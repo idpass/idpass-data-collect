@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ID PASS DataCollect</string>
+    <string name="title_activity_main">ID PASS DataCollect</string>
+    <string name="package_name">com.openspp.selfreg</string>
+    <string name="custom_url_scheme">com.openspp.selfreg</string>
+</resources>

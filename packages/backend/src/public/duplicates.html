@@ -1,0 +1,116 @@
+<!doctype html>
+<html>
+  <head>
+    <title>DataCollect Sync Server</title>
+    <style>
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+
+      th,
+      td {
+        padding: 8px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+      }
+
+      tr:hover {
+        background-color: #f5f5f5;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>DataCollect</h1>
+
+    <div id="potentialDuplicates" style="display: none">
+      <h2>Potential Duplicates</h2>
+      <h4>Unresolved potential duplicates will prevent external sync from running</h4>
+      <table>
+        <thead>
+          <tr>
+            <th>New Item</th>
+            <th>Existing Item</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="potentialDuplicatesList"></tbody>
+      </table>
+    </div>
+
+    <script>
+      let token;
+      let isAdmin = false;
+
+
+      function fetchUserRole() {
+        fetch("/api/users/me", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+          .then((response) => response.json())
+          .then((user) => {
+            isAdmin = user.role === "ADMIN";
+            if (isAdmin) {
+              document.getElementById("userManagement").style.display = "block";
+              document.getElementById("potentialDuplicates").style.display = "block";
+              fetchUsers();
+              fetchPotentialDuplicates();
+            } else {
+              alert("Access denied. Only admins can access the user management section.");
+            }
+          })
+          .catch((error) => console.error("Error:", error));
+      }
+
+      function fetchPotentialDuplicates() {
+        fetch("/api/potential-duplicates", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            const potentialDuplicatesList = document.getElementById("potentialDuplicatesList");
+            potentialDuplicatesList.innerHTML = "";
+            data.forEach((duplicate) => {
+              const row = document.createElement("tr");
+              row.innerHTML = `
+                        <td>${duplicate.entityGuid}</td>
+                        <td>${duplicate.duplicateGuid}</td>
+                        <td>
+                            <button onclick="resolveDuplicate('${duplicate.entityGuid}', '${
+                              duplicate.duplicateGuid
+                            }', ${false})">Keep both</button>
+
+                            <button onclick="resolveDuplicate('${duplicate.entityGuid}', '${
+                              duplicate.duplicateGuid
+                            }', ${true})">Delete new</button>
+                        </td>
+                    `;
+              potentialDuplicatesList.appendChild(row);
+            });
+          })
+          .catch((error) => console.error("Error:", error));
+      }
+
+      function resolveDuplicate(newItem, existingItem, shouldDeleteNewItem) {
+        fetch(`/api/potential-duplicates/resolve`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ newItem, existingItem, shouldDeleteNewItem }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            fetchPotentialDuplicates();
+          })
+          .catch((error) => console.error("Error:", error));
+      }
+    </script>
+  </body>
+</html>

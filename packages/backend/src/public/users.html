@@ -1,0 +1,167 @@
+<!doctype html>
+<html>
+  <head>
+    <title>DataCollect Sync Server - Users</title>
+    <style>
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+
+      th,
+      td {
+        padding: 8px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+      }
+
+      tr:hover {
+        background-color: #f5f5f5;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>DataCollect</h1>
+
+    <div id="userManagement" style="display: none">
+      <h2>Users</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="userList"></tbody>
+      </table>
+      <button onclick="showCreateUserForm()">Create User</button>
+
+      <div id="createUserForm" style="display: none">
+        <h2>Create User</h2>
+        <input type="email" id="newUserEmail" placeholder="Email" required />
+        <input type="password" id="newUserPassword" placeholder="Password" required />
+        <select id="newUserRole">
+          <option value="ADMIN">Admin</option>
+          <option value="USER">User</option>
+        </select>
+        <button onclick="createUser()">Create</button>
+        <button onclick="hideCreateUserForm()">Cancel</button>
+      </div>
+    </div>
+
+    <script>
+      let token;
+      let isAdmin = false;
+        
+      // check token
+      function checkToken() {
+        token = localStorage.getItem("token");
+        if (token) {
+          fetchUserRole();
+          fetchUsers();
+        } else {
+          alert("Please login to continue");
+          window.location.href = "index.html";
+        }
+      }
+      checkToken();
+    
+      function fetchUserRole() {
+        fetch("/api/users/me", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+          .then((response) => response.json())
+          .then((user) => {
+            isAdmin = user.role === "ADMIN";
+            if (isAdmin) {
+              document.getElementById("userManagement").style.display = "block";
+              document.getElementById("potentialDuplicates").style.display = "block";
+              fetchUsers();
+              fetchPotentialDuplicates();
+            } else {
+              alert("Access denied. Only admins can access the user management section.");
+            }
+          })
+          .catch((error) => console.error("Error:", error));
+      }
+
+      function fetchUsers() {
+        fetch("/api/users", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+          .then((response) => response.json())
+          .then((users) => {
+            const userList = document.getElementById("userList");
+            userList.innerHTML = "";
+            users.forEach((user) => {
+              const row = document.createElement("tr");
+              row.innerHTML = `
+                        <td>${user.email}</td>
+                        <td>${user.role}</td>
+                        <td>
+                            <button onclick="showUpdateUserForm('${user.email}')">Update</button>
+                            <button onclick="deleteUser('${user.email}')">Delete</button>
+                        </td>
+                    `;
+              userList.appendChild(row);
+            });
+          })
+          .catch((error) => console.error("Error:", error));
+      }
+
+      function showCreateUserForm() {
+        document.getElementById("createUserForm").style.display = "block";
+      }
+
+      function hideCreateUserForm() {
+        document.getElementById("createUserForm").style.display = "none";
+      }
+
+      function createUser() {
+        const email = document.getElementById("newUserEmail").value;
+        const password = document.getElementById("newUserPassword").value;
+        const role = document.getElementById("newUserRole").value;
+
+        fetch("/api/users", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ email, password, role }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            alert(data.message);
+            hideCreateUserForm();
+            fetchUsers();
+          })
+          .catch((error) => console.error("Error:", error));
+      }
+
+      function deleteUser(email) {
+        if (confirm(`Are you sure you want to delete the user with email ${email}?`)) {
+          fetch(`/api/users/${email}`, {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              alert(data.message);
+              fetchUsers();
+            })
+            .catch((error) => console.error("Error:", error));
+        }
+      }
+
+    </script>
+  </body>
+</html>

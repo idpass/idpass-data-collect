@@ -1,0 +1,385 @@
+/**
+ * Any CSS included here will be global. The classic template
+ * bundles Infima by default. Infima is a CSS framework designed to
+ * work well for content-centric websites.
+ */
+
+/* Professional, conservative color palette */
+:root {
+  /* Primary blue palette - keeping Docusaurus defaults */
+  --ifm-color-primary: #1976d2;
+  --ifm-color-primary-dark: #1565c0;
+  --ifm-color-primary-darker: #0d47a1;
+  --ifm-color-primary-darkest: #0a3a85;
+  --ifm-color-primary-light: #2196f3;
+  --ifm-color-primary-lighter: #42a5f5;
+  --ifm-color-primary-lightest: #64b5f6;
+  
+  /* Typography and spacing */
+  --ifm-code-font-size: 95%;
+  --ifm-font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+}
+
+/* Dark mode colors - keeping Docusaurus defaults */
+[data-theme='dark'] {
+  --ifm-color-primary: #42a5f5;
+  --ifm-color-primary-dark: #2196f3;
+  --ifm-color-primary-darker: #1e88e5;
+  --ifm-color-primary-darkest: #1976d2;
+  --ifm-color-primary-light: #64b5f6;
+  --ifm-color-primary-lighter: #90caf9;
+  --ifm-color-primary-lightest: #bbdefb;
+  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+}
+
+/* Clean, professional hero section */
+.hero {
+  background-color: var(--ifm-color-primary);
+  color: white;
+  padding: 4rem 0;
+  text-align: center;
+}
+
+.hero__title {
+  font-size: 3rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: white;
+}
+
+.hero__subtitle {
+  font-size: 1.4rem;
+  font-weight: 400;
+  opacity: 0.9;
+  margin-bottom: 2rem;
+  line-height: 1.5;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.hero__cta {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.hero__cta .button {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 500;
+  border-radius: 4px;
+  text-decoration: none;
+}
+
+.hero__cta .button--primary {
+  background: white;
+  color: var(--ifm-color-primary);
+}
+
+.hero__cta .button--primary:hover {
+  background: var(--ifm-color-emphasis-100);
+  color: var(--ifm-color-primary);
+}
+
+.hero__cta .button--secondary {
+  background: transparent;
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.hero__cta .button--secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+/* Clean, professional card styles */
+.card {
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 6px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  background: var(--ifm-background-surface-color);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.card:hover {
+  border-color: var(--ifm-color-primary);
+}
+
+.card__header {
+  margin-bottom: 1rem;
+}
+
+.card__header h3 {
+  margin-bottom: 0.5rem;
+  color: var(--ifm-color-primary);
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.card__icon {
+  font-size: 1.2rem;
+  margin-right: 0.5rem;
+  color: var(--ifm-color-primary);
+}
+
+.card__body {
+  color: var(--ifm-font-color-base);
+  flex-grow: 1;
+  line-height: 1.6;
+}
+
+.card__footer {
+  margin-top: 1rem;
+}
+
+.card__footer .button {
+  width: 100%;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+/* Package-specific styling - subtle left border only */
+.card--package {
+  border-left: 3px solid var(--ifm-color-primary);
+}
+
+/* Simple grid layouts */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+}
+
+.cards-grid--2col {
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+}
+
+.cards-grid--3col {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+/* Button improvements */
+.button {
+  font-weight: 500;
+  text-transform: none;
+  border-radius: 4px;
+}
+
+.button--block {
+  width: 100%;
+}
+
+/* Sidebar improvements */
+.menu__link {
+  border-radius: 4px;
+}
+
+.menu__link--active {
+  font-weight: 600;
+}
+
+/* Clean code block styling */
+pre {
+  border-radius: 6px;
+  border: 1px solid var(--ifm-color-emphasis-200);
+}
+
+code {
+  border-radius: 3px;
+  padding: 0.1rem 0.3rem;
+  background: var(--ifm-color-emphasis-100);
+  font-family: var(--ifm-font-family-monospace);
+}
+
+.prism-code {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* Simple API method badges */
+.api-method {
+  display: inline-block;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  margin-right: 0.5rem;
+}
+
+.api-method--get {
+  background: var(--ifm-color-success);
+  color: white;
+}
+
+.api-method--post {
+  background: var(--ifm-color-info);
+  color: white;
+}
+
+.api-method--put {
+  background: var(--ifm-color-warning);
+  color: white;
+}
+
+.api-method--delete {
+  background: var(--ifm-color-danger);
+  color: white;
+}
+
+/* Parameter documentation */
+.param-table {
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 8px;
+  overflow: hidden;
+  margin: 1rem 0;
+}
+
+.param-table th {
+  background: var(--ifm-color-emphasis-100);
+  padding: 0.75rem;
+  font-weight: 600;
+  color: var(--ifm-font-color-base);
+}
+
+.param-table td {
+  padding: 0.75rem;
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.param-required {
+  color: var(--ifm-color-danger);
+  font-weight: 600;
+}
+
+.param-optional {
+  color: var(--ifm-font-color-secondary);
+  font-style: italic;
+}
+
+/* Documentation page improvements */
+article {
+  max-width: 900px;
+}
+
+article h1:first-child {
+  font-size: 2.5rem;
+  margin-bottom: 2rem;
+}
+
+/* Improve table styling */
+table {
+  width: 100%;
+  margin-bottom: 2rem;
+}
+
+table thead {
+  background-color: var(--ifm-color-emphasis-100);
+}
+
+/* Custom badges */
+.badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1;
+  border-radius: 0.25rem;
+  margin-right: 0.5rem;
+}
+
+.badge--primary {
+  background-color: var(--ifm-color-primary);
+  color: white;
+}
+
+.badge--success {
+  background-color: #4caf50;
+  color: white;
+}
+
+.badge--warning {
+  background-color: #ff9800;
+  color: white;
+}
+
+.badge--danger {
+  background-color: #f44336;
+  color: white;
+}
+
+/* Improve navbar */
+.navbar {
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.1);
+}
+
+.navbar__title {
+  font-weight: 600;
+}
+
+/* Footer improvements */
+.footer {
+  background-color: var(--ifm-background-color-secondary);
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+}
+
+[data-theme='dark'] .footer {
+  background-color: var(--ifm-background-surface-color);
+}
+
+.footer__title {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--ifm-font-color-base);
+}
+
+.footer__link-item {
+  color: var(--ifm-font-color-secondary);
+}
+
+.footer__link-item:hover {
+  color: var(--ifm-color-primary);
+}
+
+/* Make external links more obvious */
+a[target="_blank"]:after {
+  content: " ↗";
+  font-size: 0.8em;
+  vertical-align: super;
+}
+
+/* Improve admonitions */
+.admonition {
+  border-radius: 8px;
+}
+
+/* Simple responsive adjustments */
+@media (max-width: 768px) {
+  .hero__title {
+    font-size: 2rem;
+  }
+  
+  .hero__subtitle {
+    font-size: 1.2rem;
+  }
+  
+  .cards-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .cards-grid--2col {
+    grid-template-columns: 1fr;
+  }
+  
+  .cards-grid--3col {
+    grid-template-columns: 1fr;
+  }
+}

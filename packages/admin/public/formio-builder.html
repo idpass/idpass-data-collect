@@ -1,0 +1,83 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Form.io Embedded Form Builder</title>
+
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+      }
+      #builder {
+        width: 100%;
+        min-height: 100%;
+        padding: 20px;
+        box-sizing: border-box;
+      }
+    </style>
+
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="https://cdn.form.io/formiojs/formio.full.min.css"
+    />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css"
+    />
+    <link
+      rel="stylesheet"
+      type="text/css"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.css"
+    />
+    <script src="https://code.jquery.com/jquery-3.7.0.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/js/bootstrap.min.js"></script>
+    <script src="https://cdn.form.io/formiojs/formio.full.min.js"></script>
+  </head>
+  <body>
+    <div id="builder"></div>
+
+    <script>
+      let builder = null
+
+      Formio.builder(document.getElementById('builder'), {}, {}).then((instance) => {
+        builder = instance
+
+        // Setup event listeners
+        builder.on('saveComponent', () => {
+          const schema = builder.schema
+          window.parent.postMessage(
+            {
+              type: 'formio-builder-schema',
+              schema: schema,
+            },
+            window.location.origin,
+          )
+        })
+
+        window.parent.postMessage(
+          {
+            type: 'formio-builder-ready',
+          },
+          window.location.origin,
+        )
+
+        // listen to formio-initialize and receive schema
+        window.addEventListener('message', (event) => {
+          if (event.data.type === 'formio-initialize') {
+            console.log('formio-initialize', event.data.schema)
+            // Set the schema and rebuild the form
+            builder.setForm(event.data.schema)
+          }
+        })
+      })
+    </script>
+  </body>
+</html>

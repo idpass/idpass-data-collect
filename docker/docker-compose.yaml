@@ -1,0 +1,66 @@
+version: "3.8"
+
+services:
+  # Nginx reverse proxy
+  nginx:
+    platform: linux/amd64
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - sync-server
+      - admin-ui
+    networks:
+      - hdm-network
+
+  # HDM Sync Server - Main application
+  sync-server:
+    platform: linux/amd64
+    image: "hdm-sync-server:latest"
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    user: "node"
+    working_dir: /home/node/app
+    env_file: ./.env
+    restart: always
+    depends_on:
+      - postgres
+    networks:
+      - hdm-network
+
+  # PostgreSQL database for HDM Sync Server
+  postgres:
+    platform: linux/amd64
+    image: postgres:15
+    restart: always
+    env_file: ./postgresql.env
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - hdm-network
+
+  # Admin UI (Vue.js application)
+  admin-ui:
+    platform: linux/amd64
+    image: "hdm-admin-ui:latest"
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.admin
+      args:
+        - VITE_API_URL=/sync
+    depends_on:
+      - sync-server
+    networks:
+      - hdm-network
+
+volumes:
+  postgres-data:
+
+networks:
+  hdm-network:
+    driver: bridge

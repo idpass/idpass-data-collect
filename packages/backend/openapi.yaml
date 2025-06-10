@@ -1,0 +1,874 @@
+openapi: 3.0.3
+info:
+  title: ID PASS Data Collect Backend API
+  description: |
+    REST API for ID PASS Data Collect backend server, providing synchronization, user management, and application configuration endpoints.
+    
+    ## Authentication
+    
+    Most endpoints require JWT authentication. Include the token in the Authorization header:
+    ```
+    Authorization: Bearer <your-jwt-token>
+    ```
+    
+    ## Multi-tenant Support
+    
+    The API supports multiple application configurations identified by `configId`. Each configuration can have its own entity forms, data, and external sync settings.
+    
+    ## Synchronization
+    
+    The sync endpoints support bidirectional synchronization between clients and server, as well as external system integration. Events are synchronized with pagination for efficient data transfer.
+  version: 1.0.0
+  contact:
+    name: Association pour la cooperation numerique (ACN)
+    url: https://github.com/newlogic/Data-Management-System-Sync
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+  - url: http://localhost:3000
+    description: Development server
+  - url: https://your-sync-server.com
+    description: Production server
+
+security:
+  - BearerAuth: []
+
+paths:
+  # Authentication & User Management
+  /users/login:
+    post:
+      tags:
+        - Authentication
+      summary: User login
+      description: Authenticate user with email and password, returns JWT token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: admin@example.com
+                password:
+                  type: string
+                  format: password
+                  example: password123
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    description: JWT authentication token
+                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                  userId:
+                    type: integer
+                    description: User ID
+                    example: 1
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /users/check-token:
+    get:
+      tags:
+        - Authentication
+      summary: Validate JWT token
+      description: Check if the provided JWT token is valid
+      responses:
+        '200':
+          description: Token is valid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Token is valid
+        '401':
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /users:
+    get:
+      tags:
+        - User Management
+      summary: Get all users
+      description: Retrieve all users (Admin only)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags:
+        - User Management
+      summary: Create new user
+      description: Create a new user account (Admin only)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - role
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  format: password
+                  example: password123
+                role:
+                  $ref: '#/components/schemas/Role'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: User created successfully
+        '403':
+          description: Admin access required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /users/{id}:
+    put:
+      tags:
+        - User Management
+      summary: Update user
+      description: Update an existing user (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - role
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                role:
+                  $ref: '#/components/schemas/Role'
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: User updated successfully
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /users/{email}:
+    delete:
+      tags:
+        - User Management
+      summary: Delete user
+      description: Delete a user by email (Admin only)
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: email
+          in: path
+          required: true
+          schema:
+            type: string
+            format: email
+          example: user@example.com
+      responses:
+        '200':
+          description: User deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: User deleted successfully
+
+  /users/me:
+    get:
+      tags:
+        - User Management
+      summary: Get current user
+      description: Get the current authenticated user's information
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current user information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # Synchronization
+  /sync/count-entities:
+    get:
+      tags:
+        - Synchronization
+      summary: Count entities
+      description: Get the total count of entities for a specific app configuration
+      parameters:
+        - name: configId
+          in: query
+          schema:
+            type: string
+            default: default
+          description: Application configuration ID
+      responses:
+        '200':
+          description: Entity count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count:
+                    type: integer
+                    example: 42
+
+  /sync/pull:
+    get:
+      tags:
+        - Synchronization
+      summary: Pull events from server
+      description: Retrieve events from server since a specific timestamp with pagination
+      parameters:
+        - name: since
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Timestamp to pull events since
+          example: "2024-01-01T00:00:00.000Z"
+        - name: configId
+          in: query
+          schema:
+            type: string
+            default: default
+          description: Application configuration ID
+      responses:
+        '200':
+          description: Events retrieved successfully
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      events:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/FormSubmission'
+                      nextCursor:
+                        type: string
+                        nullable: true
+                        description: Cursor for next page of results
+                  - type: object
+                    properties:
+                      events:
+                        type: array
+                        items: {}
+                        maxItems: 0
+                      nextCursor:
+                        type: null
+                      error:
+                        type: string
+                        example: "Duplicates exist! Please resolve them on admin page."
+
+  /sync/push:
+    post:
+      tags:
+        - Synchronization
+      summary: Push events to server
+      description: Send form submission events to the server for processing
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                events:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/FormSubmission'
+                configId:
+                  type: string
+                  example: default
+      responses:
+        '200':
+          description: Events processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /sync/push/audit-logs:
+    post:
+      tags:
+        - Synchronization
+      summary: Push audit logs to server
+      description: Send audit log entries to the server
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                auditLogs:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/AuditLogEntry'
+                configId:
+                  type: string
+                  example: default
+      responses:
+        '200':
+          description: Audit logs processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /sync/pull/audit-logs:
+    get:
+      tags:
+        - Synchronization
+      summary: Pull audit logs from server
+      description: Retrieve audit log entries since a specific timestamp
+      parameters:
+        - name: since
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Timestamp to pull audit logs since
+          example: "2024-01-01T00:00:00.000Z"
+        - name: configId
+          in: query
+          schema:
+            type: string
+            default: default
+          description: Application configuration ID
+      responses:
+        '200':
+          description: Audit logs retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditLogEntry'
+
+  /sync/external:
+    post:
+      tags:
+        - Synchronization
+      summary: Trigger external sync
+      description: Synchronize data with external systems using configured adapters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                configId:
+                  type: string
+                  default: default
+                credentials:
+                  $ref: '#/components/schemas/ExternalSyncCredentials'
+      responses:
+        '200':
+          description: External sync completed
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      status:
+                        type: string
+                        example: error
+                      message:
+                        type: string
+                        example: Failed to sync with external system
+                      details:
+                        type: object
+
+  # App Configuration
+  /app-configs:
+    get:
+      tags:
+        - App Configuration
+      summary: Get all app configurations
+      description: Retrieve all application configurations
+      responses:
+        '200':
+          description: List of app configurations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AppConfig'
+
+    post:
+      tags:
+        - App Configuration
+      summary: Upload app configuration
+      description: Upload a new application configuration as JSON file
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                config:
+                  type: string
+                  format: binary
+                  description: JSON file containing app configuration
+      responses:
+        '200':
+          description: Configuration uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: No JSON file uploaded or invalid file
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /app-configs/{id}:
+    delete:
+      tags:
+        - App Configuration
+      summary: Delete app configuration
+      description: Delete an application configuration and associated data
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: my-app-config
+      responses:
+        '200':
+          description: Configuration deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  # Potential Duplicates
+  /potential-duplicates:
+    get:
+      tags:
+        - Data Management
+      summary: Get potential duplicates
+      description: Retrieve list of potential duplicate entities that need resolution
+      parameters:
+        - name: configId
+          in: query
+          schema:
+            type: string
+          description: Application configuration ID
+      responses:
+        '200':
+          description: List of potential duplicates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PotentialDuplicate'
+
+  /potential-duplicates/resolve:
+    post:
+      tags:
+        - Data Management
+      summary: Resolve duplicate entities
+      description: Resolve potential duplicate entities by merging or deleting
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - newItem
+                - existingItem
+                - shouldDeleteNewItem
+                - configId
+              properties:
+                newItem:
+                  type: string
+                  description: GUID of the new entity
+                  example: "550e8400-e29b-41d4-a716-446655440000"
+                existingItem:
+                  type: string
+                  description: GUID of the existing entity
+                  example: "550e8400-e29b-41d4-a716-446655440001"
+                shouldDeleteNewItem:
+                  type: boolean
+                  description: Whether to delete the new item
+                  example: true
+                configId:
+                  type: string
+                  description: Application configuration ID
+                  example: default
+      responses:
+        '200':
+          description: Duplicate resolved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        role:
+          $ref: '#/components/schemas/Role'
+
+    Role:
+      type: string
+      enum:
+        - ADMIN
+        - USER
+      example: USER
+
+    FormSubmission:
+      type: object
+      properties:
+        guid:
+          type: string
+          format: uuid
+          description: Unique identifier for the form submission
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        type:
+          type: string
+          description: Type of form submission event
+          example: "create-group"
+        entityGuid:
+          type: string
+          format: uuid
+          description: GUID of the entity being modified
+          example: "550e8400-e29b-41d4-a716-446655440001"
+        data:
+          type: object
+          description: Form data payload
+          additionalProperties: true
+        timestamp:
+          type: string
+          format: date-time
+          description: When the event occurred
+          example: "2024-01-15T10:30:00.000Z"
+        userId:
+          type: string
+          description: ID of user who created the event
+          example: "1"
+        syncLevel:
+          type: integer
+          description: Synchronization level (0=LOCAL, 1=SYNCED)
+          example: 1
+
+    AuditLogEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        action:
+          type: string
+          description: Action performed
+          example: "entity_created"
+        entityId:
+          type: string
+          description: ID of affected entity
+          example: "entity-123"
+        entityType:
+          type: string
+          description: Type of entity
+          example: "group"
+        userId:
+          type: string
+          description: User who performed the action
+          example: "1"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00.000Z"
+        details:
+          type: object
+          description: Additional details about the action
+          additionalProperties: true
+
+    ExternalSyncCredentials:
+      type: object
+      properties:
+        username:
+          type: string
+          example: "api_user"
+        password:
+          type: string
+          format: password
+          example: "api_password"
+        url:
+          type: string
+          format: uri
+          example: "https://external-system.com/api"
+        additionalProperties: true
+
+    AppConfig:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the app configuration
+          example: "my-app-config"
+        name:
+          type: string
+          description: Human-readable name
+          example: "My Application"
+        description:
+          type: string
+          description: Description of the application
+          example: "Data collection for rural communities"
+        version:
+          type: string
+          description: Version of the configuration
+          example: "1.0.0"
+        url:
+          type: string
+          format: uri
+          description: Application URL
+          example: "https://my-app.com"
+        entityForms:
+          type: array
+          description: Form definitions for entities
+          items:
+            $ref: '#/components/schemas/EntityForm'
+        entityData:
+          type: array
+          description: Pre-loaded entity data
+          items:
+            $ref: '#/components/schemas/EntityData'
+        externalSync:
+          $ref: '#/components/schemas/ExternalSyncConfig'
+
+    EntityForm:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "group-form"
+        name:
+          type: string
+          example: "Group Registration"
+        title:
+          type: string
+          example: "Register New Group"
+        dependsOn:
+          type: string
+          description: ID of parent form if this form depends on another
+          example: "individual-form"
+        formio:
+          type: object
+          description: Form.io form definition
+          additionalProperties: true
+
+    EntityData:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Name of the entity type
+          example: "regions"
+        data:
+          type: array
+          description: Array of entity data items
+          items:
+            $ref: '#/components/schemas/EntityDataItem'
+
+    EntityDataItem:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "region-001"
+        name:
+          type: string
+          example: "Central Region"
+        parentId:
+          type: string
+          description: ID of parent entity if hierarchical
+          example: "country-001"
+      additionalProperties: true
+
+    ExternalSyncConfig:
+      type: object
+      properties:
+        type:
+          type: string
+          description: Type of external sync adapter
+          example: "openspp"
+        auth:
+          type: string
+          description: Authentication method
+          example: "basic"
+        url:
+          type: string
+          format: uri
+          description: External system URL
+          example: "https://openspp.org/api"
+      additionalProperties: true
+
+    PotentialDuplicate:
+      type: object
+      properties:
+        newEntity:
+          type: object
+          description: The newly submitted entity
+          additionalProperties: true
+        existingEntity:
+          type: object
+          description: The existing entity that might be a duplicate
+          additionalProperties: true
+        similarity:
+          type: number
+          format: float
+          description: Similarity score between entities
+          example: 0.85
+
+    SuccessResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Error description"
+        message:
+          type: string
+          example: "Detailed error message"
+
+tags:
+  - name: Authentication
+    description: User authentication endpoints
+  - name: User Management
+    description: User account management (Admin only)
+  - name: Synchronization
+    description: Data synchronization between clients and server
+  - name: App Configuration
+    description: Application configuration management
+  - name: Data Management
+    description: Entity data management and duplicate resolution

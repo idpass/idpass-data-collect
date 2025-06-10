@@ -1,0 +1,76 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap');
+
+@font-face {
+  font-family: 'FontAwesome';
+  src:
+    url('~@fortawesome/fontawesome-free/webfonts/fa-solid-900.woff2') format('woff2'),
+    url('~@fortawesome/fontawesome-free/webfonts/fa-solid-900.woff') format('woff'),
+    url('~@fortawesome/fontawesome-free/webfonts/fa-solid-900.ttf') format('truetype');
+  font-weight: 900;
+  font-style: normal;
+}
+
+/* color palette from <https://github.com/vuejs/theme> */
+:root {
+  --color-white: #ffffff;
+  --color-very-light-blue: #f9fafb;
+  --color-light-blue: #e6ecf6;
+  --color-blue: #3264c8;
+  --color-medium-dark-blue: #59667d;
+  --color-dark-blue: #023a51;
+  --primary: #3264c8;
+}
+
+/* semantic color variables for this project */
+:root {
+  --color-bg: var(--color-blue);
+  --color-heading: var(--color-dark-blue);
+  --color-text: var(--color-medium-dark-blue);
+
+  --color-btn-primary: var(--color-white);
+  --color-btn-primary-bg: var(--color-blue);
+  --color-btn-default: var(--color-medium-dark-blue);
+  --color-btn-default-bg: var(--color-light-blue);
+  --color-card-bg: var(--color-blue);
+}
+
+/* Link styles */
+a {
+  color: var(--primary);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--color-dark-blue);
+}
+
+.safe-top {
+  padding-top: constant(safe-area-inset-top);
+  padding-top: env(safe-area-inset-top);
+}
+.safe-left {
+  padding-left: constant(safe-area-inset-left);
+  padding-left: env(safe-area-inset-left);
+}
+.safe-right {
+  padding-right: constant(safe-area-inset-right);
+  padding-right: env(safe-area-inset-right);
+}
+.safe-bottom {
+  padding-bottom: constant(safe-area-inset-bottom);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Card styles */
+.card-primary {
+  background: var(--primary);
+}
+
+.card-primary-outline {
+  border: 2px solid var(--primary);
+}
+
+.bg-primary {
+  background: var(--primary);
+}

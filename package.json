@@ -1,0 +1,50 @@
+{
+  "name": "idpass-datacollect-monorepo",
+  "version": "1.0.0",
+  "description": "ID PASS Data Collect - Offline-first data management system",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm run test:datacollect && npm run test:backend && npm run test:admin",
+    "test:datacollect": "cd packages/datacollect && npm test",
+    "test:backend": "cd packages/backend && npm test",
+    "test:admin": "cd packages/admin && npm run test:unit",
+    "build": "npm run build:datacollect && npm run build:backend && npm run build:admin",
+    "build:datacollect": "cd packages/datacollect && npm run build",
+    "build:backend": "cd packages/backend && npm run build",
+    "build:admin": "cd packages/admin && npm run build",
+    "check-licenses": "node scripts/check-license-headers.js",
+    "check-licenses:fix": "node scripts/check-license-headers.js --fix",
+    "lint": "npm run lint --workspaces",
+    "type-check": "npm run type-check --workspaces",
+    "prepare": "[ \"$CI\" != \"true\" ] && husky install || echo 'Skipping husky in CI'"
+  },
+  "devDependencies": {
+    "glob": "^10.3.10",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.2.0"
+  },
+  "lint-staged": {
+    "packages/**/*.{ts,tsx,js,jsx}": [
+      "node scripts/check-license-headers-staged.js"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/idpass/idpass-data-collect.git"
+  },
+  "keywords": [
+    "offline-first",
+    "data-management",
+    "event-sourcing",
+    "synchronization"
+  ],
+  "author": "Newlogic",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/idpass/idpass-data-collect/issues"
+  },
+  "homepage": "https://github.com/idpass/idpass-data-collect#readme"
+}

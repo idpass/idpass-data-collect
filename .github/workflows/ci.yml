@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop, refactorv4]
+  pull_request:
+    branches: [main, develop, refactorv4]
+
+jobs:
+  license-check:
+    runs-on: ubuntu-latest
+    env:
+      HUSKY: 0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: "npm"
+
+      - name: Install dependencies
+        run: HUSKY=0 npm ci
+
+      - name: Check license headers
+        run: npm run check-licenses
+
+  test:
+    runs-on: ubuntu-latest
+    env:
+      HUSKY: 0
+    needs: license-check
+
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: HUSKY=0 npm ci
+
+      - name: Install datacollect lib
+        run: |
+          cd packages/datacollect && npm run build
+          cd ../backend && npm install ../datacollect
+          cd ../mobile && npm install ../datacollect
+
+      - name: Run linting
+        run: npm run lint
+
+      - name: Run type checking
+        run: npm run type-check
+
+      - name: Validate OpenAPI specification
+        working-directory: packages/backend
+        run: npm run validate-api
+
+      - name: Run tests
+        env:
+          POSTGRES: postgresql://test:test@localhost:5432/test
+          POSTGRES_TEST: postgresql://test:test@localhost:5432/test
+          JWT_SECRET: test_secret
+          INITIAL_PASSWORD: test_password
+        run: npm test
+
+      - name: Build projects
+        run: npm run build
+
+  security:
+    runs-on: ubuntu-latest
+    env:
+      HUSKY: 0
+    needs: license-check
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          cache: "npm"
+
+      - name: Install dependencies
+        run: HUSKY=0 npm ci
+
+      - name: Run security audit
+        continue-on-error: true
+        run: npm audit --production

@@ -1,0 +1,80 @@
+yarn run v1.22.19
+$ docusaurus start
+[INFO] Starting the development server...
+[ERROR] Loading of version failed for version current
+
+[ERROR] Error: Invalid sidebar file at "sidebars.ts".
+These sidebar document ids do not exist:
+- administration/backup-restore
+- administration/external-sync
+- administration/index
+- administration/multi-tenant
+- administration/user-management
+- architecture/data-flow
+- architecture/security-model
+- architecture/storage-adapters
+- deployment/docker
+- deployment/index
+- deployment/monitoring
+- deployment/production
+- deployment/scaling
+- developers/coding-standards
+- developers/contributing
+- developers/development-setup
+- developers/index
+- developers/release-process
+- developers/testing
+- digital-public-good/community-governance
+- digital-public-good/localization
+- digital-public-good/privacy-security
+- digital-public-good/standards-compliance
+- digital-public-good/sustainability
+- examples/basic-client
+- examples/custom-sync-adapter
+- examples/index
+- examples/multi-tenant-setup
+- examples/production-deployment
+- getting-started/configuration
+- getting-started/first-app
+- reference/configuration-schema
+- reference/error-codes
+- reference/event-types
+- reference/faq
+- reference/index
+- reference/performance
+- tutorials/basic-usage
+- tutorials/custom-events
+- tutorials/external-adapters
+- tutorials/index
+- tutorials/integration-examples
+- user-guide/data-management
+- user-guide/forms-submissions
+- user-guide/index
+- user-guide/offline-mode
+- user-guide/sync-operations
+- user-guide/troubleshooting
+
+Available document ids are:
+- architecture/event-sourcing
+- architecture/index
+- architecture/sync-architecture
+- digital-public-good/impact-evidence
+- digital-public-good/index
+- getting-started/index
+- getting-started/installation
+- index
+
+    at Object.checkSidebarsDocIds (/Users/jeremi/Projects/134-openspp/Data-Management-System-Sync/docs/website/node_modules/@docusaurus/plugin-content-docs/lib/sidebars/utils.js:245:19)
+    at doLoadVersion (/Users/jeremi/Projects/134-openspp/Data-Management-System-Sync/docs/website/node_modules/@docusaurus/plugin-content-docs/lib/index.js:199:31)
+    at async loadVersion (/Users/jeremi/Projects/134-openspp/Data-Management-System-Sync/docs/website/node_modules/@docusaurus/plugin-content-docs/lib/index.js:216:28)
+    at async Promise.all (index 0)
+    at async Object.loadContent (/Users/jeremi/Projects/134-openspp/Data-Management-System-Sync/docs/website/node_modules/@docusaurus/plugin-content-docs/lib/index.js:224:33)
+    at async /Users/jeremi/Projects/134-openspp/Data-Management-System-Sync/docs/website/node_modules/@docusaurus/core/lib/server/plugins/plugins.js:39:23
+    at async Promise.all (index 1)
+    at async /Users/jeremi/Projects/134-openspp/Data-Management-System-Sync/docs/website/node_modules/@docusaurus/core/lib/server/plugins/plugins.js:140:25
+    at async loadSite (/Users/jeremi/Projects/134-openspp/Data-Management-System-Sync/docs/website/node_modules/@docusaurus/core/lib/server/site.js:144:45)
+    at async createReloadableSite (/Users/jeremi/Projects/134-openspp/Data-Management-System-Sync/docs/website/node_modules/@docusaurus/core/lib/commands/start/utils.js:63:16)
+[INFO] Docusaurus version: 3.8.0
+Node version: v22.14.0
+error Command failed with exit code 1.
+info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command.

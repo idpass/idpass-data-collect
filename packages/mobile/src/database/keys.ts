@@ -1,0 +1,69 @@
+/*
+ * Licensed to the Association pour la cooperation numerique (ACN) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ACN licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import { getDatabase } from '.'
+import sodium from 'libsodium-wrappers'
+const dbKey = 'vc_issuer_key'
+
+// Function to save keys
+export async function saveKeys(publicKey: string, privateKey: string, keyType: string) {
+  const db = await getDatabase()
+  const id = dbKey
+
+  await db.keys.upsert({
+    id,
+    publicKey,
+    keyType,
+    privateKey
+  })
+}
+
+export async function getKeys() {
+  const db = await getDatabase()
+
+  const id = dbKey
+
+  const doc = await db.keys.findOne(id).exec()
+
+  if (doc) {
+    return {
+      publicKey: doc.publicKey,
+      privateKey: doc.privateKey,
+      keyType: doc.keyType
+    }
+  } else {
+    return await generateKeys()
+  }
+}
+
+export async function generateKeys() {
+  await sodium.ready
+  // Generate Ed25519 key pair
+  const keyPair = sodium.crypto_sign_keypair()
+  const publicKey = sodium.to_base64(keyPair.publicKey)
+  const privateKey = sodium.to_base64(keyPair.privateKey)
+
+  await saveKeys(publicKey, privateKey, keyPair.keyType)
+
+  return {
+    publicKey,
+    privateKey,
+    keyType: keyPair.keyType
+  }
+}

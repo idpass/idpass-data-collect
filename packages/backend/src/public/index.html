@@ -1,0 +1,306 @@
+<!doctype html>
+<html>
+  <head>
+    <title>DataCollect Sync Server</title>
+    <style>
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+
+      th,
+      td {
+        padding: 8px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+      }
+
+      tr:hover {
+        background-color: #f5f5f5;
+      }
+
+      .nav-link {
+        display: inline-block;
+        padding: 8px 16px;
+        margin: 4px;
+        text-decoration: none;
+        background-color: #f0f0f0;
+        color: black;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      .nav-link:hover {
+        background-color: #e0e0e0;
+      }
+
+      .info-card {
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 15px;
+        margin-bottom: 10px;
+        width: 300px;
+        box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
+      }
+
+      .info-card-title {
+        font-size: 1.2em;
+        font-weight: bold;
+        margin-bottom: 10px;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 5px;
+      }
+
+      .info-row {
+        display: flex;
+        margin-bottom: 8px;
+      }
+
+      .info-row-label {
+        font-weight: bold;
+        width: 100px;
+        color: #555;
+      }
+
+      .info-row-value {
+        flex-grow: 1;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>DataCollect</h1>
+
+    <div id="loginForm">
+      <h2>Login</h2>
+      <input type="email" id="loginEmail" placeholder="Email" required />
+      <input type="password" id="loginPassword" placeholder="Password" required />
+      <button onclick="login()">Login</button>
+    </div>
+
+    <div id="authenticated" style="display: none">
+      <!-- Navigation menu -->
+      <div id="navigationMenu">
+        <a href="users.html" class="nav-link">Users</a>
+      </div>
+
+      <br />
+
+      <h2>Apps</h2>
+      <div id="apps">
+        <!-- Upload json config file -->
+        <input type="file" id="appConfigFile" accept=".json" />
+        <button onclick="uploadAppConfig()">Upload</button>
+
+        <!-- List of apps -->
+        <div id="appsList" style="margin-top: 20px"></div>
+      </div>
+    </div>
+
+    <script>
+      let token;
+      let isAdmin = false;
+
+      function checkToken() {
+        token = localStorage.getItem("token");
+        console.log(token);
+        if (token) {
+          // check if token is valid
+          fetch("/api/users/check-token", {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              document.getElementById("loginForm").style.display = "none";
+              document.getElementById("authenticated").style.display = "block";
+              getApps();
+            })
+            .catch((error) => {
+              localStorage.removeItem("token");
+              location.reload();
+            });
+        }
+      }
+
+      function login() {
+        const email = document.getElementById("loginEmail").value;
+        const password = document.getElementById("loginPassword").value;
+
+        fetch("/api/users/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email, password }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (data.token) {
+              token = data.token;
+              localStorage.setItem("token", token);
+              document.getElementById("loginForm").style.display = "none";
+              document.getElementById("authenticated").style.display = "block";
+            } else {
+              alert("Invalid email or password");
+              location.reload(); // Refresh the page if login failed
+            }
+          })
+          .catch((error) => console.error("Error:", error));
+      }
+
+      function navigateTo(page) {
+        window.location.href = page + ".html";
+      }
+
+      function uploadAppConfig() {
+        let json;
+        const file = document.getElementById("appConfigFile").files[0];
+        const fileReader = new FileReader();
+        fileReader.onload = async function (event) {
+          try {
+            // Validate file content is valid JSON
+            const json = JSON.parse(event.target.result);
+
+            // Basic validation that JSON has required fields
+            if (!json || typeof json !== "object") {
+              throw new Error("Invalid app configuration format");
+            }
+
+            const formData = new FormData();
+            formData.append(
+              "config",
+              new Blob([JSON.stringify(json)], {
+                type: "application/json",
+              }),
+              "config.json",
+            );
+
+            const response = await fetch("/api/apps", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+              body: formData,
+            });
+
+            if (!response.ok) {
+              if (response.status === 401) {
+                alert("Session expired. Please login again.");
+                localStorage.removeItem("token");
+                location.reload();
+                return;
+              }
+              throw new Error(`Server error: ${response.status}`);
+            }
+
+            await response.json();
+            getApps(); // Refresh the apps list
+          } catch (error) {
+            console.error("Error uploading configuration:", error);
+            alert(error.message || "Error uploading app configuration");
+          }
+        };
+
+        fileReader.onerror = () => {
+          console.error("Error reading file");
+          alert("Failed to read the configuration file");
+        };
+
+        fileReader.readAsText(file);
+      }
+
+      function getApps() {
+        fetch("/api/apps", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            const appsList = document.getElementById("appsList");
+            appsList.innerHTML = "";
+            data.forEach((app) => {
+              // count all entities in the app
+              fetch(`/api/sync/count-entities?configId=${app.id}`, {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              })
+                .then((response) => response.json())
+                .then((data2) => {
+                  const appItem = document.createElement("div");
+                  appItem.innerHTML = `
+                  <div class="info-card">
+                    <div class="info-card-title">${app.name}</div>
+                    <div class="info-row">
+                      <span class="info-row-label">App ID:</span>
+                      <span class="info-row-value">${app.id}</span>
+                    </div>
+                    <div class="info-row">
+                      <span class="info-row-label">Entities:</span>
+                      <span class="info-row-value">${data2.count}</span>
+                    </div>
+                    <div class="info-row">
+                      <!-- force download link -->
+                      <a href="/${app.id}.json" class="nav-link" style="width: 100%; text-align: center;" download>Download Config</a>
+                    </div>
+                    <div class="info-row">
+                      <img src="/${app.id}.png" alt="QR Code" style="width: 50%; height: 50%;">
+                    </div>
+                    <div class="info-row">
+                      <button onclick="deleteApp('${app.id}')">Delete</button>
+                    </div>
+                    <div class="info-row">
+                      <button onclick="testPush('${app.id}')">Test Push</button>
+                    </div>
+                  </div>
+                `;
+                  appsList.appendChild(appItem);
+                });
+            });
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+            alert("Error uploading app config");
+          });
+      }
+
+      function deleteApp(id) {
+        fetch(`/api/apps/${id}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            getApps();
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+            alert("Error deleting app config");
+          });
+      }
+
+      function testPush(id) {
+        fetch(`/api/sync/external/push?configId=${id}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            console.log(data);
+          })
+          .catch((error) => {
+            console.error("Error:", error);
+          });
+      }
+
+      checkToken();
+    </script>
+  </body>
+</html>
