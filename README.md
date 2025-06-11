@@ -86,7 +86,7 @@ npm run dev
 
 ## 📖 Documentation
 
-- [Getting Started Guide](docs/website/docs/README.md)
+- [Getting Started Guide](docs/website/docs/index.md)
 - [Architecture Overview](docs/website/docs/architecture/index.md)
 - [API Reference](docs/api/datacollect/README.md)
 - [Deployment Guide](docs/deployment/README.md) _(coming soon)_
@@ -95,26 +95,24 @@ npm run dev
 ## 💻 Basic Usage
 
 ```typescript
-import { EntityDataManager } from 'idpass-data-collect';
+import { EntityDataManager } from "idpass-data-collect";
 
 // Initialize the data manager
 const manager = new EntityDataManager(/* ... */);
 
 // Create a household group
 const household = await manager.submitForm({
-  type: 'create-group',
-  data: { name: 'Smith Family' },
+  type: "create-group",
+  data: { name: "Smith Family" },
   // ... other fields
 });
 
 // Add members to household
 const updated = await manager.submitForm({
-  type: 'add-member',
+  type: "add-member",
   entityGuid: household.guid,
-  data: { 
-    members: [
-      { name: 'John Smith', dateOfBirth: '1980-01-15' }
-    ]
+  data: {
+    members: [{ name: "John Smith", dateOfBirth: "1980-01-15" }],
   },
   // ... other fields
 });
