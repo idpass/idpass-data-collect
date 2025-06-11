@@ -61,7 +61,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
 
   // API Documentation
   try {
-    const swaggerDocument = YAML.load(path.join(__dirname, "openapi.yaml"));
+    const swaggerDocument = YAML.load(path.join(__dirname, "../openapi.yaml"));
     app.use(
       "/api-docs",
       swaggerUi.serve,
@@ -112,12 +112,12 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
     const SALT_ROUNDS = 10;
     const hashedPassword = await bcrypt.hash(config.initialPassword, SALT_ROUNDS);
     const initialAdmin = {
-      email: "admin@hdm.com",
+      email: "admin@hdm.example",
       passwordHash: hashedPassword,
       role: Role.ADMIN,
     };
     await userStore.saveUser(initialAdmin);
-    console.log("Initial admin user admin@hdm.com created");
+    console.log("Initial admin user " + initialAdmin.email + " created");
   }
 
   // Add a cron job to run every 30 minutes

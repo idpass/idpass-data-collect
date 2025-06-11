@@ -4,19 +4,49 @@ This directory contains Docker configurations for deploying ID PASS Data Collect
 
 ## Quick Start
 
-### Basic Setup (Recommended)
+### Development Setup (Recommended for getting started)
+
+The `docker-compose.dev.yaml` provides a development setup with everything you need to start quickly.
+Before running, you need to configure the `.env` file and the `postgresql.env` file.
+
+```bash
+# Copy the example environment files and update with your values
+cp .env.example .env
+cp postgresql.env.example postgresql.env
+```
+Then, you can start the services:
+
+```bash
+# Start all services
+docker compose -f docker-compose.dev.yaml up -d
+
+# View logs
+docker compose -f docker-compose.dev.yaml logs -f
+
+# Stop all services
+docker compose -f docker-compose.dev.yaml down
+```
+
+This will start:
+- **Sync Server** on port 3000
+- **PostgreSQL** on port 5432
+- **Admin UI** on port 5173
+- **Mobile App UI** on port 8081
+- **PgAdmin** on port 5050
+
+### Basic Production Setup
 
 The default `docker-compose.yaml` provides a minimal setup with just the core components:
 
 ```bash
 # Start all services
-docker-compose up -d
+docker compose up -d
 
 # View logs
-docker-compose logs -f
+docker compose logs -f
 
 # Stop all services
-docker-compose down
+docker compose down
 ```
 
 This will start:
@@ -50,7 +80,7 @@ For external synchronization with OpenSPP, use the example configuration:
 
 ```bash
 # Use the OpenSPP configuration
-docker-compose -f docker-compose.openspp.yaml up -d
+docker compose -f docker-compose.openspp.yaml up -d
 ```
 
 ### Additional Services (docker-compose.openspp.yaml)
@@ -103,13 +133,13 @@ cp odoo_postgresql.env.example odoo_postgresql.env
 
 ### Build all images
 ```bash
-docker-compose build
+docker compose build
 ```
 
 ### Build specific service
 ```bash
-docker-compose build sync-server
-docker-compose build admin-ui
+docker compose build sync-server
+docker compose build admin-ui
 ```
 
 ## Data Persistence
@@ -122,7 +152,7 @@ Data is persisted in Docker volumes:
 ### Backup data
 ```bash
 # Backup PostgreSQL
-docker-compose exec postgres pg_dump -U admin hdm_sync > backup.sql
+docker compose exec postgres pg_dump -U admin hdm_sync > backup.sql
 
 # Backup volumes
 docker run --rm -v postgres-data:/data -v $(pwd):/backup alpine tar czf /backup/postgres-data.tar.gz -C /data .
@@ -131,7 +161,7 @@ docker run --rm -v postgres-data:/data -v $(pwd):/backup alpine tar czf /backup/
 ### Restore data
 ```bash
 # Restore PostgreSQL
-docker-compose exec -T postgres psql -U admin hdm_sync < backup.sql
+docker compose exec -T postgres psql -U admin hdm_sync < backup.sql
 
 # Restore volumes
 docker run --rm -v postgres-data:/data -v $(pwd):/backup alpine tar xzf /backup/postgres-data.tar.gz -C /data
@@ -158,25 +188,25 @@ All services communicate through the `hdm-network` bridge network. Service names
 ### View logs
 ```bash
 # All services
-docker-compose logs -f
+docker compose logs -f
 
 # Specific service
-docker-compose logs -f sync-server
+docker compose logs -f sync-server
 ```
 
 ### Access container shell
 ```bash
-docker-compose exec sync-server sh
-docker-compose exec postgres psql -U admin hdm_sync
+docker compose exec sync-server sh
+docker compose exec postgres psql -U admin hdm_sync
 ```
 
 ### Reset everything
 ```bash
 # Stop and remove containers, networks, volumes
-docker-compose down -v
+docker compose down -v
 
 # Remove all images
-docker-compose down --rmi all
+docker compose down --rmi all
 ```
 
 ### Common Issues
@@ -195,7 +225,7 @@ docker-compose down --rmi all
 
 2. **Performance**:
    - Adjust PostgreSQL configuration for production workloads
-   - Configure resource limits in docker-compose
+   - Configure resource limits in docker compose
    - Use external load balancer for high availability
 
 3. **Monitoring**:
@@ -208,7 +238,7 @@ docker-compose down --rmi all
 ### Hot reload for development
 ```bash
 # Mount source code for live updates
-docker-compose -f docker-compose.dev.yaml up
+docker compose -f docker-compose.dev.yaml up
 ```
 
 This will start:
@@ -221,8 +251,8 @@ This will start:
 ### Running tests in containers
 ```bash
 # Run sync server tests
-docker-compose exec sync-server npm test
+docker compose exec sync-server npm test
 
 # Run admin UI tests
-docker-compose exec admin-ui npm run test:unit
+docker compose exec admin-ui npm run test:unit
 ```

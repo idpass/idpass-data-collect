@@ -99,7 +99,7 @@ Authorization: Bearer <your-jwt-token>
 curl -X POST http://localhost:3000/api/users/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@hdm.com",
+    "email": "admin@hdm.example",
     "password": "your-password"
   }'
 ```
@@ -156,7 +156,7 @@ In production:
 # 1. Login
 TOKEN=$(curl -s -X POST http://localhost:3000/api/users/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@hdm.com","password":"admin1@"}' \
+  -d '{"email":"admin@hdm.example","password":"admin1@"}' \
   | jq -r '.token')
 
 # 2. Use token for authenticated requests

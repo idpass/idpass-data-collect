@@ -53,7 +53,7 @@ describe("Sync Server", () => {
   describe("GET /sync/pull", () => {
     it("should return events since the given timestamp", async () => {
       const adminLoginResponse = await axios.post(internalUrl + "/api/users/login", {
-        email: "admin@hdm.com",
+        email: "admin@hdm.example",
         password: "admin1@",
       });
       const adminToken = get(adminLoginResponse.data, "token") ?? "";
@@ -107,7 +107,7 @@ describe("Sync Server", () => {
 
     it("should return an empty array if duplicates exist", async () => {
       const adminLoginResponse = await axios.post(internalUrl + "/api/users/login", {
-        email: "admin@hdm.com",
+        email: "admin@hdm.example",
         password: "admin1@",
       });
       const adminToken = get(adminLoginResponse.data, "token") ?? "";
@@ -173,7 +173,7 @@ describe("Sync Server", () => {
   describe("POST /sync/push", () => {
     it("should push events to the event store", async () => {
       const adminLoginResponse = await axios.post(internalUrl + "/api/users/login", {
-        email: "admin@hdm.com",
+        email: "admin@hdm.example",
         password: "admin1@",
       });
       const adminToken = get(adminLoginResponse.data, "token") ?? "";
@@ -293,7 +293,7 @@ describe("Sync Server", () => {
   describe("POST /potential-duplicates/resolve", () => {
     it("should resolve potential duplicates and delete the new item", async () => {
       const adminLoginResponse = await axios.post(internalUrl + "/api/users/login", {
-        email: "admin@hdm.com",
+        email: "admin@hdm.example",
         password: "admin1@",
       });
       const adminToken = get(adminLoginResponse.data, "token") ?? "";

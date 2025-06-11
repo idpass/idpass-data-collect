@@ -1,7 +1,6 @@
 services:
   # HDM Sync Server - Development mode
   sync-server:
-    platform: linux/amd64
     image: node:20-bookworm-slim
     working_dir: /packages
     env_file: ./.env
@@ -41,7 +40,6 @@ services:
 
   # PostgreSQL database
   postgres:
-    platform: linux/amd64
     image: postgres:15
     restart: always
     env_file: ./postgresql.env
@@ -54,7 +52,6 @@ services:
 
   # Admin UI - Development mode
   admin-ui:
-    platform: linux/amd64
     image: node:20-bookworm-slim
     working_dir: /app
     environment:
@@ -81,7 +78,6 @@ services:
 
   # Mobile App - Browser Development mode
   mobile-app:
-    platform: linux/amd64
     image: node:20-bookworm-slim
     working_dir: /app
     environment:
@@ -115,7 +111,6 @@ services:
 
   # pgAdmin for database management (optional)
   pgadmin:
-    platform: linux/amd64
     image: dpage/pgadmin4:latest
     environment:
       - PGADMIN_DEFAULT_EMAIL=admin@example.com

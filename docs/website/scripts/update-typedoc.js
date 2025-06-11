@@ -16,7 +16,7 @@ const CONFIG = {
   datacollectPath: path.resolve(__dirname, '../../../packages/datacollect'),
   typedocOutputPath: path.resolve(__dirname, '../../../docs/api/datacollect'),
   targetPath: path.resolve(__dirname, '../docs/packages/datacollect/api'),
-  oldRepoUrl: 'https://github.com/newlogic/Data-Management-System-Sync',
+  oldRepoUrl: 'https://github.com/idpass/idpass-data-collect',
   newRepoUrl: 'https://github.com/idpass/idpass-data-collect',
   oldProjectName: 'ID PASS Data Collect',
   newProjectName: 'ID PASS Data Collect'
@@ -104,7 +104,8 @@ console.log('  📂 Copying TypeDoc output to docs website...');
 copyDirectory(CONFIG.typedocOutputPath, CONFIG.targetPath);
 
 // Update repository URLs and project name in all copied files
-console.log('  🔄 Updating repository URLs and project name...');
-updateAllFiles(CONFIG.targetPath);
+// NOTE: Uncomment the following lines if you want to update URLs and project names in the copied files
+// console.log('  🔄 Updating repository URLs and project name...');
+// updateAllFiles(CONFIG.targetPath);
 
 console.log('✅ TypeDoc documentation generated and updated successfully!');

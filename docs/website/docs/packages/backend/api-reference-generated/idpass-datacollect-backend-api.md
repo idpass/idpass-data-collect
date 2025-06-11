@@ -59,7 +59,7 @@ Most endpoints require JWT authentication. Get a token by logging in:
 curl -X POST http://localhost:3000/api/users/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@hdm.com",
+    "email": "admin@example.com",
     "password": "your-password"
   }'
 ```

@@ -20,8 +20,8 @@ info:
     The sync endpoints support bidirectional synchronization between clients and server, as well as external system integration. Events are synchronized with pagination for efficient data transfer.
   version: 1.0.0
   contact:
-    name: Association pour la cooperation numerique (ACN)
-    url: https://github.com/newlogic/Data-Management-System-Sync
+    name: OpenSPP
+    url: https://github.com/idpass/idpass-data-collect
   license:
     name: Apache 2.0
     url: https://www.apache.org/licenses/LICENSE-2.0

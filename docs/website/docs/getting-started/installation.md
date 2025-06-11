@@ -208,7 +208,7 @@ curl http://localhost:3000/api/health
 # Test authentication
 curl -X POST http://localhost:3000/api/users/login \
   -H "Content-Type: application/json" \
-  -d '{"email": "admin@hdm.com", "password": "your-password"}'
+  -d '{"email": "admin@example.com", "password": "your-password"}'
 ```
 
 ### Test Admin Interface

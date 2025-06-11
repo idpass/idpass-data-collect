@@ -1468,7 +1468,7 @@ describe("EntityDataManager", () => {
   it.skip("should sync events with the sync server", async () => {
     const groupAGuid = uuidv4();
 
-    await manager.login("admin@hdm.com", "admin1@");
+    await manager.login("admin@hdm.example", "admin1@");
     await manager.submitForm({
       guid: uuidv4(),
       entityGuid: groupAGuid,

@@ -3,7 +3,6 @@ version: "3.8"
 services:
   # Nginx reverse proxy
   nginx:
-    platform: linux/amd64
     image: nginx:alpine
     ports:
       - "80:80"
@@ -17,7 +16,6 @@ services:
 
   # HDM Sync Server - Main application
   sync-server:
-    platform: linux/amd64
     image: "hdm-sync-server:latest"
     build:
       context: ..
@@ -33,7 +31,6 @@ services:
 
   # PostgreSQL database for HDM Sync Server
   postgres:
-    platform: linux/amd64
     image: postgres:15
     restart: always
     env_file: ./postgresql.env
@@ -46,7 +43,6 @@ services:
 
   # Admin UI (Vue.js application)
   admin-ui:
-    platform: linux/amd64
     image: "hdm-admin-ui:latest"
     build:
       context: ..
