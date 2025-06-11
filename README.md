@@ -19,11 +19,12 @@
 
 ## 📦 Project Structure
 
-This monorepo contains three main packages:
+This monorepo contains four main packages:
 
 - **`packages/datacollect`** - Core library for offline data management
 - **`packages/backend`** - Central sync server with PostgreSQL
 - **`packages/admin`** - Vue.js admin interface for server management
+- **`packages/mobile`** - Mobile application built with Vue.js and Capacitor
 
 ## 🚀 Quick Start
 
@@ -38,12 +39,14 @@ For setting up on Docker, see the [docker/README](docker/README.md)
 ### Installation
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/idpass/idpass-data-collect.git
 cd idpass-data-collect
 ```
 
 2. Install dependencies and build:
+
 ```bash
 # Install root dependencies
 npm install
@@ -63,12 +66,14 @@ npm install
 ```
 
 3. Set up environment variables:
+
 ```bash
 cp .env.example .env
 # Edit .env with your configuration
 ```
 
 4. Start the development servers:
+
 ```bash
 # Terminal 1: Backend server
 cd packages/backend
@@ -81,10 +86,10 @@ npm run dev
 
 ## 📖 Documentation
 
-- [Getting Started Guide](docs/README.md)
-- [Architecture Overview](docs/architecture/new-spec.md)
-- [API Reference](docs/api/README.md) *(coming soon)*
-- [Deployment Guide](docs/deployment/README.md) *(coming soon)*
+- [Getting Started Guide](docs/website/docs/README.md)
+- [Architecture Overview](docs/website/docs/architecture/index.md)
+- [API Reference](docs/api/datacollect/README.md)
+- [Deployment Guide](docs/deployment/README.md) _(coming soon)_
 - [Examples](examples/)
 
 ## 💻 Basic Usage
@@ -129,6 +134,7 @@ graph LR
 ```
 
 The system uses event sourcing with CQRS pattern:
+
 - **Events** represent immutable changes to entities
 - **Entities** represent current state (Groups and Individuals)
 - **Sync** handles bidirectional data synchronization
@@ -152,6 +158,7 @@ npm test -- --coverage
 ## 🤝 Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on:
+
 - Code of Conduct
 - Development setup
 - Submitting pull requests

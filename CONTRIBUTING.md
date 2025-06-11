@@ -3,6 +3,7 @@
 Thank you for your interest in contributing to ID PASS Data Collect! This document provides guidelines and instructions for contributing to the project.
 
 ## Table of Contents
+
 - [Code of Conduct](#code-of-conduct)
 - [Getting Started](#getting-started)
 - [Development Setup](#development-setup)
@@ -27,6 +28,7 @@ This project adheres to the Contributor Covenant [Code of Conduct](CODE_OF_CONDU
 ## Development Setup
 
 ### Prerequisites
+
 - Node.js 20.x
 - PostgreSQL 15+ (for backend development)
 - npm or yarn
@@ -34,34 +36,42 @@ This project adheres to the Contributor Covenant [Code of Conduct](CODE_OF_CONDU
 ### Initial Setup
 
 1. Clone the repository:
+
 ```bash
-git clone https://github.com/yourusername/Data-Management-System-Sync.git
-cd Data-Management-System-Sync
+git clone https://github.com/idpass/idpass-data-collect.git
+cd idpass-data-collect
 ```
 
 2. Install dependencies for all modules:
+
 ```bash
 # Install root dependencies
 npm install
 
-# Build DataCollect library first (required by backend)
-cd dataCollect
+# Build datacollect library first (required by backend)
+cd packages/datacollect
 npm install
 npm run build
-cd ..
+cd ../..
 
 # Install backend dependencies
-cd backend
+cd packages/backend
 npm install
-cd ..
+cd ../..
 
 # Install admin dependencies
-cd admin
+cd packages/admin
 npm install
-cd ..
+cd ../..
+
+# Install mobile dependencies (optional)
+cd packages/mobile
+npm install
+cd ../..
 ```
 
 3. Set up environment variables:
+
 ```bash
 # Copy example environment file
 cp .env.example .env
@@ -69,6 +79,7 @@ cp .env.example .env
 ```
 
 4. Set up the database:
+
 ```bash
 # Create PostgreSQL database
 createdb datacollect_dev
@@ -76,13 +87,18 @@ createdb datacollect_test
 ```
 
 5. Run the development servers:
+
 ```bash
 # Terminal 1 - Backend
-cd backend
+cd packages/backend
 npm run dev
 
 # Terminal 2 - Admin
-cd admin
+cd packages/admin
+npm run dev
+
+# Terminal 3 - Mobile (optional)
+cd packages/mobile
 npm run dev
 ```
 
@@ -113,11 +129,13 @@ npm run dev
 ## Pull Request Process
 
 1. **Branch Naming**: Use descriptive branch names:
+
    - `feature/add-user-export`
    - `fix/sync-timeout-issue`
    - `docs/update-api-reference`
 
 2. **Commit Messages**: Follow conventional commits:
+
    ```
    feat: add user export functionality
    fix: resolve sync timeout issue
@@ -125,12 +143,14 @@ npm run dev
    ```
 
 3. **PR Description**: Include:
+
    - What changes were made
    - Why these changes were made
    - Any breaking changes
    - Related issue numbers
 
-4. **Code Review**: 
+4. **Code Review**:
+
    - Address reviewer feedback promptly
    - Keep discussions professional and constructive
 
@@ -142,41 +162,45 @@ npm run dev
 ## Coding Standards
 
 ### TypeScript
+
 - Use TypeScript for all new code
 - Enable strict mode
 - Avoid `any` types unless absolutely necessary
 - Use interfaces over type aliases when possible
 
 ### Code Style
+
 - Run `npm run format` before committing
 - Follow ESLint rules (run `npm run lint`)
 - Use meaningful variable and function names
 - Keep functions small and focused
 
 ### File Organization
+
 ```typescript
 // Good
-import { external } from 'external-package';
-import { internal } from '@/internal-module';
-import { local } from './local-file';
+import { external } from "external-package";
+import { internal } from "@/internal-module";
+import { local } from "./local-file";
 
 // Bad
-import { local } from './local-file';
-import { external } from 'external-package';
-import { internal } from '@/internal-module';
+import { local } from "./local-file";
+import { external } from "external-package";
+import { internal } from "@/internal-module";
 ```
 
 ## Testing
 
 ### Running Tests
+
 ```bash
 # Run all tests
 npm test
 
 # Run tests for specific module
-cd dataCollect && npm test
-cd backend && npm test
-cd admin && npm run test:unit
+cd packages/datacollect && npm test
+cd packages/backend && npm test
+cd packages/admin && npm run test:unit
 
 # Run specific test file
 npm test -- EntityDataManager.test.ts
@@ -186,25 +210,27 @@ npm test -- --watch
 ```
 
 ### Writing Tests
+
 - Write tests for all new functionality
 - Aim for high code coverage
 - Use descriptive test names
 - Follow AAA pattern (Arrange, Act, Assert)
 
 Example:
+
 ```typescript
-describe('EntityDataManager', () => {
-  describe('submitForm', () => {
-    it('should create a new group entity when valid form is submitted', async () => {
+describe("EntityDataManager", () => {
+  describe("submitForm", () => {
+    it("should create a new group entity when valid form is submitted", async () => {
       // Arrange
       const manager = new EntityDataManager(/* ... */);
       const formData = createMockGroupForm();
-      
+
       // Act
       const result = await manager.submitForm(formData);
-      
+
       // Assert
-      expect(result.type).toBe('group');
+      expect(result.type).toBe("group");
       expect(result.data.name).toBe(formData.data.name);
     });
   });
@@ -214,16 +240,19 @@ describe('EntityDataManager', () => {
 ## Documentation
 
 ### Code Documentation
+
 - Add JSDoc comments to all public APIs
 - Include examples in documentation
 - Document complex algorithms
 
 ### README Updates
+
 - Update README.md when adding new features
 - Keep examples up to date
 - Add new dependencies to setup instructions
 
 ### API Documentation
+
 - Document all REST endpoints
 - Include request/response examples
 - Note any breaking changes
@@ -231,6 +260,7 @@ describe('EntityDataManager', () => {
 ## Questions?
 
 If you have questions about contributing, please:
+
 1. Check existing documentation
 2. Search closed issues
 3. Ask in an open issue
