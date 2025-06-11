@@ -91,3 +91,4 @@ packages/datacollect/package-lock.json
 packages/mobile/package-lock.json
 packages/backend/src/public/*.json
 packages/backend/src/public/*.png
+docker-compose.local.yaml

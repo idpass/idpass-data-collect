@@ -1,0 +1,152 @@
+name: 🐛 Bug Report
+description: Report a bug or unexpected behavior in ID PASS Data Collect
+title: "[Bug]: "
+labels: ["bug", "triage"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the form below to help us understand and reproduce the issue.
+
+        **⚠️ Security Note**: If this bug involves a security vulnerability, please report it privately to security@newlogic.com instead of using this form.
+
+  - type: input
+    id: contact
+    attributes:
+      label: Contact Details
+      description: How can we reach you if we need more information? (Optional)
+      placeholder: your.email@example.com
+    validations:
+      required: false
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is
+      placeholder: Describe what happened and what you expected to happen instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Please provide step-by-step instructions to reproduce the issue
+      placeholder: |
+        1. Go to...
+        2. Click on...
+        3. Enter data...
+        4. See error...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which part of ID PASS Data Collect is affected?
+      options:
+        - Core Library (packages/datacollect)
+        - Backend Server (packages/backend)
+        - Admin Interface (packages/admin)
+        - Mobile App (packages/mobile)
+        - Docker Setup
+        - Documentation
+        - Other (please specify in description)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Where did this bug occur?
+      options:
+        - Development
+        - Staging/Testing
+        - Production
+        - Local Docker Setup
+        - Other (please specify)
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: What version of ID PASS Data Collect are you using?
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: browsers
+    attributes:
+      label: Browser (if applicable)
+      description: Which browser are you using? (Select all that apply)
+      multiple: true
+      options:
+        - Chrome
+        - Firefox
+        - Safari
+        - Edge
+        - Mobile Safari
+        - Mobile Chrome
+        - Other
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      description: What operating system are you using?
+      placeholder: "Windows 11, macOS 13, Ubuntu 22.04, etc."
+    validations:
+      required: false
+
+  - type: dropdown
+    id: data-state
+    attributes:
+      label: Data Synchronization State
+      description: Was the system online or offline when the bug occurred?
+      options:
+        - Online (connected to server)
+        - Offline (working locally)
+        - During synchronization
+        - Unknown
+        - Not applicable
+    validations:
+      required: false
+
+  - type: textarea
+    id: error-logs
+    attributes:
+      label: Error Logs
+      description: Please paste any relevant error messages or logs
+      render: shell
+      placeholder: Paste error messages, stack traces, or relevant log output here
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Add any other context, screenshots, or information about the problem
+      placeholder: Any additional information that might help us understand the issue
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Checklist
+      description: Please confirm the following
+      options:
+        - label: I have searched for existing issues before creating this bug report
+          required: true
+        - label: I have provided enough information to help reproduce the issue
+          required: true
+        - label: This is not a security vulnerability (if it is, I will report it privately to security@newlogic.com)
+          required: true

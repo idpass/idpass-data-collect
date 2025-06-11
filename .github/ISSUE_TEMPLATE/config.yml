@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Security Vulnerability Report
+    url: mailto:security@newlogic.com
+    about: Please report security vulnerabilities privately via email, not through public issues.
+  - name: 📚 Documentation Website
+    url: https://idpass.github.io/idpass-data-collect/
+    about: Visit our documentation website for guides, API reference, and examples.
+  - name: 💬 Community Discussions
+    url: https://github.com/idpass/idpass-data-collect/discussions
+    about: Ask questions, share ideas, and discuss the project with the community.
