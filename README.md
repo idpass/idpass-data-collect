@@ -27,6 +27,8 @@ This monorepo contains three main packages:
 
 ## 🚀 Quick Start
 
+For setting up on Docker, see the [docker/README](docker/README.md)
+
 ### Prerequisites
 
 - Node.js 20.x
@@ -37,8 +39,8 @@ This monorepo contains three main packages:
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/newlogic/Data-Management-System-Sync.git
-cd Data-Management-System-Sync
+git clone https://github.com/idpass/idpass-data-collect.git
+cd idpass-data-collect
 ```
 
 2. Install dependencies and build:
@@ -161,8 +163,8 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## 🔗 Links
 
-- [GitHub Repository](https://github.com/newlogic/Data-Management-System-Sync)
-- [Issue Tracker](https://github.com/newlogic/Data-Management-System-Sync/issues)
+- [GitHub Repository](https://github.com/idpass/idpass-data-collect)
+- [Issue Tracker](https://github.com/idpass/idpass-data-collect/issues)
 - [Newlogic Website](https://newlogic.com)
 
 ## 👥 Authors
@@ -171,4 +173,4 @@ Developed and maintained by [Newlogic](https://newlogic.com)
 
 ---
 
-For questions or support, please [open an issue](https://github.com/newlogic/Data-Management-System-Sync/issues) or contact the maintainers.
+For questions or support, please [open an issue](https://github.com/idpass/idpass-data-collect/issues) or contact the maintainers.
