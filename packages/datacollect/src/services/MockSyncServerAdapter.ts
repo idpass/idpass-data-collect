@@ -31,16 +31,15 @@ import { EventApplierService } from "./EventApplierService";
 import axios from "axios";
 
 class MockSyncServerAdapter implements ExternalSyncAdapter {
-  private url: string;
-  private batchSize: number;
+  private url: string = "";
+  private batchSize: number = 100;
 
   constructor(
     private eventStore: EventStore,
     private eventApplierService: EventApplierService,
     private config: ExternalSyncConfig,
   ) {
-    this.url = (this.config?.url as string | undefined) ?? "";
-    this.batchSize = (this.config?.batchSize as number | undefined) ?? 100;
+    this.url = this.config?.url;
   }
 
   async pushData(): Promise<void> {

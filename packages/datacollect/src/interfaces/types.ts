@@ -644,8 +644,12 @@ export interface Conflict {
 export type ExternalSyncConfig = {
   /** Type of external system (e.g., 'openspp', 'mock-sync-server') */
   type: string;
-  /** Additional configuration properties specific to the adapter */
-  [key: string]: unknown;
+  /** Authentication method (e.g., 'basic', 'token') */
+  auth?: string;
+  /** URL of the external system */
+  url: string;
+  /** Extra fields for the external system */
+  extraFields: { name: string; value: string }[];
 };
 
 /**

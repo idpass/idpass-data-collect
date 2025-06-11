@@ -20,6 +20,7 @@
 import { EventStore, ExternalSyncAdapter, ExternalSyncConfig, ExternalSyncCredentials } from "../interfaces/types";
 import { EventApplierService } from "../services/EventApplierService";
 import MockSyncServerAdapter from "../services/MockSyncServerAdapter";
+import OpenFnSyncAdapter from "./openfn/OpenFnSyncAdapter";
 
 /**
  * Registry of available external sync adapters mapped by their type identifiers.
@@ -28,6 +29,7 @@ import MockSyncServerAdapter from "../services/MockSyncServerAdapter";
  */
 const adaptersMapping = {
   "mock-sync-server": MockSyncServerAdapter,
+  "openfn-adapter": OpenFnSyncAdapter,
 };
 
 /**
@@ -162,6 +164,7 @@ export class ExternalSyncManager {
       return;
     }
 
+    // @ts-expect-error - config is typed as ExternalSyncConfig but narrowed depending on the adapter
     this.adapter = new adapterModule(this.eventStore, this.eventApplierService, this.config);
   }
 

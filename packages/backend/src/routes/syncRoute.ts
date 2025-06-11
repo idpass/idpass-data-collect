@@ -66,6 +66,21 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
     }),
   );
 
+  router.get(
+    "/pull/callback",
+    authenticateJWT,
+    asyncHandler(async (req, res) => {
+      const { configId = "default" } = req.query;
+      const appInstance = await appInstanceStore.getAppInstance(configId as string);
+      if (!appInstance) {
+        return res.json({ status: "error", message: "App instance not found" });
+      }
+      // TODO: support async pull
+      // this will be used as a callback endpoint for external systems to push data back to our system
+      res.json({ status: "not implemented" });
+    }),
+  );
+
   router.post(
     "/push",
     authenticateJWT,

@@ -62,16 +62,20 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   // API Documentation
   try {
     const swaggerDocument = YAML.load(path.join(__dirname, "openapi.yaml"));
-    app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
-      explorer: true,
-      customCss: '.swagger-ui .topbar { display: none }',
-      customSiteTitle: "ID PASS Data Collect Backend API",
-      swaggerOptions: {
-        docExpansion: 'tag',
-        filter: true,
-        showRequestDuration: true
-      }
-    }));
+    app.use(
+      "/api-docs",
+      swaggerUi.serve,
+      swaggerUi.setup(swaggerDocument, {
+        explorer: true,
+        customCss: ".swagger-ui .topbar { display: none }",
+        customSiteTitle: "IDPass DataCollect Backend API",
+        swaggerOptions: {
+          docExpansion: "tag",
+          filter: true,
+          showRequestDuration: true,
+        },
+      }),
+    );
   } catch (error) {
     console.warn("OpenAPI documentation not available:", error);
   }

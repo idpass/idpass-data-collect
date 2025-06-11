@@ -48,7 +48,11 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
 
   async createAppInstance(configId: string = "default"): Promise<AppInstance> {
     const config = await this.appConfigStore.getConfig(configId);
-    const defaultExternalSyncConfig = { type: "default" };
+    const defaultExternalSyncConfig = {
+      type: "default",
+      url: "",
+      extraFields: [],
+    };
 
     console.log("Creating app instance with config:", config.id);
 
