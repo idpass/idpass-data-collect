@@ -18,9 +18,9 @@
  */
 
 /**
- * ID PASS Data Collect - Offline-first data management library for household and individual beneficiary data.
+ * ID PASS DataCollect - Offline-first data management library for household and individual beneficiary data.
  * 
- * This is the main entry point for the ID PASS Data Collect library, providing a comprehensive
+ * This is the main entry point for the ID PASS DataCollect library, providing a comprehensive
  * offline-first data management system with event sourcing, CQRS patterns, and multi-level
  * synchronization capabilities.
  * 

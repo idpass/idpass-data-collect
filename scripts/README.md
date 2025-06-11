@@ -1,6 +1,6 @@
 # Scripts
 
-This directory contains utility scripts for the ID PASS Data Collect project.
+This directory contains utility scripts for the ID PASS DataCollect project.
 
 ## License Header Checking
 

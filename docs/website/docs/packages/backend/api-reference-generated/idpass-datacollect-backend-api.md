@@ -1,7 +1,7 @@
 ---
 id: "idpass-datacollect-backend-api"
-title: "ID PASS Data Collect Backend API"
-description: "REST API for ID PASS Data Collect backend server, providing synchronization, user management, and application configuration endpoints.
+title: "ID PASS DataCollect Backend API"
+description: "REST API for ID PASS DataCollect backend server, providing synchronization, user management, and application configuration endpoints.
 
 ## Authentication
 
@@ -21,9 +21,9 @@ The sync endpoints support bidirectional synchronization between clients and ser
 sidebar_position: 1
 ---
 
-# ID PASS Data Collect Backend API
+# ID PASS DataCollect Backend API
 
-REST API for ID PASS Data Collect backend server, providing synchronization, user management, and application configuration endpoints.
+REST API for ID PASS DataCollect backend server, providing synchronization, user management, and application configuration endpoints.
 
 ## Authentication
 
@@ -59,7 +59,7 @@ Most endpoints require JWT authentication. Get a token by logging in:
 curl -X POST http://localhost:3000/api/users/login \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "admin@example.com",
+    "email": "admin@hdm.example",
     "password": "your-password"
   }'
 ```

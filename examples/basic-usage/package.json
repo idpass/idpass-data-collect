@@ -1,7 +1,7 @@
 {
   "name": "idpass-datacollect-basic-example",
   "version": "1.0.0",
-  "description": "Basic usage example for ID PASS Data Collect",
+  "description": "Basic usage example for ID PASS DataCollect",
   "main": "index.ts",
   "scripts": {
     "start": "ts-node index.ts"

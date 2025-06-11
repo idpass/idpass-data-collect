@@ -15,6 +15,6 @@ Based on the project's development history, we acknowledge the following individ
 
 ## About This Project
 
-ID PASS Data Collect is now open source as part of our commitment to digital public goods. This repository represents a complete rewrite and clean release of the original project, with all development history consolidated into a single initial commit for security and privacy reasons.
+ID PASS DataCollect is now open source as part of our commitment to digital public goods. This repository represents a complete rewrite and clean release of the original project, with all development history consolidated into a single initial commit for security and privacy reasons.
 
 We thank all the contributors who made this project possible through their dedication and expertise.

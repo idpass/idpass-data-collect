@@ -6,7 +6,7 @@ sidebar_position: 3
 
 # Synchronization Architecture
 
-ID PASS Data Collect implements a sophisticated multi-level synchronization architecture that enables offline-first operation while maintaining data consistency across distributed systems. This document details the sync patterns, conflict resolution strategies, and implementation specifics.
+ID PASS DataCollect implements a sophisticated multi-level synchronization architecture that enables offline-first operation while maintaining data consistency across distributed systems. This document details the sync patterns, conflict resolution strategies, and implementation specifics.
 
 ## Overview
 
@@ -173,7 +173,7 @@ async function pullSync(): Promise<void> {
 
 ### Conflict Resolution
 
-ID PASS Data Collect implements several conflict resolution strategies:
+ID PASS DataCollect implements several conflict resolution strategies:
 
 #### 1. Version-Based Resolution
 
@@ -700,7 +700,7 @@ const pollInterval = calculateBackoff(failureCount);
 
 ## Conclusion
 
-The synchronization architecture in ID PASS Data Collect provides:
+The synchronization architecture in ID PASS DataCollect provides:
 
 - **Reliability**: Offline-first with automatic retry
 - **Consistency**: Conflict resolution and version management

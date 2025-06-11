@@ -18,8 +18,8 @@ const CONFIG = {
   targetPath: path.resolve(__dirname, '../docs/packages/datacollect/api'),
   oldRepoUrl: 'https://github.com/idpass/idpass-data-collect',
   newRepoUrl: 'https://github.com/idpass/idpass-data-collect',
-  oldProjectName: 'ID PASS Data Collect',
-  newProjectName: 'ID PASS Data Collect'
+  oldProjectName: 'ID PASS DataCollect',
+  newProjectName: 'ID PASS DataCollect'
 };
 
 // Utility functions
@@ -53,8 +53,8 @@ function updateFileContent(filePath) {
     content = content.replace(new RegExp(CONFIG.oldRepoUrl, 'g'), CONFIG.newRepoUrl);
     
     // Update project name (be careful not to break links)
-    content = content.replace(/\[ID PASS Data Collect\]/g, `[${CONFIG.newProjectName}]`);
-    content = content.replace(/^# ID PASS Data Collect/gm, `# ${CONFIG.newProjectName}`);
+    content = content.replace(/\[ID PASS DataCollect\]/g, `[${CONFIG.newProjectName}]`);
+    content = content.replace(/^# ID PASS DataCollect/gm, `# ${CONFIG.newProjectName}`);
     
     fs.writeFileSync(filePath, content, 'utf8');
   }

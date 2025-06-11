@@ -1,6 +1,6 @@
 # Basic Usage Example
 
-This example demonstrates basic usage of ID PASS Data Collect for managing household and individual data.
+This example demonstrates basic usage of ID PASS DataCollect for managing household and individual data.
 
 ## Setup
 

@@ -4,13 +4,13 @@ title: Getting Started
 sidebar_position: 1
 ---
 
-# Getting Started with ID PASS Data Collectct
+# Getting Started with ID PASS DataCollectct
 
-ID PASS Data Collectct is a robust, offline-first data management system designed for managing household and individual beneficiary data. This guide will help you get up and running quickly.
+ID PASS DataCollectct is a robust, offline-first data management system designed for managing household and individual beneficiary data. This guide will help you get up and running quickly.
 
-## What is ID PASS Data Collectct?
+## What is ID PASS DataCollectct?
 
-ID PASS Data Collectct provides:
+ID PASS DataCollectct provides:
 - **Offline-first architecture** - Work without internet connectivity
 - **Event sourcing** - Complete audit trail of all data changes
 - **Two-level synchronization** - Client ↔ Server ↔ External systems

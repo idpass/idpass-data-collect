@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: ID PASS Data Collect Backend API
+  title: ID PASS DataCollect Backend API
   description: |
-    REST API for ID PASS Data Collect backend server, providing synchronization, user management, and application configuration endpoints.
+    REST API for ID PASS DataCollect backend server, providing synchronization, user management, and application configuration endpoints.
     
     ## Authentication
     
@@ -737,7 +737,7 @@ components:
         description:
           type: string
           description: Description of the application
-          example: "Data collection for rural communities"
+          example: "DataCollection for rural communities"
         version:
           type: string
           description: Version of the configuration

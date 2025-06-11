@@ -6,7 +6,7 @@ sidebar_position: 2
 
 # Installation Guide
 
-This guide provides detailed installation instructions for ID PASS Data Collect based on the actual implementation and tested deployment scenarios.
+This guide provides detailed installation instructions for ID PASS DataCollect based on the actual implementation and tested deployment scenarios.
 
 ## System Requirements
 
@@ -208,7 +208,7 @@ curl http://localhost:3000/api/health
 # Test authentication
 curl -X POST http://localhost:3000/api/users/login \
   -H "Content-Type: application/json" \
-  -d '{"email": "admin@example.com", "password": "your-password"}'
+  -d '{"email": "admin@hdm.example", "password": "your-password"}'
 ```
 
 ### Test Admin Interface

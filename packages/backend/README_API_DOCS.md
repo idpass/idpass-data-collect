@@ -2,7 +2,7 @@
 
 ## Overview
 
-The ID PASS Data Collect backend provides a comprehensive REST API for data synchronization, user management, and application configuration. The API is fully documented using OpenAPI 3.0 specification.
+The ID PASS DataCollect backend provides a comprehensive REST API for data synchronization, user management, and application configuration. The API is fully documented using OpenAPI 3.0 specification.
 
 ## Quick Start
 

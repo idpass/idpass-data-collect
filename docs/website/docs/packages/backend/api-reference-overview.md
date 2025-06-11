@@ -6,7 +6,7 @@ sidebar_position: 1
 
 # Backend REST API Overview
 
-The ID PASS Data Collect Backend provides a comprehensive REST API automatically documented from the OpenAPI 3.0 specification.
+The ID PASS DataCollect Backend provides a comprehensive REST API automatically documented from the OpenAPI 3.0 specification.
 
 ## 🔄 **Auto-Generated Documentation**
 
@@ -48,7 +48,7 @@ Authorization: Bearer <your-jwt-token>
 ```bash
 curl -X POST http://localhost:3000/api/users/login \
   -H "Content-Type: application/json" \
-  -d '{"email": "admin@example.com", "password": "your-password"}'
+  -d '{"email": "admin@hdm.example", "password": "your-password"}'
 ```
 
 ## 📖 **OpenAPI Specification**

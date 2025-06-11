@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for helping us improve our documentation! Clear documentation is essential for making ID PASS Data Collect accessible to everyone.
+        Thanks for helping us improve our documentation! Clear documentation is essential for making ID PASS DataCollect accessible to everyone.
 
   - type: input
     id: contact
@@ -108,7 +108,7 @@ body:
         - New users/beginners
         - Experienced developers
         - System administrators
-        - Data collectors
+        - DataCollectors
         - Integration developers
         - Contributors
         - All users

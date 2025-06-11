@@ -4,9 +4,9 @@ title: Packages Overview
 sidebar_position: 2
 ---
 
-# ID PASS Data Collectct Packages
+# ID PASS DataCollectct Packages
 
-ID PASS Data Collectct is organized into three main packages, each serving a specific role in the offline-first data management ecosystem:
+ID PASS DataCollectct is organized into three main packages, each serving a specific role in the offline-first data management ecosystem:
 
 ## 📦 Package Architecture
 
@@ -40,7 +40,7 @@ graph TB
 - 📱 **Cross-Platform**: Works in browsers, mobile apps, and desktop applications
 - 🔐 **Encryption Support**: Client-side data encryption capabilities
 
-**Use Cases**: Mobile data collection, offline surveys, field data entry
+**Use Cases**: Mobile DataCollection, offline surveys, field data entry
 
 ---
 

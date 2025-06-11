@@ -2,7 +2,7 @@
 
 ## Overview
 
-The ID PASS Data Collect project takes security seriously. This document outlines our security policy, supported versions, and the process for responsibly reporting security vulnerabilities.
+The ID PASS DataCollect project takes security seriously. This document outlines our security policy, supported versions, and the process for responsibly reporting security vulnerabilities.
 
 ## Supported Versions
 
@@ -17,7 +17,7 @@ We actively maintain and provide security updates for the following versions:
 
 ## Security Considerations
 
-ID PASS Data Collect handles sensitive household and beneficiary data. Key security features include:
+ID PASS DataCollect handles sensitive household and beneficiary data. Key security features include:
 
 - **🔐 JWT Authentication** - Secure API access with role-based permissions
 - **📝 Event Sourcing** - Complete audit trail of all data changes
@@ -32,7 +32,7 @@ We encourage responsible disclosure of security vulnerabilities. **Please do not
 ### How to Report
 
 1. **Email**: Send details to `security@newlogic.com`
-2. **Subject Line**: `[SECURITY] ID PASS Data Collect - [Brief Description]`
+2. **Subject Line**: `[SECURITY] ID PASS DataCollect - [Brief Description]`
 3. **Include**:
    - Description of the vulnerability
    - Steps to reproduce the issue

@@ -1,6 +1,6 @@
 # Examples
 
-This directory contains examples for using ID PASS Data Collect.
+This directory contains examples for using ID PASS DataCollect.
 
 ## Configuration Examples
 
@@ -16,7 +16,7 @@ An alternative configuration example with a different structure, useful for refe
 ## Usage Examples
 
 ### basic-usage/
-A simple example showing how to integrate ID PASS Data Collect in a web application.
+A simple example showing how to integrate ID PASS DataCollect in a web application.
 
 ### external-sync/ (Coming Soon)
 Examples of setting up external synchronization with different adapters.

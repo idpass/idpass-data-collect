@@ -5,7 +5,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const config: Config = {
-  title: 'ID PASS  Data Collect',
+  title: 'ID PASS  DataCollect',
   tagline: 'Offline-first data management for social protection and humanitarian assistance',
   favicon: 'img/favicon.ico',
 
@@ -112,9 +112,9 @@ const config: Config = {
     // Replace with your project's social card
     image: 'img/docusaurus-social-card.jpg',
     navbar: {
-      title: 'ID PASS Data Collect',
+      title: 'ID PASS DataCollect',
       logo: {
-        alt: 'ID PASS Data Collect Logo',
+        alt: 'ID PASS DataCollect Logo',
         src: 'img/logo.svg',
       },
       items: [

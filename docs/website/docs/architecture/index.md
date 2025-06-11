@@ -6,7 +6,7 @@ sidebar_position: 1
 
 # Architecture Overview
 
-ID PASS Data Collect implements a sophisticated offline-first data management architecture using event sourcing and CQRS patterns. This document provides a high-level overview of the system architecture.
+ID PASS DataCollect implements a sophisticated offline-first data management architecture using event sourcing and CQRS patterns. This document provides a high-level overview of the system architecture.
 
 ## System Overview
 

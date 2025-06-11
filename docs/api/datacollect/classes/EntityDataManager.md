@@ -1,14 +1,14 @@
-[**ID PASS Data Collect API Documentation v0.0.1**](../README.md)
+[**ID PASS DataCollect API Documentation v0.0.1**](../README.md)
 
 ***
 
-[ID PASS Data Collect API Documentation](../globals.md) / EntityDataManager
+[ID PASS DataCollect API Documentation](../globals.md) / EntityDataManager
 
 # Class: EntityDataManager
 
 Defined in: [components/EntityDataManager.ts:131](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L131)
 
-Primary API interface for the ID PASS Data Collect library.
+Primary API interface for the ID PASS DataCollect library.
 
 The EntityDataManager orchestrates all data operations including:
 - Form submission and event processing

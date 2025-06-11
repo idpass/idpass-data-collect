@@ -1,4 +1,4 @@
-# ID PASS Data Collect
+# ID PASS DataCollect
 
 > Offline-first data management library for household and individual beneficiary data
 
@@ -8,7 +8,7 @@
 
 ## Overview
 
-ID PASS Data Collect is a TypeScript library that provides a comprehensive offline-first data management system with event sourcing, CQRS patterns, and multi-level synchronization capabilities. It's designed for household and individual beneficiary data management with support for both browser (IndexedDB) and server (PostgreSQL) environments.
+ID PASS DataCollect is a TypeScript library that provides a comprehensive offline-first data management system with event sourcing, CQRS patterns, and multi-level synchronization capabilities. It's designed for household and individual beneficiary data management with support for both browser (IndexedDB) and server (PostgreSQL) environments.
 
 ## Key Features
 

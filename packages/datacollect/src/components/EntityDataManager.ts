@@ -38,7 +38,7 @@ import { InternalSyncManager } from "./InternalSyncManager";
 // const MAX_GROUP_DEPTH = 5; // Maximum allowed depth for nested groups
 
 /**
- * Primary API interface for the ID PASS Data Collect library.
+ * Primary API interface for the ID PASS DataCollect library.
  *
  * The EntityDataManager orchestrates all data operations including:
  * - Form submission and event processing

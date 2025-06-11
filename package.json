@@ -1,7 +1,7 @@
 {
   "name": "idpass-datacollect-monorepo",
   "version": "1.0.0",
-  "description": "ID PASS Data Collect - Offline-first data management system",
+  "description": "ID PASS DataCollect - Offline-first data management system",
   "private": true,
   "workspaces": [
     "packages/*"

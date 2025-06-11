@@ -1,6 +1,6 @@
 # Documentation Best Practices
 
-This document outlines the best practices for documenting packages in the ID PASS Data Collect ecosystem. These guidelines are based on experience documenting the core components and are designed to ensure high-quality, maintainable, and developer-friendly documentation.
+This document outlines the best practices for documenting packages in the ID PASS DataCollect ecosystem. These guidelines are based on experience documenting the core components and are designed to ensure high-quality, maintainable, and developer-friendly documentation.
 
 ## Philosophy: Quality Over Quantity
 
@@ -398,7 +398,7 @@ Use ESLint rules for documentation quality:
 
 ## Conclusion
 
-High-quality documentation is essential for the success of the ID PASS Data Collect project and its goal of becoming a Digital Public Good. By following these best practices, we ensure that:
+High-quality documentation is essential for the success of the ID PASS DataCollect project and its goal of becoming a Digital Public Good. By following these best practices, we ensure that:
 
 - Developers can quickly understand and use our packages
 - The codebase remains maintainable as it grows

@@ -5,7 +5,7 @@ export default function HomepageHero(): JSX.Element {
     <header className="hero">
       <div className="container">
         <h1 className="hero__title">
-          ID PASS Data Collect
+          ID PASS DataCollect
         </h1>
         <p className="hero__subtitle">
           Offline-first data management for social protection programs and humanitarian assistance

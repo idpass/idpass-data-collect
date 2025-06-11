@@ -1,5 +1,5 @@
 name: ❓ Question & Support
-description: Ask a question about using ID PASS Data Collect
+description: Ask a question about using ID PASS DataCollect
 title: "[Question]: "
 labels: ["question", "support"]
 assignees: []
@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for your question! We're here to help you use ID PASS Data Collect effectively.
+        Thanks for your question! We're here to help you use ID PASS DataCollect effectively.
 
         **💡 Quick Help**: Before submitting, check if your question is answered in:
         - [Documentation](https://idpass.github.io/idpass-data-collect/)
@@ -61,7 +61,7 @@ body:
     id: component
     attributes:
       label: Component (if applicable)
-      description: Which part of ID PASS Data Collect is your question about?
+      description: Which part of ID PASS DataCollect is your question about?
       options:
         - Core Library (packages/datacollect)
         - Backend Server (packages/backend)
@@ -91,7 +91,7 @@ body:
     id: version
     attributes:
       label: Version
-      description: What version of ID PASS Data Collect are you using?
+      description: What version of ID PASS DataCollect are you using?
       placeholder: "1.0.0"
     validations:
       required: false

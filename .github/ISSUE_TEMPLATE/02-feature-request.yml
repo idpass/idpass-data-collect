@@ -1,5 +1,5 @@
 name: ✨ Feature Request
-description: Suggest a new feature or enhancement for ID PASS Data Collect
+description: Suggest a new feature or enhancement for ID PASS DataCollect
 title: "[Feature]: "
 labels: ["enhancement", "triage"]
 assignees: []
@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for suggesting a new feature! Your ideas help make ID PASS Data Collect better for everyone.
+        Thanks for suggesting a new feature! Your ideas help make ID PASS DataCollect better for everyone.
 
         Please provide as much detail as possible to help us understand your request.
 
@@ -48,7 +48,7 @@ body:
     id: component
     attributes:
       label: Component
-      description: Which part of ID PASS Data Collect should this feature be added to?
+      description: Which part of ID PASS DataCollect should this feature be added to?
       options:
         - Core Library (packages/datacollect)
         - Backend Server (packages/backend)
@@ -83,7 +83,7 @@ body:
       description: Who would benefit from this feature?
       multiple: true
       options:
-        - End Users (data collectors)
+        - End Users (DataCollectors)
         - System Administrators
         - Developers/Integrators
         - Data Analysts

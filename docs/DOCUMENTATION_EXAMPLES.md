@@ -1,6 +1,6 @@
 # Documentation Examples
 
-This document provides concrete examples of documentation patterns used in the ID PASS Data Collect project. These examples demonstrate the standards established in our [Documentation Best Practices](./DOCUMENTATION_BEST_PRACTICES.md) guide.
+This document provides concrete examples of documentation patterns used in the ID PASS DataCollect project. These examples demonstrate the standards established in our [Documentation Best Practices](./DOCUMENTATION_BEST_PRACTICES.md) guide.
 
 ## Table of Contents
 
@@ -85,7 +85,7 @@ Based on `EntityDataManager`:
 
 ```typescript
 /**
- * Primary API interface for the ID PASS Data Collect library.
+ * Primary API interface for the ID PASS DataCollect library.
  * 
  * The EntityDataManager orchestrates all data operations including:
  * - Form submission and event processing
@@ -492,4 +492,4 @@ async login(email: string, password: string): Promise<void> {
 - ✅ **Context provided**: Explain when and why to use the pattern
 - ✅ **Error scenarios**: Show how to handle failures
 
-These examples demonstrate the documentation standards that have made the ID PASS Data Collect codebase more maintainable and developer-friendly. Following these patterns ensures consistency across all packages and helps new contributors understand both the technical implementation and architectural decisions.
+These examples demonstrate the documentation standards that have made the ID PASS DataCollect codebase more maintainable and developer-friendly. Following these patterns ensures consistency across all packages and helps new contributors understand both the technical implementation and architectural decisions.

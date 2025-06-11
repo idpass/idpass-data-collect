@@ -4,7 +4,7 @@
 
 Defined in: [components/EntityDataManager.ts:131](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L131)
 
-Primary API interface for the ID PASS Data Collect library.
+Primary API interface for the ID PASS DataCollect library.
 
 The EntityDataManager orchestrates all data operations including:
 - Form submission and event processing

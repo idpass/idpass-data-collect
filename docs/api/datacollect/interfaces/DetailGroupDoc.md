@@ -1,8 +1,8 @@
-[**ID PASS Data Collect API Documentation v0.0.1**](../README.md)
+[**ID PASS DataCollect API Documentation v0.0.1**](../README.md)
 
 ***
 
-[ID PASS Data Collect API Documentation](../globals.md) / DetailGroupDoc
+[ID PASS DataCollect API Documentation](../globals.md) / DetailGroupDoc
 
 # Interface: DetailGroupDoc
 

@@ -1,4 +1,4 @@
-# ID PASS Data Collect
+# ID PASS DataCollect
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)

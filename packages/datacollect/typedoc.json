@@ -1,6 +1,6 @@
 {
   "$schema": "https://typedoc.org/schema.json",
-  "name": "ID PASS Data Collect API Documentation",
+  "name": "ID PASS DataCollect API Documentation",
   "entryPoints": ["src/index.ts"],
   "out": "../../docs/api/datacollect",
   "theme": "default",

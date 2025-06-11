@@ -1,6 +1,6 @@
-# Contributing to ID PASS Data Collect
+# Contributing to ID PASS DataCollect
 
-Thank you for your interest in contributing to ID PASS Data Collect! This document provides guidelines and instructions for contributing to the project.
+Thank you for your interest in contributing to ID PASS DataCollect! This document provides guidelines and instructions for contributing to the project.
 
 ## Table of Contents
 - [Code of Conduct](#code-of-conduct)
@@ -236,4 +236,4 @@ If you have questions about contributing, please:
 3. Ask in an open issue
 4. Contact the maintainers
 
-Thank you for contributing to ID PASS Data Collect!
+Thank you for contributing to ID PASS DataCollect!

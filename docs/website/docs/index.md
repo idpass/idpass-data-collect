@@ -1,6 +1,6 @@
 ---
 id: index
-title: Welcome to ID PASS Data Collect
+title: Welcome to ID PASS DataCollect
 sidebar_position: 1
 slug: /
 hide_table_of_contents: true
@@ -10,9 +10,9 @@ import HomepageHero from '@site/src/components/HomepageHero';
 
 <HomepageHero />
 
-## What is ID PASS Data Collect?
+## What is ID PASS DataCollect?
 
-ID PASS Data Collect is a comprehensive open-source solution that enables organizations to:
+ID PASS DataCollect is a comprehensive open-source solution that enables organizations to:
 
 - 📱 **Collect data offline** in areas with limited or no internet connectivity
 - 🔄 **Synchronize seamlessly** when connections become available
@@ -54,7 +54,7 @@ ID PASS Data Collect is a comprehensive open-source solution that enables organi
       </h3>
     </div>
     <div className="card__body">
-      <p>New to ID PASS Data Collect? Start here with installation and your first app. Follow our step-by-step guide to get up and running in minutes.</p>
+      <p>New to ID PASS DataCollect? Start here with installation and your first app. Follow our step-by-step guide to get up and running in minutes.</p>
     </div>
     <div className="card__footer">
       <a href="./getting-started" className="button button--primary">Get Started</a>
@@ -107,12 +107,12 @@ ID PASS Data Collect is a comprehensive open-source solution that enables organi
   </div>
 </div>
 
-## Who Uses ID PASS Data Collect?
+## Who Uses ID PASS DataCollect?
 
 - **Government Agencies** - National social protection programs
 - **UN Organizations** - Humanitarian response and refugee assistance
 - **NGOs** - Community development and beneficiary management
-- **Health Organizations** - Patient registration and health data collection
+- **Health Organizations** - Patient registration and health DataCollection
 
 ## Documentation Overview
 
@@ -129,7 +129,7 @@ ID PASS Data Collect is a comprehensive open-source solution that enables organi
 - [Configuration](./getting-started/configuration) - System configuration
 
 ### For Organizations
-- [Implementation Examples](./examples) - How others use ID PASS Data Collect
+- [Implementation Examples](./examples) - How others use ID PASS DataCollect
 
 ## Support & Community
 
@@ -139,7 +139,7 @@ ID PASS Data Collect is a comprehensive open-source solution that enables organi
 
 ## License
 
-ID PASS Data Collect is open source software licensed under the [Apache License 2.0](https://github.com/idpass/idpass-data-collect/blob/main/LICENSE).
+ID PASS DataCollect is open source software licensed under the [Apache License 2.0](https://github.com/idpass/idpass-data-collect/blob/main/LICENSE).
 
 ---
 

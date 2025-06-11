@@ -1,6 +1,6 @@
 # Docker Setup Guide
 
-This directory contains Docker configurations for deploying ID PASS Data Collect.
+This directory contains Docker configurations for deploying ID PASS DataCollect.
 
 ## Quick Start
 

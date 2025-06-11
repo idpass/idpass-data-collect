@@ -1,7 +1,7 @@
 ## Prerequisites
 1. NodeJS: v20
 2. Android SDK
-3. ID PASS Data Collect - https://github.com/idpass/idpass-data-collect
+3. ID PASS DataCollect - https://github.com/idpass/idpass-data-collect
    1. Checkout the branch - `main`
 
 
@@ -15,7 +15,7 @@
    ```
    npm install
    ```
-4. ID PASS Data Collect is not available in any registry. Install it locally. 
+4. ID PASS DataCollect is not available in any registry. Install it locally. 
    ```
    npm install ../../idpass-data-collect
    ```
@@ -61,7 +61,7 @@
 3. Use this endpoint to get the form JSON - `{backend_url}/api/registration/site/config?site_id={id}`
 
 ## Adding the form
-1. Login to the self-reg mobile using an ID PASS Data Collect account. 
+1. Login to the self-reg mobile using an ID PASS DataCollect account. 
 2. For web, go to **Entities** and click the **Create group** button. Input the the form url.
 3. For mobile, create a QR code with the form URL as the value. Go to **Entities** and click the **Create group** button and scan the QR code.
 

@@ -6,7 +6,7 @@ sidebar_position: 2
 
 # Event Sourcing Architecture
 
-ID PASS Data Collect implements a comprehensive event sourcing architecture that provides complete audit trails, time-travel debugging, and cryptographic integrity verification. This document explains the design principles, implementation details, and practical usage.
+ID PASS DataCollect implements a comprehensive event sourcing architecture that provides complete audit trails, time-travel debugging, and cryptographic integrity verification. This document explains the design principles, implementation details, and practical usage.
 
 ## Overview
 
@@ -27,7 +27,7 @@ graph LR
 
 ### Events as First-Class Citizens
 
-In ID PASS Data Collect, every change is represented as an immutable event:
+In ID PASS DataCollect, every change is represented as an immutable event:
 
 ```typescript
 interface FormSubmission {
@@ -541,7 +541,7 @@ async function printEventTimeline(entityId: string): Promise<void> {
 
 ## Conclusion
 
-Event sourcing in ID PASS Data Collect provides a robust foundation for:
+Event sourcing in ID PASS DataCollect provides a robust foundation for:
 
 - **Reliability**: Complete audit trails and data integrity
 - **Flexibility**: Easy to add new event types and behaviors

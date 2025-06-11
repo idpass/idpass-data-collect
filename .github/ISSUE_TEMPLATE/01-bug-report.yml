@@ -1,5 +1,5 @@
 name: 🐛 Bug Report
-description: Report a bug or unexpected behavior in ID PASS Data Collect
+description: Report a bug or unexpected behavior in ID PASS DataCollect
 title: "[Bug]: "
 labels: ["bug", "triage"]
 assignees: []
@@ -46,7 +46,7 @@ body:
     id: component
     attributes:
       label: Component
-      description: Which part of ID PASS Data Collect is affected?
+      description: Which part of ID PASS DataCollect is affected?
       options:
         - Core Library (packages/datacollect)
         - Backend Server (packages/backend)
@@ -76,7 +76,7 @@ body:
     id: version
     attributes:
       label: Version
-      description: What version of ID PASS Data Collect are you using?
+      description: What version of ID PASS DataCollect are you using?
       placeholder: "1.0.0"
     validations:
       required: true
