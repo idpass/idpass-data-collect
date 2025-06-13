@@ -117,5 +117,5 @@ console.log("Created member:", member);
 
 - Check our [Troubleshooting Guide](../user-guide/troubleshooting.md)
 - Read the [FAQ](../reference/faq.md)
-- Open an issue on [GitHub](https://github.com/your-org/Data-Management-System-Sync/issues)
-- Join our [Community Discussions](https://github.com/your-org/Data-Management-System-Sync/discussions)
+- Open an issue on [GitHub](https://github.com/idpass/idpass-data-collect/issues)
+- Join our [Community Discussions](https://github.com/idpass/idpass-data-collect/discussions)
