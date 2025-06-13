@@ -9,8 +9,11 @@ This directory contains Docker configurations for deploying ID PASS DataCollect.
 The `docker-compose.dev.yaml` provides a development setup with everything you need to start quickly.
 Before running, you need to configure the `.env` file and the `postgresql.env` file.
 
+Keep in mind that the PostgreSQL details in both files need to be in sync,
+or you will experience authentication issues between the services.
+
 ```bash
-# Copy the example environment files and update with your values
+# Copy the example environment files and update with your values.
 cp .env.example .env
 cp postgresql.env.example postgresql.env
 ```
