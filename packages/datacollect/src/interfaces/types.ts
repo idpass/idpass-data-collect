@@ -696,21 +696,21 @@ export interface ExternalSyncCredentials {
  */
 export interface OIDCConfig {
   /** The OIDC provider's base URL (issuer identifier) */
-  authority: string
+  authority: string;
   /** Client identifier registered with the OIDC provider */
-  client_id: string
+  client_id: string;
   /** URI where the OIDC provider redirects after successful authentication */
-  redirect_uri: string
+  redirect_uri: string;
   /** URI where the OIDC provider redirects after logout */
-  post_logout_redirect_uri: string
+  post_logout_redirect_uri: string;
   /** OAuth 2.0 response type (typically "code" for authorization code flow) */
-  response_type: string
+  response_type: string;
   /** Space-separated list of requested scopes (e.g., "openid profile email") */
-  scope: string
+  scope: string;
   /** Optional state parameter for CSRF protection during auth flow */
-  state?: string
+  state?: string;
   /** Optional custom parameters specific to the OIDC provider */
-  customParams?: Record<string, string>
+  customParams?: Record<string, string>;
 }
 
 /**
@@ -736,23 +736,23 @@ export interface OIDCConfig {
  */
 export interface AuthResult {
   /** JWT access token for API authentication */
-  access_token: string
+  access_token: string;
   /** Optional JWT ID token containing user identity claims */
-  id_token?: string
+  id_token?: string;
   /** Optional refresh token for obtaining new access tokens */
-  refresh_token?: string
+  refresh_token?: string;
   /** Token lifetime in seconds from issuance */
-  expires_in: number
+  expires_in: number;
   /** Optional user profile information extracted from tokens */
-  profile?: Record<string, string> // Optional profile information
+  profile?: Record<string, string>; // Optional profile information
 }
 
 /**
  * Configuration for an authentication provider.
- * 
+ *
  * Base configuration interface that all authentication providers must implement.
  * Contains common settings and allows for provider-specific configuration extensions.
- * 
+ *
  * @example
  * ```typescript
  * const googleConfig: AuthProviderConfig = {
@@ -765,18 +765,18 @@ export interface AuthResult {
  */
 export interface AuthProviderConfig {
   /** Whether this authentication provider is enabled */
-  enabled: boolean
+  enabled: boolean;
   /** Additional provider-specific configuration properties */
-  [key: string]: string | number | boolean | undefined
+  [key: string]: string | number | boolean | undefined;
 }
 
 /**
  * Authentication provider interface for implementing different OIDC providers.
- * 
- * Defines the contract for authentication provider implementations (e.g., Google, 
+ *
+ * Defines the contract for authentication provider implementations (e.g., Google,
  * Microsoft, Auth0, etc.). Each provider handles the specifics of creating OIDC
  * configuration and initializing authentication managers.
- * 
+ *
  * @example
  * ```typescript
  * const googleProvider: AuthProvider = {
@@ -797,31 +797,56 @@ export interface AuthProviderConfig {
  */
 export interface AuthProvider {
   /** Unique identifier for the authentication provider (e.g., "google", "microsoft") */
-  name: string
+  name: string;
   /** Human-readable description of the authentication provider */
-  description: string
-  /** 
+  description: string;
+  /**
    * Create OIDC configuration from provider-specific configuration.
-   * 
+   *
    * Transforms the provider's configuration format into the standard OIDCConfig
    * format that can be used by OIDCAuthManager.
-   * 
+   *
    * @param config - Provider-specific configuration settings
    * @returns Standard OIDC configuration object
    */
-  createConfig(config: AuthProviderConfig): OIDCConfig
-  /** 
+  createConfig(config: AuthProviderConfig): OIDCConfig;
+  /**
    * Initialize the authentication manager for this provider.
-   * 
+   *
    * Creates and configures an OIDCAuthManager instance for this provider,
    * or returns null if the provider is disabled or configuration is invalid.
-   * 
+   *
    * @param config - Provider-specific configuration settings
    * @param authServices - Registry of existing authentication service instances
    * @returns Initialized OIDCAuthManager instance or null if disabled/invalid
    */
-  initialize(
-    config: AuthProviderConfig,
-    authServices: Record<string, OIDCAuthManager>
-  ): OIDCAuthManager | null
+  initialize(config: AuthProviderConfig, authServices: Record<string, OIDCAuthManager>): OIDCAuthManager | null;
+}
+
+export interface AuthConfig {
+  type: string;
+  fields: Record<string, string>;
+}
+
+export interface PasswordCredentials {
+  username: string;
+  password: string;
+}
+
+export interface TokenCredentials {
+  token: string;
+}
+
+export interface AuthAdapter {
+  initialize(): Promise<void>;
+  isAuthenticated(): Promise<boolean>;
+  login(credentials: PasswordCredentials | TokenCredentials | null): Promise<void>;
+  logout(): Promise<void>;
+  validateToken(token: string): Promise<boolean>;
+}
+
+export interface AuthStorageAdapter {
+  getToken(): Promise<string>;
+  setToken(token: string): Promise<void>;
+  removeToken(): Promise<void>;
 }
