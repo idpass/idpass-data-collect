@@ -39,7 +39,8 @@ export class AppConfigStoreImpl implements AppConfigStore {
         url TEXT,
         entity_forms JSONB NOT NULL,
         entity_data JSONB,
-        external_sync JSONB
+        external_sync JSONB,
+        auth_configs JSONB
       );
     `;
 
@@ -64,6 +65,7 @@ export class AppConfigStoreImpl implements AppConfigStore {
         entityForms: row.entity_forms,
         entityData: row.entity_data,
         externalSync: row.external_sync,
+        authConfigs: row.auth_configs,
       }));
     } catch (error) {
       throw new Error(`Failed to get configs: ${error}`);
@@ -90,6 +92,7 @@ export class AppConfigStoreImpl implements AppConfigStore {
         entityForms: row.entity_forms,
         entityData: row.entity_data,
         externalSync: row.external_sync,
+        authConfigs: row.auth_configs,
       };
     } catch (error) {
       if (error instanceof Error && error.message.includes("not found")) {
@@ -102,8 +105,8 @@ export class AppConfigStoreImpl implements AppConfigStore {
   async saveConfig(config: AppConfig): Promise<void> {
     const query = `
       INSERT INTO app_configs (
-        id, name, description, version, url, entity_forms, entity_data, external_sync
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        id, name, description, version, url, entity_forms, entity_data, external_sync, auth_configs
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       ON CONFLICT (id) DO UPDATE SET
         name = EXCLUDED.name,
         description = EXCLUDED.description,
@@ -111,7 +114,8 @@ export class AppConfigStoreImpl implements AppConfigStore {
         url = EXCLUDED.url,
         entity_forms = EXCLUDED.entity_forms,
         entity_data = EXCLUDED.entity_data,
-        external_sync = EXCLUDED.external_sync
+        external_sync = EXCLUDED.external_sync,
+        auth_configs = EXCLUDED.auth_configs
     `;
 
     try {
@@ -124,6 +128,7 @@ export class AppConfigStoreImpl implements AppConfigStore {
         JSON.stringify(config.entityForms),
         JSON.stringify(config.entityData),
         config.externalSync,
+        JSON.stringify(config.authConfigs),
       ]);
     } catch (error) {
       throw new Error(`Failed to save config: ${error}`);

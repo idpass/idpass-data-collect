@@ -48,6 +48,13 @@ describe("AppConfigStore", () => {
         formio: { components: [] },
       },
     ],
+    authConfigs: [
+      {
+        type: "jwt",
+        secret: "test-secret",
+        expiresIn: "1h",
+      },
+    ],
   };
 
   describe("saveConfig", () => {
@@ -57,6 +64,7 @@ describe("AppConfigStore", () => {
       expect(configs).toHaveLength(1);
       expect(configs[0]).toMatchObject(mockConfig);
       expect(configs[0].id).toMatch("test-config-1");
+      expect(configs[0].authConfigs).toEqual(mockConfig.authConfigs);
     });
 
     it("should update an existing config", async () => {
