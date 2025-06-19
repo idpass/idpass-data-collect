@@ -97,22 +97,49 @@ const dynamicRouter = createRouter({
       name: 'entity-edit',
       component: () => import('@/views/dynamic/DynamicEditView.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/:id/oidc-login',
+      name: 'oidc-login',
+      component: () => import('@/views/dynamic/auth/AuthScreen.vue')
+    },
+    {
+      path: '/callback',
+      name: 'callback',
+      component: () => import('@/views/dynamic/auth/AuthScreen.vue')
     }
   ]
 })
 
 dynamicRouter.beforeEach(async (to, _from, next) => {
   if (to.meta.requiresAuth) {
+    
     const authStore = useAuthStore()
-    const auth = await authStore.getSyncServerAuth(to.params.id as string)
+    const appId = to.params.id as string
+    const auth = await authStore.getSyncServerAuth(appId)
+    //change this with the authenticated user later
     if (!auth.token) {
-      next({ name: 'login', params: { id: to.params.id } })
+      next({ name: 'login', params: { id: appId } })
       return
     }
 
-    await initStore(auth.userId, auth.token, to.params.id as string, auth.fullSyncServerUrl)
+    await initStore(auth.userId, auth.token, appId, auth.fullSyncServerUrl)
+    // Check OIDC authentication first
+    const isOidcAuthenticated = await authStore.isOidcAuthenticated(appId, to.fullPath)
+    if (!isOidcAuthenticated) {
+      next({
+        name: 'oidc-login',
+        params: { id: appId },
+        query: { redirect: to.fullPath }
+      })
+      return
+    }
+    else{
+      return next()
+    }
+  
   }
-  next()
+  return next()
 })
 
 // add a before each for the dynamic router

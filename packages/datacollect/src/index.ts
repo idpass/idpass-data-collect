@@ -223,3 +223,11 @@ export * from "./storage/PostgresEventStorageAdapter";
 
 // Type Definitions and Interfaces
 export * from "./interfaces/types";
+
+
+// Authentication Components
+export * from "./components/authentication/AuthProvider";
+export * from "./components/authentication/providers/Auth0Provider";
+export * from "./components/authentication/providers/KeycloakProvider";
+export * from "./components/OIDCAuthManager";
+

@@ -49,7 +49,8 @@ const onBack = () => {
 }
 
 const onLogout = () => {
-  authStore.logoutSyncServer(route.params.id as string)
+  // authStore.logoutSyncServer(route.params.id as string)
+  authStore.logoutOIDC(route.params.id as string)
 }
 
 const onSync = async () => {
