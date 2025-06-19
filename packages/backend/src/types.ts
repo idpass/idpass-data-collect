@@ -83,6 +83,11 @@ export interface EntityData {
   data: EntityDataItem[];
 }
 
+export interface AuthConfig {
+  type: string;
+  [key: string]: unknown;
+}
+
 export interface AppConfig {
   id: string;
   name: string;
@@ -92,6 +97,7 @@ export interface AppConfig {
   entityForms?: EntityForm[];
   entityData?: EntityData[];
   externalSync?: ExternalSyncConfig;
+  authConfigs?: AuthConfig[];
 }
 
 export interface AppConfigStore {

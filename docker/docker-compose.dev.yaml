@@ -1,3 +1,4 @@
+name: idpass-data-collection-dev
 services:
   # HDM Sync Server - Development mode
   sync-server:
@@ -45,10 +46,12 @@ services:
     env_file: ./postgresql.env
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./init-reset-dbs.sh:/docker-entrypoint-initdb.d/init-reset-dbs.sh
     ports:
       - "5432:5432"
     networks:
       - hdm-network
+    command: ["postgres"]
 
   # Admin UI - Development mode
   admin-ui:

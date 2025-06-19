@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import FormBuilderDialog from '@/components/FormBuilderDialog.vue'
-import { onMounted, ref, watch } from 'vue'
-import set from 'lodash/set'
 import { createApp as createAppApi, getApp, updateApp as updateAppApi } from '@/api'
+import FormBuilderDialog from '@/components/FormBuilderDialog.vue'
 import { useSnackBarStore } from '@/stores/snackBar'
-import { useRouter, useRoute } from 'vue-router'
+import set from 'lodash/set'
+import { onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 type EntityForm = {
   name: string
@@ -19,12 +19,23 @@ type ExternalSync = {
   extraFields: { name: string; value: string }[]
 }
 
+type AuthConfig = {
+  type: string
+  fields: AuthConfigField[]
+}
+
+type AuthConfigField = {
+  name: string
+  value: string
+}
+
 type ConfigSchema = {
   name: string
   description: string
   version: string
   entityForms: EntityForm[]
   externalSync: ExternalSync
+  authConfigs: AuthConfig[]
 }
 
 const snackBarStore = useSnackBarStore()
@@ -43,6 +54,7 @@ const form = ref<ConfigSchema>({
     auth: '',
     extraFields: [],
   },
+  authConfigs: [],
 })
 const circularDepError = ref(false)
 const selectedForFormBuilder = ref<{ name: string; title: string; formio?: object } | null>(null)
@@ -55,6 +67,10 @@ const itemEntityFormsError = ref<{
 const typeError = ref('')
 const urlError = ref('')
 const versionError = ref('')
+const authConfigsError = ref<{
+  [key: string]: { type: string; fieldsError: string; fields: { name: string; value: string }[] }
+}>({})
+const isValid = ref(false)
 
 onMounted(async () => {
   const id = route.params.id
@@ -130,11 +146,20 @@ const getDependsOnValues = (currentEntityForm: EntityForm) => {
   return values
 }
 
+const flattenAuthConfigs = (authConfigs: AuthConfig[]) => {
+  return authConfigs.map((authConfig) => ({
+    type: authConfig.type,
+    ...authConfig.fields.reduce((acc: Record<string, string>, field) => {
+      acc[field.name] = field.value
+      return acc
+    }, {}),
+  }))
+}
+
 const createConfig = async () => {
-  console.log('createConfig', form.value)
   try {
-    const isValid = validateForm()
-    if (!isValid) {
+    isValid.value = validateForm()
+    if (!isValid.value) {
       return
     }
 
@@ -145,6 +170,7 @@ const createConfig = async () => {
       version: form.value.version,
       entityForms: form.value.entityForms,
       externalSync: form.value.externalSync,
+      authConfigs: flattenAuthConfigs(form.value.authConfigs),
     }
 
     const formData = new FormData()
@@ -165,6 +191,41 @@ const createConfig = async () => {
   }
 }
 
+const updateConfig = async () => {
+  try {
+    isValid.value = validateForm()
+    if (!isValid.value) {
+      return
+    }
+
+    const config = {
+      id: route.params.id as string,
+      name: form.value.name,
+      description: form.value.description,
+      version: form.value.version,
+      entityForms: form.value.entityForms,
+      externalSync: form.value.externalSync,
+      authConfigs: flattenAuthConfigs(form.value.authConfigs),
+    }
+
+    const formData = new FormData()
+    formData.append(
+      'config',
+      new Blob([JSON.stringify(config)], {
+        type: 'application/json',
+      }),
+      'config.json',
+    )
+
+    await updateAppApi(route.params.id as string, formData)
+    snackBarStore.showSnackbar('Config updated successfully', 'success')
+    router.push('/')
+  } catch (error) {
+    console.error('Error updating config:', error)
+    snackBarStore.showSnackbar('Error updating config', 'red')
+  }
+}
+
 const validateForm = () => {
   let isValid = true
   // reset errors
@@ -175,6 +236,7 @@ const validateForm = () => {
   typeError.value = ''
   urlError.value = ''
   versionError.value = ''
+  authConfigsError.value = {}
 
   if (!form.value.name) {
     nameError.value = 'Name is required'
@@ -214,10 +276,37 @@ const validateForm = () => {
     urlError.value = 'URL is required'
     isValid = false
   }
+  // if at least one auth config is added, then at least one field is required
+  if (form.value.authConfigs.length > 0) {
+    form.value.authConfigs.forEach((authConfig, index) => {
+      if (authConfig.type === '') {
+        set(authConfigsError.value, `${index}.type`, 'Type is required')
+        isValid = false
+      }
+      if (authConfig.fields.length === 0) {
+        set(authConfigsError.value, `${index}.fieldsError`, 'At least one field is required')
+        isValid = false
+      } else {
+        authConfig.fields.forEach((field, fieldIndex) => {
+          if (!field.name) {
+            set(authConfigsError.value, `${index}.fields.${fieldIndex}.name`, 'Name is required')
+            isValid = false
+          }
+          if (!field.value) {
+            set(authConfigsError.value, `${index}.fields.${fieldIndex}.value`, 'Value is required')
+            isValid = false
+          }
+        })
+      }
+    })
+  }
+
   return isValid
 }
 
 const addEntityForm = () => {
+  entityFormsError.value = ''
+  itemEntityFormsError.value = {}
   form.value.entityForms.push({
     name: '',
     title: '',
@@ -241,7 +330,6 @@ const editFormio = (entityForm: EntityForm) => {
 }
 
 const saveFormio = (formio: object) => {
-  console.log('saveFormio', formio)
   const index = form.value.entityForms.findIndex(
     (entityForm) => entityForm.name === selectedForFormBuilder.value?.name,
   )
@@ -262,38 +350,27 @@ const removeExternalSyncField = (index: number) => {
   form.value.externalSync.extraFields.splice(index, 1)
 }
 
-const updateConfig = async () => {
-  try {
-    const isValid = validateForm()
-    if (!isValid) {
-      return
-    }
+const addAuthConfig = () => {
+  form.value.authConfigs.push({
+    type: '',
+    fields: [{ name: '', value: '' }],
+  })
+}
 
-    const config = {
-      id: route.params.id as string,
-      name: form.value.name,
-      description: form.value.description,
-      version: form.value.version,
-      entityForms: form.value.entityForms,
-      externalSync: form.value.externalSync,
-    }
+const addAuthConfigField = (index: number) => {
+  set(authConfigsError.value, `${index}.fieldsError`, '')
+  form.value.authConfigs[index].fields.push({
+    name: '',
+    value: '',
+  })
+}
 
-    const formData = new FormData()
-    formData.append(
-      'config',
-      new Blob([JSON.stringify(config)], {
-        type: 'application/json',
-      }),
-      'config.json',
-    )
+const removeAuthConfigField = (index: number, fieldIndex: number) => {
+  form.value.authConfigs[index].fields.splice(fieldIndex, 1)
+}
 
-    await updateAppApi(route.params.id as string, formData)
-    snackBarStore.showSnackbar('Config updated successfully', 'success')
-    router.push('/')
-  } catch (error) {
-    console.error('Error updating config:', error)
-    snackBarStore.showSnackbar('Error updating config', 'red')
-  }
+const removeAuthConfig = (index: number) => {
+  form.value.authConfigs.splice(index, 1)
 }
 </script>
 
@@ -303,7 +380,7 @@ const updateConfig = async () => {
       <v-row>
         <v-col cols="12">
           <h2 class="text-h4 mb-4">{{ isEdit ? 'Edit' : 'Create' }} Config</h2>
-          <v-form ref="formRef" @submit.prevent="createConfig">
+          <v-form>
             <v-text-field
               v-model="form.name"
               label="Name"
@@ -366,9 +443,8 @@ const updateConfig = async () => {
                 class="mt-2"
                 prepend-icon="mdi-file-document-outline"
                 size="small"
-                variant="outlined"
                 @click="buildFormio(entityForm)"
-                :color="itemEntityFormsError[entityForm.name]?.formio ? 'error' : 'primary'"
+                :color="itemEntityFormsError[entityForm.name]?.formio ? 'error' : 'inherit'"
                 >Build Form</v-btn
               >
 
@@ -377,7 +453,6 @@ const updateConfig = async () => {
                 v-if="entityForm.formio"
                 color="success"
                 size="small"
-                variant="outlined"
                 @click="editFormio(entityForm)"
                 >Edit Form</v-btn
               >
@@ -422,8 +497,6 @@ const updateConfig = async () => {
               label="Auth"
               required
             ></v-select>
-            <!-- button to add more fields -->
-            <v-btn @click="addExternalSyncField" class="mb-4 mt-4">Add Field</v-btn>
             <div v-for="(field, index) in form.externalSync.extraFields" :key="index">
               <v-row>
                 <v-col cols="5">
@@ -432,8 +505,9 @@ const updateConfig = async () => {
                 <v-col cols="5">
                   <v-text-field v-model="field.value" label="Value" required></v-text-field>
                 </v-col>
-                <v-col cols="1" class="mt-2">
+                <v-col cols="2" class="mt-2">
                   <v-btn
+                    size="small"
                     color="error"
                     icon="mdi-trash-can-outline"
                     @click="removeExternalSyncField(index)"
@@ -441,6 +515,82 @@ const updateConfig = async () => {
                 </v-col>
               </v-row>
             </div>
+            <v-btn size="small" prepend-icon="mdi-plus" @click="addExternalSyncField" class="mb-4"
+              >Add Field</v-btn
+            >
+
+            <!-- AUTH CONFIG -->
+            <v-divider class="my-6"></v-divider>
+            <h2 class="text-h5 mb-4">Auth Config</h2>
+
+            <div v-for="(authConfig, index) in form.authConfigs" :key="index">
+              <v-row align="center" class="mb-1">
+                <v-col cols="6">
+                  <h2 class="text-h6">Config {{ index + 1 }}</h2>
+                </v-col>
+                <v-col cols="6" class="text-right">
+                  <v-btn
+                    color="error"
+                    size="small"
+                    icon="mdi-trash-can-outline"
+                    @click="removeAuthConfig(index)"
+                  ></v-btn>
+                </v-col>
+              </v-row>
+
+              <v-select
+                v-model="form.authConfigs[index].type"
+                :items="[
+                  { title: 'None', value: '' },
+                  { title: 'Auth0', value: 'auth0' },
+                  { title: 'Keycloak', value: 'keycloak' },
+                ]"
+                label="Type"
+                required
+                :error-messages="authConfigsError[index]?.type"
+              ></v-select>
+              <!-- :error-messages="get(authConfigsError, `${index}.fields.${fieldIndex}.name`)" -->
+
+              <div v-for="(field, fieldIndex) in form.authConfigs[index].fields" :key="fieldIndex">
+                <v-row>
+                  <v-col cols="5">
+                    <v-text-field
+                      v-model="field.name"
+                      label="Name"
+                      required
+                      :error-messages="authConfigsError?.[index]?.fields?.[fieldIndex]?.name"
+                    ></v-text-field>
+                  </v-col>
+                  <v-col cols="5">
+                    <v-text-field
+                      v-model="field.value"
+                      label="Value"
+                      required
+                      :error-messages="authConfigsError?.[index]?.fields?.[fieldIndex]?.value"
+                    ></v-text-field>
+                  </v-col>
+                  <v-col cols="2" class="mt-2">
+                    <v-btn
+                      color="error"
+                      size="small"
+                      icon="mdi-trash-can-outline"
+                      @click="removeAuthConfigField(index, fieldIndex)"
+                    ></v-btn>
+                  </v-col>
+                </v-row>
+              </div>
+              <v-alert v-if="authConfigsError[index]?.fieldsError" type="error" class="mb-4">
+                {{ authConfigsError[index]?.fieldsError }}
+              </v-alert>
+              <v-btn
+                size="small"
+                prepend-icon="mdi-plus"
+                @click="addAuthConfigField(index)"
+                class="mb-4"
+                >Add Field</v-btn
+              >
+            </div>
+            <v-btn color="primary" @click="addAuthConfig" class="mb-4 mt-4">Add Auth Config</v-btn>
 
             <v-card-actions class="mt-4">
               <v-spacer></v-spacer>

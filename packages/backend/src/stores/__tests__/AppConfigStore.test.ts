@@ -1,8 +1,10 @@
-import "dotenv/config";
+import dotenv from "dotenv";
 
 import { Pool } from "pg";
 import { AppConfigStoreImpl } from "../AppConfigStore";
 import { AppConfig } from "../../types";
+import path from "path";
+dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 
 describe("AppConfigStore", () => {
   let adapter: AppConfigStoreImpl;
@@ -48,6 +50,13 @@ describe("AppConfigStore", () => {
         formio: { components: [] },
       },
     ],
+    authConfigs: [
+      {
+        type: "jwt",
+        secret: "test-secret",
+        expiresIn: "1h",
+      },
+    ],
   };
 
   describe("saveConfig", () => {
@@ -57,6 +66,7 @@ describe("AppConfigStore", () => {
       expect(configs).toHaveLength(1);
       expect(configs[0]).toMatchObject(mockConfig);
       expect(configs[0].id).toMatch("test-config-1");
+      expect(configs[0].authConfigs).toEqual(mockConfig.authConfigs);
     });
 
     it("should update an existing config", async () => {

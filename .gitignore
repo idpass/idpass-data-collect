@@ -92,3 +92,4 @@ packages/mobile/package-lock.json
 packages/backend/src/public/*.json
 packages/backend/src/public/*.png
 docker-compose.local.yaml
+packages/admin/package-lock.json
