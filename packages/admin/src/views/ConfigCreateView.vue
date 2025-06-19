@@ -146,16 +146,6 @@ const getDependsOnValues = (currentEntityForm: EntityForm) => {
   return values
 }
 
-const flattenAuthConfigs = (authConfigs: AuthConfig[]) => {
-  return authConfigs.map((authConfig) => ({
-    type: authConfig.type,
-    ...authConfig.fields.reduce((acc: Record<string, string>, field) => {
-      acc[field.name] = field.value
-      return acc
-    }, {}),
-  }))
-}
-
 const createConfig = async () => {
   try {
     isValid.value = validateForm()
@@ -170,7 +160,7 @@ const createConfig = async () => {
       version: form.value.version,
       entityForms: form.value.entityForms,
       externalSync: form.value.externalSync,
-      authConfigs: flattenAuthConfigs(form.value.authConfigs),
+      authConfigs: form.value.authConfigs,
     }
 
     const formData = new FormData()
@@ -205,7 +195,7 @@ const updateConfig = async () => {
       version: form.value.version,
       entityForms: form.value.entityForms,
       externalSync: form.value.externalSync,
-      authConfigs: flattenAuthConfigs(form.value.authConfigs),
+      authConfigs: form.value.authConfigs,
     }
 
     const formData = new FormData()
