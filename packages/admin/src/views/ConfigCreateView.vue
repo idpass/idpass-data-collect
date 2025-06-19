@@ -67,6 +67,7 @@ const authConfigsError = ref<{
   [key: string]: { type: string; fieldsError: string; fields: Record<string, string> }
 }>({})
 const isValid = ref(false)
+const isReady = ref(false)
 
 onMounted(async () => {
   const id = route.params.id
@@ -78,6 +79,7 @@ onMounted(async () => {
       form.value.name = config.name + ' Copy'
     }
   }
+  isReady.value = true
 })
 
 // watch form.entityForms for circular dependencies
@@ -339,7 +341,7 @@ const removeAuthConfig = (index: number) => {
 </script>
 
 <template>
-  <div class="bootstrapWrapper">
+  <div v-if="isReady" class="bootstrapWrapper">
     <v-container>
       <v-row>
         <v-col cols="12">
