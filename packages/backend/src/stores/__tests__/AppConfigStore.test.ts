@@ -1,10 +1,8 @@
-import dotenv from "dotenv";
+import "dotenv/config";
 
 import { Pool } from "pg";
 import { AppConfigStoreImpl } from "../AppConfigStore";
 import { AppConfig } from "../../types";
-import path from "path";
-dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 
 describe("AppConfigStore", () => {
   let adapter: AppConfigStoreImpl;
