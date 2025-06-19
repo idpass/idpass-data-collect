@@ -30,11 +30,14 @@ import {
   SearchCriteria,
   SyncLevel,
   ExternalSyncCredentials,
+  PasswordCredentials,
+  TokenCredentials,
 } from "../interfaces/types";
 import { EventApplierService } from "../services/EventApplierService";
 import { AppError } from "../utils/AppError";
 import { ExternalSyncManager } from "./ExternalSyncManager";
 import { InternalSyncManager } from "./InternalSyncManager";
+import { AuthManager } from "./AuthManager";
 // const MAX_GROUP_DEPTH = 5; // Maximum allowed depth for nested groups
 
 /**
@@ -146,6 +149,7 @@ export class EntityDataManager {
     private eventApplierService: EventApplierService,
     private externalSyncManager?: ExternalSyncManager,
     private internalSyncManager?: InternalSyncManager,
+    private authManager?: AuthManager,
   ) {}
 
   /**
@@ -772,11 +776,12 @@ export class EntityDataManager {
    * }
    * ```
    */
-  async login(email: string, password: string): Promise<void> {
-    if (this.internalSyncManager) {
-      await this.internalSyncManager.login(email, password);
-    }
-  }
+  // Deprecated
+  // async login(email: string, password: string): Promise<void> {
+  //   if (this.internalSyncManager) {
+  //     await this.internalSyncManager.login(email, password);
+  //   }
+  // }
 
   /**
    * Retrieves all potential duplicate entity pairs detected by the system.
@@ -840,5 +845,31 @@ export class EntityDataManager {
     if (this.externalSyncManager) {
       await this.externalSyncManager.synchronize(credentials);
     }
+  }
+
+  async login(type: string, credentials: PasswordCredentials | TokenCredentials | null): Promise<void> {
+    if (this.authManager) {
+      await this.authManager.login(type, credentials);
+    }
+  }
+
+  async logout(): Promise<void> {
+    if (this.authManager) {
+      await this.authManager.logout();
+    }
+  }
+
+  async validateToken(type: string, token: string): Promise<boolean> {
+    if (this.authManager) {
+      return this.authManager.validateToken(type, token);
+    }
+    return false;
+  }
+
+  async isAuthenticated(): Promise<boolean> {
+    if (this.authManager) {
+      return this.authManager.isAuthenticated();
+    }
+    return false;
   }
 }
