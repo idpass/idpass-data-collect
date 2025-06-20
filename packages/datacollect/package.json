@@ -24,7 +24,7 @@
     "dist"
   ],
   "scripts": {
-    "test": "jest --silent --config jest.config.js",
+    "test": "jest",
     "clean": "rimraf dist/",
     "build": "npm run clean && npm run build:types && npm run build:cjs && npm run build:esm",
     "build:types": "tsc --project tsconfig.json --emitDeclarationOnly --outDir dist/types",

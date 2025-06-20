@@ -5,11 +5,11 @@ module.exports = {
     "^.+\\.tsx?$": [
       "ts-jest",
       {
-        tsconfig: "tsconfig.test.json",
+        tsconfig: "<rootDir>/tsconfig.test.json",
       },
     ],
   },
   testMatch: ["**/*.spec.ts", "**/*.test.ts"],
-  moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
+  moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json"],
   setupFilesAfterEnv: ["jest-fetch-mock"],
 };
