@@ -107,7 +107,7 @@ const copyApp = async (id: string) => {
     <v-card-text>
       <v-list>
         <v-list-item>
-          <v-list-item-title>Id</v-list-item-title>
+          <v-list-item-title>ID</v-list-item-title>
           <v-list-item-subtitle>{{ app.id }}</v-list-item-subtitle>
         </v-list-item>
         <v-list-item>

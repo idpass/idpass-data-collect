@@ -840,15 +840,17 @@ export interface TokenCredentials {
 export interface AuthAdapter {
   initialize(): Promise<void>;
   isAuthenticated(): Promise<boolean>;
-  login(credentials: PasswordCredentials | TokenCredentials | null): Promise<void>;
+  login(credentials: PasswordCredentials | TokenCredentials | null): Promise<{ username: string; token: string }>;
   logout(): Promise<void>;
   validateToken(token: string): Promise<boolean>;
 }
 
 export interface AuthStorageAdapter {
   initialize(): Promise<void>;
+  getUsername(): Promise<string>;
   getToken(): Promise<{ provider: string; token: string } | null>;
   getTokenByProvider(provider: string): Promise<string>;
+  setUsername(provider: string, username: string): Promise<void>;
   setToken(provider: string, token: string): Promise<void>;
   removeToken(provider: string): Promise<void>;
   removeAllTokens(): Promise<void>;

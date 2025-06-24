@@ -22,10 +22,10 @@ import { AuthAdapter, SingleAuthStorage } from "../interfaces/types";
 export class MockAuthAdapter implements AuthAdapter {
   private authenticated = false;
 
-  constructor(private AuthStorage: SingleAuthStorage) {}
+  constructor(private authStorage: SingleAuthStorage) {}
 
   async initialize(): Promise<void> {
-    const token = await this.AuthStorage.getToken();
+    const token = await this.authStorage.getToken();
     if (token) {
       this.authenticated = true;
     }
@@ -35,15 +35,15 @@ export class MockAuthAdapter implements AuthAdapter {
     return Promise.resolve(this.authenticated);
   }
 
-  async login(): Promise<void> {
+  async login(): Promise<{ username: string; token: string }> {
     this.authenticated = true;
-    await this.AuthStorage.setToken("mock-token");
-    return Promise.resolve();
+    await this.authStorage.setToken("mock-token");
+    return Promise.resolve({ username: "mock-username", token: "mock-token" });
   }
 
   async logout(): Promise<void> {
     this.authenticated = false;
-    await this.AuthStorage.removeToken();
+    await this.authStorage.removeToken();
     return Promise.resolve();
   }
 

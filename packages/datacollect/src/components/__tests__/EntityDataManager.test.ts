@@ -158,16 +158,15 @@ describe("EntityDataManager", () => {
   const internalUrl = "http://localhost:3000";
   // const internalUrl = "http://hdm-sync.openspp.org:3000";
   const externalUrl = "http://localhost:3001";
-  const userId = "test";
   beforeEach(async () => {
     jest.clearAllMocks();
-    eventStore = new EventStoreImpl(userId, new IndexedDbEventStorageAdapter());
+    eventStore = new EventStoreImpl(new IndexedDbEventStorageAdapter());
     await eventStore.initialize();
     entityStore = new EntityStoreImpl(new IndexedDbEntityStorageAdapter());
     await entityStore.initialize();
     authStorage = new IndexedDbAuthStorageAdatper();
     await authStorage.initialize();
-    eventApplierService = new EventApplierService(userId, eventStore, entityStore);
+    eventApplierService = new EventApplierService(eventStore, entityStore);
     eventApplierService.registerEventApplier("add-elderly", addElderlyApplier);
     eventApplierService.registerEventApplier("split-household", splitHouseholdApplier);
     internalSyncManager = new InternalSyncManager(

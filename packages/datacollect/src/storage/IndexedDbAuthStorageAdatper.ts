@@ -143,6 +143,37 @@ export class IndexedDbAuthStorageAdatper implements AuthStorageAdapter {
   }
 
   /**
+   * Retrieves the stored username.
+   *
+   * Returns the single stored username, or an empty string if no username is stored.
+   * This method retrieves the username stored with a fixed key, ensuring only one username is maintained.
+   *
+   * @returns The stored username, or empty string if no username exists
+   */
+  async getUsername(): Promise<string> {
+    if (!this.db) {
+      console.warn("IndexedDB not initialized for auth storage");
+      return "";
+    }
+
+    const transaction = this.db.transaction([this.storeName], "readonly");
+    const objectStore = transaction.objectStore(this.storeName);
+    const request = objectStore.get("username");
+
+    return new Promise((resolve, reject) => {
+      request.onerror = () => {
+        console.error("Error retrieving username from IndexedDB:", request.error);
+        reject(request.error);
+      };
+
+      request.onsuccess = () => {
+        const result = request.result;
+        resolve(result?.username || "");
+      };
+    });
+  }
+
+  /**
    * Retrieves the first available authentication token.
    *
    * Returns the first token found in the database, or null if no tokens are stored.
@@ -294,6 +325,55 @@ export class IndexedDbAuthStorageAdatper implements AuthStorageAdapter {
       request.onsuccess = () => {
         const result = request.result;
         resolve(result?.token || "");
+      };
+    });
+  }
+
+  /**
+   * Stores a username in IndexedDB.
+   *
+   * Saves the provided username with a fixed key, replacing any previously stored username.
+   * This method ensures only one username is maintained at a time.
+   * This method is typically called during login to store the authenticated user's username.
+   *
+   * @param username - The username to store
+   * @throws {Error} When IndexedDB is not initialized, invalid parameters provided, or username storage fails
+   *
+   * @example
+   * ```typescript
+   * // Store username (replaces any existing username)
+   * await adapter.setUsername('john.doe@example.com');
+   *
+   * // Store a different username (replaces the previous one)
+   * await adapter.setUsername('jane.smith@example.com');
+   * ```
+   */
+  async setUsername(username: string): Promise<void> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized for auth storage");
+    }
+
+    if (!username || typeof username !== "string") {
+      throw new Error("Invalid username provided: username must be a non-empty string");
+    }
+
+    const transaction = this.db.transaction([this.storeName], "readwrite");
+    const objectStore = transaction.objectStore(this.storeName);
+
+    return new Promise((resolve, reject) => {
+      const storeRequest = objectStore.put({
+        id: "username",
+        username: username,
+        timestamp: new Date().toISOString(),
+      });
+
+      storeRequest.onerror = () => {
+        console.error("Error storing username:", storeRequest.error);
+        reject(storeRequest.error);
+      };
+
+      storeRequest.onsuccess = () => {
+        resolve();
       };
     });
   }
