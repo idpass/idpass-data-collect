@@ -112,7 +112,8 @@ export class InternalSyncManager {
   private async loadAuthToken(): Promise<void> {
     const token = await this.authStorage.getToken();
     if (token) {
-      this.axiosInstance.defaults.headers.Authorization = `Bearer ${token.token}`;
+      const provider = token.provider === "default" ? "Bearer" : token.provider;
+      this.axiosInstance.defaults.headers.Authorization = `${provider} ${token.token}`;
       return;
     }
     throw new Error("Unauthorized");

@@ -19,7 +19,7 @@
 
 import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
-import { Role, UserStore } from "../types";
+import { AppInstanceStore, Role, UserStore } from "../types";
 
 export interface DecodedPayload {
   id: string;
@@ -52,6 +52,43 @@ export const authenticateJWT = async (req: Request, res: Response, next: NextFun
     res.status(401).json({ error: "Invalid token" });
   }
 };
+
+export function createDynamicAuthMiddleware(appInstanceStore: AppInstanceStore) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader) {
+        res.status(401).json({ error: "Authorization header missing" });
+        return;
+      }
+
+      const [authType, token] = authHeader.split(" ");
+      if (authType.toLowerCase() === "bearer") {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || "") as DecodedPayload;
+        (req as AuthenticatedRequest).user = decoded;
+      }
+
+      // get app instance from request
+      const { configId = "default" } = req.query;
+      const appInstance = await appInstanceStore.getAppInstance(configId as string);
+      if (!appInstance) {
+        res.status(400).json({ error: "App instance not found" });
+        return;
+      }
+
+      const isValid = await appInstance.edm.validateToken(authType, token);
+      if (!isValid) {
+        res.status(401).json({ error: "Invalid token" });
+        return;
+      }
+
+      next();
+    } catch (error) {
+      console.error(error);
+      res.status(401).json({ error: "Invalid token" });
+    }
+  };
+}
 
 export function createAuthAdminMiddleware(userStore: UserStore) {
   return async (req: Request, res: Response, next: NextFunction) => {

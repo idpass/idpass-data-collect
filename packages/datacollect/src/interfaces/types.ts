@@ -850,7 +850,7 @@ export interface AuthStorageAdapter {
   getUsername(): Promise<string>;
   getToken(): Promise<{ provider: string; token: string } | null>;
   getTokenByProvider(provider: string): Promise<string>;
-  setUsername(provider: string, username: string): Promise<void>;
+  setUsername(username: string): Promise<void>;
   setToken(provider: string, token: string): Promise<void>;
   removeToken(provider: string): Promise<void>;
   removeAllTokens(): Promise<void>;

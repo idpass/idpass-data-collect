@@ -60,7 +60,11 @@ export class AuthManager {
 
   async login(credentials: PasswordCredentials | TokenCredentials | null, type?: string): Promise<void> {
     if (type) {
-      this.adapters[type]?.login(credentials);
+      const token = await this.adapters[type]?.login(credentials);
+      if (token) {
+        await this.authStorage.setToken(type, token.token);
+        await this.authStorage.setUsername(token.username);
+      }
     } else if (credentials && "username" in credentials) {
       await this.defaultLogin(credentials);
     }
