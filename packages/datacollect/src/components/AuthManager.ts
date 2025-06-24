@@ -17,6 +17,7 @@
  * under the License.
  */
 
+import axios from "axios";
 import {
   AuthConfig,
   AuthAdapter,
@@ -25,6 +26,7 @@ import {
   AuthStorageAdapter,
 } from "../interfaces/types";
 import { MockAuthAdapter } from "../services/MockAuthAdapter";
+import { SingleAuthStorageImpl } from "../services/SingleAuthStorageImpl";
 
 const adaptersMapping = {
   "mock-auth-adapter": MockAuthAdapter,
@@ -33,6 +35,7 @@ const adaptersMapping = {
 export class AuthManager {
   constructor(
     private configs: AuthConfig[],
+    private syncServerUrl: string,
     private authStorage: AuthStorageAdapter,
   ) {}
   private adapters: Record<string, AuthAdapter> = {};
@@ -41,8 +44,9 @@ export class AuthManager {
     this.adapters = this.configs.reduce(
       (acc, config) => {
         const adapterModule = adaptersMapping[config.type as keyof typeof adaptersMapping];
+        const singleAuthStorage = new SingleAuthStorageImpl(this.authStorage, config.type);
         if (adapterModule) {
-          acc[config.type] = new adapterModule(this.authStorage);
+          acc[config.type] = new adapterModule(singleAuthStorage);
         }
         return acc;
       },
@@ -54,12 +58,36 @@ export class AuthManager {
     return Object.values(this.adapters).some((adapter) => adapter.isAuthenticated());
   }
 
-  async login(type: string, credentials: PasswordCredentials | TokenCredentials | null): Promise<void> {
-    this.adapters[type]?.login(credentials);
+  async login(credentials: PasswordCredentials | TokenCredentials | null, type?: string): Promise<void> {
+    if (type) {
+      this.adapters[type]?.login(credentials);
+    } else if (credentials && "username" in credentials) {
+      await this.defaultLogin(credentials);
+    }
+  }
+
+  private async defaultLogin(credentials: PasswordCredentials): Promise<void> {
+    if (!credentials) {
+      throw new Error("Unauthorized");
+    }
+
+    try {
+      const response = await axios.post(`${this.syncServerUrl}/api/users/login`, {
+        email: credentials.username,
+        password: credentials.password,
+      });
+      const token = response.data.token;
+      await this.authStorage.setToken("default", token);
+      return;
+    } catch (error) {
+      console.error("Failed to login to sync server using default login");
+      throw error;
+    }
   }
 
   async logout(): Promise<void> {
     Object.values(this.adapters).forEach((adapter) => adapter.logout());
+    await this.authStorage.removeAllTokens();
   }
 
   async validateToken(type: string, token: string): Promise<boolean> {

@@ -17,12 +17,12 @@
  * under the License.
  */
 
-import { AuthAdapter, AuthStorageAdapter } from "../interfaces/types";
+import { AuthAdapter, SingleAuthStorage } from "../interfaces/types";
 
 export class MockAuthAdapter implements AuthAdapter {
   private authenticated = false;
 
-  constructor(private AuthStorage: AuthStorageAdapter) {}
+  constructor(private AuthStorage: SingleAuthStorage) {}
 
   async initialize(): Promise<void> {
     const token = await this.AuthStorage.getToken();

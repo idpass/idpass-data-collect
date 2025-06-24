@@ -46,7 +46,7 @@ import { AuthStorageAdapter } from "../interfaces/types";
  * @example
  * Basic usage:
  * ```typescript
- * const adapter = new IndexedDbAuthStoragAdatper('tenant-123');
+ * const adapter = new IndexedDbAuthStorageAdatper('tenant-123');
  * await adapter.initialize();
  *
  * // Store authentication token
@@ -69,11 +69,11 @@ import { AuthStorageAdapter } from "../interfaces/types";
  * Multi-tenant setup:
  * ```typescript
  * // Tenant-specific adapter
- * const tenantAdapter = new IndexedDbAuthStoragAdatper('org-xyz');
+ * const tenantAdapter = new IndexedDbAuthStorageAdatper('org-xyz');
  * await tenantAdapter.initialize(); // Creates database: authStore_org-xyz
  *
  * // Default adapter
- * const defaultAdapter = new IndexedDbAuthStoragAdatper();
+ * const defaultAdapter = new IndexedDbAuthStorageAdatper();
  * await defaultAdapter.initialize(); // Creates database: authStore
  * ```
  *
@@ -81,10 +81,10 @@ import { AuthStorageAdapter } from "../interfaces/types";
  * Authentication flow integration:
  * ```typescript
  * class AuthManager {
- *   private storage: IndexedDbAuthStoragAdatper;
+ *   private storage: IndexedDbAuthStorageAdatper;
  *
  *   constructor(tenantId: string) {
- *     this.storage = new IndexedDbAuthStoragAdatper(tenantId);
+ *     this.storage = new IndexedDbAuthStorageAdatper(tenantId);
  *   }
  *
  *   async initialize() {
@@ -116,13 +116,13 @@ import { AuthStorageAdapter } from "../interfaces/types";
  * }
  * ```
  */
-export class IndexedDbAuthStoragAdatper implements AuthStorageAdapter {
+export class IndexedDbAuthStorageAdatper implements AuthStorageAdapter {
   private dbName = "authStore";
   private storeName = "tokens";
   private db: IDBDatabase | null = null;
 
   /**
-   * Creates a new IndexedDbAuthStoragAdatper instance.
+   * Creates a new IndexedDbAuthStorageAdatper instance.
    *
    * @param tenantId - Optional tenant identifier for multi-tenant isolation
    *                   When provided, creates a separate database prefixed with tenant ID
@@ -130,16 +130,87 @@ export class IndexedDbAuthStoragAdatper implements AuthStorageAdapter {
    * @example
    * ```typescript
    * // Default database (authStore)
-   * const adapter = new IndexedDbAuthStoragAdatper();
+   * const adapter = new IndexedDbAuthStorageAdatper();
    *
    * // Tenant-specific database (authStore_org-123)
-   * const tenantAdapter = new IndexedDbAuthStoragAdatper('org-123');
+   * const tenantAdapter = new IndexedDbAuthStorageAdatper('org-123');
    * ```
    */
   constructor(public readonly tenantId: string = "") {
     if (tenantId) {
       this.dbName = `authStore_${tenantId}`;
     }
+  }
+
+  /**
+   * Retrieves the first available authentication token.
+   *
+   * Returns the first token found in the database, or null if no tokens are stored.
+   * This method is typically called to get any available token for authentication.
+   *
+   * @returns The first available token with provider information, or null if no tokens exist
+   */
+  async getToken(): Promise<{ provider: string; token: string } | null> {
+    if (!this.db) {
+      console.warn("IndexedDB not initialized for auth storage");
+      return null;
+    }
+
+    const transaction = this.db.transaction([this.storeName], "readonly");
+    const objectStore = transaction.objectStore(this.storeName);
+
+    return new Promise((resolve, reject) => {
+      const request = objectStore.openCursor();
+
+      request.onerror = () => {
+        console.error("Error retrieving token from IndexedDB:", request.error);
+        reject(request.error);
+      };
+
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (cursor) {
+          // Return the first token found
+          resolve({
+            provider: cursor.key as string,
+            token: cursor.value.token,
+          });
+        } else {
+          // No tokens found
+          resolve(null);
+        }
+      };
+    });
+  }
+
+  /**
+   * Removes all stored authentication tokens from IndexedDB.
+   *
+   * Clears all stored tokens, effectively logging out all users.
+   * This method is typically called during logout or when tokens expire.
+   *
+   * @throws {Error} When IndexedDB is not initialized or token removal fails
+   */
+  async removeAllTokens(): Promise<void> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized for auth storage");
+    }
+
+    const transaction = this.db.transaction([this.storeName], "readwrite");
+    const objectStore = transaction.objectStore(this.storeName);
+
+    return new Promise((resolve, reject) => {
+      const request = objectStore.clear();
+
+      request.onerror = () => {
+        console.error("Error removing all tokens from IndexedDB:", request.error);
+        reject(request.error);
+      };
+
+      request.onsuccess = () => {
+        resolve();
+      };
+    });
   }
 
   /**
@@ -166,7 +237,7 @@ export class IndexedDbAuthStoragAdatper implements AuthStorageAdapter {
    *
    * @example
    * ```typescript
-   * const adapter = new IndexedDbAuthStoragAdatper('tenant-123');
+   * const adapter = new IndexedDbAuthStorageAdatper('tenant-123');
    * await adapter.initialize();
    * // Now ready for token operations
    * ```
@@ -196,31 +267,15 @@ export class IndexedDbAuthStoragAdatper implements AuthStorageAdapter {
   }
 
   /**
-   * Retrieves the stored authentication token.
+   * Retrieves a stored authentication token by key.
    *
-   * Returns the most recently stored token, or an empty string if no token is found.
+   * Returns the token associated with the specified key, or an empty string if no token is found.
    * This method is typically called before making authenticated API requests.
    *
+   * @param provider - The provider name identifying the token to retrieve
    * @returns The stored authentication token, or empty string if not found
-   *
-   * @example
-   * ```typescript
-   * const token = await adapter.getToken();
-   * if (token) {
-   *   // Token exists, use it for authenticated requests
-   *   const response = await fetch('/api/protected-resource', {
-   *     headers: {
-   *       'Authorization': `Bearer ${token}`,
-   *       'Content-Type': 'application/json'
-   *     }
-   *   });
-   * } else {
-   *   // No token found, redirect to login
-   *   window.location.href = '/login';
-   * }
-   * ```
    */
-  async getToken(): Promise<string> {
+  async getTokenByProvider(provider: string = "current_token"): Promise<string> {
     if (!this.db) {
       console.warn("IndexedDB not initialized for auth storage");
       return "";
@@ -228,7 +283,7 @@ export class IndexedDbAuthStoragAdatper implements AuthStorageAdapter {
 
     const transaction = this.db.transaction([this.storeName], "readonly");
     const objectStore = transaction.objectStore(this.storeName);
-    const request = objectStore.getAll();
+    const request = objectStore.get(provider);
 
     return new Promise((resolve, reject) => {
       request.onerror = () => {
@@ -237,41 +292,23 @@ export class IndexedDbAuthStoragAdatper implements AuthStorageAdapter {
       };
 
       request.onsuccess = () => {
-        const tokens = request.result;
-        if (tokens && tokens.length > 0) {
-          // Return the most recent token (assuming single token storage)
-          resolve(tokens[0].token || "");
-        } else {
-          resolve("");
-        }
+        const result = request.result;
+        resolve(result?.token || "");
       };
     });
   }
 
   /**
-   * Stores an authentication token in IndexedDB.
+   * Stores an authentication token with a specific key in IndexedDB.
    *
-   * Saves the provided token with a timestamp for tracking purposes.
-   * If a token already exists, it will be replaced with the new token.
+   * Saves the provided token with the specified key and a timestamp for tracking purposes.
+   * If a token already exists with the same key, it will be replaced with the new token.
    *
+   * @param key - The key to associate with the token
    * @param token - The authentication token to store (JWT, Bearer token, etc.)
    * @throws {Error} When IndexedDB is not initialized or token storage fails
-   *
-   * @example
-   * ```typescript
-   * // After successful authentication
-   * const response = await fetch('/auth/login', {
-   *   method: 'POST',
-   *   headers: { 'Content-Type': 'application/json' },
-   *   body: JSON.stringify({ username: 'user', password: 'pass' })
-   * });
-   *
-   * const { access_token } = await response.json();
-   * await adapter.setToken(access_token);
-   * console.log('Authentication token stored successfully');
-   * ```
    */
-  async setToken(token: string): Promise<void> {
+  async setToken(key: string, token: string): Promise<void> {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized for auth storage");
     }
@@ -280,69 +317,41 @@ export class IndexedDbAuthStoragAdatper implements AuthStorageAdapter {
       throw new Error("Invalid token provided: token must be a non-empty string");
     }
 
+    if (!key || typeof key !== "string") {
+      throw new Error("Invalid key provided: key must be a non-empty string");
+    }
+
     const transaction = this.db.transaction([this.storeName], "readwrite");
     const objectStore = transaction.objectStore(this.storeName);
 
     return new Promise((resolve, reject) => {
-      // Clear existing tokens first (single token storage)
-      const clearRequest = objectStore.clear();
+      const storeRequest = objectStore.put({
+        id: key,
+        token: token,
+        timestamp: new Date().toISOString(),
+      });
 
-      clearRequest.onerror = () => {
-        console.error("Error clearing existing tokens:", clearRequest.error);
-        reject(clearRequest.error);
+      storeRequest.onerror = () => {
+        console.error("Error storing token:", storeRequest.error);
+        reject(storeRequest.error);
       };
 
-      clearRequest.onsuccess = () => {
-        // Store the new token
-        const storeRequest = objectStore.put({
-          id: "current_token",
-          token: token,
-          timestamp: new Date().toISOString(),
-        });
-
-        storeRequest.onerror = () => {
-          console.error("Error storing token:", storeRequest.error);
-          reject(storeRequest.error);
-        };
-
-        storeRequest.onsuccess = () => {
-          resolve();
-        };
+      storeRequest.onsuccess = () => {
+        resolve();
       };
     });
   }
 
   /**
-   * Removes the stored authentication token from IndexedDB.
+   * Removes a specific authentication token by key from IndexedDB.
    *
-   * Clears all stored tokens, effectively logging out the user.
+   * Removes the token associated with the specified key.
    * This method is typically called during logout or when tokens expire.
    *
+   * @param key - The key identifying the token to remove
    * @throws {Error} When IndexedDB is not initialized or token removal fails
-   *
-   * @example
-   * ```typescript
-   * // During logout process
-   * async function logout() {
-   *   try {
-   *     // Optionally notify server of logout
-   *     await fetch('/auth/logout', {
-   *       method: 'POST',
-   *       headers: {
-   *         'Authorization': `Bearer ${await adapter.getToken()}`
-   *       }
-   *     });
-   *   } catch (error) {
-   *     console.warn('Server logout failed, continuing with local logout');
-   *   }
-   *
-   *   // Always remove local token
-   *   await adapter.removeToken();
-   *   console.log('User logged out successfully');
-   * }
-   * ```
    */
-  async removeToken(): Promise<void> {
+  async removeToken(key: string): Promise<void> {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized for auth storage");
     }
@@ -351,7 +360,7 @@ export class IndexedDbAuthStoragAdatper implements AuthStorageAdapter {
     const objectStore = transaction.objectStore(this.storeName);
 
     return new Promise((resolve, reject) => {
-      const request = objectStore.clear();
+      const request = objectStore.delete(key);
 
       request.onerror = () => {
         console.error("Error removing token from IndexedDB:", request.error);
@@ -360,75 +369,6 @@ export class IndexedDbAuthStoragAdatper implements AuthStorageAdapter {
 
       request.onsuccess = () => {
         resolve();
-      };
-    });
-  }
-
-  /**
-   * Checks if a token is currently stored and valid.
-   *
-   * Utility method to determine if the user is authenticated.
-   * This is a convenience method that combines getToken() with validation.
-   *
-   * @returns True if a token exists and is not empty, false otherwise
-   *
-   * @example
-   * ```typescript
-   * // Check authentication status
-   * const isAuthenticated = await adapter.hasToken();
-   * if (isAuthenticated) {
-   *   console.log('User is authenticated');
-   *   // Proceed with authenticated operations
-   * } else {
-   *   console.log('User is not authenticated');
-   *   // Redirect to login
-   * }
-   * ```
-   */
-  async hasToken(): Promise<boolean> {
-    const token = await this.getToken();
-    return token.length > 0;
-  }
-
-  /**
-   * Gets the timestamp when the current token was stored.
-   *
-   * Useful for token age validation and refresh logic.
-   *
-   * @returns ISO timestamp when the token was stored, or null if no token exists
-   *
-   * @example
-   * ```typescript
-   * const tokenAge = await adapter.getTokenTimestamp();
-   * if (tokenAge) {
-   *   const ageInMinutes = (Date.now() - new Date(tokenAge).getTime()) / (1000 * 60);
-   *   if (ageInMinutes > 60) {
-   *     console.log('Token is over 1 hour old, consider refreshing');
-   *   }
-   * }
-   * ```
-   */
-  async getTokenTimestamp(): Promise<string | null> {
-    if (!this.db) {
-      return null;
-    }
-
-    const transaction = this.db.transaction([this.storeName], "readonly");
-    const objectStore = transaction.objectStore(this.storeName);
-    const request = objectStore.getAll();
-
-    return new Promise((resolve, reject) => {
-      request.onerror = () => {
-        reject(request.error);
-      };
-
-      request.onsuccess = () => {
-        const tokens = request.result;
-        if (tokens && tokens.length > 0) {
-          resolve(tokens[0].timestamp || null);
-        } else {
-          resolve(null);
-        }
       };
     });
   }

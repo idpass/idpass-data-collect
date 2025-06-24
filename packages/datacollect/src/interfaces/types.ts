@@ -846,6 +846,17 @@ export interface AuthAdapter {
 }
 
 export interface AuthStorageAdapter {
+  initialize(): Promise<void>;
+  getToken(): Promise<{ provider: string; token: string } | null>;
+  getTokenByProvider(provider: string): Promise<string>;
+  setToken(provider: string, token: string): Promise<void>;
+  removeToken(provider: string): Promise<void>;
+  removeAllTokens(): Promise<void>;
+  closeConnection(): Promise<void>;
+  clearStore(): Promise<void>;
+}
+
+export interface SingleAuthStorage {
   getToken(): Promise<string>;
   setToken(token: string): Promise<void>;
   removeToken(): Promise<void>;

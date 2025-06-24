@@ -18,23 +18,30 @@
  */
 
 import axios, { AxiosInstance } from "axios";
-import { FormSubmission, EventStore, SyncLevel, AuditLogEntry, EntityStore } from "../interfaces/types";
+import {
+  FormSubmission,
+  EventStore,
+  SyncLevel,
+  AuditLogEntry,
+  EntityStore,
+  AuthStorageAdapter,
+} from "../interfaces/types";
 import { EventApplierService } from "../services/EventApplierService";
 
 /**
  * Manages bidirectional synchronization between local DataCollect instances and the remote sync server.
- * 
+ *
  * The InternalSyncManager implements a two-phase sync process:
  * 1. **Push Phase**: Sends local unsynced events to the remote server
  * 2. **Pull Phase**: Retrieves and applies remote events to local storage
- * 
+ *
  * Key features:
  * - Pagination support (10 events per page by default)
  * - JWT-based authentication with automatic token refresh
  * - Conflict detection and resolution
  * - Audit log synchronization
  * - Progress tracking and error handling
- * 
+ *
  * @example
  * Basic usage:
  * ```typescript
@@ -46,25 +53,25 @@ import { EventApplierService } from "../services/EventApplierService";
  *   'jwt-token',
  *   'app-config-id'
  * );
- * 
+ *
  * // Authenticate
  * await syncManager.login('user@example.com', 'password');
- * 
+ *
  * // Check for pending changes
  * if (await syncManager.hasUnsyncedEvents()) {
  *   console.log(`${await syncManager.getUnsyncedEventsCount()} events pending`);
- *   
+ *
  *   // Perform full sync
  *   await syncManager.sync();
  * }
  * ```
- * 
+ *
  * @example
  * Manual sync phases:
  * ```typescript
  * // Push local changes first
  * await syncManager.pushToRemote();
- * 
+ *
  * // Then pull remote changes
  * await syncManager.pullFromRemote();
  * ```
@@ -72,13 +79,13 @@ import { EventApplierService } from "../services/EventApplierService";
 export class InternalSyncManager {
   /** Flag indicating if a sync operation is currently in progress */
   public isSyncing = false;
-  
+
   /** HTTP client instance with configured base URL and headers */
   private readonly axiosInstance: AxiosInstance;
 
   /**
    * Creates a new InternalSyncManager instance.
-   * 
+   *
    * @param eventStore - Store for managing events and form submissions
    * @param entityStore - Store for managing current entity state
    * @param eventApplierService - Service for applying events to entities
@@ -91,70 +98,36 @@ export class InternalSyncManager {
     private entityStore: EntityStore,
     private eventApplierService: EventApplierService,
     private syncServerUrl: string,
-    private authToken: string,
+    private authStorage: AuthStorageAdapter,
     private configId: string = "default",
   ) {
     this.axiosInstance = axios.create({
       baseURL: this.syncServerUrl,
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${this.authToken}`,
       },
     });
   }
 
-  /**
-   * Authenticates with the sync server using email and password.
-   * 
-   * Automatically updates the authentication token and HTTP headers
-   * for subsequent requests.
-   * 
-   * @param email - User email address
-   * @param password - User password
-   * @throws {Error} When authentication fails
-   * 
-   * @example
-   * ```typescript
-   * try {
-   *   await syncManager.login('user@example.com', 'password123');
-   *   console.log('Authentication successful');
-   * } catch (error) {
-   *   console.error('Login failed:', error.message);
-   * }
-   * ```
-   */
-  async login(email: string, password: string): Promise<void> {
-    const response = await this.axiosInstance.post("/api/users/login", { email, password });
-    this.authToken = response.data.token;
-    this.axiosInstance.defaults.headers.Authorization = `Bearer ${this.authToken}`;
-  }
-
-  /**
-   * Updates the authentication token for server communication.
-   * 
-   * @param token - New JWT authentication token
-   * 
-   * @example
-   * ```typescript
-   * // After receiving a new token from external authentication
-   * await syncManager.setAuthToken(newJwtToken);
-   * ```
-   */
-  async setAuthToken(token: string): Promise<void> {
-    this.authToken = token;
-    this.axiosInstance.defaults.headers.Authorization = `Bearer ${token}`;
+  private async loadAuthToken(): Promise<void> {
+    const token = await this.authStorage.getToken();
+    if (token) {
+      this.axiosInstance.defaults.headers.Authorization = `Bearer ${token.token}`;
+      return;
+    }
+    throw new Error("Unauthorized");
   }
 
   /**
    * Gets the count of events waiting to be synchronized with the server.
-   * 
+   *
    * @returns Number of unsynced events
-   * 
+   *
    * @example
    * ```typescript
    * const count = await syncManager.getUnsyncedEventsCount();
    * console.log(`${count} events pending sync`);
-   * 
+   *
    * if (count > 50) {
    *   console.log('Large number of changes - consider syncing soon');
    * }
@@ -168,9 +141,9 @@ export class InternalSyncManager {
 
   /**
    * Checks if there are any events waiting to be synchronized.
-   * 
+   *
    * @returns True if there are unsynced events, false otherwise
-   * 
+   *
    * @example
    * ```typescript
    * if (await syncManager.hasUnsyncedEvents()) {
@@ -189,11 +162,11 @@ export class InternalSyncManager {
 
   /**
    * Pulls events from the remote server since a specific timestamp.
-   * 
+   *
    * @param lastSyncTimestamp - ISO timestamp to fetch events from
    * @returns Object with events array and pagination cursor
    * @throws {Error} When API request fails or server returns error
-   * 
+   *
    * @private
    */
   private async pullFromRemote(lastSyncTimestamp: string): Promise<{
@@ -209,38 +182,38 @@ export class InternalSyncManager {
 
   /**
    * Pushes events to the remote server.
-   * 
+   *
    * @param events - Array of events to push to the server
    * @throws {Error} When API request fails or server rejects events
-   * 
+   *
    * @private
    */
   private async pushToRemote(events: FormSubmission[]): Promise<void> {
-    await this.axiosInstance.post("api/sync/push", { events, configId: this.configId });
+    await this.axiosInstance.post("/api/sync/push", { events, configId: this.configId });
   }
 
   /**
    * Pushes audit logs to the remote server.
-   * 
+   *
    * @param auditLogs - Array of audit log entries to push
    * @throws {Error} When API request fails
-   * 
+   *
    * @private
    */
   private async pushAuditLogsToRemote(auditLogs: AuditLogEntry[]): Promise<void> {
-    await this.axiosInstance.post("api/sync/push/audit-logs", { auditLogs, configId: this.configId });
+    await this.axiosInstance.post("/api/sync/push/audit-logs", { auditLogs, configId: this.configId });
   }
 
   /**
    * Splits an array into smaller chunks of specified size.
-   * 
+   *
    * Used for pagination during sync operations to avoid memory issues
    * and provide better error recovery.
-   * 
+   *
    * @param array - Array to split into chunks
    * @param chunkSize - Maximum size of each chunk
    * @returns Array of arrays (chunks)
-   * 
+   *
    * @private
    */
   private chunkArray<T>(array: T[], chunkSize: number): T[][] {
@@ -253,16 +226,16 @@ export class InternalSyncManager {
 
   /**
    * Uploads a chunk of events with retry logic and exponential backoff.
-   * 
+   *
    * Implements resilient upload with automatic retries for transient failures.
    * Uses exponential backoff to avoid overwhelming the server.
-   * 
+   *
    * @param chunk - Array of events to upload
    * @param retryCount - Maximum number of retry attempts (default: 3)
    * @param delayMs - Base delay in milliseconds between retries (default: 1000)
    * @returns True if upload succeeded, false otherwise
    * @throws {Error} When all retry attempts are exhausted
-   * 
+   *
    * @private
    */
   private async uploadChunkWithRetry(chunk: FormSubmission[], retryCount = 3, delayMs = 1000): Promise<boolean> {
@@ -280,19 +253,19 @@ export class InternalSyncManager {
 
   /**
    * Uploads all local unsynced events to the remote server.
-   * 
+   *
    * This method implements chunked upload with retry logic:
    * - Fetches all events since last local sync timestamp
    * - Splits events into chunks (default: 10 events per chunk)
    * - Uploads chunks sequentially with retry on failure
    * - Updates sync level to REMOTE for successful events
    * - Handles partial failures gracefully
-   * 
+   *
    * @param chunkSize - Number of events per chunk (default: 10)
    * @throws {Error} When upload fails after all retries
-   * 
+   *
    * @private
-   * 
+   *
    * TODO: Consider making chunk size configurable per instance
    * TODO: Add progress callback for UI updates
    */
@@ -347,7 +320,7 @@ export class InternalSyncManager {
 
   /**
    * Downloads and applies remote events from the server.
-   * 
+   *
    * This method implements paginated download with event application:
    * - Uses cursor-based pagination to handle large datasets
    * - Sorts events by timestamp to ensure correct application order
@@ -355,11 +328,11 @@ export class InternalSyncManager {
    * - Applies events using EventApplierService
    * - Updates remote sync timestamp on successful batches
    * - Rolls back timestamp on failure to enable retry
-   * 
+   *
    * @throws {Error} When download or event application fails
-   * 
+   *
    * @private
-   * 
+   *
    * TODO: Add conflict resolution for concurrent modifications
    * TODO: Consider batch size optimization based on network conditions
    */
@@ -367,11 +340,12 @@ export class InternalSyncManager {
     let nextCursor: string | Date | null = await this.eventStore.getLastRemoteSyncTimestamp();
     let lastSuccessfulTimestamp: string | null = null;
 
-    while (nextCursor !== null) {
+    while (nextCursor) {
+      console.log("nextCursor", nextCursor);
       const result = await this.pullFromRemote(nextCursor.toString());
       const { events, nextCursor: newCursor } = result;
 
-      if (events.length) {
+      if (events && events.length) {
         const sorted = events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
         const latestEventTimestamp = sorted[sorted.length - 1].timestamp;
 
@@ -403,12 +377,12 @@ export class InternalSyncManager {
 
   /**
    * Checks if there are any unresolved potential duplicates.
-   * 
+   *
    * Sync operations are blocked when duplicates exist to prevent
    * data inconsistencies. Users must resolve duplicates before syncing.
-   * 
+   *
    * @returns True if potential duplicates exist, false otherwise
-   * 
+   *
    * @example
    * ```typescript
    * if (await syncManager.checkIfDuplicatesExist()) {
@@ -425,17 +399,17 @@ export class InternalSyncManager {
 
   /**
    * Performs a complete bidirectional synchronization with the remote server.
-   * 
+   *
    * This is the main sync method that orchestrates the entire sync process:
    * 1. **Duplicate Check**: Ensures no unresolved duplicates exist
    * 2. **Upload Phase**: Pushes local events to server (chunked, with retry)
    * 3. **Download Phase**: Pulls and applies remote events (paginated)
-   * 
+   *
    * The sync operation is atomic - if any phase fails, the entire sync is rolled back.
    * Only one sync operation can run at a time (protected by `isSyncing` flag).
-   * 
+   *
    * @throws {Error} When duplicates exist, authentication fails, or network errors occur
-   * 
+   *
    * @example
    * ```typescript
    * try {
@@ -450,7 +424,7 @@ export class InternalSyncManager {
    *   }
    * }
    * ```
-   * 
+   *
    * @example
    * Checking sync status:
    * ```typescript
@@ -458,7 +432,7 @@ export class InternalSyncManager {
    *   console.log('Sync already in progress...');
    *   return;
    * }
-   * 
+   *
    * await syncManager.sync();
    * ```
    */
@@ -473,6 +447,7 @@ export class InternalSyncManager {
         throw new Error("Duplicates exist! Please resolve them before syncing.");
       }
 
+      await this.loadAuthToken();
       await this.uploadLocalEvents();
       await this.downloadRemoteEvents();
     } catch (error) {

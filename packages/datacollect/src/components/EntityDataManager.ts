@@ -682,30 +682,6 @@ export class EntityDataManager {
   }
 
   /**
-   * Sets the authentication token for sync server communication.
-   *
-   * Updates the JWT token used for authenticating with the remote sync server.
-   * Only available when an InternalSyncManager is configured.
-   *
-   * @param token - JWT authentication token
-   *
-   * @example
-   * ```typescript
-   * // After user login
-   * const authResponse = await loginUser(email, password);
-   * await manager.setAuthToken(authResponse.token);
-   *
-   * // Now sync operations will use the new token
-   * await manager.syncWithSyncServer();
-   * ```
-   */
-  async setAuthToken(token: string): Promise<void> {
-    if (this.internalSyncManager) {
-      await this.internalSyncManager.setAuthToken(token);
-    }
-  }
-
-  /**
    * Saves multiple audit log entries to the event store.
    *
    * Used for batch saving of audit logs, typically during sync operations
@@ -847,9 +823,9 @@ export class EntityDataManager {
     }
   }
 
-  async login(type: string, credentials: PasswordCredentials | TokenCredentials | null): Promise<void> {
+  async login(credentials: PasswordCredentials | TokenCredentials | null, type?: string): Promise<void> {
     if (this.authManager) {
-      await this.authManager.login(type, credentials);
+      await this.authManager.login(credentials, type);
     }
   }
 
