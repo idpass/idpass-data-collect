@@ -24,7 +24,11 @@ const tenantStore = useTenantStore()
 const authProviders = ref<AuthConfig[]>([])
 const isCallback = ref(false)
 const callbackProcessing = ref(false)
-
+const form = ref({
+  email: '',
+  password: ''
+})
+const errorMessage = ref('')
 onMounted(async () => {
   // Check if this is a callback route
   isCallback.value = route.name === 'callback' || route.path === '/callback'
@@ -114,8 +118,10 @@ const getProviderName = (provider: string) => {
   return config?.type || provider.charAt(0).toUpperCase() + provider.slice(1)
 }
 
-const onBasicAuthLogin = () => {
-  router.push(`/app/${currentAppId.value}/login`)
+const onLogin = async () => {
+  await authManager.initialize(currentAppId.value)
+  await authManager.login(null, {username: form.value.email, password: form.value.password})
+  await authManager.handleDefaultLogin()
 }
 </script>
 
@@ -143,13 +149,29 @@ const onBasicAuthLogin = () => {
 
       <!-- Regular auth flow -->
       <div v-else>
+        <form @submit.prevent="onLogin">
+          <div class="mb-3">
+            <label for="email" class="form-label">Email address</label>
+            <input type="email" class="form-control" id="email" v-model="form.email" />
+          </div>
+          <div class="mb-3">
+            <label for="password" class="form-label">Password</label>
+            <input type="password" v-model="form.password" class="form-control" id="password" />
+          </div>
+            <div class="d-flex justify-content-end">
+            <button type="submit" class="btn btn-primary">Login</button>
+          </div>
+          <p v-if="errorMessage" class="text-danger">{{ errorMessage }}</p>
+        </form>
+
         <!-- Error state -->
         <div v-if="authError" class="alert alert-danger text-center" role="alert">
           <p class="mb-3">{{ authError }}</p>
         </div>
-
+      
         <!-- Auth providers -->
-        <div v-else class="d-flex flex-column align-items-center">
+        <div v-else class="d-flex flex-column align-items-center py-4">
+         
           <div v-if="authProviders.length > 0">
             <div v-for="provider in authProviders" :key="provider.type" class="mb-3">
               <button
@@ -171,23 +193,9 @@ const onBasicAuthLogin = () => {
               </button>
             </div>
           </div>
-          <div v-else>
-            <button class="btn btn-primary" @click="onBasicAuthLogin">Login with username and password</button>
-          </div>
+         
         </div>
       </div>
     </div>
   </AuthContainer>
 </template>
-
-<style scoped>
-.btn-primary {
-  background-color: #635dff;
-  border-color: #635dff;
-}
-
-.btn-secondary {
-  background-color: #466bb0;
-  border-color: #466bb0;
-}
-</style>

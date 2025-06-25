@@ -12,7 +12,7 @@ import { useAuthManagerStore } from '@/store/authManager'
 const route = useRoute()
 const router = useRouter()
 
-const authStore = useAuthManagerStore()
+const authManagerStore = useAuthManagerStore()
 const tenantapp = ref<TenantAppData>()
 const highLevelEntities = ref<EntityForm[]>([])
 const totalEntities = ref(0)
@@ -46,8 +46,8 @@ const onBack = () => {
 }
 
 const onLogout = () => {
-  authStore.initialize(route.params.id as string)
-  authStore.logout()
+  authManagerStore.initialize(route.params.id as string)
+  authManagerStore.logout(route.params.id as string)
  
   router.push({ name: 'app-login', params: { id: route.params.id } })
 }

@@ -76,7 +76,6 @@ export class MobileAuthStorage {
     try {
       localStorage.setItem(this.TEMP_OAUTH_APP_ID_KEY, appId)
       localStorage.setItem(this.TEMP_OAUTH_PROVIDER_KEY, provider)
-      console.log('Temporary OAuth data saved:', { appId, provider })
     } catch (err) {
       console.warn('Failed to save temporary OAuth data:', err)
     }
@@ -104,7 +103,6 @@ export class MobileAuthStorage {
     try {
       localStorage.removeItem(this.TEMP_OAUTH_APP_ID_KEY)
       localStorage.removeItem(this.TEMP_OAUTH_PROVIDER_KEY)
-      console.log('Temporary OAuth data cleared')
     } catch (err) {
       console.warn('Failed to clear temporary OAuth data:', err)
     }

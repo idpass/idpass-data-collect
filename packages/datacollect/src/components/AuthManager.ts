@@ -57,12 +57,14 @@ export class AuthManager {
   }
 
   async isAuthenticated(): Promise<boolean> {
-    const results = await Promise.all(
+    // Check adapter-based authentication
+    const adapterResults = await Promise.all(
       Object.values(this.adapters).map(adapter => adapter.isAuthenticated())
     );
-    const isAuth = results.some(result => result);
-    console.log(`AuthManager isAuthenticated: ${isAuth}`);
-    console.log(`AuthManager results: ${JSON.stringify(results)}`);
+    // Check default login token
+    const defaultToken = await this.authStorage.getTokenByProvider("default");
+    const hasDefaultToken = !!defaultToken;
+    const isAuth = adapterResults.some(result => result) || hasDefaultToken;
     return isAuth;
   }
 
@@ -80,7 +82,13 @@ export class AuthManager {
     }
 
     try {
-      const response = await axios.post(`${this.syncServerUrl}/api/users/login`, {
+      // Ensure syncServerUrl has a proper protocol
+      let url = this.syncServerUrl;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = `http://${url}`;
+      }
+      
+      const response = await axios.post(`${url}/api/users/login`, {
         email: credentials.username,
         password: credentials.password,
       });

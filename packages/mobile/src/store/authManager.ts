@@ -60,8 +60,10 @@ export const useAuthManagerStore = defineStore('authManager', () => {
       appId.value = targetAppId || null
       const tenantStore = useTenantStore()
       const tenant = await tenantStore.getTenant(targetAppId)
+
       const authConfigs:AuthConfig[] = tenant._data.authConfigs || []
       const transformedAuthConfigs = transformAuthConfigs(authConfigs, detectPlatform())
+
       // Get sync server URL and initialize the store properly
       const syncServerUrl = await getSyncServerUrlByAppId(targetAppId || 'default')
       await initStore(targetAppId || 'default', syncServerUrl, transformedAuthConfigs)
@@ -83,20 +85,13 @@ export const useAuthManagerStore = defineStore('authManager', () => {
   }
 
   async function login(
-    provider: string,
+    provider: string | null,
     credentials?: { username: string; password: string } | { token: string }
   ) {
   
     if (!isInitialized.value || !mobileAuthStorage.value || !authManager.value) {
       throw new Error('Auth system not initialized. Call initialize() first.')
     }
-
-    if (!availableProviders.value.includes(provider)) {
-      throw new Error(
-        `Provider '${provider}' not configured. Available providers: ${availableProviders.value.join(', ')}`
-      )
-    }
-
     try {
       isLoading.value = true
       error.value = null
@@ -128,6 +123,17 @@ export const useAuthManagerStore = defineStore('authManager', () => {
     }
   }
 
+  async function handleDefaultLogin() {
+     // Navigate to appropriate route after successful callback
+     if (isAuthenticated.value && typeof window !== 'undefined') {
+      mobileAuthStorage.value.setLastProvider('default', appId.value || undefined)
+      // Use window.location for navigation to avoid router issues
+      const redirectUrl = appId.value ? `/app/${appId.value}` : '/'
+      console.log(`Redirecting to: ${redirectUrl}`)
+      window.location.href = redirectUrl
+    }
+    
+  }
   async function logout(targetAppId: string) {
     if (!authManager.value) return
 
@@ -147,7 +153,6 @@ export const useAuthManagerStore = defineStore('authManager', () => {
         mobileAuthStorage.value.clearLastProvider(targetAppId || undefined)
       }
       
-      console.log('Logout successful')
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Logout failed'
       console.error('Logout error:', err)
@@ -157,18 +162,6 @@ export const useAuthManagerStore = defineStore('authManager', () => {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async function validateToken(_provider: string, _token: string) {
-    if (!authManager.value) return false
-
-    try {
-      // EntityDataManager doesn't have validateToken, so we'll check if authenticated
-      return await authManager.value.isAuthenticated()
-    } catch (err) {
-      console.error('Token validation error:', err)
-      return false
-    }
-  }
 
   async function handleCallback() {
     
@@ -253,14 +246,6 @@ export const useAuthManagerStore = defineStore('authManager', () => {
 
       // Detect platform and transform auth configs accordingly
       const platform = detectPlatform()
-      const authConfigs = transformAuthConfigs(tenant._data.authConfigs, platform)
-
-      if (authConfigs.length === 0) {
-        return {
-          isAuthenticated: false,
-          error: 'No valid auth configurations found'
-        }
-      }
 
       await initialize(targetAppId)
       const isAppAuthenticated = await authManager.value.isAuthenticated()
@@ -354,8 +339,8 @@ export const useAuthManagerStore = defineStore('authManager', () => {
     initialize,
     login,
     logout,
-    validateToken,
     handleCallback,
+    handleDefaultLogin,
     refreshAuthenticationState,
     checkAuthenticationStatus,
     setupCapacitorUrlListener,
