@@ -24,7 +24,7 @@ export class Auth0AuthAdapter implements AuthAdapter {
   private oidc: OIDCClient;
 
   constructor(
-    private authStorage: SingleAuthStorage,
+    private authStorage: SingleAuthStorage | null,
     public config: AuthConfig,
   ) {
     const oidcConfig: OIDCConfig = {
@@ -61,7 +61,9 @@ export class Auth0AuthAdapter implements AuthAdapter {
 
   async logout(): Promise<void> {
     await this.oidc.logout();
-    await this.authStorage.removeToken();
+    if (this.authStorage) {
+      await this.authStorage.removeToken();
+    }
   }
 
   async validateToken(token: string): Promise<boolean> {
@@ -71,7 +73,7 @@ export class Auth0AuthAdapter implements AuthAdapter {
 
   async handleCallback(): Promise<void> {
     const user = await this.oidc.handleCallback();
-    if (user) {
+    if (user && this.authStorage) {
       await this.authStorage.setToken(user.access_token);
     }
   }

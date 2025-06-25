@@ -24,6 +24,7 @@ import {
   AuthStorageAdapter,
   PasswordCredentials,
   TokenCredentials,
+  SingleAuthStorage,
 } from "../interfaces/types";
 import { SingleAuthStorageImpl } from "../services/SingleAuthStorageImpl";
 import { KeycloakAuthAdapter } from "./authentication/KeycloakAuthAdapter";
@@ -38,7 +39,7 @@ export class AuthManager {
   constructor(
     private configs: AuthConfig[],
     private syncServerUrl: string,
-    private authStorage: AuthStorageAdapter,
+    private authStorage?: AuthStorageAdapter,
   ) {}
   private adapters: Record<string, AuthAdapter> = {};
 
@@ -46,7 +47,10 @@ export class AuthManager {
     this.adapters = this.configs.reduce(
       (acc, config) => {
         const adapterModule = adaptersMapping[config.type as keyof typeof adaptersMapping];
-        const singleAuthStorage = new SingleAuthStorageImpl(this.authStorage, config.type);
+        let singleAuthStorage: SingleAuthStorage | null = null;
+        if (this.authStorage) {
+          singleAuthStorage = new SingleAuthStorageImpl(this.authStorage, config.type);
+        }
         if (adapterModule) {
           acc[config.type] = new adapterModule(singleAuthStorage, config);
         }
@@ -57,6 +61,9 @@ export class AuthManager {
   }
 
   async isAuthenticated(): Promise<boolean> {
+    if (!this.authStorage) {
+      throw new Error("Auth storage is not set");
+    }
     // Check adapter-based authentication
     const adapterResults = await Promise.all(Object.values(this.adapters).map((adapter) => adapter.isAuthenticated()));
     // Check default login token
@@ -67,6 +74,9 @@ export class AuthManager {
   }
 
   async login(credentials: PasswordCredentials | TokenCredentials | null, type?: string): Promise<void> {
+    if (!this.authStorage) {
+      throw new Error("Auth storage is not set");
+    }
     if (type) {
       this.adapters[type]?.login(credentials);
     } else if (credentials && "username" in credentials) {
@@ -75,6 +85,9 @@ export class AuthManager {
   }
 
   private async defaultLogin(credentials: PasswordCredentials): Promise<void> {
+    if (!this.authStorage) {
+      throw new Error("Auth storage is not set");
+    }
     if (!credentials) {
       throw new Error("Unauthorized");
     }
@@ -101,7 +114,9 @@ export class AuthManager {
 
   async logout(): Promise<void> {
     Object.values(this.adapters).forEach((adapter) => adapter.logout());
-    await this.authStorage.removeAllTokens();
+    if (this.authStorage) {
+      await this.authStorage.removeAllTokens();
+    }
   }
 
   async validateToken(type: string, token: string): Promise<boolean> {

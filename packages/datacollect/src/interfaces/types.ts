@@ -746,7 +746,6 @@ export interface AuthResult {
   user_metadata?: Record<string, string>;
 }
 
-
 export interface AuthConfig {
   type: string;
   fields: Record<string, string>;
@@ -788,4 +787,3 @@ export interface SingleAuthStorage {
   setToken(token: string): Promise<void>;
   removeToken(): Promise<void>;
 }
-

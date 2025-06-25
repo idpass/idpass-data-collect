@@ -85,7 +85,7 @@ export interface EntityData {
 
 export interface AuthConfig {
   type: string;
-  [key: string]: unknown;
+  fields: Record<string, string>;
 }
 
 export interface AppConfig {

@@ -26,6 +26,7 @@ import {
   PostgresEventStorageAdapter,
   ExternalSyncManager,
   SyncLevel,
+  AuthManager,
 } from "idpass-data-collect";
 import { v4 as uuidv4 } from "uuid";
 import { AppConfigStore, AppInstance, AppInstanceStore } from "../types";
@@ -35,7 +36,6 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
 
   constructor(
     private appConfigStore: AppConfigStore,
-    private userId: string,
     private postgresUrl: string,
   ) {}
 
@@ -60,6 +60,11 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
     await eventStore.initialize();
     const entityStore = new EntityStoreImpl(new PostgresEntityStorageAdapter(this.postgresUrl, configId));
     await entityStore.initialize();
+    let authManager: AuthManager | undefined;
+    if (config.authConfigs) {
+      authManager = new AuthManager(config.authConfigs, "");
+      await authManager.initialize();
+    }
 
     const eventApplierService = new EventApplierService(eventStore, entityStore);
     const externalSyncAdapter = new ExternalSyncManager(
@@ -69,7 +74,14 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
     );
     await externalSyncAdapter.initialize();
 
-    const manager = new EntityDataManager(eventStore, entityStore, eventApplierService, externalSyncAdapter, undefined);
+    const manager = new EntityDataManager(
+      eventStore,
+      entityStore,
+      eventApplierService,
+      externalSyncAdapter,
+      undefined,
+      authManager,
+    );
     this.instances[configId] = {
       configId,
       edm: manager,

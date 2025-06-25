@@ -22,12 +22,17 @@ import { AuthAdapter, AuthConfig, SingleAuthStorage } from "../interfaces/types"
 export class MockAuthAdapter implements AuthAdapter {
   private authenticated = false;
 
-  constructor(private authStorage: SingleAuthStorage, public config?: AuthConfig) {}
+  constructor(
+    private authStorage?: SingleAuthStorage,
+    public config?: AuthConfig,
+  ) {}
 
   async initialize(): Promise<void> {
-    const token = await this.authStorage.getToken();
-    if (token) {
-      this.authenticated = true;
+    if (this.authStorage) {
+      const token = await this.authStorage.getToken();
+      if (token) {
+        this.authenticated = true;
+      }
     }
   }
 
@@ -36,12 +41,18 @@ export class MockAuthAdapter implements AuthAdapter {
   }
 
   async login(): Promise<{ username: string; token: string }> {
+    if (!this.authStorage) {
+      throw new Error("Auth storage is not set");
+    }
     this.authenticated = true;
     await this.authStorage.setToken("mock-token");
     return Promise.resolve({ username: "mock-username", token: "mock-token" });
   }
 
   async logout(): Promise<void> {
+    if (!this.authStorage) {
+      throw new Error("Auth storage is not set");
+    }
     this.authenticated = false;
     await this.authStorage.removeToken();
     return Promise.resolve();
@@ -54,5 +65,4 @@ export class MockAuthAdapter implements AuthAdapter {
   async handleCallback(): Promise<void> {
     return Promise.resolve();
   }
-
 }
