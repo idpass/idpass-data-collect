@@ -1,36 +1,33 @@
 <script setup lang="ts">
 import ChevronRight from '@/components/icons/ChevronRight.vue'
-import { useDatabase } from '@/database'
 import { TenantAppData } from '@/schemas/tenantApp.schema'
 import { store } from '@/store'
-import { useAuthStore } from '@/store/auth'
 import { EntityForm } from '@/utils/dynamicFormIoUtils'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useTenantStore } from '@/store/tenant'
+import { useAuthManagerStore } from '@/store/authManager'
+
+
 const route = useRoute()
 const router = useRouter()
-const database = useDatabase()
-const authStore = useAuthStore()
+
+const authStore = useAuthManagerStore()
 const tenantapp = ref<TenantAppData>()
 const highLevelEntities = ref<EntityForm[]>([])
 const totalEntities = ref(0)
 const isSynced = ref(false)
+const tenantStore = useTenantStore()
+// const user = ref<AuthResult | null>(null)
 
 onMounted(async () => {
-  const foundDocuments = await database.tenantapps
-    .find({
-      selector: {
-        id: route.params.id
-      }
-    })
-    .exec()
-  tenantapp.value = foundDocuments[0]
-
+  const tenant = await tenantStore.getTenant(route.params.id as string)
+  tenantapp.value = tenant
   highLevelEntities.value = tenantapp.value.entityForms.filter((entity) => !entity.dependsOn)
-
   // check if the tenantapp is synced
   const syncStatus = await store.getUnsyncedEventsCount()
   isSynced.value = syncStatus === 0
+  // const isAuthenticated = await store.isAuthenticated()
 
   // sync with the backend
   try {
@@ -49,8 +46,10 @@ const onBack = () => {
 }
 
 const onLogout = () => {
-  // authStore.logoutSyncServer(route.params.id as string)
-  authStore.logoutOIDC(route.params.id as string)
+  authStore.initialize(route.params.id as string)
+  authStore.logout()
+ 
+  router.push({ name: 'app-login', params: { id: route.params.id } })
 }
 
 const onSync = async () => {

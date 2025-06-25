@@ -19,10 +19,8 @@
 
 import { extractParentUUIDInPath } from '@/utils/dynamicFormIoUtils'
 import { createRouter, createWebHistory } from 'vue-router'
-
-import { useAuthStore } from '@/store/auth'
 import DynamicHome from '@/views/dynamic/DyHome.vue'
-import { initStore } from '@/store'
+import { useAuthManagerStore } from '@/store/authManager'
 
 const dynamicRouter = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -56,18 +54,6 @@ const dynamicRouter = createRouter({
           parentGuid = parts[parts.length - 2] || ''
         }
 
-        // Parse the rest parameter to extract entity/guid pairs
-        // const pairs = []
-        // if (typeof rest === 'string') {
-        //   const parts = rest.split('/')
-
-        //   for (let i = 0; i < parts.length; i += 2) {
-        //     if (parts[i + 1]) {
-        //       pairs.push({ entity: parts[i], guid: parts[i + 1] })
-        //     }
-        //   }
-        // }
-
         return { id, parentGuid, entity }
       },
       meta: { requiresAuth: true }
@@ -99,6 +85,11 @@ const dynamicRouter = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/app/:id/login',
+      name: 'app-login',
+      component: () => import('@/views/dynamic/auth/AuthScreen.vue')
+    },
+    {
       path: '/app/:id/oidc-login',
       name: 'oidc-login',
       component: () => import('@/views/dynamic/auth/AuthScreen.vue')
@@ -111,91 +102,72 @@ const dynamicRouter = createRouter({
   ]
 })
 
+/**
+ * Router guard using AuthManager for authentication
+ *
+ * For routes requiring auth:
+ * 1. Use AuthManager to check authentication status
+ * 2. If not authenticated, redirect to app-specific login
+ * 3. Initialize authManager with proper configuration
+ */
 dynamicRouter.beforeEach(async (to, _from, next) => {
-  if (to.meta.requiresAuth) {
-    
-    const authStore = useAuthStore()
-    const appId = to.params.id as string
-    const auth = await authStore.getSyncServerAuth(appId)
-    //change this with the authenticated user later
-    if (!auth.token) {
-      next({ name: 'login', params: { id: appId } })
-      return
-    }
-
-    await initStore(auth.userId, auth.token, appId, auth.fullSyncServerUrl)
-    // Check OIDC authentication first
-    const isOidcAuthenticated = await authStore.isOidcAuthenticated(appId, to.fullPath)
-    if (!isOidcAuthenticated) {
-      next({
-        name: 'oidc-login',
-        params: { id: appId },
-        query: { redirect: to.fullPath }
-      })
-      return
-    }
-    else{
-      return next()
-    }
+  const authManagerStore = useAuthManagerStore()
   
+  // Force reinitialization for login routes or when app ID changes
+  const appId = to.params.id as string
+  const isLoginRoute = to.name === 'app-login' || to.name === 'oidc-login' || to.name === 'login' || to.name === 'callback'
+  
+  if (appId && (isLoginRoute || authManagerStore.appId !== appId)) {
+    console.log(`Reinitializing store for app: ${appId}`)
+    // Reset the store to ensure clean state
+    authManagerStore.$reset()
+    
+    try {
+      // Initialize authManager with proper configuration
+      await authManagerStore.initialize(appId)
+    } catch (error) {
+      console.error('Failed to initialize auth manager:', error)
+      if (isLoginRoute) {
+        // For login routes, continue even if initialization fails
+        next()
+        return
+      } else {
+        // For protected routes, redirect to login
+        next({ name: 'app-login', params: { id: appId } })
+        return
+      }
+    }
   }
-  return next()
+
+  if (to.meta.requiresAuth) {
+    if (!appId) {
+      console.error('No app ID found in route')
+      next({ name: 'home' })
+      return
+    }
+
+    try {
+      // Ensure authManager is initialized for this app
+      if (!authManagerStore.isInitialized || authManagerStore.appId !== appId) {
+        await authManagerStore.initialize(appId)
+      }
+      
+      // Check if user is authenticated
+      if (!authManagerStore.isAuthenticated) {
+        next({ name: 'app-login', params: { id: appId } })
+        return
+      }
+
+      // User is authenticated, proceed to the route
+      next()
+    } catch (error) {
+      console.error('Authentication check failed:', error)
+      next({ name: 'app-login', params: { id: appId } })
+    }
+  } else {
+    // Route doesn't require auth
+    next()
+  }
 })
-
-// add a before each for the dynamic router
-// dynamicRouter.beforeEach(async (_to, _from, next) => {
-//   // init store when the entered a new dynamic app
-//   if (_to.path.includes('/app/')) {
-//     console.log('here')
-//     // check if the store is already initialized
-//     if (currentAppId !== _to.params.id) {
-//       await closeStore()
-//       let token = localStorage.getItem('token_' + _to.params.id)
-//       let userId = localStorage.getItem('userId_' + _to.params.id)
-//       let fullSyncServerUrl = localStorage.getItem('syncServerUrl_' + _to.params.id)
-
-//       if (!token || !userId) {
-//         // get sync server url from the tenant app
-//         const tenantApp = await (
-//           await db
-//         ).collections.tenantapps
-//           .findOne({
-//             selector: {
-//               id: _to.params.id
-//             }
-//           })
-//           .exec()
-//           .then((result) => {
-//             return result
-//           })
-//         const syncServerUrl = tenantApp.syncServerUrl
-//         let res
-//         try {
-//           // First try with HTTPS
-//           res = await axios.post('https://' + syncServerUrl + '/api/users/login', {
-//             email: import.meta.env.VITE_EMAIL,
-//             password: import.meta.env.VITE_PASSWORD
-//           })
-//           fullSyncServerUrl = 'https://' + syncServerUrl
-//         } catch (error) {
-//           console.error('Try HTTPS failed', error)
-//           // If HTTPS fails, try with HTTP
-//           res = await axios.post('http://' + syncServerUrl + '/api/users/login', {
-//             email: import.meta.env.VITE_EMAIL,
-//             password: import.meta.env.VITE_PASSWORD
-//           })
-//           fullSyncServerUrl = 'http://' + syncServerUrl
-//         }
-//         token = get(res.data, 'token')
-//         userId = get(res.data, 'userId')
-//         localStorage.setItem('token_' + _to.params.id, token)
-//         localStorage.setItem('userId_' + _to.params.id, userId)
-//         localStorage.setItem('syncServerUrl_' + _to.params.id, fullSyncServerUrl)
-//       }
-//       await initStore(userId, token, _to.params.id as string, fullSyncServerUrl)
-//     }
-//   }
-//   return next()
-// })
 
 export default dynamicRouter

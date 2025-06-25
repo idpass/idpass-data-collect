@@ -31,13 +31,14 @@ import {
   SyncLevel,
   ExternalSyncCredentials,
   PasswordCredentials,
-  TokenCredentials,
+  TokenCredentials
 } from "../interfaces/types";
 import { EventApplierService } from "../services/EventApplierService";
 import { AppError } from "../utils/AppError";
 import { ExternalSyncManager } from "./ExternalSyncManager";
 import { InternalSyncManager } from "./InternalSyncManager";
 import { AuthManager } from "./AuthManager";
+
 // const MAX_GROUP_DEPTH = 5; // Maximum allowed depth for nested groups
 
 /**
@@ -829,6 +830,12 @@ export class EntityDataManager {
     }
   }
 
+  async initializeAuthManager(): Promise<void> {
+    if (this.authManager) {
+      await this.authManager.initialize();
+    }
+  }
+
   async logout(): Promise<void> {
     if (this.authManager) {
       await this.authManager.logout();
@@ -848,4 +855,10 @@ export class EntityDataManager {
     }
     return false;
   }
+  async handleCallback(type: string): Promise<void> {
+    if (this.authManager) {
+      await this.authManager.handleCallback(type);
+    }
+  }
+
 }

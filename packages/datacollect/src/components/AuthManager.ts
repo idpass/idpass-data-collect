@@ -21,15 +21,17 @@ import axios from "axios";
 import {
   AuthConfig,
   AuthAdapter,
+  AuthStorageAdapter,
   PasswordCredentials,
   TokenCredentials,
-  AuthStorageAdapter,
 } from "../interfaces/types";
-import { MockAuthAdapter } from "../services/MockAuthAdapter";
 import { SingleAuthStorageImpl } from "../services/SingleAuthStorageImpl";
+import { KeycloakAuthAdapter } from "./authentication/KeycloakAuthAdapter";
+import { Auth0AuthAdapter } from "./authentication/Auth0AuthAdapter";
 
 const adaptersMapping = {
-  "mock-auth-adapter": MockAuthAdapter,
+  "auth0": Auth0AuthAdapter,
+  "keycloak": KeycloakAuthAdapter,
 };
 
 export class AuthManager {
@@ -46,7 +48,7 @@ export class AuthManager {
         const adapterModule = adaptersMapping[config.type as keyof typeof adaptersMapping];
         const singleAuthStorage = new SingleAuthStorageImpl(this.authStorage, config.type);
         if (adapterModule) {
-          acc[config.type] = new adapterModule(singleAuthStorage);
+          acc[config.type] = new adapterModule(singleAuthStorage, config);
         }
         return acc;
       },
@@ -97,4 +99,9 @@ export class AuthManager {
   async validateToken(type: string, token: string): Promise<boolean> {
     return this.adapters[type]?.validateToken(token) ?? false;
   }
+
+  async handleCallback(type: string): Promise<void> {
+    return this.adapters[type]?.handleCallback();
+  }
+
 }

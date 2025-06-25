@@ -17,8 +17,6 @@
  * under the License.
  */
 
-import OIDCAuthManager from "../components/OIDCAuthManager";
-
 /**
  * Entity types supported by the DataCollect system.
  *
@@ -710,7 +708,7 @@ export interface OIDCConfig {
   /** Optional state parameter for CSRF protection during auth flow */
   state?: string;
   /** Optional custom parameters specific to the OIDC provider */
-  customParams?: Record<string, string>;
+  extraQueryParams?: Record<string, string>;
 }
 
 /**
@@ -745,83 +743,9 @@ export interface AuthResult {
   expires_in: number;
   /** Optional user profile information extracted from tokens */
   profile?: Record<string, string>; // Optional profile information
+  user_metadata?: Record<string, string>;
 }
 
-/**
- * Configuration for an authentication provider.
- *
- * Base configuration interface that all authentication providers must implement.
- * Contains common settings and allows for provider-specific configuration extensions.
- *
- * @example
- * ```typescript
- * const googleConfig: AuthProviderConfig = {
- *   enabled: true,
- *   authority: "https://accounts.google.com",
- *   client_id: "my-google-client-id",
- *   scope: "openid profile email"
- * };
- * ```
- */
-export interface AuthProviderConfig {
-  /** Whether this authentication provider is enabled */
-  enabled: boolean;
-  /** Additional provider-specific configuration properties */
-  [key: string]: string | number | boolean | undefined;
-}
-
-/**
- * Authentication provider interface for implementing different OIDC providers.
- *
- * Defines the contract for authentication provider implementations (e.g., Google,
- * Microsoft, Auth0, etc.). Each provider handles the specifics of creating OIDC
- * configuration and initializing authentication managers.
- *
- * @example
- * ```typescript
- * const googleProvider: AuthProvider = {
- *   name: "google",
- *   description: "Google OAuth 2.0 / OpenID Connect",
- *   createConfig: (config) => ({
- *     authority: "https://accounts.google.com",
- *     client_id: config.client_id,
- *     redirect_uri: config.redirect_uri,
- *     // ... other Google-specific settings
- *   }),
- *   initialize: (config, authServices) => {
- *     if (!config.enabled) return null;
- *     return new OIDCAuthManager(this.createConfig(config));
- *   }
- * };
- * ```
- */
-export interface AuthProvider {
-  /** Unique identifier for the authentication provider (e.g., "google", "microsoft") */
-  name: string;
-  /** Human-readable description of the authentication provider */
-  description: string;
-  /**
-   * Create OIDC configuration from provider-specific configuration.
-   *
-   * Transforms the provider's configuration format into the standard OIDCConfig
-   * format that can be used by OIDCAuthManager.
-   *
-   * @param config - Provider-specific configuration settings
-   * @returns Standard OIDC configuration object
-   */
-  createConfig(config: AuthProviderConfig): OIDCConfig;
-  /**
-   * Initialize the authentication manager for this provider.
-   *
-   * Creates and configures an OIDCAuthManager instance for this provider,
-   * or returns null if the provider is disabled or configuration is invalid.
-   *
-   * @param config - Provider-specific configuration settings
-   * @param authServices - Registry of existing authentication service instances
-   * @returns Initialized OIDCAuthManager instance or null if disabled/invalid
-   */
-  initialize(config: AuthProviderConfig, authServices: Record<string, OIDCAuthManager>): OIDCAuthManager | null;
-}
 
 export interface AuthConfig {
   type: string;
@@ -843,6 +767,7 @@ export interface AuthAdapter {
   login(credentials: PasswordCredentials | TokenCredentials | null): Promise<{ username: string; token: string }>;
   logout(): Promise<void>;
   validateToken(token: string): Promise<boolean>;
+  handleCallback(): Promise<void>;
 }
 
 export interface AuthStorageAdapter {
@@ -863,3 +788,4 @@ export interface SingleAuthStorage {
   setToken(token: string): Promise<void>;
   removeToken(): Promise<void>;
 }
+

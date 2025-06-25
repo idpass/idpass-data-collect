@@ -17,23 +17,25 @@
  * under the License.
  */
 
-import { AuthProvider } from '../../interfaces/types'
-
-
-class ProviderRegistry {
-  private static providers: Map<string, AuthProvider> = new Map()
-
-  static register(name: string, provider: AuthProvider) {
-    this.providers.set(name.toLowerCase(), provider)
+import { useDatabase } from '@/database'
+import { defineStore } from 'pinia'
+import { TenantAppData } from '@/schemas/tenantApp.schema'
+import { ref } from 'vue'
+export const useTenantStore = defineStore('tenant', () => {
+  const database = useDatabase()
+  const tenant = ref<TenantAppData | null>(null)
+  const getTenant = async (appId: string) => {
+    const foundDocuments = await database.tenantapps
+      .find({
+        selector: { id: appId }
+      })
+      .exec()
+    tenant.value = foundDocuments[0]
+    return foundDocuments[0]
   }
 
-  static get(name: string): AuthProvider | undefined {
-    return this.providers.get(name.toLowerCase())
+  return {
+    getTenant,
+    tenant
   }
-
-  static getAll(): AuthProvider[] {
-    return Array.from(this.providers.values())
-  }
-}
-
-export { ProviderRegistry }
+})

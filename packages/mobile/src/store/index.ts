@@ -19,13 +19,17 @@
 
 // household-data-manager store
 import {
+  AuthConfig,
+  AuthManager,
   EntityDataManager,
   EntityStoreImpl,
   EventStoreImpl,
   IndexedDbEventStorageAdapter,
   IndexedDbEntityStorageAdapter,
   EventApplierService,
-  InternalSyncManager
+  InternalSyncManager,
+  IndexedDbAuthStorageAdapter,
+
 } from 'idpass-data-collect'
 
 export let store: EntityDataManager
@@ -33,30 +37,30 @@ export let store: EntityDataManager
 const storeCache = new Map<string, EntityDataManager>()
 
 export const initStore = async (
-  userId: string,
-  token: string,
   appId: string = 'default',
-  syncServerUrl: string = import.meta.env.VITE_SYNC_URL
+  syncServerUrl: string = import.meta.env.VITE_SYNC_URL,
+  authConfigs: AuthConfig[] = []
 ) => {
   if (storeCache.has(appId)) {
-    store = storeCache.get(appId)
+    store = storeCache.get(appId)!
     return
   }
 
-  console.log('initializing store', appId, syncServerUrl)
-
-  const eventStore = new EventStoreImpl(userId, new IndexedDbEventStorageAdapter(appId))
+  const eventStore = new EventStoreImpl( new IndexedDbEventStorageAdapter(appId))
   const entityStore = new EntityStoreImpl(new IndexedDbEntityStorageAdapter(appId))
-  await Promise.all([entityStore.initialize(), eventStore.initialize()])
-  const eventApplierService = new EventApplierService(userId, eventStore, entityStore)
+ 
+  const authStorage = new IndexedDbAuthStorageAdapter(appId)
+  const authManagerInstance = new AuthManager(authConfigs, syncServerUrl, authStorage)
+  await Promise.all([entityStore.initialize(), eventStore.initialize(), authManagerInstance?.initialize(), authStorage.initialize()])
+  const eventApplierService = new EventApplierService(eventStore, entityStore)
   const internalSyncManager = new InternalSyncManager(
     eventStore,
     entityStore,
     eventApplierService,
     syncServerUrl,
-    token,
-    appId
+    authStorage
   )
+  
   // External sync adapter is not used in the client
   // const syncAdapter = new SyncAdapterImpl('')
   store = new EntityDataManager(
@@ -64,9 +68,11 @@ export const initStore = async (
     entityStore,
     eventApplierService,
     null,
-    internalSyncManager
+    internalSyncManager,
+    authManagerInstance
   )
   storeCache.set(appId, store)
+  
 }
 
 export const closeStore = async (appId: string) => {
@@ -74,5 +80,12 @@ export const closeStore = async (appId: string) => {
     const store = storeCache.get(appId)
     await store.closeConnection()
     storeCache.delete(appId)
+  }
+}
+
+export const logout = async (appId: string) => {
+  if (storeCache.has(appId)) {
+    const store = storeCache.get(appId)
+    await store.logout()
   }
 }

@@ -24,7 +24,7 @@ import {
 import { EventApplierService } from "../../services/EventApplierService";
 import { IndexedDbEntityStorageAdapter } from "../../storage/IndexedDbEntityStorageAdapter";
 import { IndexedDbEventStorageAdapter } from "../../storage/IndexedDbEventStorageAdapter";
-import { IndexedDbAuthStorageAdatper } from "../../storage/IndexedDbAuthStorageAdatper";
+import { IndexedDbAuthStorageAdapter } from "../../storage/IndexedDbAuthStorageAdapter";
 import { AppError } from "../../utils/AppError";
 import { EntityDataManager } from "../EntityDataManager";
 import { EntityStoreImpl } from "../EntityStore";
@@ -164,7 +164,7 @@ describe("EntityDataManager", () => {
     await eventStore.initialize();
     entityStore = new EntityStoreImpl(new IndexedDbEntityStorageAdapter());
     await entityStore.initialize();
-    authStorage = new IndexedDbAuthStorageAdatper();
+    authStorage = new IndexedDbAuthStorageAdapter();
     await authStorage.initialize();
     eventApplierService = new EventApplierService(eventStore, entityStore);
     eventApplierService.registerEventApplier("add-elderly", addElderlyApplier);

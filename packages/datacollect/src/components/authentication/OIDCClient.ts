@@ -17,7 +17,7 @@
  * under the License.
  */
 
-import { AuthResult, OIDCConfig } from '../interfaces/types'
+import { AuthResult, OIDCConfig } from '../../interfaces/types'
 import { WebStorageStateStore, UserManager, UserManagerSettings } from 'oidc-client-ts'
 
 /**
@@ -41,7 +41,7 @@ import { WebStorageStateStore, UserManager, UserManagerSettings } from 'oidc-cli
  * await authManager.login();
  * ```
  */
-export class OIDCAuthManager {
+export class OIDCClient {
   /** OIDC client user manager for handling authentication flows */
   private userManager: UserManager
 
@@ -60,7 +60,7 @@ export class OIDCAuthManager {
       scope: config.scope,
       userStore: new WebStorageStateStore({ store: localStorage }),
       extraQueryParams: {
-        ...config.customParams // Allow custom parameters to be passed
+        ...config.extraQueryParams // Allow custom parameters to be passed
       }
       // Additional settings as needed
     }
@@ -145,4 +145,4 @@ export class OIDCAuthManager {
   }
 }
 
-export default OIDCAuthManager
+export default OIDCClient

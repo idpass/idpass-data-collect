@@ -46,7 +46,7 @@ import { AuthStorageAdapter } from "../interfaces/types";
  * @example
  * Basic usage:
  * ```typescript
- * const adapter = new IndexedDbAuthStorageAdatper('tenant-123');
+ * const adapter = new IndexedDbAuthStorageAdapter('tenant-123');
  * await adapter.initialize();
  *
  * // Store authentication token
@@ -69,11 +69,11 @@ import { AuthStorageAdapter } from "../interfaces/types";
  * Multi-tenant setup:
  * ```typescript
  * // Tenant-specific adapter
- * const tenantAdapter = new IndexedDbAuthStorageAdatper('org-xyz');
+ * const tenantAdapter = new IndexedDbAuthStorageAdapter('org-xyz');
  * await tenantAdapter.initialize(); // Creates database: authStore_org-xyz
  *
  * // Default adapter
- * const defaultAdapter = new IndexedDbAuthStorageAdatper();
+ * const defaultAdapter = new IndexedDbAuthStorageAdapter();
  * await defaultAdapter.initialize(); // Creates database: authStore
  * ```
  *
@@ -81,10 +81,10 @@ import { AuthStorageAdapter } from "../interfaces/types";
  * Authentication flow integration:
  * ```typescript
  * class AuthManager {
- *   private storage: IndexedDbAuthStorageAdatper;
+ *   private storage: IndexedDbAuthStorageAdapter;
  *
  *   constructor(tenantId: string) {
- *     this.storage = new IndexedDbAuthStorageAdatper(tenantId);
+ *     this.storage = new IndexedDbAuthStorageAdapter(tenantId);
  *   }
  *
  *   async initialize() {
@@ -116,13 +116,13 @@ import { AuthStorageAdapter } from "../interfaces/types";
  * }
  * ```
  */
-export class IndexedDbAuthStorageAdatper implements AuthStorageAdapter {
+export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
   private dbName = "authStore";
   private storeName = "tokens";
   private db: IDBDatabase | null = null;
 
   /**
-   * Creates a new IndexedDbAuthStorageAdatper instance.
+   * Creates a new IndexedDbAuthStorageAdapter instance.
    *
    * @param tenantId - Optional tenant identifier for multi-tenant isolation
    *                   When provided, creates a separate database prefixed with tenant ID
@@ -130,10 +130,10 @@ export class IndexedDbAuthStorageAdatper implements AuthStorageAdapter {
    * @example
    * ```typescript
    * // Default database (authStore)
-   * const adapter = new IndexedDbAuthStorageAdatper();
+   * const adapter = new IndexedDbAuthStorageAdapter();
    *
    * // Tenant-specific database (authStore_org-123)
-   * const tenantAdapter = new IndexedDbAuthStorageAdatper('org-123');
+   * const tenantAdapter = new IndexedDbAuthStorageAdapter('org-123');
    * ```
    */
   constructor(public readonly tenantId: string = "") {
@@ -268,7 +268,7 @@ export class IndexedDbAuthStorageAdatper implements AuthStorageAdapter {
    *
    * @example
    * ```typescript
-   * const adapter = new IndexedDbAuthStorageAdatper('tenant-123');
+   * const adapter = new IndexedDbAuthStorageAdapter('tenant-123');
    * await adapter.initialize();
    * // Now ready for token operations
    * ```
