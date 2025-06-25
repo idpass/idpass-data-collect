@@ -82,10 +82,3 @@ export const closeStore = async (appId: string) => {
     storeCache.delete(appId)
   }
 }
-
-export const logout = async (appId: string) => {
-  if (storeCache.has(appId)) {
-    const store = storeCache.get(appId)
-    await store.logout()
-  }
-}

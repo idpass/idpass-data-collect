@@ -57,16 +57,18 @@ export class AuthManager {
   }
 
   async isAuthenticated(): Promise<boolean> {
-    return Object.values(this.adapters).some((adapter) => adapter.isAuthenticated());
+    const results = await Promise.all(
+      Object.values(this.adapters).map(adapter => adapter.isAuthenticated())
+    );
+    const isAuth = results.some(result => result);
+    console.log(`AuthManager isAuthenticated: ${isAuth}`);
+    console.log(`AuthManager results: ${JSON.stringify(results)}`);
+    return isAuth;
   }
 
   async login(credentials: PasswordCredentials | TokenCredentials | null, type?: string): Promise<void> {
     if (type) {
-      const token = await this.adapters[type]?.login(credentials);
-      if (token) {
-        await this.authStorage.setToken(type, token.token);
-        await this.authStorage.setUsername(token.username);
-      }
+      this.adapters[type]?.login(credentials);
     } else if (credentials && "username" in credentials) {
       await this.defaultLogin(credentials);
     }

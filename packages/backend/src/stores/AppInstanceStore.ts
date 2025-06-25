@@ -56,12 +56,12 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
 
     console.log("Creating app instance with config:", config.id);
 
-    const eventStore = new EventStoreImpl(this.userId, new PostgresEventStorageAdapter(this.postgresUrl, configId));
+    const eventStore = new EventStoreImpl(new PostgresEventStorageAdapter(this.postgresUrl, configId));
     await eventStore.initialize();
     const entityStore = new EntityStoreImpl(new PostgresEntityStorageAdapter(this.postgresUrl, configId));
     await entityStore.initialize();
 
-    const eventApplierService = new EventApplierService(this.userId, eventStore, entityStore);
+    const eventApplierService = new EventApplierService(eventStore, entityStore);
     const externalSyncAdapter = new ExternalSyncManager(
       eventStore,
       eventApplierService,

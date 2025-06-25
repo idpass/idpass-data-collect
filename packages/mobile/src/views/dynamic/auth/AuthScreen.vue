@@ -53,8 +53,6 @@ const handleOAuthCallback = async () => {
     callbackProcessing.value = true
     authError.value = ''
 
-    console.log('Processing OAuth callback...')
-
     // Extract app ID from callback URL using the auth manager utility
     let { appId } = authManager.getTemporaryOAuthData()
     // Fallback: try route query parameters
@@ -62,7 +60,6 @@ const handleOAuthCallback = async () => {
       throw new Error('App ID not found in callback URL. Cannot process authentication.')
     }
 
-    console.log('Processing callback for app ID:', appId)
     currentAppId.value = appId
 
     // Get tenant configuration for the app
@@ -74,15 +71,12 @@ const handleOAuthCallback = async () => {
     authProviders.value = tenant._data.authConfigs as AuthConfig[]
     await authManager.initialize(appId)
     // Process the callback
+    await authManager.initialize(currentAppId.value)
     await authManager.handleCallback()
 
     // Check if authentication was successful - use the state instead of the removed method
     const isAuthenticated = authManager.isAuthenticated
-    console.log('Authentication result:', isAuthenticated)
-
     if (isAuthenticated) {
-      console.log('OAuth callback processed successfully')
-      // Redirect to the app
       await router.push(`/app/${appId}`)
     } else {
       throw new Error('Authentication failed after callback processing')
@@ -106,6 +100,7 @@ const handleOAuthCallback = async () => {
 
 // Handle login for a specific provider
 const authenticate = async (provider: string) => {
+  await authManager.initialize(currentAppId.value)
   await authManager.login(provider, null)
 }
 

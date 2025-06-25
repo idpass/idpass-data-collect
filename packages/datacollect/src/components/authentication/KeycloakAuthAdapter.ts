@@ -48,7 +48,6 @@ export class KeycloakAuthAdapter implements AuthAdapter {
     const auth = await this.oidc.getStoredAuth();
     // Check if we have valid authentication data
     const isValid = !!(auth && auth.access_token && auth.access_token.trim() !== '');
-
     return isValid;
   }
 

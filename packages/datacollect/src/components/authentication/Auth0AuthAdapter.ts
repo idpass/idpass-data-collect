@@ -47,8 +47,7 @@ export class Auth0AuthAdapter implements AuthAdapter {
   async isAuthenticated(): Promise<boolean> {
     const auth = await this.oidc.getStoredAuth();
     // Check if we have valid authentication data
-    const isValid = !!(auth && auth.access_token && auth.access_token.trim() !== '');
-
+    const isValid = !!(auth && auth.access_token && auth.access_token.trim() !== '')
     return isValid;
   }
 

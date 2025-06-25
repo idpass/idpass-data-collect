@@ -51,11 +51,10 @@ export const useAuthManagerStore = defineStore('authManager', () => {
 
   // Getters
   // Actions
-  async function initialize(targetAppId?: string) {
+  async function initialize(targetAppId: string) {
     try {
       isLoading.value = true
       error.value = null
-
       // Initialize storage with app ID
       mobileAuthStorage.value = new MobileAuthStorage(targetAppId)
       appId.value = targetAppId || null
@@ -63,23 +62,15 @@ export const useAuthManagerStore = defineStore('authManager', () => {
       const tenant = await tenantStore.getTenant(targetAppId)
       const authConfigs:AuthConfig[] = tenant._data.authConfigs || []
       const transformedAuthConfigs = transformAuthConfigs(authConfigs, detectPlatform())
-      
       // Get sync server URL and initialize the store properly
       const syncServerUrl = await getSyncServerUrlByAppId(targetAppId || 'default')
       await initStore(targetAppId || 'default', syncServerUrl, transformedAuthConfigs)
       
       // Now store is properly initialized, assign it to authManager
       authManager.value = store
-      
-      // Set available providers
-      availableProviders.value = authConfigs.map((config) => config.type)
-
-      // Check if already authenticated using the initialized store
+      availableProviders.value = authConfigs.map((config) => config.type)  
       isAuthenticated.value = await store.isAuthenticated()
-      
-      // Try to determine current provider from stored tokens
       currentProvider.value = mobileAuthStorage.value.getLastProvider(targetAppId) || availableProviders.value[0] || null
-      
       isInitialized.value = true
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to initialize auth system'
@@ -95,7 +86,7 @@ export const useAuthManagerStore = defineStore('authManager', () => {
     provider: string,
     credentials?: { username: string; password: string } | { token: string }
   ) {
-   
+  
     if (!isInitialized.value || !mobileAuthStorage.value || !authManager.value) {
       throw new Error('Auth system not initialized. Call initialize() first.')
     }
@@ -121,8 +112,6 @@ export const useAuthManagerStore = defineStore('authManager', () => {
       // Use the properly initialized authManager (which is the store)
       await authManager.value.login(credentials || null, provider)
 
-      console.log(`Login successful with ${provider}`)
-      
       // Update authentication state
       isAuthenticated.value = true
     } catch (err) {
@@ -139,7 +128,7 @@ export const useAuthManagerStore = defineStore('authManager', () => {
     }
   }
 
-  async function logout(targetAppId?: string) {
+  async function logout(targetAppId: string) {
     if (!authManager.value) return
 
     try {
@@ -219,18 +208,17 @@ export const useAuthManagerStore = defineStore('authManager', () => {
     try {
       // Check authentication status from the initialized store
       const authResult = await authManager.value.isAuthenticated()
-      console.log('AuthManager.isAuthenticated result:', authResult)
 
       // Set authentication state
       if (authResult) {
         isAuthenticated.value = true
         currentProvider.value = currentProvider.value || 
         (mobileAuthStorage.value?.getLastProvider(appId.value || undefined)) || null
-        console.log('Authentication successful - Provider:', currentProvider.value)
+   
       } else {
         isAuthenticated.value = false
         currentProvider.value = null
-        console.log('No valid authentication found')
+
       }
     } catch (err) {
       console.error('Error refreshing authentication state:', err)
@@ -275,12 +263,11 @@ export const useAuthManagerStore = defineStore('authManager', () => {
       }
 
       await initialize(targetAppId)
-      
-      if (isAuthenticated.value) {
+      const isAppAuthenticated = await authManager.value.isAuthenticated()
+      if (isAppAuthenticated) {
         // Get stored tokens to determine current provider and user info
-       
         return {
-          isAuthenticated: isAuthenticated.value,
+          isAuthenticated: isAppAuthenticated,
           currentProvider: currentProvider.value,
           authManager: authManager.value,
           authStorage: mobileAuthStorage.value,
