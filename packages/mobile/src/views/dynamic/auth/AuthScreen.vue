@@ -120,7 +120,7 @@ const getProviderName = (provider: string) => {
 
 const onLogin = async () => {
   await authManager.initialize(currentAppId.value)
-  await authManager.login(null, {username: form.value.email, password: form.value.password})
+  await authManager.login(null, { username: form.value.email, password: form.value.password })
   await authManager.handleDefaultLogin()
 }
 </script>
@@ -130,7 +130,7 @@ const onLogin = async () => {
     <a class="primary mb-2" @click="onBack" v-if="!isCallback">Back</a>
   </div>
   <AuthContainer>
-    <div class="container py-4">
+    <div class="py-4">
       <!-- Callback processing state -->
       <div v-if="isCallback" class="d-flex flex-column align-items-center">
         <div v-if="callbackProcessing" class="text-center">
@@ -148,7 +148,8 @@ const onLogin = async () => {
       </div>
 
       <!-- Regular auth flow -->
-      <div v-else>
+
+      <div v-else class="align-items-center py-4">
         <form @submit.prevent="onLogin">
           <div class="mb-3">
             <label for="email" class="form-label">Email address</label>
@@ -158,7 +159,7 @@ const onLogin = async () => {
             <label for="password" class="form-label">Password</label>
             <input type="password" v-model="form.password" class="form-control" id="password" />
           </div>
-            <div class="d-flex justify-content-end">
+          <div class="d-flex justify-content-end">
             <button type="submit" class="btn btn-primary">Login</button>
           </div>
           <p v-if="errorMessage" class="text-danger">{{ errorMessage }}</p>
@@ -168,32 +169,32 @@ const onLogin = async () => {
         <div v-if="authError" class="alert alert-danger text-center" role="alert">
           <p class="mb-3">{{ authError }}</p>
         </div>
-      
+
         <!-- Auth providers -->
-        <div v-else class="d-flex flex-column align-items-center py-4">
-         
-          <div v-if="authProviders.length > 0">
-            <div v-for="provider in authProviders" :key="provider.type" class="mb-3">
-              <button
-                class="btn w-100 align-items-center justify-content-center btn-primary"
-                @click="authenticate(provider.type)"
-                :disabled="loadingStates[provider.type] || authLoading"
-              >
-                <span v-if="!loadingStates[provider.type]">
-                  Sign in with {{ getProviderName(provider.type) }}
-                </span>
-                <span v-else>
-                  <span
-                    class="spinner-border spinner-border-sm me-2"
-                    role="status"
-                    aria-hidden="true"
-                  ></span>
-                  Loading...
-                </span>
-              </button>
-            </div>
+
+       
+
+        <div v-if="authProviders.length > 0" class="py-3">
+          <hr />
+          <div v-for="provider in authProviders" :key="provider.type" class="mb-3 ">
+            <button
+              class="btn w-100 align-items-center justify-content-center btn-primary"
+              @click="authenticate(provider.type)"
+              :disabled="loadingStates[provider.type] || authLoading"
+            >
+              <span v-if="!loadingStates[provider.type]">
+                Sign in with {{ getProviderName(provider.type) }}
+              </span>
+              <span v-else>
+                <span
+                  class="spinner-border spinner-border-sm me-2"
+                  role="status"
+                  aria-hidden="true"
+                ></span>
+                Loading...
+              </span>
+            </button>
           </div>
-         
         </div>
       </div>
     </div>

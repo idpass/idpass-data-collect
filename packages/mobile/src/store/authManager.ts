@@ -42,7 +42,7 @@ export const useAuthManagerStore = defineStore('authManager', () => {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const isInitialized = ref(false)
-  
+
   // Authentication state
   const isAuthenticated = ref(false)
   const currentProvider = ref<string | null>(null)
@@ -61,18 +61,19 @@ export const useAuthManagerStore = defineStore('authManager', () => {
       const tenantStore = useTenantStore()
       const tenant = await tenantStore.getTenant(targetAppId)
 
-      const authConfigs:AuthConfig[] = tenant._data.authConfigs || []
+      const authConfigs: AuthConfig[] = tenant._data.authConfigs || []
       const transformedAuthConfigs = transformAuthConfigs(authConfigs, detectPlatform())
 
       // Get sync server URL and initialize the store properly
       const syncServerUrl = await getSyncServerUrlByAppId(targetAppId || 'default')
       await initStore(targetAppId || 'default', syncServerUrl, transformedAuthConfigs)
-      
+
       // Now store is properly initialized, assign it to authManager
       authManager.value = store
-      availableProviders.value = authConfigs.map((config) => config.type)  
+      availableProviders.value = authConfigs.map((config) => config.type)
       isAuthenticated.value = await store.isAuthenticated()
-      currentProvider.value = mobileAuthStorage.value.getLastProvider(targetAppId) || availableProviders.value[0] || null
+      currentProvider.value =
+        mobileAuthStorage.value.getLastProvider(targetAppId) || availableProviders.value[0] || null
       isInitialized.value = true
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to initialize auth system'
@@ -88,7 +89,6 @@ export const useAuthManagerStore = defineStore('authManager', () => {
     provider: string | null,
     credentials?: { username: string; password: string } | { token: string }
   ) {
-  
     if (!isInitialized.value || !mobileAuthStorage.value || !authManager.value) {
       throw new Error('Auth system not initialized. Call initialize() first.')
     }
@@ -100,7 +100,7 @@ export const useAuthManagerStore = defineStore('authManager', () => {
       if (appId.value) {
         mobileAuthStorage.value.saveTemporaryOAuthData(appId.value, provider)
       }
-      
+
       // Set current provider before login for callback handling
       currentProvider.value = provider
 
@@ -112,7 +112,7 @@ export const useAuthManagerStore = defineStore('authManager', () => {
     } catch (err) {
       error.value = err instanceof Error ? err.message : `Login failed for ${provider}`
       console.error(`Login error for ${provider}:`, err)
-      
+
       // Clear temporary app ID on login failure
       if (mobileAuthStorage.value) {
         mobileAuthStorage.value.clearTemporaryOAuthData()
@@ -124,15 +124,13 @@ export const useAuthManagerStore = defineStore('authManager', () => {
   }
 
   async function handleDefaultLogin() {
-     // Navigate to appropriate route after successful callback
-     if (isAuthenticated.value && typeof window !== 'undefined') {
+    if (isAuthenticated.value && typeof window !== 'undefined') {
       mobileAuthStorage.value.setLastProvider('default', appId.value || undefined)
       // Use window.location for navigation to avoid router issues
       const redirectUrl = appId.value ? `/app/${appId.value}` : '/'
       console.log(`Redirecting to: ${redirectUrl}`)
       window.location.href = redirectUrl
     }
-    
   }
   async function logout(targetAppId: string) {
     if (!authManager.value) return
@@ -152,7 +150,6 @@ export const useAuthManagerStore = defineStore('authManager', () => {
       if (mobileAuthStorage.value) {
         mobileAuthStorage.value.clearLastProvider(targetAppId || undefined)
       }
-      
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Logout failed'
       console.error('Logout error:', err)
@@ -162,9 +159,7 @@ export const useAuthManagerStore = defineStore('authManager', () => {
     }
   }
 
-
   async function handleCallback() {
-    
     if (!mobileAuthStorage.value || !authManager.value) {
       throw new Error('Auth system not initialized. Call initialize() first.')
     }
@@ -172,7 +167,7 @@ export const useAuthManagerStore = defineStore('authManager', () => {
     try {
       isLoading.value = true
       error.value = null
-      
+
       const { provider } = mobileAuthStorage.value.getTemporaryOAuthData()
       if (provider) {
         await authManager.value.handleCallback(provider)
@@ -185,7 +180,6 @@ export const useAuthManagerStore = defineStore('authManager', () => {
       // Force refresh authentication state after callback
       await refreshAuthenticationState()
       mobileAuthStorage.value.clearTemporaryOAuthData()
-
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Callback handling failed'
       console.error('Callback handling error:', err)
@@ -205,13 +199,13 @@ export const useAuthManagerStore = defineStore('authManager', () => {
       // Set authentication state
       if (authResult) {
         isAuthenticated.value = true
-        currentProvider.value = currentProvider.value || 
-        (mobileAuthStorage.value?.getLastProvider(appId.value || undefined)) || null
-   
+        currentProvider.value =
+          currentProvider.value ||
+          mobileAuthStorage.value?.getLastProvider(appId.value || undefined) ||
+          null
       } else {
         isAuthenticated.value = false
         currentProvider.value = null
-
       }
     } catch (err) {
       console.error('Error refreshing authentication state:', err)
@@ -334,7 +328,7 @@ export const useAuthManagerStore = defineStore('authManager', () => {
     currentProvider,
     availableProviders,
     appId,
-    
+
     // Actions
     initialize,
     login,
@@ -347,4 +341,4 @@ export const useAuthManagerStore = defineStore('authManager', () => {
     getTemporaryOAuthData,
     $reset
   }
-}) 
+})

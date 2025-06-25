@@ -28,8 +28,7 @@ import {
   IndexedDbEntityStorageAdapter,
   EventApplierService,
   InternalSyncManager,
-  IndexedDbAuthStorageAdapter,
-
+  IndexedDbAuthStorageAdapter
 } from 'idpass-data-collect'
 
 export let store: EntityDataManager
@@ -46,12 +45,17 @@ export const initStore = async (
     return
   }
 
-  const eventStore = new EventStoreImpl( new IndexedDbEventStorageAdapter(appId))
+  const eventStore = new EventStoreImpl(new IndexedDbEventStorageAdapter(appId))
   const entityStore = new EntityStoreImpl(new IndexedDbEntityStorageAdapter(appId))
- 
+
   const authStorage = new IndexedDbAuthStorageAdapter(appId)
   const authManagerInstance = new AuthManager(authConfigs, syncServerUrl, authStorage)
-  await Promise.all([entityStore.initialize(), eventStore.initialize(), authManagerInstance?.initialize(), authStorage.initialize()])
+  await Promise.all([
+    entityStore.initialize(),
+    eventStore.initialize(),
+    authManagerInstance?.initialize(),
+    authStorage.initialize()
+  ])
   const eventApplierService = new EventApplierService(eventStore, entityStore)
   const internalSyncManager = new InternalSyncManager(
     eventStore,
@@ -60,7 +64,7 @@ export const initStore = async (
     syncServerUrl,
     authStorage
   )
-  
+
   // External sync adapter is not used in the client
   // const syncAdapter = new SyncAdapterImpl('')
   store = new EntityDataManager(
@@ -72,7 +76,6 @@ export const initStore = async (
     authManagerInstance
   )
   storeCache.set(appId, store)
-  
 }
 
 export const closeStore = async (appId: string) => {

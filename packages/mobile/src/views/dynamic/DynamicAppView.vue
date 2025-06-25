@@ -8,7 +8,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { useTenantStore } from '@/store/tenant'
 import { useAuthManagerStore } from '@/store/authManager'
 
-
 const route = useRoute()
 const router = useRouter()
 
@@ -26,8 +25,8 @@ onMounted(async () => {
   highLevelEntities.value = tenantapp.value.entityForms.filter((entity) => !entity.dependsOn)
   // check if the tenantapp is synced
   const syncStatus = await store.getUnsyncedEventsCount()
+ 
   isSynced.value = syncStatus === 0
-  // const isAuthenticated = await store.isAuthenticated()
 
   // sync with the backend
   try {
@@ -48,7 +47,7 @@ const onBack = () => {
 const onLogout = () => {
   authManagerStore.initialize(route.params.id as string)
   authManagerStore.logout(route.params.id as string)
- 
+
   router.push({ name: 'app-login', params: { id: route.params.id } })
 }
 

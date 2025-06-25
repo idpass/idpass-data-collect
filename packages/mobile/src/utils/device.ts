@@ -32,15 +32,6 @@ export function detectPlatform(): 'mobile' | 'web' {
     return 'mobile'
   }
 
-  // Check user agent for mobile devices
-  const userAgent =
-    navigator.userAgent || navigator.vendor || (window as unknown as { opera?: string }).opera
-  const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i
-
-  if (mobileRegex.test(userAgent.toLowerCase())) {
-    return 'mobile'
-  }
-
   // Default to web
   return 'web'
 }

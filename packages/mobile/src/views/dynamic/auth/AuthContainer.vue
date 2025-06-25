@@ -9,12 +9,9 @@ const route = useRoute()
       <div class="row justify-content-center">
         <div class="col-12 col-md-6 col-lg-4">
           <template v-if="!route.query.code">
-            <h1 class="h3 mb-3 text-center fw-semibold text-body">
-              <slot name="title">Welcome</slot>
-            </h1>
-            <p class="text-center text-muted mb-4">
+            <h4 class="text-center text-muted mb-4">
               <slot name="subtitle">Please choose your authentication method</slot>
-            </p>
+            </h4>
           </template>
           <slot></slot>
         </div>

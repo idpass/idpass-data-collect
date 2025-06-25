@@ -114,16 +114,18 @@ dynamicRouter.beforeEach(async (to, _from, next) => {
   const authManagerStore = useAuthManagerStore()
   // Force reinitialization for login routes or when app ID changes
   const appId = to.params.id as string
-  const isLoginRoute = to.name === 'app-login' || to.name === 'oidc-login' || to.name === 'login' || to.name === 'callback'
-  
+  const isLoginRoute =
+    to.name === 'app-login' ||
+    to.name === 'oidc-login' ||
+    to.name === 'login' ||
+    to.name === 'callback'
+
   if (appId && (isLoginRoute || authManagerStore.appId !== appId)) {
-   
     // Reset the store to ensure clean state
-   
+
     try {
       // Initialize authManager with proper configuration
       await authManagerStore.initialize(appId)
-      
     } catch (error) {
       console.error('Failed to initialize auth manager:', error)
       if (isLoginRoute) {
