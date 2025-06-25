@@ -30,8 +30,8 @@ import { KeycloakAuthAdapter } from "./authentication/KeycloakAuthAdapter";
 import { Auth0AuthAdapter } from "./authentication/Auth0AuthAdapter";
 
 const adaptersMapping = {
-  "auth0": Auth0AuthAdapter,
-  "keycloak": KeycloakAuthAdapter,
+  auth0: Auth0AuthAdapter,
+  keycloak: KeycloakAuthAdapter,
 };
 
 export class AuthManager {
@@ -58,13 +58,11 @@ export class AuthManager {
 
   async isAuthenticated(): Promise<boolean> {
     // Check adapter-based authentication
-    const adapterResults = await Promise.all(
-      Object.values(this.adapters).map(adapter => adapter.isAuthenticated())
-    );
+    const adapterResults = await Promise.all(Object.values(this.adapters).map((adapter) => adapter.isAuthenticated()));
     // Check default login token
     const defaultToken = await this.authStorage.getTokenByProvider("default");
     const hasDefaultToken = !!defaultToken;
-    const isAuth = adapterResults.some(result => result) || hasDefaultToken;
+    const isAuth = adapterResults.some((result) => result) || hasDefaultToken;
     return isAuth;
   }
 
@@ -84,10 +82,10 @@ export class AuthManager {
     try {
       // Ensure syncServerUrl has a proper protocol
       let url = this.syncServerUrl;
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
         url = `http://${url}`;
       }
-      
+
       const response = await axios.post(`${url}/api/users/login`, {
         email: credentials.username,
         password: credentials.password,
@@ -113,5 +111,4 @@ export class AuthManager {
   async handleCallback(type: string): Promise<void> {
     return this.adapters[type]?.handleCallback();
   }
-
 }

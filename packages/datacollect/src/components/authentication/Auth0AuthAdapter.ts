@@ -23,9 +23,11 @@ import OIDCClient from "./OIDCClient";
 export class Auth0AuthAdapter implements AuthAdapter {
   private oidc: OIDCClient;
 
-  constructor(private authStorage: SingleAuthStorage, public config: AuthConfig) {
-    
-    const oidcConfig:OIDCConfig = {
+  constructor(
+    private authStorage: SingleAuthStorage,
+    public config: AuthConfig,
+  ) {
+    const oidcConfig: OIDCConfig = {
       authority: config.fields.authority,
       client_id: config.fields.client_id,
       redirect_uri: config.fields.redirect_uri,
@@ -33,9 +35,9 @@ export class Auth0AuthAdapter implements AuthAdapter {
       response_type: config.fields.response_type,
       scope: config.fields.scope,
       extraQueryParams: {
-        ...JSON.parse(config.fields.extraQueryParams)
+        ...JSON.parse(config.fields.extraQueryParams),
       },
-    }
+    };
     this.oidc = new OIDCClient(oidcConfig);
   }
 
@@ -47,14 +49,14 @@ export class Auth0AuthAdapter implements AuthAdapter {
   async isAuthenticated(): Promise<boolean> {
     const auth = await this.oidc.getStoredAuth();
     // Check if we have valid authentication data
-    const isValid = !!(auth && auth.access_token && auth.access_token.trim() !== '')
+    const isValid = !!(auth && auth.access_token && auth.access_token.trim() !== "");
     return isValid;
   }
 
   async login(): Promise<{ username: string; token: string }> {
     await this.oidc.login();
     const auth = await this.oidc.getStoredAuth();
-    return { username: auth?.profile?.name || '', token: auth?.access_token || '' };
+    return { username: auth?.profile?.name || "", token: auth?.access_token || "" };
   }
 
   async logout(): Promise<void> {
@@ -66,7 +68,7 @@ export class Auth0AuthAdapter implements AuthAdapter {
     const auth = await this.oidc.getStoredAuth();
     return !!auth && auth.access_token === token;
   }
-  
+
   async handleCallback(): Promise<void> {
     const user = await this.oidc.handleCallback();
     if (user) {

@@ -62,7 +62,8 @@ export const initStore = async (
     entityStore,
     eventApplierService,
     syncServerUrl,
-    authStorage
+    authStorage,
+    appId
   )
 
   // External sync adapter is not used in the client

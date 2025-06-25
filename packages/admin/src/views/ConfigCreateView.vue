@@ -6,6 +6,7 @@ import { useSnackBarStore } from '@/stores/snackBar'
 import set from 'lodash/set'
 import { onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import merge from 'lodash/merge'
 
 type EntityForm = {
   name: string
@@ -15,7 +16,6 @@ type EntityForm = {
 }
 type ExternalSync = {
   type?: string
-  auth?: string
   url: string
   extraFields: Record<string, string>
 }
@@ -74,7 +74,7 @@ onMounted(async () => {
   isEdit.value = route.name?.toString().includes('edit') || false
   if (id) {
     const config = await getApp(id as string)
-    form.value = config
+    form.value = merge(form.value, config)
     if (route.name?.toString().includes('copy')) {
       form.value.name = config.name + ' Copy'
     }
@@ -452,15 +452,6 @@ const removeAuthConfig = (index: number) => {
               required
               :error-messages="urlError"
             ></v-text-field>
-            <v-select
-              v-model="form.externalSync.auth"
-              :items="[
-                { title: 'None', value: '' },
-                { title: 'Basic', value: 'basic' },
-              ]"
-              label="Auth"
-              required
-            ></v-select>
             <FieldsInput v-model="form.externalSync.extraFields" />
 
             <!-- AUTH CONFIG -->

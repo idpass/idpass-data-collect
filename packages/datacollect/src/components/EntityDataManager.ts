@@ -31,7 +31,7 @@ import {
   SyncLevel,
   ExternalSyncCredentials,
   PasswordCredentials,
-  TokenCredentials
+  TokenCredentials,
 } from "../interfaces/types";
 import { EventApplierService } from "../services/EventApplierService";
 import { AppError } from "../utils/AppError";
@@ -860,5 +860,4 @@ export class EntityDataManager {
       await this.authManager.handleCallback(type);
     }
   }
-
 }
