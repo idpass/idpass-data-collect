@@ -20,6 +20,36 @@
 import { AuthResult, OIDCConfig } from '../../interfaces/types'
 import { WebStorageStateStore, UserManager, UserManagerSettings } from 'oidc-client-ts'
 
+// Mock storage for server environments
+class MockStorage implements Storage {
+  private data: Record<string, string> = {};
+  
+  get length(): number {
+    return Object.keys(this.data).length;
+  }
+  
+  clear(): void {
+    this.data = {};
+  }
+  
+  getItem(key: string): string | null {
+    return this.data[key] || null;
+  }
+  
+  key(index: number): string | null {
+    const keys = Object.keys(this.data);
+    return keys[index] || null;
+  }
+  
+  removeItem(key: string): void {
+    delete this.data[key];
+  }
+  
+  setItem(key: string, value: string): void {
+    this.data[key] = value;
+  }
+}
+
 /**
  * OpenID Connect (OIDC) Authentication Manager
  * 
@@ -51,6 +81,9 @@ export class OIDCClient {
    * @param config - OIDC configuration containing provider settings
    */
   constructor(config: OIDCConfig) {
+    // Use localStorage if available (browser), otherwise use mock storage (server)
+    const storage = typeof window !== 'undefined' && window.localStorage ? localStorage : new MockStorage();
+    
     const settings: UserManagerSettings = {
       authority: config.authority,
       client_id: config.client_id,
@@ -58,7 +91,7 @@ export class OIDCClient {
       post_logout_redirect_uri: config.post_logout_redirect_uri,
       response_type: config.response_type,
       scope: config.scope,
-      userStore: new WebStorageStateStore({ store: localStorage }),
+      userStore: new WebStorageStateStore({ store: storage }),
       extraQueryParams: {
         ...config.extraQueryParams // Allow custom parameters to be passed
       }

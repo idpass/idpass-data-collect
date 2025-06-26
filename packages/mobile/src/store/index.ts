@@ -56,6 +56,7 @@ export const initStore = async (
     authManagerInstance?.initialize(),
     authStorage.initialize()
   ])
+
   const eventApplierService = new EventApplierService(eventStore, entityStore)
   const internalSyncManager = new InternalSyncManager(
     eventStore,

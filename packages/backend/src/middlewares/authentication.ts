@@ -52,11 +52,21 @@ export const authenticateJWT = async (req: Request, res: Response, next: NextFun
     res.status(401).json({ error: "Invalid token" });
   }
 };
+export async function authenticateJWTBackend(token: string): Promise<DecodedPayload | null> {
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "") as DecodedPayload;
+    return decoded;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
 
 export function createDynamicAuthMiddleware(appInstanceStore: AppInstanceStore) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const authHeader = req.headers.authorization;
+      let isValid = false;
       if (!authHeader) {
         res.status(401).json({ error: "Authorization header missing" });
         return;
@@ -70,13 +80,21 @@ export function createDynamicAuthMiddleware(appInstanceStore: AppInstanceStore) 
 
       // get app instance from request
       const { configId = "default" } = req.body;
+      
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
       if (!appInstance) {
         res.status(400).json({ error: "App instance not found" });
         return;
       }
-
-      const isValid = await appInstance.edm.validateToken(authType, token);
+    
+      isValid = await appInstance.edm.validateToken(authType, token);
+      
+      if (!isValid) {
+        const decoded = await authenticateJWTBackend(token);
+        if (decoded) {
+          isValid = true;
+        }
+      }
       if (!isValid) {
         res.status(401).json({ error: "Invalid token" });
         return;

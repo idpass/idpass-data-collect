@@ -40,7 +40,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   await userStore.initialize();
   const appConfigStore = new AppConfigStoreImpl(config.postgresUrl);
   await appConfigStore.initialize();
-  const appInstanceStore = new AppInstanceStoreImpl(appConfigStore, config.userId, config.postgresUrl);
+  const appInstanceStore = new AppInstanceStoreImpl(appConfigStore, config.postgresUrl);
   await appInstanceStore.initialize();
 
   const app = express();

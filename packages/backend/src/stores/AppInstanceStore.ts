@@ -54,8 +54,6 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
       extraFields: [],
     };
 
-    console.log("Creating app instance with config:", config.id);
-
     const eventStore = new EventStoreImpl(new PostgresEventStorageAdapter(this.postgresUrl, configId));
     await eventStore.initialize();
     const entityStore = new EntityStoreImpl(new PostgresEntityStorageAdapter(this.postgresUrl, configId));
@@ -73,7 +71,6 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
       config.externalSync || defaultExternalSyncConfig,
     );
     await externalSyncAdapter.initialize();
-
     const manager = new EntityDataManager(
       eventStore,
       entityStore,

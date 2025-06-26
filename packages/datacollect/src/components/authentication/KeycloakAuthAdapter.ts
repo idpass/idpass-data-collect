@@ -19,10 +19,10 @@
 
 import { AuthAdapter, AuthConfig, AuthResult, OIDCConfig, SingleAuthStorage } from "../../interfaces/types";
 import OIDCClient from "./OIDCClient";
-
+import axios from "axios";
 export class KeycloakAuthAdapter implements AuthAdapter {
   private oidc: OIDCClient;
-
+  private appType: 'backend' | 'frontend' = 'backend';
   constructor(
     private authStorage: SingleAuthStorage | null,
     public config: AuthConfig,
@@ -35,10 +35,11 @@ export class KeycloakAuthAdapter implements AuthAdapter {
       response_type: config.fields.response_type,
       scope: config.fields.scope,
       extraQueryParams: {
-        ...JSON.parse(config.fields.extraQueryParams),
+        ...(config.fields.extraQueryParams ? JSON.parse(config.fields.extraQueryParams) : {}),
       },
     };
     this.oidc = new OIDCClient(oidcConfig);
+    this.appType = typeof window !== 'undefined' && window.localStorage ? 'frontend' : 'backend';
   }
 
   async initialize(): Promise<void> {
@@ -67,6 +68,34 @@ export class KeycloakAuthAdapter implements AuthAdapter {
   }
 
   async validateToken(token: string): Promise<boolean> {
+    if (this.appType === 'backend') {
+      return this.validateTokenServer(token);
+    } else {
+      return this.validateTokenClient(token);
+    }
+  }
+
+  private async validateTokenServer(token: string): Promise<boolean> {
+    try {
+      // Validate token by calling Keycloak's userinfo endpoint
+      const userinfoUrl = `${this.config.fields.authority}/protocol/openid-connect/userinfo`;
+      const response = await axios.get(userinfoUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 5000 // 5 second timeout
+      });
+      
+      // If we get a successful response, the token is valid
+      return response.status === 200 && response.data && response.data.sub;
+    } catch (error) {
+      console.error("Keycloak token validation error:", error);
+      return false;
+    }
+  }
+
+  private async validateTokenClient(token: string): Promise<boolean> {
     const auth = await this.oidc.getStoredAuth();
     return !!auth && auth.access_token === token;
   }
