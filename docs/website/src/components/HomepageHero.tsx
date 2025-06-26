@@ -13,12 +13,12 @@ export default function HomepageHero(): JSX.Element {
         <div className="hero__cta">
           <a
             className="button button--primary button--lg"
-            href="/getting-started">
+            href="getting-started">
             Get Started
           </a>
           <a
             className="button button--secondary button--lg"
-            href="/packages">
+            href="packages">
             View Packages
           </a>
         </div>

@@ -4,9 +4,9 @@ title: Packages Overview
 sidebar_position: 2
 ---
 
-# ID PASS DataCollectct Packages
+# ID PASS DataCollect Packages
 
-ID PASS DataCollectct is organized into three main packages, each serving a specific role in the offline-first data management ecosystem:
+ID PASS DataCollect is organized into three main packages, each serving a specific role in the offline-first data management ecosystem:
 
 ## 📦 Package Architecture
 

@@ -6,7 +6,7 @@ sidebar_position: 1
 
 # DataCollect Package
 
-The DataCollect package is the core client library for ID PASS DataCollectct, providing offline-first data management capabilities for household and individual beneficiary data.
+The DataCollect package is the core client library for ID PASS DataCollect, providing offline-first data management capabilities for household and individual beneficiary data.
 
 ## Overview
 
@@ -85,7 +85,7 @@ const manager = new EntityDataManager(
 );
 ```
 
-## Documentation Sections
+<!-- ## Documentation Sections
 
 ### [API Reference](./api-reference.md)
 Complete TypeScript API documentation with examples
@@ -100,7 +100,7 @@ Step-by-step guides for common use cases:
 Configuration options and environment setup
 
 ### [Examples](./examples/)
-Working code examples for different scenarios
+Working code examples for different scenarios -->
 
 ## Architecture Integration
 
@@ -130,7 +130,6 @@ graph LR
 
 ## Next Steps
 
-- 📖 [Tutorials](./tutorials/) - Learn by building
-- 🔧 [Configuration](./configuration.md) - Customize for your needs
+- 📖 [Tutorials](./datacollect-tutorials/) - Learn by building
 - 🚀 [Backend Package](../backend/) - Add server synchronization
 - 👥 [Admin Package](../admin/) - Complete management solution

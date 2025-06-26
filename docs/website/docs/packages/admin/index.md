@@ -6,7 +6,7 @@ sidebar_position: 3
 
 # Admin Package
 
-The Admin package provides a Vue.js-based web interface for managing ID PASS DataCollectct deployments, including user management, configuration, and data visualization.
+The Admin package provides a Vue.js-based web interface for managing ID PASS DataCollect deployments, including user management, configuration, and data visualization.
 
 ## Overview
 
@@ -165,7 +165,7 @@ VITE_ENABLE_ANALYTICS=true
 VITE_ENABLE_EXPORT=true
 
 # Branding
-VITE_APP_TITLE="ID PASS DataCollectct Admin"
+VITE_APP_TITLE="ID PASS DataCollect Admin"
 VITE_APP_LOGO_URL="/logo.svg"
 ```
 

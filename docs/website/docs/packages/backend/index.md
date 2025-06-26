@@ -6,7 +6,7 @@ sidebar_position: 2
 
 # Backend Package
 
-The Backend package provides a central sync server for ID PASS DataCollectct, enabling multi-client synchronization, user management, and integration with external systems.
+The Backend package provides a central sync server for ID PASS DataCollect, enabling multi-client synchronization, user management, and integration with external systems.
 
 ## Overview
 

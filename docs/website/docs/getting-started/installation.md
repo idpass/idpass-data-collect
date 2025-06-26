@@ -52,7 +52,7 @@ cd packages/backend
 npm install
 
 # Create environment file
-cp .env.example .env
+cp ../docker/.env.example .env
 ```
 
 **Edit `.env` file:**
@@ -66,7 +66,7 @@ PORT=3000
 
 **Start PostgreSQL** (using Docker):
 ```bash
-docker run --name postgres-hdm \
+docker run --name postgres-datacollect \
   -e POSTGRES_USER=admin \
   -e POSTGRES_PASSWORD=admin \
   -e POSTGRES_DB=postgres \
@@ -122,14 +122,15 @@ nano .env
 
 #### 3. Build and Start Services
 ```bash
-docker-compose build
-docker-compose up -d
+docker-compose -f docker-compose.dev.yaml up -d
 ```
 
 **Services will be available at:**
-- Backend API: http://localhost:3000
-- Admin Interface: http://localhost:5173
-- PostgreSQL: localhost:5432
+- **Sync Server** on port 3000
+- **PostgreSQL** on port 5432
+- **Admin UI** on port 5173
+- **Mobile App UI** on port 8081
+- **PgAdmin** on port 5050
 
 ### Method 3: npm Package Installation
 
@@ -270,7 +271,7 @@ import 'fake-indexeddb/auto';
 
 ## Next Steps
 
-- [Configuration Guide](configuration.md) - Configure for your environment
-- [First App Tutorial](first-app.md) - Build your first application
-- [API Documentation](/api/datacollect/index.html) - Explore the APIs
-- [Deployment Guide](../deployment/README.md) - Production deployment
+<!-- - [Configuration Guide](configuration.md) - Configure for your environment -->
+- [First App Tutorial](../getting-started/#your-first-application) - Build your first application
+- [API Documentation](../packages/datacollect/datacollect-api-reference) - Explore the APIs
+- [Deployment Guide](../deployment) - Production deployment
