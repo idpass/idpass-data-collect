@@ -181,8 +181,8 @@ const sidebars: SidebarsConfig = {
       items: [
         "getting-started/index",
         "getting-started/installation",
+        "getting-started/configuration",
         // TODO: Add when created
-        // 'getting-started/configuration',
         // 'getting-started/first-app',
       ],
     },

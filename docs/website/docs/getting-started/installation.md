@@ -271,7 +271,7 @@ import 'fake-indexeddb/auto';
 
 ## Next Steps
 
-<!-- - [Configuration Guide](configuration.md) - Configure for your environment -->
-- [First App Tutorial](../getting-started/#your-first-application) - Build your first application
+<!-- - [First App Tutorial](../getting-started/#your-first-application) - Build your first application -->
+- [Configuration Guide](configuration.md) - Configure for your environment
 - [API Documentation](../packages/datacollect/datacollect-api-reference) - Explore the APIs
 - [Deployment Guide](../deployment) - Production deployment
