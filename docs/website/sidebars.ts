@@ -271,6 +271,11 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: "category",
+      label: "Configuration",
+      items: ["configuration/index", "configuration/entity-forms", "configuration/external-sync"],
+    },
+    {
+      type: "category",
       label: "Deployment",
       items: [
         "deployment/index",
