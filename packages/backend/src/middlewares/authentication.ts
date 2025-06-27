@@ -79,7 +79,7 @@ export function createDynamicAuthMiddleware(appInstanceStore: AppInstanceStore) 
       }
 
       // get app instance from request
-      const { configId = "default" } = req.body;
+      const configId = req.body.configId || req.query.configId || "default";
       
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
       if (!appInstance) {

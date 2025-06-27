@@ -262,9 +262,10 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
     const client = await this.pool.connect();
     try {
       const result = await client.query(
-        "SELECT guid, entity_guid, type, data, timestamp, user_id, sync_level FROM events WHERE timestamp > $1 ORDER BY timestamp ASC",
-        [timestampString],
+        "SELECT guid, entity_guid, type, data, timestamp, user_id, sync_level FROM events WHERE timestamp > $1 AND tenant_id = $2 ORDER BY timestamp ASC",
+        [timestampString, this.tenantId],
       );
+      
       return result.rows.map((row) => ({
         guid: row.guid,
         entityGuid: row.entity_guid,
@@ -292,11 +293,12 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
       const query = `
           SELECT guid, entity_guid, type, data, timestamp, user_id, sync_level
           FROM events
-          WHERE timestamp > $1
+          WHERE timestamp > $1 
+          AND tenant_id = $2
           ORDER BY timestamp ASC
-          LIMIT $2
+          LIMIT $3
         `;
-      const result = await client.query(query, [timestampString, limit]);
+      const result = await client.query(query, [timestampString, this.tenantId, limit]);
       const events = result.rows.map((row) => ({
         guid: row.guid,
         entityGuid: row.entity_guid,
