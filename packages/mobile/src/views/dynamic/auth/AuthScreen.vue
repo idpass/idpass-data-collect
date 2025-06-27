@@ -1,24 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AuthContainer from './AuthContainer.vue'
 import { useTenantStore } from '@/store/tenant'
 import { useAuthManagerStore } from '@/store/authManager'
-
+import { useErrorHandler } from '@/composables/useErrorHandler'
+import { AuthConfig } from 'idpass-data-collect'
 const route = useRoute()
 const router = useRouter()
-
-// Auth configuration interface matching the one used in useAuthManager
-interface AuthConfig {
-  type: 'auth0' | 'keycloak'
-  fields: Record<string, string>
-}
 
 // Local state
 const currentAppId = ref('')
 const authManager = useAuthManagerStore()
 const loadingStates = ref<Record<string, boolean>>({})
-const authLoading = ref(false)
 const authError = ref('')
 const tenantStore = useTenantStore()
 const authProviders = ref<AuthConfig[]>([])
@@ -29,7 +23,36 @@ const form = ref({
   password: ''
 })
 const errorMessage = ref('')
+const showError = ref(false)
+
+const { getErrorMessage, getProviderErrorMessage, getCallbackErrorMessage } = useErrorHandler()
+
+let unhandledRejectionHandler: ((event: PromiseRejectionEvent) => void) | null = null
+
+// Add function to show error messages
+const displayError = (message: string, duration = 5000) => {
+  errorMessage.value = message
+  showError.value = true
+  setTimeout(() => {
+    showError.value = false
+    errorMessage.value = ''
+  }, duration)
+}
+
+// Add global error handler for unhandled promise rejections
 onMounted(async () => {
+  // Add global error handler for OIDC errors
+  unhandledRejectionHandler = (event) => {
+    if (event.reason && String(event.reason.message || '').includes('Failed to fetch')) {
+      console.error('Unhandled OIDC error:', event.reason)
+      const message = getProviderErrorMessage(event.reason, 'Authentication Provider')
+      displayError(message)
+      event.preventDefault() // Prevent the error from being logged to console
+    }
+  }
+  
+  window.addEventListener('unhandledrejection', unhandledRejectionHandler)
+
   // Check if this is a callback route
   isCallback.value = route.name === 'callback' || route.path === '/callback'
 
@@ -49,6 +72,13 @@ onMounted(async () => {
   currentAppId.value = appId
   const tenant = await tenantStore.getTenant(appId)
   authProviders.value = tenant._data.authConfigs as AuthConfig[]
+})
+
+onUnmounted(() => {
+  // Clean up the event listener
+  if (unhandledRejectionHandler) {
+    window.removeEventListener('unhandledrejection', unhandledRejectionHandler)
+  }
 })
 
 // Handle OAuth callback processing
@@ -87,14 +117,13 @@ const handleOAuthCallback = async () => {
     }
   } catch (error) {
     console.error('OAuth callback error:', error)
-    authError.value = error instanceof Error ? error.message : 'Authentication failed'
-
+    authError.value = getCallbackErrorMessage(error)
     // Show error for a few seconds then redirect to login
     setTimeout(() => {
       if (currentAppId.value) {
-        router.push(`/app/${currentAppId.value}/login`)
+        window.location.href = `/app/${currentAppId.value}/login`
       } else {
-        router.push('/')
+        window.location.href = '/'
       }
     }, 3000)
   } finally {
@@ -104,8 +133,21 @@ const handleOAuthCallback = async () => {
 
 // Handle login for a specific provider
 const authenticate = async (provider: string) => {
-  await authManager.initialize(currentAppId.value)
-  await authManager.login(provider, null)
+  try {
+    loadingStates.value[provider] = true
+    authError.value = '' // Clear any previous auth errors
+    showError.value = false // Clear any previous form errors
+    
+    await authManager.initialize(currentAppId.value)
+    await authManager.login(provider, null)
+  
+  } catch (error) {
+    console.error('OAuth authentication error:', error)
+    const message = getProviderErrorMessage(error, getProviderName(provider))
+    displayError(message)
+  } finally {
+    loadingStates.value[provider] = false
+  }
 }
 
 const onBack = () => {
@@ -119,9 +161,16 @@ const getProviderName = (provider: string) => {
 }
 
 const onLogin = async () => {
-  await authManager.initialize(currentAppId.value)
-  await authManager.login(null, { username: form.value.email, password: form.value.password })
-  await authManager.handleDefaultLogin()
+  try {
+    showError.value = false
+    await authManager.initialize(currentAppId.value)
+    await authManager.login(null, { username: form.value.email, password: form.value.password })
+    await authManager.handleDefaultLogin()
+  } catch (error) {
+    console.error('Login error:', error)
+    const message = getErrorMessage(error)
+    displayError(message)
+  }
 }
 </script>
 
@@ -150,6 +199,14 @@ const onLogin = async () => {
       <!-- Regular auth flow -->
 
       <div v-else class="align-items-center py-4">
+        <!-- Error Message Alert -->
+        <div v-if="showError" class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
+          <i class="bi bi-exclamation-triangle"></i>
+          {{ errorMessage }}
+          <i class="bi bi-x" @click="showError = false" aria-label="Close"></i>
+          
+        </div>
+
         <form @submit.prevent="onLogin">
           <div class="mb-3">
             <label for="email" class="form-label">Email address</label>
@@ -162,7 +219,6 @@ const onLogin = async () => {
           <div class="d-flex justify-content-end">
             <button type="submit" class="btn btn-primary">Login</button>
           </div>
-          <p v-if="errorMessage" class="text-danger">{{ errorMessage }}</p>
         </form>
 
         <!-- Error state -->
@@ -172,15 +228,13 @@ const onLogin = async () => {
 
         <!-- Auth providers -->
 
-       
-
         <div v-if="authProviders.length > 0" class="py-3">
           <hr />
           <div v-for="provider in authProviders" :key="provider.type" class="mb-3 ">
             <button
               class="btn w-100 align-items-center justify-content-center btn-primary"
               @click="authenticate(provider.type)"
-              :disabled="loadingStates[provider.type] || authLoading"
+              :disabled="loadingStates[provider.type]"
             >
               <span v-if="!loadingStates[provider.type]">
                 Sign in with {{ getProviderName(provider.type) }}

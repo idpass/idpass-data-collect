@@ -20,9 +20,11 @@
 import { AuthAdapter, AuthConfig, AuthResult, OIDCConfig, SingleAuthStorage } from "../../interfaces/types";
 import OIDCClient from "./OIDCClient";
 import axios from "axios";
+
 export class KeycloakAuthAdapter implements AuthAdapter {
   private oidc: OIDCClient;
   private appType: 'backend' | 'frontend' = 'backend';
+
   constructor(
     private authStorage: SingleAuthStorage | null,
     public config: AuthConfig,
@@ -62,33 +64,22 @@ export class KeycloakAuthAdapter implements AuthAdapter {
 
   async logout(): Promise<void> {
     await this.oidc.logout();
-    if (this.authStorage) {
-      await this.authStorage.removeToken();
-    }
   }
 
   async validateToken(token: string): Promise<boolean> {
-    if (this.appType === 'backend') {
-      return this.validateTokenServer(token);
-    } else {
+    
+    if (this.appType === 'frontend') {
       return this.validateTokenClient(token);
+    } else {
+      return this.validateTokenServer(token);
     }
   }
 
   private async validateTokenServer(token: string): Promise<boolean> {
     try {
-      // Validate token by calling Keycloak's userinfo endpoint
-      const userinfoUrl = `${this.config.fields.authority}/protocol/openid-connect/userinfo`;
-      const response = await axios.get(userinfoUrl, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 5000 // 5 second timeout
-      });
-      
-      // If we get a successful response, the token is valid
-      return response.status === 200 && response.data && response.data.sub;
+      // Use userinfo validation since JWKS requires Node.js crypto
+      console.log("Using userinfo validation for Keycloak token");
+      return this.checkTokenActive(token);
     } catch (error) {
       console.error("Keycloak token validation error:", error);
       return false;
@@ -111,5 +102,28 @@ export class KeycloakAuthAdapter implements AuthAdapter {
 
   async getStoredAuth(): Promise<AuthResult | null> {
     return this.oidc.getStoredAuth();
+  }
+
+  private async checkTokenActive(token: string): Promise<boolean> {
+    try {
+      // Call Keycloak's userinfo endpoint to verify token is still active
+      const userinfoUrl = `${this.config.fields.authority}/protocol/openid-connect/userinfo`;
+      const response = await axios.get(userinfoUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 5000 // 5 second timeout
+      });
+
+      // If we get a successful response with user data, the token is active
+      const isActive = response.status === 200 && response.data && response.data.sub;
+      
+      return isActive;
+    } catch (error) {
+      console.error("Error checking Keycloak token activity:", error);
+      // If userinfo call fails, token might be revoked or invalid
+      return false;
+    }
   }
 }

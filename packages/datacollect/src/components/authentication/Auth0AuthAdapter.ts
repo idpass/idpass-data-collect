@@ -70,27 +70,19 @@ export class Auth0AuthAdapter implements AuthAdapter {
   }
 
   async validateToken(token: string): Promise<boolean> {
-    if (this.appType === 'backend') {
-      return this.validateTokenServer(token);
-    } else {
+
+    if (this.appType === 'frontend') {
       return this.validateTokenClient(token);
+    } else {
+      return this.validateTokenServer(token);
     }
   }
 
   private async validateTokenServer(token: string): Promise<boolean> {
     try {
-      // Validate token by calling Auth0's userinfo endpoint
-      const userinfoUrl = `${this.config.fields.authority}/userinfo`;
-      const response = await axios.get(userinfoUrl, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 5000 // 5 second timeout
-      });
-      //add check if org id is the same with the one in the token
-      // If we get a successful response, the token is valid
-      return response.status === 200 && response.data && response.data.sub;
+      // Use userinfo validation since crypto module is not available in browsers
+      console.log("Using userinfo validation for Auth0 token");
+      return this.checkTokenActive(token);
     } catch (error) {
       console.error("Auth0 token validation error:", error);
       return false;
@@ -106,6 +98,33 @@ export class Auth0AuthAdapter implements AuthAdapter {
     const user = await this.oidc.handleCallback();
     if (user && this.authStorage) {
       await this.authStorage.setToken(user.access_token);
+    }
+  }
+
+  private async checkTokenActive(token: string): Promise<boolean> {
+    try {
+      // Call Auth0's userinfo endpoint to verify token is still active
+      const userinfoUrl = `${this.config.fields.authority}/userinfo`;
+      const response = await axios.get(userinfoUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 5000 // 5 second timeout
+      });
+
+      // If we get a successful response with user data, the token is active
+      const isActive = response.status === 200 && response.data && response.data.sub;
+      console.log("Auth0 token is active:", isActive, response.data);
+      if(isActive && response.data.org_id === this.config.fields.organization){ 
+        return true;
+      }
+     
+      return false;
+    } catch (error) {
+      console.error("Error checking token activity:", error);
+      // If userinfo call fails, token might be revoked or invalid
+      return false;
     }
   }
 }
