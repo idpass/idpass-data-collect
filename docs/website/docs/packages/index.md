@@ -4,9 +4,9 @@ title: Packages Overview
 sidebar_position: 2
 ---
 
-# ID PASS DataCollectct Packages
+# ID PASS DataCollect Packages
 
-ID PASS DataCollectct is organized into three main packages, each serving a specific role in the offline-first data management ecosystem:
+ID PASS DataCollect is organized into three main packages, each serving a specific role in the offline-first data management ecosystem:
 
 ## 📦 Package Architecture
 
@@ -53,6 +53,18 @@ graph TB
 - 👥 **Multi-Tenant**: Support for multiple organizations and configurations
 
 **Use Cases**: Central data management, team collaboration, system integration
+
+---
+
+### [Mobile](./mobile/)
+**Vue.js Administration Interface**
+
+- 👥 **User Management**: Create and manage user accounts and permissions
+- ⚙️ **Configuration**: Set up multi-tenant configurations and forms
+- 📊 **Data Visualization**: View and analyze collected data
+- 🎨 **Customizable**: Theming and branding options
+
+**Use Cases**: Administrative oversight, user onboarding, data analysis
 
 ---
 

@@ -4,13 +4,13 @@ title: Getting Started
 sidebar_position: 1
 ---
 
-# Getting Started with ID PASS DataCollectct
+# Getting Started with ID PASS DataCollect
 
-ID PASS DataCollectct is a robust, offline-first data management system designed for managing household and individual beneficiary data. This guide will help you get up and running quickly.
+ID PASS DataCollect is a robust, offline-first data management system designed for managing household and individual beneficiary data. This guide will help you get up and running quickly.
 
-## What is ID PASS DataCollectct?
+## What is ID PASS DataCollect?
 
-ID PASS DataCollectct provides:
+ID PASS DataCollect provides:
 - **Offline-first architecture** - Work without internet connectivity
 - **Event sourcing** - Complete audit trail of all data changes
 - **Two-level synchronization** - Client ↔ Server ↔ External systems
@@ -52,6 +52,13 @@ ID PASS DataCollectct provides:
 4. **Try the admin interface** (optional)
    ```bash
    cd packages/admin
+   npm install
+   npm run dev
+   ```
+
+5. **Try the mobile app** (optional)
+   ```bash
+   cd packages/mobile
    npm install
    npm run dev
    ```
@@ -111,7 +118,7 @@ console.log("Created member:", member);
 - [Configuration](configuration.md) - Configure for your environment  
 - [Build Your First App](first-app.md) - Complete tutorial
 - [User Guide](../user-guide/README.md) - Comprehensive usage guide
-- [API Reference](/api/datacollect/index.html) - Complete API documentation
+- [API Reference](../packages/datacollect/datacollect-api-reference) - Complete API documentation
 
 ## Need Help?
 
