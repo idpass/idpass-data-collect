@@ -61,7 +61,7 @@ Each configuration consists of four main components:
 - **Description**: Human-readable description of the configuration's purpose
 - **Version**: Version number for tracking configuration changes
 
-### 2. Entity Forms
+### 2. [Entity Forms](./entity-forms/)
 Entity forms define the data collection forms that users will interact with in the mobile application. Each form includes:
 
 - **Name**: Unique identifier for the form
@@ -75,7 +75,7 @@ Entity forms define the data collection forms that users will interact with in t
 - Visual form builder integration
 - Dynamic form validation
 
-### 3. External Sync Configuration
+### 3. [External Sync Configuration](./external-sync.md)
 Defines how the application synchronizes data with external systems:
 
 - **Type**: Sync adapter type (Mock Sync Server, OpenSPP, OpenFn)

@@ -100,6 +100,18 @@ npm run dev
 # Interface available at http://localhost:5173
 ```
 
+#### 5. Set Up Mobile App (Optional)
+```bash
+cd packages/mobile
+npm install
+```
+
+**Start Mobile app (in dev mode):**
+```bash
+npm run dev
+# Available at http://localhost:8081
+```
+
 ### Method 2: Docker Deployment
 
 For production-like environments.
@@ -129,7 +141,7 @@ docker-compose -f docker-compose.dev.yaml up -d
 - **Sync Server** on port 3000
 - **PostgreSQL** on port 5432
 - **Admin UI** on port 5173
-- **Mobile App UI** on port 8081
+- **Mobile App** on port 8081
 - **PgAdmin** on port 5050
 
 ### Method 3: npm Package Installation

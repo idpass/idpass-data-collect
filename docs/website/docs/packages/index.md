@@ -56,6 +56,18 @@ graph TB
 
 ---
 
+### [Mobile](./mobile/)
+**Vue.js Administration Interface**
+
+- 👥 **User Management**: Create and manage user accounts and permissions
+- ⚙️ **Configuration**: Set up multi-tenant configurations and forms
+- 📊 **Data Visualization**: View and analyze collected data
+- 🎨 **Customizable**: Theming and branding options
+
+**Use Cases**: Administrative oversight, user onboarding, data analysis
+
+---
+
 ### [Admin](./admin/)
 **Vue.js Administration Interface**
 

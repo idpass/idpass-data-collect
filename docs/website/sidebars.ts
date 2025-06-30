@@ -181,9 +181,8 @@ const sidebars: SidebarsConfig = {
       items: [
         "getting-started/index",
         "getting-started/installation",
+        "getting-started/tutorials",
         "getting-started/configuration",
-        // TODO: Add when created
-        // 'getting-started/first-app',
       ],
     },
     {
@@ -205,7 +204,7 @@ const sidebars: SidebarsConfig = {
               href: "/packages/datacollect/api/",
             },
             // TODO: Add when created
-            "packages/datacollect/datacollect-tutorials",
+            // "packages/datacollect/datacollect-tutorials",
             // 'packages/datacollect/configuration',
           ],
         },
@@ -242,6 +241,12 @@ const sidebars: SidebarsConfig = {
             // 'packages/admin/components/index',
             // 'packages/admin/theming',
           ],
+        },
+        {
+          type: "category",
+          label: "Mobile",
+          collapsed: true,
+          items: ["packages/mobile/mobile-overview"],
         },
       ],
     },
