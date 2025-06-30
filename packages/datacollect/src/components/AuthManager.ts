@@ -46,13 +46,18 @@ export class AuthManager {
   async initialize(): Promise<void> {
     this.adapters = this.configs.reduce(
       (acc, config) => {
-        const adapterModule = adaptersMapping[config.type as keyof typeof adaptersMapping];
-        let singleAuthStorage: SingleAuthStorage | null = null;
-        if (this.authStorage) {
-          singleAuthStorage = new SingleAuthStorageImpl(this.authStorage, config.type);
-        }
-        if (adapterModule) {
-          acc[config.type] = new adapterModule(singleAuthStorage, config);
+        try {
+          const adapterModule = adaptersMapping[config.type as keyof typeof adaptersMapping];
+          let singleAuthStorage: SingleAuthStorage | null = null;
+          if (this.authStorage) {
+            singleAuthStorage = new SingleAuthStorageImpl(this.authStorage, config.type);
+          }
+          if (adapterModule) {
+            acc[config.type] = new adapterModule(singleAuthStorage, config);
+          }
+        } catch (error) {
+          console.error(`Failed to initialize adapter for type ${config.type}:`, error);
+          // Skip this adapter but continue with others
         }
         return acc;
       },
@@ -61,16 +66,24 @@ export class AuthManager {
   }
 
   async isAuthenticated(): Promise<boolean> {
-    if (!this.authStorage) {
+    // If there are no configs and no auth storage, return false
+    if (!this.configs.length) {
+      return false;
+    }
+     if (!this.authStorage) {
       throw new Error("Auth storage is not set");
     }
     // Check adapter-based authentication
     const adapterResults = await Promise.all(Object.values(this.adapters).map((adapter) => adapter.isAuthenticated()));
-    // Check default login token
-    const defaultToken = await this.authStorage.getTokenByProvider("default");
-    const hasDefaultToken = !!defaultToken;
-    const isAuth = adapterResults.some((result) => result) || hasDefaultToken;
-    return isAuth;
+    
+    // Check default login token if auth storage exists
+    if (this.authStorage) {
+      const defaultToken = await this.authStorage.getTokenByProvider("default");
+      const hasDefaultToken = !!defaultToken;
+      return adapterResults.some((result) => result) || hasDefaultToken;
+    }
+
+    return adapterResults.some((result) => result);
   }
 
   async login(credentials: PasswordCredentials | TokenCredentials | null, type?: string): Promise<void> {
