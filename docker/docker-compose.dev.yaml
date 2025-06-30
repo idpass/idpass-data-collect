@@ -125,6 +125,22 @@ services:
     networks:
       - hdm-network
 
+  # Keycloak for authentication
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0.0
+    container_name: keycloak
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+    command:
+      - start-dev
+    ports:
+      - "9090:8080"
+    depends_on:
+      - postgres
+    networks:
+      - hdm-network
+
 volumes:
   postgres-data:
 
