@@ -11,6 +11,7 @@
 
 ## Classes
 
+- [AuthManager](classes/AuthManager.md)
 - [EntityDataManager](classes/EntityDataManager.md)
 - [EntityStoreImpl](classes/EntityStoreImpl.md)
 - [EventStoreImpl](classes/EventStoreImpl.md)
@@ -18,6 +19,8 @@
 - [InternalSyncManager](classes/InternalSyncManager.md)
 - [SyncAdapterImpl](classes/SyncAdapterImpl.md)
 - [EventApplierService](classes/EventApplierService.md)
+- [SingleAuthStorageImpl](classes/SingleAuthStorageImpl.md)
+- [IndexedDbAuthStorageAdapter](classes/IndexedDbAuthStorageAdapter.md)
 - [IndexedDbEntityStorageAdapter](classes/IndexedDbEntityStorageAdapter.md)
 - [IndexedDbEventStorageAdapter](classes/IndexedDbEventStorageAdapter.md)
 - [PostgresEntityStorageAdapter](classes/PostgresEntityStorageAdapter.md)
@@ -47,6 +50,14 @@
 - [Conflict](interfaces/Conflict.md)
 - [ExternalSyncAdapter](interfaces/ExternalSyncAdapter.md)
 - [ExternalSyncCredentials](interfaces/ExternalSyncCredentials.md)
+- [OIDCConfig](interfaces/OIDCConfig.md)
+- [AuthResult](interfaces/AuthResult.md)
+- [AuthConfig](interfaces/AuthConfig.md)
+- [PasswordCredentials](interfaces/PasswordCredentials.md)
+- [TokenCredentials](interfaces/TokenCredentials.md)
+- [AuthAdapter](interfaces/AuthAdapter.md)
+- [AuthStorageAdapter](interfaces/AuthStorageAdapter.md)
+- [SingleAuthStorage](interfaces/SingleAuthStorage.md)
 
 ## Type Aliases
 

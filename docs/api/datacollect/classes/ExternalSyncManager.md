@@ -6,7 +6,7 @@
 
 # Class: ExternalSyncManager
 
-Defined in: [components/ExternalSyncManager.ts:101](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/ExternalSyncManager.ts#L101)
+Defined in: [components/ExternalSyncManager.ts:103](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/ExternalSyncManager.ts#L103)
 
 Manages synchronization with external third-party systems using pluggable adapters.
 
@@ -80,7 +80,7 @@ const opensppConfig: ExternalSyncConfig = {
 
 > **new ExternalSyncManager**(`eventStore`, `eventApplierService`, `config`): `ExternalSyncManager`
 
-Defined in: [components/ExternalSyncManager.ts:127](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/ExternalSyncManager.ts#L127)
+Defined in: [components/ExternalSyncManager.ts:129](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/ExternalSyncManager.ts#L129)
 
 Creates a new ExternalSyncManager instance.
 
@@ -131,7 +131,7 @@ const manager = new ExternalSyncManager(
 
 > **initialize**(): `Promise`\<`void`\>
 
-Defined in: [components/ExternalSyncManager.ts:158](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/ExternalSyncManager.ts#L158)
+Defined in: [components/ExternalSyncManager.ts:160](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/ExternalSyncManager.ts#L160)
 
 Initializes the external sync manager by instantiating the appropriate adapter.
 
@@ -170,7 +170,7 @@ if (manager.isInitialized()) {
 
 > **synchronize**(`credentials?`): `Promise`\<`void`\>
 
-Defined in: [components/ExternalSyncManager.ts:208](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/ExternalSyncManager.ts#L208)
+Defined in: [components/ExternalSyncManager.ts:211](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/ExternalSyncManager.ts#L211)
 
 Performs synchronization with the external system using the configured adapter.
 
@@ -230,7 +230,7 @@ try {
 
 > **isInitialized**(): `boolean`
 
-Defined in: [components/ExternalSyncManager.ts:232](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/ExternalSyncManager.ts#L232)
+Defined in: [components/ExternalSyncManager.ts:235](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/ExternalSyncManager.ts#L235)
 
 Checks if the external sync manager has been properly initialized with an adapter.
 

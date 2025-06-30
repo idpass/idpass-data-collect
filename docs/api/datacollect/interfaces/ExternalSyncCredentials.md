@@ -6,7 +6,7 @@
 
 # Interface: ExternalSyncCredentials
 
-Defined in: [interfaces/types.ts:664](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/interfaces/types.ts#L664)
+Defined in: [interfaces/types.ts:668](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/interfaces/types.ts#L668)
 
 Credentials for authenticating with external systems.
 
@@ -16,7 +16,7 @@ Credentials for authenticating with external systems.
 
 > **username**: `string`
 
-Defined in: [interfaces/types.ts:666](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/interfaces/types.ts#L666)
+Defined in: [interfaces/types.ts:670](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/interfaces/types.ts#L670)
 
 Username for basic authentication
 
@@ -26,6 +26,6 @@ Username for basic authentication
 
 > **password**: `string`
 
-Defined in: [interfaces/types.ts:668](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/interfaces/types.ts#L668)
+Defined in: [interfaces/types.ts:672](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/interfaces/types.ts#L672)
 
 Password for basic authentication

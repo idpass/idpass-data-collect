@@ -6,7 +6,7 @@
 
 # Class: InternalSyncManager
 
-Defined in: [components/InternalSyncManager.ts:72](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/InternalSyncManager.ts#L72)
+Defined in: [components/InternalSyncManager.ts:79](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/InternalSyncManager.ts#L79)
 
 Manages bidirectional synchronization between local DataCollect instances and the remote sync server.
 
@@ -40,7 +40,7 @@ await syncManager.login('user@example.com', 'password');
 // Check for pending changes
 if (await syncManager.hasUnsyncedEvents()) {
   console.log(`${await syncManager.getUnsyncedEventsCount()} events pending`);
-  
+
   // Perform full sync
   await syncManager.sync();
 }
@@ -59,9 +59,9 @@ await syncManager.pullFromRemote();
 
 ### Constructor
 
-> **new InternalSyncManager**(`eventStore`, `entityStore`, `eventApplierService`, `syncServerUrl`, `authToken`, `configId`): `InternalSyncManager`
+> **new InternalSyncManager**(`eventStore`, `entityStore`, `eventApplierService`, `syncServerUrl`, `authStorage`, `configId`): `InternalSyncManager`
 
-Defined in: [components/InternalSyncManager.ts:89](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/InternalSyncManager.ts#L89)
+Defined in: [components/InternalSyncManager.ts:96](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/InternalSyncManager.ts#L96)
 
 Creates a new InternalSyncManager instance.
 
@@ -91,11 +91,9 @@ Service for applying events to entities
 
 Base URL of the remote sync server
 
-##### authToken
+##### authStorage
 
-`string`
-
-JWT authentication token for server requests
+[`AuthStorageAdapter`](../interfaces/AuthStorageAdapter.md)
 
 ##### configId
 
@@ -113,92 +111,17 @@ Configuration ID for multi-tenant setups (defaults to "default")
 
 > **isSyncing**: `boolean` = `false`
 
-Defined in: [components/InternalSyncManager.ts:74](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/InternalSyncManager.ts#L74)
+Defined in: [components/InternalSyncManager.ts:81](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/InternalSyncManager.ts#L81)
 
 Flag indicating if a sync operation is currently in progress
 
 ## Methods
 
-### login()
-
-> **login**(`email`, `password`): `Promise`\<`void`\>
-
-Defined in: [components/InternalSyncManager.ts:126](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/InternalSyncManager.ts#L126)
-
-Authenticates with the sync server using email and password.
-
-Automatically updates the authentication token and HTTP headers
-for subsequent requests.
-
-#### Parameters
-
-##### email
-
-`string`
-
-User email address
-
-##### password
-
-`string`
-
-User password
-
-#### Returns
-
-`Promise`\<`void`\>
-
-#### Throws
-
-When authentication fails
-
-#### Example
-
-```typescript
-try {
-  await syncManager.login('user@example.com', 'password123');
-  console.log('Authentication successful');
-} catch (error) {
-  console.error('Login failed:', error.message);
-}
-```
-
-***
-
-### setAuthToken()
-
-> **setAuthToken**(`token`): `Promise`\<`void`\>
-
-Defined in: [components/InternalSyncManager.ts:143](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/InternalSyncManager.ts#L143)
-
-Updates the authentication token for server communication.
-
-#### Parameters
-
-##### token
-
-`string`
-
-New JWT authentication token
-
-#### Returns
-
-`Promise`\<`void`\>
-
-#### Example
-
-```typescript
-// After receiving a new token from external authentication
-await syncManager.setAuthToken(newJwtToken);
-```
-
-***
-
 ### getUnsyncedEventsCount()
 
 > **getUnsyncedEventsCount**(): `Promise`\<`number`\>
 
-Defined in: [components/InternalSyncManager.ts:163](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/InternalSyncManager.ts#L163)
+Defined in: [components/InternalSyncManager.ts:137](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/InternalSyncManager.ts#L137)
 
 Gets the count of events waiting to be synchronized with the server.
 
@@ -225,7 +148,7 @@ if (count > 50) {
 
 > **hasUnsyncedEvents**(): `Promise`\<`boolean`\>
 
-Defined in: [components/InternalSyncManager.ts:184](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/InternalSyncManager.ts#L184)
+Defined in: [components/InternalSyncManager.ts:158](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/InternalSyncManager.ts#L158)
 
 Checks if there are any events waiting to be synchronized.
 
@@ -252,7 +175,7 @@ if (await syncManager.hasUnsyncedEvents()) {
 
 > **checkIfDuplicatesExist**(): `Promise`\<`boolean`\>
 
-Defined in: [components/InternalSyncManager.ts:421](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/InternalSyncManager.ts#L421)
+Defined in: [components/InternalSyncManager.ts:395](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/InternalSyncManager.ts#L395)
 
 Checks if there are any unresolved potential duplicates.
 
@@ -281,7 +204,7 @@ if (await syncManager.checkIfDuplicatesExist()) {
 
 > **sync**(): `Promise`\<`void`\>
 
-Defined in: [components/InternalSyncManager.ts:465](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/InternalSyncManager.ts#L465)
+Defined in: [components/InternalSyncManager.ts:439](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/InternalSyncManager.ts#L439)
 
 Performs a complete bidirectional synchronization with the remote server.
 
