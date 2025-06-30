@@ -281,7 +281,16 @@ const sidebars: SidebarsConfig = {
         "configuration/index",
         "configuration/entity-forms",
         "configuration/external-sync",
-        "configuration/auth-configs",
+        {
+          type: "category",
+          label: "Authentication Configs",
+          collapsed: true,
+          items: [
+            "configuration/auth-configs/index",
+            "configuration/auth-configs/auth-configs-auth0",
+            "configuration/auth-configs/auth-configs-keycloak",
+          ],
+        },
       ],
     },
     {

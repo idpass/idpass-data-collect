@@ -52,8 +52,8 @@ Custom event applier:
 const customApplier: EventApplier = {
   apply: async (entity, form, getEntity, saveEntity) => {
     if (form.type === 'custom-verification') {
-      const updated = { 
-        ...entity, 
+      const updated = {
+        ...entity,
         data: { ...entity.data, verified: true, verifiedAt: form.timestamp }
       };
       return updated;
@@ -78,7 +78,7 @@ const group = await service.submitForm({
   guid: uuidv4(),
   entityGuid: uuidv4(),
   type: 'create-group',
-  data: { 
+  data: {
     name: 'Smith Family',
     members: [
       { guid: 'person-1', name: 'John Smith', type: 'individual' },
@@ -95,7 +95,7 @@ await service.submitForm({
   guid: uuidv4(),
   entityGuid: group.guid,
   type: 'add-member',
-  data: { 
+  data: {
     members: [{ guid: 'person-3', name: 'Bob Smith', type: 'individual' }]
   },
   timestamp: new Date().toISOString(),
@@ -108,19 +108,13 @@ await service.submitForm({
 
 ### Constructor
 
-> **new EventApplierService**(`userId`, `eventStore`, `entityStore`): `EventApplierService`
+> **new EventApplierService**(`eventStore`, `entityStore`): `EventApplierService`
 
 Defined in: [services/EventApplierService.ts:155](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/services/EventApplierService.ts#L155)
 
 Creates a new EventApplierService instance.
 
 #### Parameters
-
-##### userId
-
-`string`
-
-Default user ID for system-generated events
 
 ##### eventStore
 
@@ -144,7 +138,7 @@ Store for managing current entity state
 
 > **registerEventApplier**(`eventType`, `applier`): `void`
 
-Defined in: [services/EventApplierService.ts:186](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/services/EventApplierService.ts#L186)
+Defined in: [services/EventApplierService.ts:185](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/services/EventApplierService.ts#L185)
 
 Registers a custom event applier for a specific event type.
 
@@ -192,7 +186,7 @@ service.registerEventApplier('custom-verification', verificationApplier);
 
 > **getEventApplier**(`eventType`): `undefined` \| [`EventApplier`](../interfaces/EventApplier.md)
 
-Defined in: [services/EventApplierService.ts:204](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/services/EventApplierService.ts#L204)
+Defined in: [services/EventApplierService.ts:203](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/services/EventApplierService.ts#L203)
 
 Retrieves a registered event applier for a specific event type.
 
@@ -225,13 +219,13 @@ if (applier) {
 
 > **submitForm**(`formDataParam`): `Promise`\<`null` \| [`EntityDoc`](../interfaces/EntityDoc.md)\>
 
-Defined in: [services/EventApplierService.ts:281](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/services/EventApplierService.ts#L281)
+Defined in: [services/EventApplierService.ts:280](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/services/EventApplierService.ts#L280)
 
 Processes a form submission to create or modify entities through the event sourcing system.
 
 This is the main entry point for all entity operations. The method:
 1. Validates the form submission data
-2. Saves the event to the event store  
+2. Saves the event to the event store
 3. Applies the event to create/update entities
 4. Logs audit entries for all changes
 5. Flags potential duplicates automatically
@@ -318,7 +312,7 @@ await service.submitForm({
 
 > **searchEntities**(`criteria`): `Promise`\<`object`[]\>
 
-Defined in: [services/EventApplierService.ts:870](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/services/EventApplierService.ts#L870)
+Defined in: [services/EventApplierService.ts:869](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/services/EventApplierService.ts#L869)
 
 Searches entities using the provided criteria.
 

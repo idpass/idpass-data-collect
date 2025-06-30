@@ -24,6 +24,11 @@ const typedocSidebar = {
       items: [
         {
           type: "doc",
+          id: "packages/datacollect/api/classes/AuthManager",
+          label: "AuthManager"
+        },
+        {
+          type: "doc",
           id: "packages/datacollect/api/classes/EntityDataManager",
           label: "EntityDataManager"
         },
@@ -56,6 +61,16 @@ const typedocSidebar = {
           type: "doc",
           id: "packages/datacollect/api/classes/EventApplierService",
           label: "EventApplierService"
+        },
+        {
+          type: "doc",
+          id: "packages/datacollect/api/classes/SingleAuthStorageImpl",
+          label: "SingleAuthStorageImpl"
+        },
+        {
+          type: "doc",
+          id: "packages/datacollect/api/classes/IndexedDbAuthStorageAdapter",
+          label: "IndexedDbAuthStorageAdapter"
         },
         {
           type: "doc",
@@ -192,6 +207,46 @@ const typedocSidebar = {
           type: "doc",
           id: "packages/datacollect/api/interfaces/ExternalSyncCredentials",
           label: "ExternalSyncCredentials"
+        },
+        {
+          type: "doc",
+          id: "packages/datacollect/api/interfaces/OIDCConfig",
+          label: "OIDCConfig"
+        },
+        {
+          type: "doc",
+          id: "packages/datacollect/api/interfaces/AuthResult",
+          label: "AuthResult"
+        },
+        {
+          type: "doc",
+          id: "packages/datacollect/api/interfaces/AuthConfig",
+          label: "AuthConfig"
+        },
+        {
+          type: "doc",
+          id: "packages/datacollect/api/interfaces/PasswordCredentials",
+          label: "PasswordCredentials"
+        },
+        {
+          type: "doc",
+          id: "packages/datacollect/api/interfaces/TokenCredentials",
+          label: "TokenCredentials"
+        },
+        {
+          type: "doc",
+          id: "packages/datacollect/api/interfaces/AuthAdapter",
+          label: "AuthAdapter"
+        },
+        {
+          type: "doc",
+          id: "packages/datacollect/api/interfaces/AuthStorageAdapter",
+          label: "AuthStorageAdapter"
+        },
+        {
+          type: "doc",
+          id: "packages/datacollect/api/interfaces/SingleAuthStorage",
+          label: "SingleAuthStorage"
         }
       ]
     },

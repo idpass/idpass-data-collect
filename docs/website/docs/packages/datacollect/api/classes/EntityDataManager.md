@@ -2,7 +2,7 @@
 
 # Class: EntityDataManager
 
-Defined in: [components/EntityDataManager.ts:131](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L131)
+Defined in: [components/EntityDataManager.ts:135](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L135)
 
 Primary API interface for the ID PASS DataCollect library.
 
@@ -97,9 +97,9 @@ if (manager.isSyncing()) {
 
 ### Constructor
 
-> **new EntityDataManager**(`eventStore`, `entityStore`, `eventApplierService`, `externalSyncManager?`, `internalSyncManager?`): `EntityDataManager`
+> **new EntityDataManager**(`eventStore`, `entityStore`, `eventApplierService`, `externalSyncManager?`, `internalSyncManager?`, `authManager?`): `EntityDataManager`
 
-Defined in: [components/EntityDataManager.ts:143](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L143)
+Defined in: [components/EntityDataManager.ts:147](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L147)
 
 Creates a new EntityDataManager instance.
 
@@ -135,6 +135,10 @@ Optional manager for external system sync
 
 Optional manager for server sync
 
+##### authManager?
+
+[`AuthManager`](AuthManager.md)
+
 #### Returns
 
 `EntityDataManager`
@@ -145,7 +149,7 @@ Optional manager for server sync
 
 > **isSyncing**(): `boolean`
 
-Defined in: [components/EntityDataManager.ts:156](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L156)
+Defined in: [components/EntityDataManager.ts:161](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L161)
 
 Checks if a synchronization operation is currently in progress.
 
@@ -161,7 +165,7 @@ True if sync is active, false otherwise
 
 > **submitForm**(`formData`): `Promise`\<`null` \| [`EntityDoc`](../interfaces/EntityDoc.md)\>
 
-Defined in: [components/EntityDataManager.ts:197](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L197)
+Defined in: [components/EntityDataManager.ts:202](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L202)
 
 Submits a form to create or modify entities through the event sourcing system.
 
@@ -214,7 +218,7 @@ const updated = await manager.submitForm({
 
 > **getAllEvents**(): `Promise`\<[`FormSubmission`](../interfaces/FormSubmission.md)[]\>
 
-Defined in: [components/EntityDataManager.ts:223](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L223)
+Defined in: [components/EntityDataManager.ts:228](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L228)
 
 Retrieves all events (form submissions) from the event store.
 
@@ -248,7 +252,7 @@ const entityEvents = events.filter(e => e.entityGuid === 'entity-456');
 
 > **getAllEntities**(): `Promise`\<`object`[]\>
 
-Defined in: [components/EntityDataManager.ts:255](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L255)
+Defined in: [components/EntityDataManager.ts:260](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L260)
 
 Retrieves all entities from the entity store.
 
@@ -288,7 +292,7 @@ const groups = entities.filter(pair =>
 
 > **getEntity**(`id`): `Promise`\<\{ `initial`: [`EntityDoc`](../interfaces/EntityDoc.md); `modified`: [`EntityDoc`](../interfaces/EntityDoc.md); \}\>
 
-Defined in: [components/EntityDataManager.ts:291](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L291)
+Defined in: [components/EntityDataManager.ts:296](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L296)
 
 Retrieves a specific entity by its internal database ID.
 
@@ -342,7 +346,7 @@ try {
 
 > **getMembers**(`groupId`): `Promise`\<`object`[]\>
 
-Defined in: [components/EntityDataManager.ts:416](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L416)
+Defined in: [components/EntityDataManager.ts:421](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L421)
 
 Retrieves all members of a specific group.
 
@@ -387,7 +391,7 @@ try {
 
 > **hasUnsyncedEvents**(): `Promise`\<`boolean`\>
 
-Defined in: [components/EntityDataManager.ts:441](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L441)
+Defined in: [components/EntityDataManager.ts:446](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L446)
 
 Checks if there are any unsynced events waiting to be synchronized.
 
@@ -414,7 +418,7 @@ if (await manager.hasUnsyncedEvents()) {
 
 > **getUnsyncedEventsCount**(): `Promise`\<`number`\>
 
-Defined in: [components/EntityDataManager.ts:465](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L465)
+Defined in: [components/EntityDataManager.ts:470](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L470)
 
 Gets the count of unsynced events waiting to be synchronized.
 
@@ -443,7 +447,7 @@ if (count > 100) {
 
 > **syncWithSyncServer**(): `Promise`\<`void`\>
 
-Defined in: [components/EntityDataManager.ts:493](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L493)
+Defined in: [components/EntityDataManager.ts:498](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L498)
 
 Synchronizes local data with the remote sync server.
 
@@ -478,7 +482,7 @@ try {
 
 > **searchEntities**(`criteria`): `Promise`\<`object`[]\>
 
-Defined in: [components/EntityDataManager.ts:525](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L525)
+Defined in: [components/EntityDataManager.ts:530](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L530)
 
 Searches entities using specified criteria.
 
@@ -523,7 +527,7 @@ const smithFamilies = await manager.searchEntities([
 
 > **getAuditTrailByEntityGuid**(`entityGuid`): `Promise`\<[`AuditLogEntry`](../interfaces/AuditLogEntry.md)[]\>
 
-Defined in: [components/EntityDataManager.ts:555](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L555)
+Defined in: [components/EntityDataManager.ts:560](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L560)
 
 Retrieves the complete audit trail for a specific entity.
 
@@ -571,7 +575,7 @@ try {
 
 > **getEventsSince**(`timestamp`): `Promise`\<[`FormSubmission`](../interfaces/FormSubmission.md)[]\>
 
-Defined in: [components/EntityDataManager.ts:607](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L607)
+Defined in: [components/EntityDataManager.ts:612](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L612)
 
 Retrieves events created since a specific timestamp.
 
@@ -609,7 +613,7 @@ recentEvents.forEach(event => {
 
 > **getEventsSincePagination**(`timestamp`, `limit`): `Promise`\<\{ `events`: [`FormSubmission`](../interfaces/FormSubmission.md)[]; `nextCursor`: `null` \| `string` \| `Date`; \}\>
 
-Defined in: [components/EntityDataManager.ts:635](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L635)
+Defined in: [components/EntityDataManager.ts:640](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L640)
 
 Retrieves events since a timestamp with pagination support.
 
@@ -657,7 +661,7 @@ console.log(`Retrieved ${allEvents.length} events total`);
 
 > **closeConnection**(): `Promise`\<`void`\>
 
-Defined in: [components/EntityDataManager.ts:655](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L655)
+Defined in: [components/EntityDataManager.ts:660](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L660)
 
 Closes all database connections and cleans up resources.
 
@@ -682,7 +686,7 @@ console.log('Database connections closed');
 
 > **clearStore**(): `Promise`\<`void`\>
 
-Defined in: [components/EntityDataManager.ts:675](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L675)
+Defined in: [components/EntityDataManager.ts:680](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L680)
 
 Clears all data from both entity and event stores.
 
@@ -705,47 +709,11 @@ if (process.env.NODE_ENV === 'test') {
 
 ***
 
-### setAuthToken()
-
-> **setAuthToken**(`token`): `Promise`\<`void`\>
-
-Defined in: [components/EntityDataManager.ts:698](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L698)
-
-Sets the authentication token for sync server communication.
-
-Updates the JWT token used for authenticating with the remote sync server.
-Only available when an InternalSyncManager is configured.
-
-#### Parameters
-
-##### token
-
-`string`
-
-JWT authentication token
-
-#### Returns
-
-`Promise`\<`void`\>
-
-#### Example
-
-```typescript
-// After user login
-const authResponse = await loginUser(email, password);
-await manager.setAuthToken(authResponse.token);
-
-// Now sync operations will use the new token
-await manager.syncWithSyncServer();
-```
-
-***
-
 ### saveAuditLogs()
 
 > **saveAuditLogs**(`auditLogs`): `Promise`\<`void`\>
 
-Defined in: [components/EntityDataManager.ts:730](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L730)
+Defined in: [components/EntityDataManager.ts:711](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L711)
 
 Saves multiple audit log entries to the event store.
 
@@ -789,7 +757,7 @@ await manager.saveAuditLogs(auditLogs);
 
 > **getAuditLogsSince**(`since`): `Promise`\<[`AuditLogEntry`](../interfaces/AuditLogEntry.md)[]\>
 
-Defined in: [components/EntityDataManager.ts:748](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L748)
+Defined in: [components/EntityDataManager.ts:729](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L729)
 
 Retrieves audit logs created since a specific timestamp.
 
@@ -818,60 +786,11 @@ console.log(`${recentAudits.length} audit entries since last sync`);
 
 ***
 
-### login()
-
-> **login**(`email`, `password`): `Promise`\<`void`\>
-
-Defined in: [components/EntityDataManager.ts:775](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L775)
-
-Authenticates with the sync server using email and password.
-
-Performs login and automatically sets the received authentication token.
-Only available when an InternalSyncManager is configured.
-
-#### Parameters
-
-##### email
-
-`string`
-
-User email address
-
-##### password
-
-`string`
-
-User password
-
-#### Returns
-
-`Promise`\<`void`\>
-
-#### Throws
-
-When login fails due to invalid credentials or network issues
-
-#### Example
-
-```typescript
-try {
-  await manager.login('user@example.com', 'password123');
-  console.log('Login successful');
-
-  // Can now perform sync operations
-  await manager.syncWithSyncServer();
-} catch (error) {
-  console.error('Login failed:', error.message);
-}
-```
-
-***
-
 ### getPotentialDuplicates()
 
 > **getPotentialDuplicates**(): `Promise`\<`object`[]\>
 
-Defined in: [components/EntityDataManager.ts:809](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L809)
+Defined in: [components/EntityDataManager.ts:791](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L791)
 
 Retrieves all potential duplicate entity pairs detected by the system.
 
@@ -911,7 +830,7 @@ if (duplicates.length > 0) {
 
 > **syncWithExternalSystem**(`credentials?`): `Promise`\<`void`\>
 
-Defined in: [components/EntityDataManager.ts:839](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L839)
+Defined in: [components/EntityDataManager.ts:821](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L821)
 
 Synchronizes data with external systems (e.g., OpenSPP, custom APIs).
 
@@ -951,3 +870,101 @@ try {
 // Sync without credentials (if configured in adapter)
 await manager.syncWithExternalSystem();
 ```
+
+***
+
+### login()
+
+> **login**(`credentials`, `type?`): `Promise`\<`void`\>
+
+Defined in: [components/EntityDataManager.ts:827](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L827)
+
+#### Parameters
+
+##### credentials
+
+`null` | [`PasswordCredentials`](../interfaces/PasswordCredentials.md) | [`TokenCredentials`](../interfaces/TokenCredentials.md)
+
+##### type?
+
+`string`
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
+### initializeAuthManager()
+
+> **initializeAuthManager**(): `Promise`\<`void`\>
+
+Defined in: [components/EntityDataManager.ts:833](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L833)
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
+### logout()
+
+> **logout**(): `Promise`\<`void`\>
+
+Defined in: [components/EntityDataManager.ts:839](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L839)
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
+### validateToken()
+
+> **validateToken**(`type`, `token`): `Promise`\<`boolean`\>
+
+Defined in: [components/EntityDataManager.ts:845](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L845)
+
+#### Parameters
+
+##### type
+
+`string`
+
+##### token
+
+`string`
+
+#### Returns
+
+`Promise`\<`boolean`\>
+
+***
+
+### isAuthenticated()
+
+> **isAuthenticated**(): `Promise`\<`boolean`\>
+
+Defined in: [components/EntityDataManager.ts:852](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L852)
+
+#### Returns
+
+`Promise`\<`boolean`\>
+
+***
+
+### handleCallback()
+
+> **handleCallback**(`type`): `Promise`\<`void`\>
+
+Defined in: [components/EntityDataManager.ts:858](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EntityDataManager.ts#L858)
+
+#### Parameters
+
+##### type
+
+`string`
+
+#### Returns
+
+`Promise`\<`void`\>
