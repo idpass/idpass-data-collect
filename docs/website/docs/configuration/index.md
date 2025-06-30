@@ -4,6 +4,7 @@ title: Configuration Overview
 sidebar_position: 1
 ---
 
+
 # Configuration Overview
 
 The IDPass Data Collect system uses a comprehensive configuration schema that defines how data collection applications are structured and operate. This configuration is created and managed through the Admin interface and serves as the blueprint for mobile data collection applications.
@@ -11,6 +12,44 @@ The IDPass Data Collect system uses a comprehensive configuration schema that de
 :::info
 Client and server instances will share the same config to handle many logic between them.
 :::
+
+## Configuration File Format
+
+Configurations are stored as JSON files with the following structure:
+
+```json
+{
+  "id": "configuration-id",
+  "name": "Configuration Name",
+  "description": "Configuration description",
+  "version": "1.0.0",
+  "entityForms": [
+    {
+      "name": "form-name",
+      "title": "Form Title",
+      "dependsOn": "parent-form-name",
+      "formio": { /* FormIO schema */ }
+    }
+  ],
+  "externalSync": {
+    "type": "sync-adapter-type",
+    "url": "https://sync-endpoint.com",
+    "auth": "basic",
+    "extraFields": {
+      "key": "value"
+    }
+  },
+  "authConfigs": [
+    {
+      "type": "auth0",
+      "fields": {
+        "domain": "your-domain.auth0.com",
+        "clientId": "your-client-id"
+      }
+    }
+  ]
+}
+```
 
 
 ## Configuration Structure
@@ -82,44 +121,6 @@ The system enforces several validation rules:
 - Circular dependencies between forms are detected and prevented
 - External sync configuration must include type and URL
 - Authentication configurations must have valid types and fields
-
-## Configuration File Format
-
-Configurations are stored as JSON files with the following structure:
-
-```json
-{
-  "id": "configuration-id",
-  "name": "Configuration Name",
-  "description": "Configuration description",
-  "version": "1.0.0",
-  "entityForms": [
-    {
-      "name": "form-name",
-      "title": "Form Title",
-      "dependsOn": "parent-form-name",
-      "formio": { /* FormIO schema */ }
-    }
-  ],
-  "externalSync": {
-    "type": "sync-adapter-type",
-    "url": "https://sync-endpoint.com",
-    "auth": "basic",
-    "extraFields": {
-      "key": "value"
-    }
-  },
-  "authConfigs": [
-    {
-      "type": "auth0",
-      "fields": {
-        "domain": "your-domain.auth0.com",
-        "clientId": "your-client-id"
-      }
-    }
-  ]
-}
-```
 
 ## Use Cases
 

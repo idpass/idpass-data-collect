@@ -4,7 +4,7 @@ title: External Sync Config
 sidebar_position: 3
 ---
 
-# External Sync Configuration
+# External Sync Config
 
 ## Overview
 
@@ -13,6 +13,108 @@ The External Sync system in DataCollect provides a unified interface for synchro
 :::info
 This configuration is typically used by sync server instances to synchronize data with external systems. The sync server reads this configuration to understand the data structure, authentication requirements, and sync endpoints needed to properly exchange data with external systems like OpenSPP, OpenFn, or other third-party platforms.
 :::
+
+## Sample Configuration
+
+Here's a complete example of an external sync configuration with detailed field explanations:
+
+```json
+{
+  "type": "openfn-adapter",
+  "url": "https://api.openfn.org/workflow/trigger/abc123",
+  "extraFields": [
+    { "name": "apiKey", "value": "sk_prod_1234567890abcdef" },
+    { "name": "workflowId", "value": "wf_1234567890" },
+    { "name": "batchSize", "value": "50" },
+    { "name": "timeout", "value": "30000" }
+  ]
+}
+```
+
+### Field Explanations
+
+#### `type` (Required)
+- **Purpose**: Specifies which adapter to use for synchronization
+- **Values**: 
+  - `"mock-sync-server"` - For testing and development
+  - `"openfn-adapter"` - For OpenFn workflow integration
+  - Custom adapter types as defined in your system
+- **Example**: `"openfn-adapter"`
+
+#### `url` (Required)
+- **Purpose**: The endpoint URL of the external system for data synchronization
+- **Format**: Full URL including protocol, domain, and path
+- **Examples**:
+  - `"https://api.openfn.org/workflow/trigger/abc123"`
+  - `"http://localhost:3000/mock-sync"`
+  - `"https://your-external-system.com/api/sync"`
+
+#### `extraFields` (Required Array)
+- **Purpose**: Additional configuration parameters specific to the adapter type
+- **Structure**: Array of objects with `name` and `value` properties
+- **Common Fields**:
+
+  **For OpenFn Adapter:**
+  - `apiKey`: Your OpenFn API key for authentication
+  - `workflowId`: The specific workflow ID to trigger
+  - `batchSize`: Number of records to process in each batch (default: 100)
+  - `timeout`: Request timeout in milliseconds (default: 30000)
+
+  **For Mock Sync Server:**
+  - `batchSize`: Number of events to process per batch
+  - `retryAttempts`: Number of retry attempts for failed requests
+  - `delayBetweenBatches`: Delay in milliseconds between batch processing
+
+  **For Custom Adapters:**
+  - Any adapter-specific configuration parameters
+  - Database connection strings
+  - Custom headers or authentication tokens
+  - Sync frequency settings
+
+### Configuration Examples by Adapter Type
+
+#### Mock Sync Server Configuration
+```json
+{
+  "type": "mock-sync-server",
+  "url": "http://localhost:3000/mock-sync",
+  "extraFields": [
+    { "name": "batchSize", "value": "25" },
+    { "name": "retryAttempts", "value": "3" }
+  ]
+}
+```
+
+#### OpenFn Adapter Configuration
+```json
+{
+  "type": "openfn-adapter",
+  "auth": "api-key",
+  "url": "https://api.openfn.org/workflow/trigger/def456",
+  "extraFields": [
+    { "name": "apiKey", "value": "sk_prod_abcdef123456" },
+    { "name": "workflowId", "value": "wf_abcdef123456" },
+    { "name": "batchSize", "value": "50" },
+    { "name": "timeout", "value": "60000" }
+  ]
+}
+```
+
+#### Custom External System Configuration
+```json
+{
+  "type": "custom-adapter",
+  "auth": "basic",
+  "url": "https://your-system.com/api/sync",
+  "extraFields": [
+    { "name": "username", "value": "sync_user" },
+    { "name": "password", "value": "secure_password" },
+    { "name": "database", "value": "production_db" },
+    { "name": "syncInterval", "value": "300000" }
+  ]
+}
+```
+
 ## Architecture
 
 ### Design Pattern

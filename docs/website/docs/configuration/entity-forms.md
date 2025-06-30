@@ -16,6 +16,36 @@ Entity Forms are dynamic, configurable forms built using Form.io that allow you 
 - Implement conditional form logic and dependencies
 - Support complex data validation and business rules
 
+## Sample Entity Form
+
+Here's a simple example of an entity form with explanations for each field:
+
+```json
+{
+  "name": "individual",
+  "title": "Individual Registration",
+  "formio": {
+    "components": [
+      {
+        "label": "Full Name",
+        "key": "fullName",
+        "type": "textfield",
+        "input": true,
+        "required": true
+      }
+    ]
+  }
+}
+```
+
+### Field Explanations
+
+- **`name`**: The unique identifier for this form. Used internally by the system to reference this specific form configuration. Should be lowercase and use hyphens for spaces (e.g., "individual", "household-member").
+
+- **`title`**: The human-readable display name that appears in the user interface. This is what users will see when selecting or working with this form (e.g., "Individual Registration", "Household Information").
+
+- **`formio`**: Contains the Form.io configuration object that defines the actual form structure, fields, and behavior.
+
 ## Entity Form Structure
 
 Each Entity Form consists of the following properties:

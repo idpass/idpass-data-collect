@@ -272,7 +272,12 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Configuration",
-      items: ["configuration/index", "configuration/entity-forms", "configuration/external-sync"],
+      items: [
+        "configuration/index",
+        "configuration/entity-forms",
+        "configuration/external-sync",
+        "configuration/auth-configs",
+      ],
     },
     {
       type: "category",
