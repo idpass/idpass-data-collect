@@ -29,15 +29,16 @@ export class Auth0AuthAdapter implements AuthAdapter {
     private authStorage: SingleAuthStorage | null,
     public config: AuthConfig,
   ) {
+    const transformedConfig = this.transformConfig(config);
     const oidcConfig: OIDCConfig = {
-      authority: config.fields.authority,
-      client_id: config.fields.client_id,
-      redirect_uri: config.fields.redirect_uri,
-      post_logout_redirect_uri: config.fields.post_logout_redirect_uri,
-      response_type: config.fields.response_type,
-      scope: config.fields.scope,
+      authority: transformedConfig.fields.authority,
+      client_id: transformedConfig.fields.client_id,
+      redirect_uri: transformedConfig.fields.redirect_uri,
+      post_logout_redirect_uri: transformedConfig.fields.post_logout_redirect_uri,
+      response_type: transformedConfig.fields.response_type,
+      scope: transformedConfig.fields.scope,
       extraQueryParams: {
-        ...(config.fields.extraQueryParams ? JSON.parse(config.fields.extraQueryParams) : {}),
+        ...(transformedConfig.fields.extraQueryParams ? JSON.parse(transformedConfig.fields.extraQueryParams) : {}),
       },
     };
     this.oidc = new OIDCClient(oidcConfig);
@@ -126,5 +127,47 @@ export class Auth0AuthAdapter implements AuthAdapter {
       // If userinfo call fails, token might be revoked or invalid
       return false;
     }
+  }
+
+  protected transformConfig(config: AuthConfig): AuthConfig {
+    if (!config.fields) return config;
+
+    const fields = { ...config.fields };
+    
+    // Standard OAuth/OIDC fields that should not be in extraQueryParams
+    const standardFields = new Set([
+      'clientId',
+      'client_id',
+      'domain',
+      'issuer',
+      'authority',
+      'redirect_uri',
+      'scope',
+      'scopes',
+      'audience',
+      'responseType',
+      'response_type',
+      'clientSecret',
+      'client_secret'
+    ]);
+
+    // Collect all non-standard fields as extra query params
+    const extraQueryParams: Record<string, string> = {};
+    Object.keys(fields).forEach((key) => {
+      if (!standardFields.has(key)) {
+        extraQueryParams[key] = fields[key];
+        delete fields[key]; // Remove from main fields to avoid duplication
+      }
+    });
+
+    // Add extraQueryParams to fields if there are any
+    if (Object.keys(extraQueryParams).length > 0) {
+      fields.extraQueryParams = JSON.stringify(extraQueryParams);
+    }
+
+    return {
+      type: config.type as 'auth0' | 'keycloak',
+      fields
+    };
   }
 }

@@ -22,7 +22,6 @@ import { ref } from 'vue'
 import { MobileAuthStorage } from '@/authentication/MobileAuthStorage'
 
 import { detectPlatform } from '@/utils/device'
-import { transformAuthConfigs } from '@/utils/authConfigUtils'
 import { useTenantStore } from '@/store/tenant'
 import { App } from '@capacitor/app'
 
@@ -62,11 +61,9 @@ export const useAuthManagerStore = defineStore('authManager', () => {
       const tenant = await tenantStore.getTenant(targetAppId)
 
       const authConfigs: AuthConfig[] = tenant._data.authConfigs || []
-      const transformedAuthConfigs = transformAuthConfigs(authConfigs, detectPlatform())
-
       // Get sync server URL and initialize the store properly
       const syncServerUrl = await getSyncServerUrlByAppId(targetAppId || 'default')
-      await initStore(targetAppId || 'default', syncServerUrl, transformedAuthConfigs)
+      await initStore(targetAppId || 'default', syncServerUrl, authConfigs)
 
       // Now store is properly initialized, assign it to authManager
       authManager.value = store
