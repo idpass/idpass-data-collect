@@ -1,3 +1,10 @@
+---
+id: authentication
+title: Authentication Architecture
+sidebar_position: 4
+description: ID PASS Data Collect authentication system architecture and components
+---
+
 # Authentication Architecture
 
 The ID PASS Data Collect authentication system provides a flexible, secure, and extensible authentication framework that supports multiple authentication providers and secure token storage.
@@ -169,40 +176,6 @@ The authentication system can be extended in several ways:
    - Proper initialization order
    - Clean logout handling
 
-## Error Handling
-
-The system provides comprehensive error handling:
-
-```typescript
-try {
-  await authManager.login(credentials);
-} catch (error) {
-  if (error instanceof AuthenticationError) {
-    // Handle authentication errors
-  } else if (error instanceof StorageError) {
-    // Handle storage errors
-  } else {
-    // Handle unexpected errors
-  }
-}
-```
-
-## Future Considerations
-
-1. **Additional Providers**
-   - Microsoft Azure AD
-   - Google Identity Platform
-   - Custom OAuth providers
-
-2. **Enhanced Security**
-   - Biometric authentication
-   - Multi-factor authentication
-   - Hardware security keys
-
-3. **Storage Options**
-   - Encrypted storage
-   - Cross-device sync
-   - Offline support
 
 ## Integration with EntityManager
 
@@ -261,129 +234,3 @@ if (hasUnsynced) {
 // Logout
 await entityManager.logout();
 ```
-
-### Sync Operations
-
-```typescript
-try {
-  // Submit form data
-  const formData: FormSubmission = {
-    guid: uuidv4(),
-    entityGuid: groupId,
-    type: "create-group",
-    data: { name: "Test Group" },
-    timestamp: new Date().toISOString(),
-    userId: "user-1",
-    syncLevel: SyncLevel.LOCAL
-  };
-
-  await entityManager.submitForm(formData);
-
-  // Check sync status
-  const unsyncedCount = await entityManager.getUnsyncedEventsCount();
-  if (unsyncedCount > 0) {
-    await entityManager.syncWithSyncServer();
-  }
-} catch (error) {
-  if (error.message === "Unauthorized") {
-    // Handle authentication errors
-    await entityManager.login(credentials);
-  }
-}
-```
-
-### Error Handling
-
-```typescript
-try {
-  await entityManager.syncWithSyncServer();
-} catch (error) {
-  switch (error.message) {
-    case "Unauthorized":
-      // Handle authentication errors
-      await entityManager.login(credentials);
-      break;
-    case "Network Error":
-      // Handle connectivity issues
-      console.error("Sync server unreachable");
-      break;
-    default:
-      // Handle other sync errors
-      console.error("Sync failed:", error);
-  }
-}
-```
-
-### Sync Levels
-
-The system supports different sync levels:
-
-```typescript
-enum SyncLevel {
-  LOCAL = 0,    // Local changes only
-  INTERNAL = 1, // Sync with internal server
-  EXTERNAL = 2  // Sync with external server
-}
-
-// Example usage
-const formData: FormSubmission = {
-  // ... other fields ...
-  syncLevel: SyncLevel.INTERNAL
-};
-```
-
-### Best Practices
-
-1. **Authentication Management**
-   - Handle authentication before sync operations
-   - Implement proper token refresh
-   - Clear authentication on logout
-
-2. **Sync Strategy**
-   - Check for unsynced events regularly
-   - Handle sync conflicts appropriately
-   - Implement retry mechanisms
-
-3. **Error Handling**
-   - Handle authentication errors gracefully
-   - Provide clear error messages
-   - Implement proper fallback mechanisms
-
-4. **Performance**
-   - Batch sync operations when possible
-   - Monitor unsynced events count
-   - Implement proper caching
-
-### Testing Considerations
-
-```typescript
-describe("EntityManager Authentication", () => {
-  it("should handle sync with authentication", async () => {
-    // Setup
-    const entityManager = new EntityDataManager(
-      eventStore,
-      entityStore,
-      eventApplierService,
-      externalSyncManager,
-      internalSyncManager,
-      authManager
-    );
-
-    // Login
-    await entityManager.login({
-      username: "admin@example.com",
-      password: "password123"
-    });
-
-    // Submit and sync data
-    await entityManager.submitForm(formData);
-    expect(await entityManager.hasUnsyncedEvents()).toBe(true);
-    await entityManager.syncWithSyncServer();
-    expect(await entityManager.hasUnsyncedEvents()).toBe(false);
-
-    // Cleanup
-    await entityManager.logout();
-  });
-});
-```
-

@@ -268,6 +268,7 @@ const sidebars: SidebarsConfig = {
         "architecture/index",
         "architecture/event-sourcing",
         "architecture/sync-architecture",
+        "architecture/authentication",
         // TODO: Add when created
         // 'architecture/storage-adapters',
         // 'architecture/security-model',
