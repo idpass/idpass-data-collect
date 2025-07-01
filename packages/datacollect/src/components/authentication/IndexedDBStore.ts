@@ -24,6 +24,10 @@ export class IndexedDBStore implements Storage {
   private _length = 0
 
   constructor() {
+    if (typeof window === 'undefined') {
+      console.log('IndexedDB is not available in this environment')
+      return
+    }
     this.initDB()
   }
 
@@ -32,6 +36,7 @@ export class IndexedDBStore implements Storage {
   }
 
   private async initDB(): Promise<void> {
+
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, 1)
 
