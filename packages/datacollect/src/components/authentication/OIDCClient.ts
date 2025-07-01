@@ -19,6 +19,7 @@
 
 import { AuthResult, OIDCConfig } from '../../interfaces/types'
 import { WebStorageStateStore, UserManager, UserManagerSettings } from 'oidc-client-ts'
+import { IndexedDBStore } from './IndexedDBStore'
 
 // Mock storage for server environments
 class MockStorage implements Storage {
@@ -81,8 +82,20 @@ export class OIDCClient {
    * @param config - OIDC configuration containing provider settings
    */
   constructor(config: OIDCConfig) {
-    // Use localStorage if available (browser), otherwise use mock storage (server)
-    const storage = typeof window !== 'undefined' && window.localStorage ? localStorage : new MockStorage();
+    // Use IndexedDB if available (browser), otherwise use mock storage (server)
+    const indexedDBStore = new IndexedDBStore()
+    const storage = typeof window !== 'undefined' && window.indexedDB 
+      ? { 
+          getItem: (key: string) => indexedDBStore.getItemAsync(key),
+          setItem: (key: string, value: string) => indexedDBStore.setItemAsync(key, value),
+          removeItem: (key: string) => indexedDBStore.removeItemAsync(key),
+          // Implement remaining AsyncStorage interface methods
+          get length() { return Promise.resolve(0) },
+          clear: () => Promise.resolve(),
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          key: (_index: number) => Promise.resolve(null)
+        }
+      : new MockStorage()
     
     const settings: UserManagerSettings = {
       authority: config.authority,
@@ -95,7 +108,6 @@ export class OIDCClient {
       extraQueryParams: {
         ...config.extraQueryParams // Allow custom parameters to be passed
       }
-      // Additional settings as needed
     }
     this.userManager = new UserManager(settings)
   }
