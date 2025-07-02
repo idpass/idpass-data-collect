@@ -50,12 +50,29 @@ export class CustomBasicAuthAdapter implements AuthAdapter {
   }
 
   async login(credentials: PasswordCredentials | TokenCredentials | null): Promise<{ username: string; token: string }> {
-    if (!credentials || !("username" in credentials)) {
-      throw new Error("Username and password required");
+    if (!this.authStorage) {
+      throw new Error("Auth storage is not set");
     }
 
-    // Implement your authentication logic here
-    const response = await this.authenticateWithProvider(credentials);
+    if (!credentials) {
+      throw new Error("Credentials are required");
+    }
+
+    let response: { username: string; token: string };
+
+    if ("username" in credentials) {
+      // Handle password credentials
+      response = await this.authenticateWithProvider(credentials);
+    } else if ("token" in credentials) {
+      // Handle token credentials
+      const isValid = await this.validateToken(credentials.token);
+      if (!isValid) {
+        throw new Error("Invalid token");
+      }
+      response = { username: "token-user", token: credentials.token };
+    } else {
+      throw new Error("Invalid credentials format");
+    }
     
     if (this.authStorage) {
       await this.authStorage.setToken(response.token);
@@ -265,7 +282,15 @@ describe("MyCustomAuthAdapter", () => {
 
 ### 1. API Key Authentication
 ```typescript
-async login(credentials: TokenCredentials): Promise<{ username: string; token: string }> {
+async login(credentials: PasswordCredentials | TokenCredentials | null): Promise<{ username: string; token: string }> {
+  if (!this.authStorage) {
+    throw new Error("Auth storage is not set");
+  }
+
+  if (!credentials || !("token" in credentials)) {
+    throw new Error("API key token is required");
+  }
+
   const apiKey = credentials.token;
   const isValid = await this.validateApiKey(apiKey);
   
@@ -273,7 +298,20 @@ async login(credentials: TokenCredentials): Promise<{ username: string; token: s
     throw new Error("Invalid API key");
   }
 
+  await this.authStorage.setToken(apiKey);
+  this.authenticated = true;
   return { username: "api-user", token: apiKey };
+}
+
+private async validateApiKey(apiKey: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${this.config.fields.url}/validate`, {
+      headers: { 'X-API-Key': apiKey }
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 ```
 
@@ -281,23 +319,90 @@ async login(credentials: TokenCredentials): Promise<{ username: string; token: s
 ```typescript
 async validateToken(token: string): Promise<boolean> {
   try {
-    const payload = this.decodeJWT(token);
-    return payload.exp > Date.now() / 1000;
+    // Simple JWT validation without signature verification
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      return false;
+    }
+
+    const payload = JSON.parse(atob(parts[1]));
+    const now = Math.floor(Date.now() / 1000);
+    
+    // Check if token is expired
+    if (payload.exp && payload.exp < now) {
+      return false;
+    }
+
+    // Additional validation with your auth server
+    const response = await fetch(`${this.config.fields.url}/verify`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    return response.ok;
   } catch {
     return false;
   }
 }
 ```
 
-### 3. Custom Headers
+### 3. Custom Headers and Authentication
 ```typescript
-private async makeAuthenticatedRequest(token: string) {
-  return fetch(this.config.fields.url, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'X-Custom-Header': this.config.fields.customHeader,
+export class CustomHeaderAuthAdapter implements AuthAdapter {
+  private authenticated = false;
+
+  constructor(
+    private authStorage: SingleAuthStorage | null,
+    public config: AuthConfig,
+  ) {}
+
+  async login(credentials: PasswordCredentials | TokenCredentials | null): Promise<{ username: string; token: string }> {
+    if (!this.authStorage) {
+      throw new Error("Auth storage is not set");
     }
-  });
+
+    if (!credentials || !("username" in credentials)) {
+      throw new Error("Username and password required");
+    }
+
+    const response = await this.authenticateWithCustomHeaders(credentials);
+    await this.authStorage.setToken(response.token);
+    this.authenticated = true;
+    return response;
+  }
+
+  private async authenticateWithCustomHeaders(credentials: PasswordCredentials): Promise<{ username: string; token: string }> {
+    const response = await fetch(`${this.config.fields.url}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Client-ID': this.config.fields.clientId,
+        'X-API-Version': this.config.fields.apiVersion || '1.0',
+      },
+      body: JSON.stringify(credentials)
+    });
+
+    if (!response.ok) {
+      throw new Error('Authentication failed');
+    }
+
+    return await response.json();
+  }
+
+  async validateToken(token: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.config.fields.url}/verify`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'X-Client-ID': this.config.fields.clientId,
+        }
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  // ... other required methods
 }
 ```
 
@@ -310,19 +415,8 @@ private async makeAuthenticatedRequest(token: string) {
 3. **Storage errors**: Verify `SingleAuthStorage` is properly injected
 4. **CORS issues**: Configure your auth provider for cross-origin requests
 
-### Debug Logging
-```typescript
-async validateToken(token: string): Promise<boolean> {
-  console.log(`Validating token for ${this.config.type}`);
-  const isValid = await this.performValidation(token);
-  console.log(`Token validation result: ${isValid}`);
-  return isValid;
-}
-```
-
 ## Alternative Solutions
 
 - **Extend existing adapters** for similar OAuth providers
 - **Use MockAuthAdapter** for development/testing
 - **Implement multiple adapters** for different environments
-- **Create adapter factories** for dynamic provider selection 
