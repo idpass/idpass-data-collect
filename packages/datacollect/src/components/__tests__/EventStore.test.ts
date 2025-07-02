@@ -11,11 +11,10 @@ import { IndexedDbEventStorageAdapter } from "../../storage/IndexedDbEventStorag
 
 describe("EventStore", () => {
   let eventStore: EventStoreImpl;
-  const instanceId = "test-instance";
 
   beforeEach(async () => {
     const adapter = new IndexedDbEventStorageAdapter();
-    eventStore = new EventStoreImpl(instanceId, adapter);
+    eventStore = new EventStoreImpl(adapter);
     await eventStore.initialize();
   });
 

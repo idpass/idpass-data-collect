@@ -69,7 +69,6 @@ class MerkleNode {
  * Basic usage:
  * ```typescript
  * const eventStore = new EventStoreImpl(
- *   'user-123',
  *   storageAdapter
  * );
  *
@@ -158,11 +157,11 @@ export class EventStoreImpl implements EventStore {
    * ```typescript
    * // With IndexedDB for browser
    * const indexedDbAdapter = new IndexedDbEventStorageAdapter('tenant-123');
-   * const browserEventStore = new EventStoreImpl('user-456', indexedDbAdapter);
+   * const browserEventStore = new EventStoreImpl(indexedDbAdapter);
    *
    * // With PostgreSQL for server
    * const postgresAdapter = new PostgresEventStorageAdapter(connectionString, 'tenant-123');
-   * const serverEventStore = new EventStoreImpl('system', postgresAdapter);
+   * const serverEventStore = new EventStoreImpl(postgresAdapter);
    * ```
    */
   constructor(storageAdapter: EventStorageAdapter) {

@@ -19,27 +19,27 @@
 
 /**
  * ID PASS DataCollect - Offline-first data management library for household and individual beneficiary data.
- * 
+ *
  * This is the main entry point for the ID PASS DataCollect library, providing a comprehensive
  * offline-first data management system with event sourcing, CQRS patterns, and multi-level
  * synchronization capabilities.
- * 
+ *
  * ## Core Architecture
- * 
+ *
  * The library implements event sourcing and CQRS patterns with the following key concepts:
- * 
+ *
  * - **Events**: Commands that represent changes to entities (stored in EventStore)
  * - **Entities**: Current state of Groups and Individuals (stored in EntityStore)
  * - **FormSubmissions**: Input data that generates events
  * - **Sync**: Multi-level sync system (Internal sync between clients/server, External sync with third-party systems)
- * 
+ *
  * ## Quick Start
- * 
+ *
  * ### Browser Setup (IndexedDB)
  * ```typescript
- * import { 
- *   EntityDataManager, 
- *   EventStoreImpl, 
+ * import {
+ *   EntityDataManager,
+ *   EventStoreImpl,
  *   EntityStore,
  *   EventApplierService,
  *   IndexedDbEntityStorageAdapter,
@@ -47,25 +47,25 @@
  *   SyncLevel,
  *   EntityType
  * } from 'idpass-datacollect';
- * 
+ *
  * // Initialize storage adapters
  * const entityAdapter = new IndexedDbEntityStorageAdapter('tenant-123');
  * const eventAdapter = new IndexedDbEventStorageAdapter('tenant-123');
- * 
+ *
  * // Initialize stores
  * const entityStore = new EntityStore(entityAdapter);
- * const eventStore = new EventStoreImpl('user-456', eventAdapter);
- * const eventApplierService = new EventApplierService('user-456', eventStore, entityStore);
- * 
+ * const eventStore = new EventStoreImpl(eventAdapter);
+ * const eventApplierService = new EventApplierService(eventStore, entityStore);
+ *
  * // Initialize manager
  * const manager = new EntityDataManager(eventStore, entityStore, eventApplierService);
- * 
+ *
  * // Initialize everything
  * await Promise.all([
  *   entityStore.initialize(),
  *   eventStore.initialize()
  * ]);
- * 
+ *
  * // Create an individual
  * const individual = await manager.submitForm({
  *   guid: 'form-123',
@@ -77,10 +77,10 @@
  *   syncLevel: SyncLevel.LOCAL
  * });
  * ```
- * 
+ *
  * ### Server Setup (PostgreSQL)
  * ```typescript
- * import { 
+ * import {
  *   EntityDataManager,
  *   EventStoreImpl,
  *   EntityStore,
@@ -89,7 +89,7 @@
  *   PostgresEventStorageAdapter,
  *   InternalSyncManager
  * } from 'idpass-datacollect';
- * 
+ *
  * // Initialize PostgreSQL adapters
  * const entityAdapter = new PostgresEntityStorageAdapter(
  *   'postgresql://user:pass@localhost:5432/datacollect',
@@ -99,70 +99,70 @@
  *   'postgresql://user:pass@localhost:5432/datacollect',
  *   'tenant-123'
  * );
- * 
+ *
  * // Initialize with sync capability
  * const entityStore = new EntityStore(entityAdapter);
- * const eventStore = new EventStoreImpl('system', eventAdapter);
- * const eventApplierService = new EventApplierService('system', eventStore, entityStore);
+ * const eventStore = new EventStoreImpl(eventAdapter);
+ * const eventApplierService = new EventApplierService(eventStore, entityStore);
  * const syncManager = new InternalSyncManager(
  *   eventStore,
- *   entityStore, 
+ *   entityStore,
  *   eventApplierService,
  *   'https://sync.example.com',
  *   'jwt-token'
  * );
- * 
+ *
  * const manager = new EntityDataManager(
- *   eventStore, 
- *   entityStore, 
+ *   eventStore,
+ *   entityStore,
  *   eventApplierService,
  *   undefined, // external sync
  *   syncManager
  * );
  * ```
- * 
+ *
  * ### With External Sync (OpenSPP)
  * ```typescript
- * import { 
+ * import {
  *   ExternalSyncManager,
- *   ExternalSyncConfig 
+ *   ExternalSyncConfig
  * } from 'idpass-datacollect';
- * 
+ *
  * const opensppConfig: ExternalSyncConfig = {
  *   type: 'openspp',
  *   url: 'http://openspp.example.com',
  *   database: 'openspp_db'
  * };
- * 
+ *
  * const externalSync = new ExternalSyncManager(
  *   eventStore,
  *   eventApplierService,
  *   opensppConfig
  * );
- * 
+ *
  * await externalSync.initialize();
  * await externalSync.synchronize({
  *   username: 'sync_user',
  *   password: 'sync_password'
  * });
  * ```
- * 
+ *
  * ## Key Components
- * 
+ *
  * - **EntityDataManager**: Main API interface for all operations
  * - **EventStore/EntityStore**: Core data persistence with pluggable adapters
  * - **EventApplierService**: Event sourcing engine that applies events to entities
  * - **InternalSyncManager**: Bidirectional sync with DataCollect servers
  * - **ExternalSyncManager**: Integration with external systems (OpenSPP, etc.)
  * - **Storage Adapters**: IndexedDB (browser) and PostgreSQL (server) implementations
- * 
+ *
  * ## Storage Adapters Available
- * 
+ *
  * - **IndexedDbEntityStorageAdapter**: Browser-based entity storage
- * - **IndexedDbEventStorageAdapter**: Browser-based event storage  
+ * - **IndexedDbEventStorageAdapter**: Browser-based event storage
  * - **PostgresEntityStorageAdapter**: Server-based entity storage with JSONB
  * - **PostgresEventStorageAdapter**: Server-based event storage with full ACID support
- * 
+ *
  * @example
  * Full workflow example:
  * ```typescript
@@ -184,19 +184,19 @@
  *   userId: 'social-worker-456',
  *   syncLevel: SyncLevel.LOCAL
  * });
- * 
+ *
  * // Query data
  * const allEntities = await manager.getAllEntities();
  * const searchResults = await manager.searchEntities([
  *   { "data.age": { $gte: 18 } },
  *   { "type": "individual" }
  * ]);
- * 
+ *
  * // Sync with server (if configured)
  * if (await manager.hasUnsyncedEvents()) {
  *   await manager.syncWithSyncServer();
  * }
- * 
+ *
  * // Get audit trail
  * const auditTrail = await manager.getAuditTrailByEntityGuid('household-123');
  * ```
@@ -207,7 +207,7 @@ export * from "./components/EntityDataManager";
 export * from "./components/EntityStore";
 export * from "./components/EventStore";
 
-// Synchronization Components  
+// Synchronization Components
 export * from "./components/InternalSyncManager";
 export * from "./components/ExternalSyncManager";
 export * from "./components/SyncAdapter";
