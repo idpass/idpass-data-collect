@@ -4,13 +4,13 @@
 
 import "fake-indexeddb/auto";
 import "core-js/stable/structured-clone";
-import { IndexedDbAuthStorageAdatper } from "../IndexedDbAuthStorageAdatper";
+import { IndexedDbAuthStorageAdapter } from "../IndexedDbAuthStorageAdapter";
 
-describe("IndexedDbAuthStorageAdatper", () => {
-  let adapter: IndexedDbAuthStorageAdatper;
+describe("IndexedDbAuthStorageAdapter", () => {
+  let adapter: IndexedDbAuthStorageAdapter;
 
   beforeEach(async () => {
-    adapter = new IndexedDbAuthStorageAdatper();
+    adapter = new IndexedDbAuthStorageAdapter();
     await adapter.initialize(); // Wait for the database to be initialized
   });
 
@@ -96,7 +96,7 @@ describe("IndexedDbAuthStorageAdatper", () => {
   });
 
   test("setToken should throw error when IndexedDB is not initialized", async () => {
-    const uninitializedAdapter = new IndexedDbAuthStorageAdatper();
+    const uninitializedAdapter = new IndexedDbAuthStorageAdapter();
 
     await expect(uninitializedAdapter.setToken("default", "test_token")).rejects.toThrow(
       "IndexedDB is not initialized for auth storage",
@@ -104,14 +104,14 @@ describe("IndexedDbAuthStorageAdatper", () => {
   });
 
   test("getToken should return null when IndexedDB is not initialized", async () => {
-    const uninitializedAdapter = new IndexedDbAuthStorageAdatper();
+    const uninitializedAdapter = new IndexedDbAuthStorageAdapter();
 
     const token = await uninitializedAdapter.getToken();
     expect(token).toBeNull();
   });
 
   test("removeToken should throw error when IndexedDB is not initialized", async () => {
-    const uninitializedAdapter = new IndexedDbAuthStorageAdatper();
+    const uninitializedAdapter = new IndexedDbAuthStorageAdapter();
 
     await expect(uninitializedAdapter.removeToken("default")).rejects.toThrow(
       "IndexedDB is not initialized for auth storage",
@@ -138,7 +138,7 @@ describe("IndexedDbAuthStorageAdatper", () => {
   });
 
   test("clearStore should throw error when IndexedDB is not initialized", async () => {
-    const uninitializedAdapter = new IndexedDbAuthStorageAdatper();
+    const uninitializedAdapter = new IndexedDbAuthStorageAdapter();
 
     await expect(uninitializedAdapter.clearStore()).rejects.toThrow("IndexedDB is not initialized for auth storage");
   });
@@ -148,7 +148,7 @@ describe("IndexedDbAuthStorageAdatper", () => {
   });
 
   test("should work with tenant-specific database", async () => {
-    const tenantAdapter = new IndexedDbAuthStorageAdatper("tenant1");
+    const tenantAdapter = new IndexedDbAuthStorageAdapter("tenant1");
     await tenantAdapter.initialize();
 
     const testToken = "tenant_specific_token";
@@ -168,8 +168,8 @@ describe("IndexedDbAuthStorageAdatper", () => {
   });
 
   test("should handle multiple tenant databases independently", async () => {
-    const tenant1Adapter = new IndexedDbAuthStorageAdatper("tenant1");
-    const tenant2Adapter = new IndexedDbAuthStorageAdatper("tenant2");
+    const tenant1Adapter = new IndexedDbAuthStorageAdapter("tenant1");
+    const tenant2Adapter = new IndexedDbAuthStorageAdapter("tenant2");
 
     await tenant1Adapter.initialize();
     await tenant2Adapter.initialize();
