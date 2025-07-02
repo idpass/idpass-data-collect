@@ -1530,7 +1530,7 @@ describe("EntityDataManager", () => {
   });
 
   // Run only when sync-server is running at localhost:3000
-  describe("Sync with sync server", () => {
+  describe.skip("Sync with sync server", () => {
     it("should sync events with the sync server", async () => {
       const groupAGuid = uuidv4();
 

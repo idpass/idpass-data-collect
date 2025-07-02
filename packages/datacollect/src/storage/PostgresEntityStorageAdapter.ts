@@ -22,11 +22,11 @@ import { EntityPair, EntityStorageAdapter, SearchCriteria } from "../interfaces/
 
 /**
  * PostgreSQL implementation of the EntityStorageAdapter for server-side entity persistence.
- * 
+ *
  * This adapter provides scalable, ACID-compliant entity storage using PostgreSQL with
  * advanced features like JSONB support, full-text search, and multi-tenant isolation.
  * It's designed for production server deployments requiring robust data persistence.
- * 
+ *
  * Key features:
  * - **ACID Transactions**: Full PostgreSQL transaction support for data consistency
  * - **JSONB Storage**: Efficient JSON storage with native PostgreSQL indexing and querying
@@ -35,14 +35,14 @@ import { EntityPair, EntityStorageAdapter, SearchCriteria } from "../interfaces/
  * - **Connection Pooling**: Efficient connection management for high-concurrency scenarios
  * - **Scalable Architecture**: Designed for production workloads with proper indexing
  * - **Duplicate Detection**: Optimized duplicate tracking with compound primary keys
- * 
+ *
  * Architecture:
  * - Uses PostgreSQL connection pooling for performance and scalability
  * - Stores entities as JSONB documents for flexible schema evolution
  * - Implements tenant isolation at the database level
  * - Provides optimized queries with proper indexing strategies
  * - Supports advanced search operations using PostgreSQL's JSONB capabilities
- * 
+ *
  * Database Schema:
  * ```
  * -- Main entities table
@@ -57,7 +57,7 @@ import { EntityPair, EntityStorageAdapter, SearchCriteria } from "../interfaces/
  *   PRIMARY KEY (id, tenant_id),
  *   UNIQUE (guid, tenant_id)
  * );
- * 
+ *
  * -- Potential duplicates tracking
  * CREATE TABLE potential_duplicates (
  *   entity_guid TEXT,
@@ -66,7 +66,7 @@ import { EntityPair, EntityStorageAdapter, SearchCriteria } from "../interfaces/
  *   PRIMARY KEY (entity_guid, duplicate_guid, tenant_id)
  * );
  * ```
- * 
+ *
  * @example
  * Basic server setup:
  * ```typescript
@@ -74,9 +74,9 @@ import { EntityPair, EntityStorageAdapter, SearchCriteria } from "../interfaces/
  *   'postgresql://user:pass@localhost:5432/datacollect',
  *   'tenant-123'
  * );
- * 
+ *
  * await adapter.initialize();
- * 
+ *
  * // Save an entity
  * const entityPair: EntityPair = {
  *   guid: 'person-456',
@@ -85,7 +85,7 @@ import { EntityPair, EntityStorageAdapter, SearchCriteria } from "../interfaces/
  * };
  * await adapter.saveEntity(entityPair);
  * ```
- * 
+ *
  * @example
  * Advanced search with JSONB:
  * ```typescript
@@ -96,30 +96,30 @@ import { EntityPair, EntityStorageAdapter, SearchCriteria } from "../interfaces/
  *   { "data.name": { $regex: "john" } },     // Case-insensitive regex
  *   { "data.verified": true }                // Boolean match
  * ]);
- * 
+ *
  * // Search with numeric ranges
  * const middleAged = await adapter.searchEntities([
  *   { "data.age": { $gte: 30 } },
  *   { "data.age": { $lte: 65 } }
  * ]);
  * ```
- * 
+ *
  * @example
  * Multi-tenant deployment:
  * ```typescript
  * // Tenant-specific adapters
  * const orgAAdapter = new PostgresEntityStorageAdapter(connectionString, 'org-a');
  * const orgBAdapter = new PostgresEntityStorageAdapter(connectionString, 'org-b');
- * 
+ *
  * // Each adapter operates on isolated data
  * await orgAAdapter.initialize();
  * await orgBAdapter.initialize();
- * 
+ *
  * // Data is completely isolated between tenants
  * await orgAAdapter.saveEntity(entityForOrgA);
  * await orgBAdapter.saveEntity(entityForOrgB);
  * ```
- * 
+ *
  * @example
  * Production connection configuration:
  * ```typescript
@@ -127,7 +127,7 @@ import { EntityPair, EntityStorageAdapter, SearchCriteria } from "../interfaces/
  *   'postgresql://datacollect_user:secure_pass@db.example.com:5432/datacollect_prod?sslmode=require',
  *   process.env.TENANT_ID
  * );
- * 
+ *
  * // Initialize with proper error handling
  * try {
  *   await adapter.initialize();
@@ -144,17 +144,17 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
 
   /**
    * Creates a new PostgresEntityStorageAdapter instance.
-   * 
+   *
    * @param connectionString - PostgreSQL connection string with credentials and database info
    * @param tenantId - Optional tenant identifier for multi-tenant isolation (defaults to "default")
-   * 
+   *
    * @example
    * ```typescript
    * // Local development
    * const adapter = new PostgresEntityStorageAdapter(
    *   'postgresql://user:pass@localhost:5432/datacollect_dev'
    * );
-   * 
+   *
    * // Production with tenant isolation
    * const prodAdapter = new PostgresEntityStorageAdapter(
    *   'postgresql://datacollect_user:secure_pass@db.prod.com:5432/datacollect?sslmode=require',
@@ -171,10 +171,10 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
 
   /**
    * Closes all connections in the PostgreSQL connection pool.
-   * 
+   *
    * Should be called during application shutdown to ensure graceful
    * cleanup of database connections.
-   * 
+   *
    * @example
    * ```typescript
    * // Application shutdown handler
@@ -191,21 +191,21 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
 
   /**
    * Initializes the PostgreSQL database with required tables and schemas.
-   * 
+   *
    * Creates:
    * - `entities` table with JSONB storage for flexible entity data
    * - `potential_duplicates` table for duplicate detection
    * - Proper indexing and constraints for multi-tenant isolation
    * - Primary keys and unique constraints for data integrity
-   * 
+   *
    * This method is idempotent and safe to call multiple times.
-   * 
+   *
    * @throws {Error} When database connection fails or table creation fails
-   * 
+   *
    * @example
    * ```typescript
    * const adapter = new PostgresEntityStorageAdapter(connectionString, tenantId);
-   * 
+   *
    * try {
    *   await adapter.initialize();
    *   console.log('Database schema initialized');
@@ -262,7 +262,7 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
 
   /**
    * Searches entities using advanced PostgreSQL JSONB query capabilities.
-   * 
+   *
    * Supports rich query operators optimized for PostgreSQL:
    * - `$gt`, `$gte`: Greater than, greater than or equal (numeric)
    * - `$lt`, `$lte`: Less than, less than or equal (numeric)
@@ -271,12 +271,12 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * - String values: Case-insensitive exact matching
    * - Boolean values: Direct boolean comparison
    * - Numeric values: Exact numeric comparison
-   * 
+   *
    * All searches examine both initial and modified entity states for comprehensive results.
-   * 
+   *
    * @param criteria - Array of search criteria objects
    * @returns Array of entity pairs matching all criteria
-   * 
+   *
    * @example
    * ```typescript
    * // Complex multi-criteria search
@@ -287,7 +287,7 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    *   { "data.name": { $regex: "smith" } },    // Name contains "smith"
    *   { "data.verified": true }               // Verified accounts
    * ]);
-   * 
+   *
    * // Geographic search
    * const localUsers = await adapter.searchEntities([
    *   { "data.address.city": "Boston" },
@@ -430,8 +430,8 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
     const client = await this.pool.connect();
     try {
       const result = await client.query(
-        "SELECT guid, initial, modified FROM entities WHERE initial->>'externalId' = $1 OR modified->>'externalId' = $1",
-        [externalId],
+        "SELECT guid, initial, modified FROM entities WHERE (initial->>'externalId' = $1 OR modified->>'externalId' = $1) AND tenant_id = $2",
+        [externalId, this.tenantId],
       );
       if (result.rows.length === 0) {
         return null;
