@@ -47,7 +47,6 @@ const form = ref<ConfigSchema>({
   externalSync: {
     type: undefined,
     url: '',
-    auth: '',
     extraFields: {},
   },
   authConfigs: [],
