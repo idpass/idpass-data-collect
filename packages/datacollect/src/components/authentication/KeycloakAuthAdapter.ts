@@ -118,7 +118,7 @@ export class KeycloakAuthAdapter implements AuthAdapter {
       });
 
       // If we get a successful response with user data, the token is active
-      const isActive = response.status === 200 && response.data && response.data.sub;
+      const isActive = !!(response.status === 200 && response.data && response.data.sub);
       
       return isActive;
     } catch (error) {

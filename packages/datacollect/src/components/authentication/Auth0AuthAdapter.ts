@@ -71,7 +71,6 @@ export class Auth0AuthAdapter implements AuthAdapter {
   }
 
   async validateToken(token: string): Promise<boolean> {
-
     if (this.appType === 'frontend') {
       return this.validateTokenClient(token);
     } else {
@@ -80,7 +79,9 @@ export class Auth0AuthAdapter implements AuthAdapter {
   }
 
   private async validateTokenServer(token: string): Promise<boolean> {
+   
     try {
+     
       // Use userinfo validation since crypto module is not available in browsers
       console.log("Using userinfo validation for Auth0 token");
       return this.checkTokenActive(token);
@@ -104,6 +105,7 @@ export class Auth0AuthAdapter implements AuthAdapter {
 
   private async checkTokenActive(token: string): Promise<boolean> {
     try {
+      
       // Call Auth0's userinfo endpoint to verify token is still active
       const userinfoUrl = `${this.config.fields.authority}/userinfo`;
       const response = await axios.get(userinfoUrl, {
@@ -113,11 +115,15 @@ export class Auth0AuthAdapter implements AuthAdapter {
         },
         timeout: 5000 // 5 second timeout
       });
-
+      
       // If we get a successful response with user data, the token is active
-      const isActive = response.status === 200 && response.data && response.data.sub;
-      console.log("Auth0 token is active:", isActive, response.data);
-      if(isActive && response.data.org_id === this.config.fields.organization){ 
+      const isActive = !!(response.status === 200 && response.data && response.data.sub);
+      if(this.config.fields.organization){
+        if(isActive && response.data.org_id === this.config.fields.organization){ 
+          return true;
+        }
+      }
+      else if(isActive){
         return true;
       }
      
@@ -148,7 +154,8 @@ export class Auth0AuthAdapter implements AuthAdapter {
       'responseType',
       'response_type',
       'clientSecret',
-      'client_secret'
+      'client_secret',
+      
     ]);
 
     // Collect all non-standard fields as extra query params
