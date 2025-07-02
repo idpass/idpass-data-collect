@@ -17,7 +17,7 @@
  * under the License.
  */
 
-export class IndexedDBStore implements Storage {
+export class OIDCCLientStore implements Storage {
   private dbName = 'oidc-client-store'
   private storeName = 'oidc-state'
   private db: IDBDatabase | null = null

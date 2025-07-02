@@ -305,6 +305,16 @@ const sidebars: SidebarsConfig = {
         // "deployment/monitoring",
       ],
     },
+    {
+      type: "category",
+      label: "Adapters",
+      items: [
+        "adapters/openfn-adapter",
+        "adapters/auth0-adapter",
+        "adapters/keycloak-adapter",
+        
+      ],
+    },
     // TODO: Add these sections when documents are created
     /*
     {

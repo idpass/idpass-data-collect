@@ -19,7 +19,7 @@
 
 import { AuthResult, OIDCConfig } from '../../interfaces/types'
 import { WebStorageStateStore, UserManager, UserManagerSettings } from 'oidc-client-ts'
-import { IndexedDBStore } from './IndexedDBStore'
+import { OIDCCLientStore } from './OIDCClientStore'
 
 // Mock storage for server environments
 class MockStorage implements Storage {
@@ -83,12 +83,12 @@ export class OIDCClient {
    */
   constructor(config: OIDCConfig) {
     // Use IndexedDB if available (browser), otherwise use mock storage (server)
-    const indexedDBStore = new IndexedDBStore()
+    const oidcClientStore = new OIDCCLientStore()
     const storage = typeof window !== 'undefined' && window.indexedDB 
       ? { 
-          getItem: (key: string) => indexedDBStore.getItemAsync(key),
-          setItem: (key: string, value: string) => indexedDBStore.setItemAsync(key, value),
-          removeItem: (key: string) => indexedDBStore.removeItemAsync(key),
+          getItem: (key: string) => oidcClientStore.getItemAsync(key),
+          setItem: (key: string, value: string) => oidcClientStore.setItemAsync(key, value),
+          removeItem: (key: string) => oidcClientStore.removeItemAsync(key),
           // Implement remaining AsyncStorage interface methods
           get length() { return Promise.resolve(0) },
           clear: () => Promise.resolve(),
