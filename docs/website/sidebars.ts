@@ -307,6 +307,13 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: "category",
+      label: "How-To Guides",
+      items: [
+        "how-to/create-custom-auth-adapter",
+      ],
+    },
+    {
+      type: "category",
       label: "Adapters",
       items: [
         "adapters/openfn-adapter",
