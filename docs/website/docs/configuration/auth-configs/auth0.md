@@ -1,7 +1,7 @@
 ---
 id: auth-configs-auth0
 title: Auth0
-sidebar_position: 2
+sidebar_position: 3
 ---
 
 # Auth0

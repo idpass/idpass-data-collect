@@ -1,7 +1,7 @@
 ---
 id: auth-configs-keycloak
 title: Keycloak
-sidebar_position: 3
+sidebar_position: 4
 ---
 
 # Keycloak

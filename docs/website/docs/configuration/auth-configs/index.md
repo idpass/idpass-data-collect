@@ -10,8 +10,10 @@ sidebar_position: 1
 
 The Authentication system in DataCollect provides a unified interface for handling different authentication providers and methods. It implements the Strategy pattern to support multiple authentication providers through pluggable adapters.
 
+**Purpose**: This authentication configuration is used to authenticate client instances before they can push and pull data from the sync server. This is also known as **internal sync** - the process of synchronizing data between client instances and the central sync server.
+
 :::info
-The authentication system is designed to be flexible and extensible, supporting various authentication providers like Auth0, Keycloak, and custom implementations. Each provider is implemented as an adapter that follows a common interface while handling provider-specific authentication flows.
+**Internal Sync Context**: Client instances must be properly authenticated using these configurations before they can perform data synchronization operations (push/pull) with the sync server. This ensures secure and authorized data exchange between distributed client instances and the central data repository.
 :::
 
 ## Sample Configuration
@@ -20,17 +22,25 @@ Here's a complete example of an authentication configuration with detailed field
 
 ```json
 {
-  "type": "auth0",
-  "fields": {
-    "authority": "https://example.auth0.com",
-    "client_id": "YOUR_CLIENT_ID",
-    "redirect_uri": "http://localhost:3000/callback",
-    "response_type": "code",
-    "scope": "openid profile email",
-    "organization": "org_123"
-  }
+  "authConfigs": [
+    {
+      "type": "auth0",
+      "fields": {
+        "authority": "https://example.auth0.com",
+        "client_id": "YOUR_CLIENT_ID",
+        "redirect_uri": "http://localhost:3000/callback",
+        "response_type": "code",
+        "scope": "openid profile email",
+        "organization": "org_123"
+      }
+    }
+  ]
 }
 ```
+
+:::info
+When no authentication configurations are provided, the system defaults to using [Built-in Authentication](./default-auth.md).
+:::
 
 ### Field Explanations
 

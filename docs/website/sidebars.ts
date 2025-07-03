@@ -288,6 +288,7 @@ const sidebars: SidebarsConfig = {
           collapsed: true,
           items: [
             "configuration/auth-configs/index",
+            "configuration/auth-configs/default-auth",
             "configuration/auth-configs/auth-configs-auth0",
             "configuration/auth-configs/auth-configs-keycloak",
           ],
@@ -308,19 +309,12 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "How-To Guides",
-      items: [
-        "how-to/create-custom-auth-adapter",
-      ],
+      items: ["how-to/create-custom-auth-adapter"],
     },
     {
       type: "category",
       label: "Adapters",
-      items: [
-        "adapters/openfn-adapter",
-        "adapters/auth0-adapter",
-        "adapters/keycloak-adapter",
-        
-      ],
+      items: ["adapters/openfn-adapter", "adapters/auth0-adapter", "adapters/keycloak-adapter"],
     },
     // TODO: Add these sections when documents are created
     /*
