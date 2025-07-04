@@ -29,8 +29,8 @@ ID PASS DataCollect provides:
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/your-org/Data-Management-System-Sync.git
-   cd Data-Management-System-Sync
+   git clone https://github.com/idpass/idpass-data-collect.git
+   cd idpass-data-collect
    ```
 
 2. **Build the DataCollect library**

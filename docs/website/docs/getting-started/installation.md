@@ -159,7 +159,12 @@ import {
   EntityDataManager,
   IndexedDbEntityStorageAdapter,
   IndexedDbEventStorageAdapter,
+  IndexedDbAuthStorageAdapter,
+  EventStoreImpl,
+  EntityStoreImpl,
   EventApplierService,
+  AuthManager,
+  InternalSyncManager,
   EntityType,
   SyncLevel
 } from 'idpass-data-collect';
@@ -167,33 +172,72 @@ import {
 // Initialize storage adapters
 const eventStorageAdapter = new IndexedDbEventStorageAdapter();
 const entityStorageAdapter = new IndexedDbEntityStorageAdapter();
+const authStorageAdapter = new IndexedDbAuthStorageAdapter();
 
 // Initialize stores
-const eventStore = new EventStoreImpl('user-1', eventStorageAdapter);
+const eventStore = new EventStoreImpl(eventStorageAdapter);
 await eventStore.initialize();
 
 const entityStore = new EntityStoreImpl(entityStorageAdapter);
 await entityStore.initialize();
 
-// Initialize services
-const eventApplierService = new EventApplierService('user-1', eventStore, entityStore);
+await authStorageAdapter.initialize();
 
-// Create entity data manager
+// Initialize services
+const eventApplierService = new EventApplierService(eventStore, entityStore);
+
+// Configure authentication
+const authConfigs = [
+  { type: "auth0", fields: { domain: "your-domain.auth0.com", clientId: "your-client-id" } },
+  { type: "keycloak", fields: { realm: "your-realm", clientId: "your-client-id" } }
+];
+
+const authManager = new AuthManager(
+  authConfigs,
+  "http://localhost:3000", // sync server URL
+  authStorageAdapter
+);
+await authManager.initialize();
+
+// Initialize sync manager
+const internalSyncManager = new InternalSyncManager(
+  eventStore,
+  entityStore,
+  eventApplierService,
+  "http://localhost:3000",
+  authStorageAdapter
+);
+
+// Create entity data manager with authentication
 const manager = new EntityDataManager(
   eventStore,
   entityStore,
-  null, // No sync adapter for offline-only
-  null, // No internal sync manager
-  eventApplierService
+  eventApplierService,
+  null, // No external sync adapter for offline-only
+  internalSyncManager,
+  authManager
 );
 
-console.log('DataCollect initialized successfully');
+console.log('DataCollect initialized successfully with authentication');
 ```
 
 ## Verification
 
-### Test DataCollect Library
+### Test DataCollect Library with Authentication
 ```typescript
+// Initialize authentication first
+await manager.initializeAuthManager();
+
+// Login
+await manager.login({
+  username: "admin@example.com",
+  password: "password123"
+});
+
+// Verify authentication
+const authenticated = await manager.isAuthenticated();
+console.log('Authentication status:', authenticated);
+
 // Create a test group
 const groupForm = {
   guid: 'test-group-001',
@@ -211,6 +255,9 @@ console.log('Created group:', result);
 // Verify the group was saved
 const savedGroup = await manager.getEntity(result.id);
 console.log('Retrieved group:', savedGroup);
+
+// Sync with server (requires authentication)
+await manager.syncWithSyncServer();
 ```
 
 ### Test Backend API
@@ -240,6 +287,14 @@ curl -X POST http://localhost:3000/api/users/login \
 import 'fake-indexeddb/auto';
 ```
 
+### Authentication Errors
+**Problem**: Authentication fails or tokens not persisting
+**Solutions**:
+1. Verify AuthManager initialization: `await manager.initializeAuthManager()`
+2. Check auth storage adapter is properly configured
+3. Ensure sync server URL is correct and accessible
+4. Verify authentication provider configuration
+
 ### PostgreSQL Connection Errors
 **Problem**: Cannot connect to PostgreSQL
 **Solutions**:
@@ -265,6 +320,7 @@ import 'fake-indexeddb/auto';
 
 ### Security
 - Use strong passwords for `INITIAL_PASSWORD` and `JWT_SECRET`
+- Configure proper authentication providers (Auth0, Keycloak)
 - Enable HTTPS in production
 - Configure PostgreSQL with proper authentication
 - Regularly update dependencies

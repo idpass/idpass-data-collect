@@ -6,16 +6,17 @@ sidebar_position: 3
 
 # DataCollect Tutorials
 
-This tutorial is for runing standalone DataCollect instances.
+This tutorial is for running standalone DataCollect instances with authentication.
 
-Welcome to the comprehensive DataCollect tutorials! Whether you're building a data collection app for field workers, managing household surveys, or creating a robust entity management system, these step-by-step guides will help you get up and running quickly.
+Welcome to the comprehensive DataCollect tutorials! Whether you're building a data collection app for field workers, managing household surveys, or creating a robust entity management system, these step-by-step guides will help you get up and running quickly with secure authentication.
 
 ## What You'll Learn
 
-- 🏗️ **Complete Setup**: Build a fully functional EntityDataManager from scratch
+- 🏗️ **Complete Setup**: Build a fully functional EntityDataManager with authentication from scratch
+- 🔐 **Authentication**: Configure multi-provider authentication (Auth0, Keycloak, custom)
 - 📝 **Form Management**: Create, update, and manage entities through forms
 - 🔍 **Data Retrieval**: Search and filter your data efficiently
-- 🔄 **Synchronization**: Keep your data in sync across devices and servers
+- 🔄 **Synchronization**: Keep your data in sync across devices and servers with authenticated operations
 - 🚀 **Advanced Features**: Handle duplicates, complex operations, and error scenarios
 
 ## Prerequisites
@@ -25,10 +26,11 @@ Before starting these tutorials, make sure you have:
 - Node.js installed on your system
 - A code editor (VS Code recommended)
 - Understanding of basic database concepts
+- Authentication provider setup (Auth0, Keycloak, or custom)
 
-## Tutorial 1: Basic EntityDataManager Setup
+## Tutorial 1: Basic EntityDataManager Setup with Authentication
 
-This tutorial shows you how to set up a complete EntityDataManager instance with all required components. You'll build a robust foundation that can handle real-world data collection scenarios.
+This tutorial shows you how to set up a complete EntityDataManager instance with authentication and all required components. You'll build a robust foundation that can handle real-world data collection scenarios with secure authentication.
 
 ### Step 1: Import Required Dependencies
 
@@ -39,11 +41,13 @@ import {
   EntityDataManager,
   IndexedDbEntityStorageAdapter,
   IndexedDbEventStorageAdapter,
+  IndexedDbAuthStorageAdapter,
   EventStoreImpl,
   EntityStoreImpl,
   EventApplierService,
   InternalSyncManager,
   ExternalSyncManager,
+  AuthManager,
   EntityType,
   SyncLevel,
   FormSubmission,
@@ -51,32 +55,73 @@ import {
   EntityDoc,
   IndividualDoc,
   GroupDoc,
-  EntityPair
+  EntityPair,
+  AuthConfig,
+  PasswordCredentials,
+  TokenCredentials
 } from 'datacollect';
 ```
 
-### Step 2: Initialize Storage Components
+### Step 2: Initialize Storage Components with Authentication
 
 ```typescript
 // Configuration
 const userId = "your-user-id";
+const appId = "your-app-id";
 const internalUrl = "http://localhost:3000"; // Your sync server URL
 const externalUrl = "http://localhost:3001"; // External system URL
 
 // Initialize Event Store
-const eventStore = new EventStoreImpl(userId, new IndexedDbEventStorageAdapter());
+const eventStore = new EventStoreImpl(new IndexedDbEventStorageAdapter(appId));
 await eventStore.initialize();
 
 // Initialize Entity Store
-const entityStore = new EntityStoreImpl(new IndexedDbEntityStorageAdapter());
+const entityStore = new EntityStoreImpl(new IndexedDbEntityStorageAdapter(appId));
 await entityStore.initialize();
+
+// Initialize Auth Storage
+const authStorageAdapter = new IndexedDbAuthStorageAdapter(appId);
+await authStorageAdapter.initialize();
 ```
 
-### Step 3: Set Up Event Applier Service
+### Step 3: Configure Authentication
+
+```typescript
+// Configure authentication providers
+const authConfigs: AuthConfig[] = [
+  {
+    type: "auth0",
+    fields: {
+      domain: "your-domain.auth0.com",
+      clientId: "your-client-id",
+      redirectUri: "http://localhost:3000/callback",
+      scope: "openid profile email"
+    }
+  },
+  {
+    type: "keycloak",
+    fields: {
+      realm: "your-realm",
+      clientId: "your-client-id",
+      serverUrl: "http://localhost:8080/auth"
+    }
+  }
+];
+
+// Initialize Auth Manager
+const authManager = new AuthManager(
+  authConfigs,
+  internalUrl,
+  authStorageAdapter
+);
+await authManager.initialize();
+```
+
+### Step 4: Set Up Event Applier Service
 
 ```typescript
 // Create the event applier service
-const eventApplierService = new EventApplierService(userId, eventStore, entityStore);
+const eventApplierService = new EventApplierService(eventStore, entityStore);
 
 // Register custom event appliers (optional)
 const addElderlyApplier: EventApplier = {
@@ -125,7 +170,7 @@ const addElderlyApplier: EventApplier = {
 eventApplierService.registerEventApplier("add-elderly", addElderlyApplier);
 ```
 
-### Step 4: Configure Sync Managers
+### Step 5: Configure Sync Managers
 
 ```typescript
 // Internal sync manager for client-server synchronization
@@ -133,8 +178,9 @@ const internalSyncManager = new InternalSyncManager(
   eventStore, 
   entityStore, 
   eventApplierService, 
-  internalUrl, 
-  "" // auth token (empty for now)
+  internalUrl,
+  authStorageAdapter,
+  appId
 );
 
 // External sync manager for external system integration
@@ -145,28 +191,103 @@ const externalSyncManager = new ExternalSyncManager(eventStore, eventApplierServ
 });
 ```
 
-### Step 5: Create EntityDataManager Instance
+### Step 6: Create EntityDataManager Instance with Authentication
 
 ```typescript
-// Create the main manager
+// Create the main manager with authentication
 const manager = new EntityDataManager(
   eventStore,
   entityStore,
   eventApplierService,
   externalSyncManager,
   internalSyncManager,
+  authManager
 );
+
+// Initialize authentication
+await manager.initializeAuthManager();
 ```
 
-**Congratulations!** You've successfully set up your first EntityDataManager. This foundation will serve as the backbone for all your data collection operations.
+**Congratulations!** You've successfully set up your first EntityDataManager with authentication. This foundation will serve as the backbone for all your secure data collection operations.
 
-## Tutorial 2: Working with Forms and Entities
+## Tutorial 2: Authentication Workflows
 
-This tutorial demonstrates how to submit forms and work with entities. You'll learn how to create, update, and manage different types of entities in your system.
+This tutorial demonstrates how to implement various authentication workflows with the EntityDataManager.
 
-### Creating Individuals
+### Basic Authentication
 
 ```typescript
+// Check authentication status
+const isAuthenticated = await manager.isAuthenticated();
+console.log("Currently authenticated:", isAuthenticated);
+
+// Login with username/password (default provider)
+const credentials: PasswordCredentials = {
+  username: "admin@example.com",
+  password: "password123"
+};
+
+await manager.login(credentials);
+console.log("Login successful");
+
+// Verify authentication
+const authenticated = await manager.isAuthenticated();
+console.log("Authentication status:", authenticated);
+```
+
+### Provider-Specific Authentication
+
+```typescript
+// Login with Auth0
+await manager.login({
+  username: "user@example.com",
+  password: "password123"
+}, "auth0");
+
+// Login with Keycloak
+await manager.login({
+  username: "user@example.com",
+  password: "password123"
+}, "keycloak");
+
+// Login with token
+const tokenCredentials: TokenCredentials = {
+  token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+};
+
+await manager.login(tokenCredentials, "auth0");
+```
+
+### Token Management
+
+```typescript
+// Validate token
+const isValid = await manager.validateToken("auth0", "your-token");
+console.log("Token valid:", isValid);
+
+// Handle authentication callback (for OAuth flows)
+await manager.handleCallback("auth0");
+
+// Logout
+await manager.logout();
+console.log("Logged out successfully");
+```
+
+## Tutorial 3: Working with Forms and Entities (Authenticated)
+
+This tutorial demonstrates how to submit forms and work with entities in an authenticated environment.
+
+### Authenticated Entity Operations
+
+```typescript
+// Ensure authentication before operations
+if (!await manager.isAuthenticated()) {
+  await manager.login({
+    username: "admin@example.com",
+    password: "password123"
+  });
+}
+
 // Create a new individual
 const individualForm: FormSubmission = {
   guid: uuidv4(),
@@ -186,10 +307,10 @@ const individual = await manager.submitForm(individualForm);
 console.log("Created individual:", individual);
 ```
 
-### Creating Groups
+### Creating Groups with Authentication
 
 ```typescript
-// Create a new group
+// Create a new group (requires authentication)
 const groupForm: FormSubmission = {
   guid: uuidv4(),
   entityGuid: uuidv4(),
@@ -323,7 +444,7 @@ const groupWithElderly = await manager.submitForm(addElderlyForm);
 console.log("Group with elderly member:", groupWithElderly);
 ```
 
-## Tutorial 3: Entity Retrieval and Search
+## Tutorial 4: Entity Retrieval and Search
 
 Master the art of finding and retrieving your data efficiently. This tutorial covers various search patterns and data access methods.
 
@@ -374,15 +495,20 @@ const emailResults = await manager.searchEntities([{ email: { $regex: "@example.
 console.log("Email search results:", emailResults);
 ```
 
-## Tutorial 4: Synchronization
+## Tutorial 5: Authenticated Synchronization
 
-Learn how to keep your data synchronized across multiple devices and servers. This is crucial for offline-capable applications.
+Learn how to keep your data synchronized across multiple devices and servers with secure authentication. This is crucial for offline-capable applications.
 
-### Basic Synchronization Setup
+### Authenticated Synchronization Setup
 
 ```typescript
-// Login to sync server (if required)
-await manager.login("admin@example.com", "password123");
+// Ensure authentication before sync
+if (!await manager.isAuthenticated()) {
+  await manager.login({
+    username: "admin@example.com",
+    password: "password123"
+  });
+}
 
 // Check for unsynced events
 const hasUnsynced = await manager.hasUnsyncedEvents();
@@ -397,7 +523,7 @@ if (hasUnsynced) {
 ### Manual Synchronization
 
 ```typescript
-// Sync with the server
+// Sync with the server (requires authentication)
 try {
   await manager.syncWithSyncServer();
   console.log("Sync completed successfully");
@@ -407,6 +533,18 @@ try {
   console.log("Has unsynced events after sync:", hasUnsyncedAfter);
 } catch (error) {
   console.error("Sync failed:", error);
+  
+  // Check if authentication expired
+  if (!await manager.isAuthenticated()) {
+    console.log("Re-authenticating...");
+    await manager.login({
+      username: "admin@example.com",
+      password: "password123"
+    });
+    
+    // Retry sync
+    await manager.syncWithSyncServer();
+  }
 }
 ```
 
@@ -427,16 +565,18 @@ const syncForm: FormSubmission = {
 await manager.submitForm(syncForm);
 
 // Check sync status
-expect(await manager.hasUnsyncedEvents()).toBe(true);
+const hasUnsyncedBefore = await manager.hasUnsyncedEvents();
+console.log("Has unsynced events before sync:", hasUnsyncedBefore);
 
-// Sync to server
+// Sync to server (requires authentication)
 await manager.syncWithSyncServer();
 
 // Verify sync completion
-expect(await manager.hasUnsyncedEvents()).toBe(false);
+const hasUnsyncedAfter = await manager.hasUnsyncedEvents();
+console.log("Has unsynced events after sync:", hasUnsyncedAfter);
 ```
 
-## Tutorial 5: Advanced Operations
+## Tutorial 6: Advanced Operations
 
 Take your DataCollect implementation to the next level with advanced features like duplicate detection, complex operations, and performance optimization.
 
@@ -569,11 +709,39 @@ const updatedGroup = await removeMember(groups[0].guid, groups[0].memberIds[0]);
 console.log("Updated group member count:", updatedGroup.memberIds.length);
 ```
 
-## Tutorial 6: Error Handling and Best Practices
+## Tutorial 7: Error Handling and Best Practices
 
-Learn how to build robust, production-ready applications with proper error handling and performance optimization techniques.
+Learn how to build robust, production-ready applications with proper error handling, authentication management, and performance optimization techniques.
 
-### Error Handling
+### Authentication Error Handling
+
+```typescript
+try {
+  // Attempt authenticated operation
+  await manager.syncWithSyncServer();
+} catch (error) {
+  if (error.message.includes("Unauthorized") || error.message.includes("401")) {
+    console.log("Authentication expired, re-authenticating...");
+    
+    try {
+      await manager.login({
+        username: "admin@example.com",
+        password: "password123"
+      });
+      
+      // Retry the operation
+      await manager.syncWithSyncServer();
+    } catch (authError) {
+      console.error("Re-authentication failed:", authError.message);
+      // Handle authentication failure
+    }
+  } else {
+    console.error("Sync error:", error.message);
+  }
+}
+```
+
+### Form Submission Error Handling
 
 ```typescript
 try {
@@ -595,13 +763,48 @@ try {
 }
 ```
 
+### Authentication State Management
+
+```typescript
+// Check authentication before operations
+const ensureAuthenticated = async () => {
+  if (!await manager.isAuthenticated()) {
+    throw new Error("Authentication required");
+  }
+};
+
+// Wrapper for authenticated operations
+const authenticatedOperation = async (operation: () => Promise<any>) => {
+  await ensureAuthenticated();
+  
+  try {
+    return await operation();
+  } catch (error) {
+    if (error.message.includes("Unauthorized")) {
+      // Re-authenticate and retry
+      await manager.login({
+        username: "admin@example.com",
+        password: "password123"
+      });
+      return await operation();
+    }
+    throw error;
+  }
+};
+
+// Usage
+await authenticatedOperation(() => manager.syncWithSyncServer());
+```
+
 ### Cleanup and Resource Management
 
 ```typescript
-// Clean up stores when done
-const cleanup = () => {
+// Clean up stores and authentication when done
+const cleanup = async () => {
+  await manager.logout();
   entityStore.clearStore();
   eventStore.clearStore();
+  authStorageAdapter.clearStore();
 };
 
 // Use in your application lifecycle
@@ -613,6 +816,9 @@ window.addEventListener('beforeunload', cleanup);
 ```typescript
 // Batch operations when possible
 const batchCreateIndividuals = async (individuals: any[]) => {
+  // Ensure authentication once
+  await ensureAuthenticated();
+  
   const promises = individuals.map(individual => 
     manager.submitForm({
       guid: uuidv4(),
@@ -643,11 +849,11 @@ console.log("Batch created:", createdIndividuals.length);
 
 Ready to take your DataCollect knowledge further? Explore these resources:
 
-- 📖 [Configuration Guide](./configuration.md) - Customize DataCollect for your specific needs
-- 🚀 [Backend Package](../backend/) - Add server synchronization capabilities
-- 👥 [Admin Package](../admin/) - Build a complete management solution
+- 📖 [Configuration Guide](./configuration.md) - Customize DataCollect and authentication for your specific needs
+- 🚀 [Backend Package](../backend/) - Add server synchronization and authentication capabilities
+- 👥 [Admin Package](../admin/) - Build a complete management solution with user authentication
 - 🔧 [API Reference](../datacollect/) - Dive deep into the technical details
-- 🏗️ [Architecture Guide](../architecture/) - Understand the system design
+- 🏗️ [Architecture Guide](../architecture/) - Understand the system design and authentication patterns
 
 ## Need Help?
 

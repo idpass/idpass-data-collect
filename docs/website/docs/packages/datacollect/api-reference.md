@@ -28,9 +28,10 @@ class EntityDataManager {
   constructor(
     eventStore: EventStore,
     entityStore: EntityStore,
-    syncAdapter: SyncAdapter,
+    eventApplierService: EventApplierService,
+    externalSyncManager: ExternalSyncManager,
     internalSyncManager: InternalSyncManager,
-    eventApplierService: EventApplierService
+    authManager: AuthManager
   )
 
   // Submit form data and apply events
@@ -41,6 +42,11 @@ class EntityDataManager {
   
   // Search entities with criteria
   async searchEntities(criteria: SearchCriteria): Promise<EntityDoc[]>
+  
+  // Authentication operations
+  async login(credentials: LoginCredentials): Promise<void>
+  async logout(): Promise<void>
+  async isAuthenticated(): Promise<boolean>
   
   // Synchronization operations
   async syncToServer(): Promise<void>
@@ -168,18 +174,113 @@ class PostgresEventStorageAdapter implements EventStorageAdapter
 class PostgresEntityStorageAdapter implements EntityStorageAdapter
 ```
 
+## Authentication
+
+### AuthManager
+Handles user authentication and token management.
+
+```typescript
+class AuthManager {
+  constructor(
+    authConfigs: AuthConfig[],
+    syncServerUrl: string,
+    authStorageAdapter: AuthStorageAdapter
+  )
+
+  // Login with credentials
+  async login(credentials: LoginCredentials): Promise<void>
+  
+  // Login with token (OAuth providers)
+  async loginWithToken(token: string, provider: string): Promise<void>
+  
+  // Handle OAuth callbacks
+  async handleCallback(provider: string): Promise<void>
+  
+  // Logout and clear tokens
+  async logout(): Promise<void>
+  
+  // Check authentication status
+  async isAuthenticated(): Promise<boolean>
+  
+  // Get current user info
+  async getCurrentUser(): Promise<UserInfo | null>
+  
+  // Get authentication token
+  async getAuthToken(): Promise<string | null>
+}
+```
+
+### AuthConfig
+Configuration for authentication providers.
+
+```typescript
+interface AuthConfig {
+  type: 'auth0' | 'keycloak' | 'custom';
+  fields: {
+    domain?: string;        // Auth0 domain
+    clientId: string;       // Client ID
+    audience?: string;      // API audience
+    scope?: string;         // OAuth scope
+    url?: string;          // Keycloak URL
+    realm?: string;        // Keycloak realm
+  };
+}
+```
+
+### LoginCredentials
+Credentials for username/password authentication.
+
+```typescript
+interface LoginCredentials {
+  username: string;
+  password: string;
+  provider?: string;      // Optional provider identifier
+}
+```
+
+### AuthStorageAdapter
+Storage interface for authentication data.
+
+```typescript
+interface AuthStorageAdapter {
+  async initialize(): Promise<void>
+  async storeToken(token: string): Promise<void>
+  async getToken(): Promise<string | null>
+  async clearToken(): Promise<void>
+  async storeUserInfo(userInfo: UserInfo): Promise<void>
+  async getUserInfo(): Promise<UserInfo | null>
+}
+```
+
+### IndexedDbAuthStorageAdapter
+IndexedDB implementation for authentication storage.
+
+```typescript
+class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
+  constructor(databaseName: string)
+  
+  async initialize(): Promise<void>
+  async storeToken(token: string): Promise<void>
+  async getToken(): Promise<string | null>
+  async clearToken(): Promise<void>
+  async storeUserInfo(userInfo: UserInfo): Promise<void>
+  async getUserInfo(): Promise<UserInfo | null>
+}
+```
+
 ## Synchronization
 
 ### InternalSyncManager
-Handles client-server synchronization.
+Handles client-server synchronization with authentication.
 
 ```typescript
 class InternalSyncManager {
   constructor(
     eventStore: EventStore,
+    entityStore: EntityStore,
     eventApplierService: EventApplierService,
     serverUrl: string,
-    authToken: string
+    authStorageAdapter: AuthStorageAdapter
   )
 
   async pushToServer(): Promise<void>
@@ -190,8 +291,45 @@ class InternalSyncManager {
 
 ## Examples
 
+### Authentication Setup
+```typescript
+// Initialize authentication
+const authManager = new AuthManager(
+  [
+    {
+      type: 'auth0',
+      fields: {
+        domain: 'your-domain.auth0.com',
+        clientId: 'your-client-id',
+        audience: 'your-api-audience',
+        scope: 'openid profile email'
+      }
+    }
+  ],
+  'http://your-sync-server.com',
+  authStorageAdapter
+);
+
+// Login with credentials
+await authManager.login({
+  username: 'user@example.com',
+  password: 'password123'
+});
+
+// Check authentication status
+const isAuthenticated = await authManager.isAuthenticated();
+```
+
 ### Creating a Group
 ```typescript
+// Ensure user is authenticated
+if (!await manager.isAuthenticated()) {
+  await manager.login({
+    username: 'user@example.com',
+    password: 'password123'
+  });
+}
+
 const formData: FormSubmission = {
   guid: uuidv4(),
   entityGuid: uuidv4(),
