@@ -28,7 +28,7 @@ Before starting these tutorials, make sure you have:
 - Understanding of basic database concepts
 - Authentication provider setup (Auth0, Keycloak, or custom)
 
-## Tutorial 1: Basic EntityDataManager Setup with Authentication
+## Tutorial 1: Basic EntityDataManager Setup
 
 This tutorial shows you how to set up a complete EntityDataManager instance with authentication and all required components. You'll build a robust foundation that can handle real-world data collection scenarios with secure authentication.
 
@@ -59,10 +59,10 @@ import {
   AuthConfig,
   PasswordCredentials,
   TokenCredentials
-} from 'datacollect';
+} from 'idpass-data-collect';
 ```
 
-### Step 2: Initialize Storage Components with Authentication
+### Step 2: Initialize Storage Components
 
 ```typescript
 // Configuration
@@ -239,16 +239,10 @@ console.log("Authentication status:", authenticated);
 
 ```typescript
 // Login with Auth0
-await manager.login({
-  username: "user@example.com",
-  password: "password123"
-}, "auth0");
+await manager.login(null, "auth0");
 
 // Login with Keycloak
-await manager.login({
-  username: "user@example.com",
-  password: "password123"
-}, "keycloak");
+await manager.login(null, "keycloak");
 
 // Login with token
 const tokenCredentials: TokenCredentials = {
@@ -261,9 +255,6 @@ await manager.login(tokenCredentials, "auth0");
 ### Token Management
 
 ```typescript
-// Validate token
-const isValid = await manager.validateToken("auth0", "your-token");
-console.log("Token valid:", isValid);
 
 // Handle authentication callback (for OAuth flows)
 await manager.handleCallback("auth0");
