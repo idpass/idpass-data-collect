@@ -24,7 +24,8 @@ Built with Vue 3, TypeScript, and Capacitor, the mobile application offers a fle
 - 🔄 **Dynamic App Loading**: Load app configurations via QR code scanning or URL input
 - 📊 **Form Builder Integration**: Full FormIO integration for dynamic form creation
 - 💾 **Offline Storage**: Local database with RxDB for offline data collection
-- 🔐 **Secure Authentication**: JWT-based authentication with secure storage
+- 🔐 **Secure Authentication**: JWT-based authentication with OAuth provider support (Auth0, Keycloak)
+- 🔑 **Multi-Provider Auth**: Support for multiple authentication providers per app configuration
 - 🎨 **QR Code Scanning**: Built-in barcode scanning for app configuration loading
 - 🎨 **Responsive Design**: Bootstrap-based UI with mobile-optimized components
 
@@ -77,6 +78,134 @@ Offline-first data collection:
 - **Sync Management**: Background synchronization when online
 - **Conflict Resolution**: Handle data conflicts during sync
 
+## Authentication
+
+### Authentication Setup
+The mobile app supports multiple authentication methods:
+
+#### Username/Password Authentication
+```typescript
+import { AuthManager, IndexedDbAuthStorageAdapter } from 'idpass-datacollect';
+
+// Initialize authentication
+const authStorageAdapter = new IndexedDbAuthStorageAdapter('mobile-auth');
+await authStorageAdapter.initialize();
+
+const authManager = new AuthManager(
+  [], // Auth configs loaded from app configuration
+  syncServerUrl,
+  authStorageAdapter
+);
+
+// Login with credentials
+await authManager.login({
+  username: 'user@example.com',
+  password: 'password123'
+}, null);
+```
+
+#### OAuth Provider Authentication
+```typescript
+// Auth0 login
+const auth0Config = {
+  type: 'auth0',
+  fields: {
+    domain: config.domain,
+    client_id: config.client_id,
+    scope: 'openid profile email'
+  }
+};
+
+const authManager = new AuthManager(
+  [auth0Config],
+  process.env.VITE_BACKEND_URL,
+  authStorageAdapter
+);
+
+// Login with OAuth token
+await authManager.loginWithToken(null, 'auth0');
+```
+
+### Authentication Components
+
+#### LoginView.vue
+```vue
+<template>
+  <div class="login-container">
+    <form @submit.prevent="handleLogin">
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input 
+          id="email"
+          v-model="credentials.email"
+          type="email"
+          class="form-control"
+          required
+        />
+      </div>
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input 
+          id="password"
+          v-model="credentials.password"
+          type="password"
+          class="form-control"
+          required
+        />
+      </div>
+      <button type="submit" class="btn btn-primary">Login</button>
+    </form>
+    
+    <!-- OAuth provider buttons -->
+    <div class="oauth-providers mt-3">
+      <button @click="loginWithAuth0" class="btn btn-outline-primary">
+        Login with Auth0
+      </button>
+      <button @click="loginWithKeycloak" class="btn btn-outline-secondary">
+        Login with Keycloak
+      </button>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue';
+import { useAuthStore } from '@/stores/auth';
+
+const authStore = useAuthStore();
+const credentials = ref({
+  email: '',
+  password: ''
+});
+
+const handleLogin = async () => {
+  await authStore.login(credentials.value);
+};
+
+const loginWithAuth0 = async () => {
+  await authStore.loginWithProvider('auth0');
+};
+
+const loginWithKeycloak = async () => {
+  await authStore.loginWithProvider('keycloak');
+};
+</script>
+```
+
+#### AuthGuard
+```typescript
+// Route guard for authentication
+export const authGuard = async (to: any, from: any, next: any) => {
+  const authStore = useAuthStore();
+  
+  if (await authStore.isAuthenticated()) {
+    next();
+  } else {
+    next('/login');
+  }
+};
+```
+
 ## Quick Start
 
 ### Installation
@@ -91,6 +220,7 @@ npm install
 Create a `.env` file:
 
 ```env
+# Database Configuration
 VITE_DB_ENCRYPTION_PASSWORD=password
 VITE_FEATURE_DYNAMIC=true
 VITE_DEVELOP=true
@@ -232,8 +362,38 @@ interface TenantAppData {
   name: string;
   description?: string;
   configuration: any;
+  authConfigs?: AuthConfig[];
   createdAt: Date;
   updatedAt: Date;
+}
+```
+
+### Auth Config Schema
+```typescript
+interface AuthConfig {
+  type: 'auth0' | 'keycloak';
+  fields: {
+    domain?: string;        // Auth0 domain
+    clientId: string;       // Client ID
+    audience?: string;      // API audience
+    scope?: string;         // OAuth scope
+    url?: string;          // Keycloak URL
+    realm?: string;        // Keycloak realm
+  };
+}
+```
+
+### User Session Schema
+```typescript
+interface UserSession {
+  id: string;
+  userId: string;
+  email: string;
+  role: string;
+  token: string;
+  expiresAt: Date;
+  provider?: string;
+  createdAt: Date;
 }
 ```
 
@@ -242,6 +402,7 @@ interface TenantAppData {
 interface FormData {
   id: string;
   appId: string;
+  userId: string;
   formConfig: any;
   submissions: any[];
   createdAt: Date;
@@ -251,6 +412,53 @@ interface FormData {
 ## Components
 
 ### Core Components
+
+#### AuthStore
+Pinia store for authentication state management:
+```typescript
+import { defineStore } from 'pinia';
+import { AuthManager } from 'idpass-datacollect';
+
+export const useAuthStore = defineStore('auth', {
+  state: () => ({
+    user: null as any,
+    isAuthenticated: false,
+    authManager: null as AuthManager | null
+  }),
+  
+  actions: {
+    async login(credentials: { email: string; password: string }) {
+      if (!this.authManager) return;
+      
+      await this.authManager.login({
+        username: credentials.email,
+        password: credentials.password
+      });
+      
+      this.isAuthenticated = await this.authManager.isAuthenticated();
+      this.user = await this.authManager.getCurrentUser();
+    },
+    
+    async loginWithProvider(provider: string) {
+      // Handle OAuth provider login
+      if (!this.authManager) return;
+      
+      // Implement OAuth flow for mobile
+      await this.authManager.handleCallback(provider);
+      this.isAuthenticated = await this.authManager.isAuthenticated();
+      this.user = await this.authManager.getCurrentUser();
+    },
+    
+    async logout() {
+      if (!this.authManager) return;
+      
+      await this.authManager.logout();
+      this.isAuthenticated = false;
+      this.user = null;
+    }
+  }
+});
+```
 
 #### QrScanner
 QR code scanning for app configuration loading:
@@ -286,21 +494,17 @@ Modal dialog for saving data:
 - Validation components
 - File upload components
 
+
 ## Mobile Features
 
 ### Capacitor Plugins
-- **Camera**: Photo capture and QR code scanning
-- **Barcode Scanning**: MLKit barcode scanning
-- **File System**: Local file storage and management
-- **Geolocation**: Location-based data collection
+- **Camera**: QR code scanning
 - **Haptics**: Tactile feedback
 - **Keyboard**: Mobile keyboard handling
 - **Status Bar**: Status bar customization
 
 ### Platform-Specific Features
-- **iOS**: Native iOS integration
 - **Android**: Native Android integration
-- **Web**: Progressive Web App capabilities
 
 ## Testing
 
@@ -352,8 +556,6 @@ npm run build:android
 - Edge 88+
 
 ## Mobile Platform Support
-
-- **iOS**: 13.0+
 - **Android**: API level 21+
 
 ## Performance
@@ -364,13 +566,7 @@ npm run build:android
 - Background sync capabilities
 - Image optimization for mobile
 
-## Security
 
-- JWT token management
-- Secure local storage
-- Encrypted data transmission
-- Permission-based access control
-- Certificate pinning support
 
 ## Next Steps
 

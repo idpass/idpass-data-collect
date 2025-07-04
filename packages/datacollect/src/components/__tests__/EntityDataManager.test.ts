@@ -18,17 +18,20 @@ import {
   FormSubmission,
   GroupDoc,
   IndividualDoc,
+  AuthStorageAdapter,
   SyncLevel,
 } from "../../interfaces/types";
 import { EventApplierService } from "../../services/EventApplierService";
 import { IndexedDbEntityStorageAdapter } from "../../storage/IndexedDbEntityStorageAdapter";
 import { IndexedDbEventStorageAdapter } from "../../storage/IndexedDbEventStorageAdapter";
+import { IndexedDbAuthStorageAdapter } from "../../storage/IndexedDbAuthStorageAdapter";
 import { AppError } from "../../utils/AppError";
 import { EntityDataManager } from "../EntityDataManager";
 import { EntityStoreImpl } from "../EntityStore";
 import { EventStoreImpl } from "../EventStore";
 import { ExternalSyncManager } from "../ExternalSyncManager";
 import { InternalSyncManager } from "../InternalSyncManager";
+import { AuthManager } from "../AuthManager";
 
 const addElderlyApplier: EventApplier = {
   apply: async (
@@ -143,9 +146,11 @@ describe("EntityDataManager", () => {
   let manager: EntityDataManager;
   let eventStore: EventStore;
   let entityStore: EntityStore;
+  let authStorage: AuthStorageAdapter;
   let eventApplierService: EventApplierService;
   let internalSyncManager: InternalSyncManager;
   let externalSyncManager: ExternalSyncManager;
+  let authManager: AuthManager;
 
   // let encryptionAdapter: EncryptionAdapter;
   // let exportImportManager: ExportImportManager;
@@ -153,23 +158,35 @@ describe("EntityDataManager", () => {
   const internalUrl = "http://localhost:3000";
   // const internalUrl = "http://hdm-sync.openspp.org:3000";
   const externalUrl = "http://localhost:3001";
-  const userId = "test";
-
   beforeEach(async () => {
     jest.clearAllMocks();
-    eventStore = new EventStoreImpl(userId, new IndexedDbEventStorageAdapter());
+    eventStore = new EventStoreImpl(new IndexedDbEventStorageAdapter());
     await eventStore.initialize();
     entityStore = new EntityStoreImpl(new IndexedDbEntityStorageAdapter());
     await entityStore.initialize();
-    eventApplierService = new EventApplierService(userId, eventStore, entityStore);
+    authStorage = new IndexedDbAuthStorageAdapter();
+    await authStorage.initialize();
+    eventApplierService = new EventApplierService(eventStore, entityStore);
     eventApplierService.registerEventApplier("add-elderly", addElderlyApplier);
     eventApplierService.registerEventApplier("split-household", splitHouseholdApplier);
-    internalSyncManager = new InternalSyncManager(eventStore, entityStore, eventApplierService, internalUrl, "");
+    internalSyncManager = new InternalSyncManager(
+      eventStore,
+      entityStore,
+      eventApplierService,
+      internalUrl,
+      authStorage,
+    );
     externalSyncManager = new ExternalSyncManager(eventStore, eventApplierService, {
       type: "mock-sync-server",
       url: externalUrl,
       extraFields: [],
     });
+
+    authManager = new AuthManager(
+      [{ type: "mock-auth-adapter", fields: { url: internalUrl } }],
+      internalUrl,
+      authStorage,
+    );
 
     manager = new EntityDataManager(
       eventStore,
@@ -177,6 +194,7 @@ describe("EntityDataManager", () => {
       eventApplierService,
       externalSyncManager,
       internalSyncManager,
+      authManager,
     );
   });
 
@@ -1464,93 +1482,12 @@ describe("EntityDataManager", () => {
     expect(entities).toHaveLength(0);
   });
 
-  // Run only when sync-server is running at localhost:3000
-  it.skip("should sync events with the sync server", async () => {
-    const groupAGuid = uuidv4();
-
-    await manager.login("admin@hdm.example", "admin1@");
-    await manager.submitForm({
-      guid: uuidv4(),
-      entityGuid: groupAGuid,
-      type: "create-group",
-      data: {
-        name: "Group A",
-        members: [
-          { guid: uuidv4(), name: "Jane Doe", dateOfBirth: "1985-05-15", relationship: "Spouse" },
-          { guid: uuidv4(), name: "Jimmy Doe", dateOfBirth: "2010-03-20", relationship: "Child" },
-        ],
-      },
-      timestamp: new Date().toISOString(),
-      userId: "user-1",
-      syncLevel: SyncLevel.LOCAL,
-    });
-    expect(await manager.hasUnsyncedEvents()).toBe(true);
-    await manager.syncWithSyncServer();
-    expect(await manager.hasUnsyncedEvents()).toBe(false);
-
-    // wait 1 sec
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    await manager.submitForm({
-      guid: uuidv4(),
-      entityGuid: groupAGuid,
-      type: "add-member",
-      data: {
-        members: [{ guid: uuidv4(), name: "Test member" }],
-      },
-      timestamp: new Date().toISOString(),
-      userId: "user-1",
-      syncLevel: SyncLevel.LOCAL,
-    });
-    expect(await manager.hasUnsyncedEvents()).toBe(true);
-    await manager.syncWithSyncServer();
-    expect(await manager.hasUnsyncedEvents()).toBe(false);
-
-    // wait 1 sec
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    await manager.submitForm({
-      guid: uuidv4(),
-      entityGuid: uuidv4(),
-      type: "create-individual",
-      data: { name: "Harry Potter" },
-      timestamp: new Date().toISOString(),
-      userId: "user-1",
-      syncLevel: SyncLevel.LOCAL,
-    });
-    expect(await manager.hasUnsyncedEvents()).toBe(true);
-    await manager.syncWithSyncServer();
-    expect(await manager.hasUnsyncedEvents()).toBe(false);
-
-    const events = await eventStore.getAllEvents();
-    const entities = await entityStore.getAllEntities();
-    expect(events).toHaveLength(3);
-    expect(entities).toHaveLength(5);
-  }, 10000);
-
   it("should handle sync errors gracefully", async () => {
     const errorMessage = "Sync server error";
     jest.spyOn(internalSyncManager, "sync").mockRejectedValueOnce(new Error(errorMessage));
 
     await expect(manager.syncWithSyncServer()).rejects.toThrow(errorMessage);
   });
-
-  // test("synchronize should sync data with the server", async () => {
-  //   (global.fetch as jest.Mock).mockImplementationOnce((url: string) => {
-  //     if (url === `${externalUrl}/pull-entities`) {
-  //       return Promise.resolve({
-  //         ok: true,
-  //         json: () => Promise.resolve([]),
-  //       });
-  //     } else if (url === `${externalUrl}/timestamp`) {
-  //       return Promise.resolve({
-  //         ok: true,
-  //         json: () => Promise.resolve(new Date().toISOString()),
-  //       });
-  //     }
-  //   });
-  //   await manager.synchronize();
-  // });
 
   it("should flag potential duplicates correctly and resolve them", async () => {
     const entityGuid1 = uuidv4();
@@ -1592,79 +1529,74 @@ describe("EntityDataManager", () => {
     expect(unsyncedEventsCount).toBe(0);
   });
 
-  // it("should process events in batches and update sync timestamp", async () => {
-  //   const mockEvents = [
-  //     {
-  //       id: 1,
-  //       guid: "event1",
-  //       entityGuid: "entity1",
-  //       type: "create-individual",
-  //       data: { name: "Test 1" },
-  //       timestamp: "2023-01-01T00:00:00Z",
-  //       userId: "user1",
-  //       syncLevel: 1,
-  //     },
-  //     {
-  //       id: 2,
-  //       guid: "event2",
-  //       entityGuid: "entity2",
-  //       type: "create-individual",
-  //       data: { name: "Test 2" },
-  //       timestamp: "2023-01-01T00:00:02Z",
-  //       userId: "user1",
-  //       syncLevel: 1,
-  //     },
-  //     {
-  //       id: 3,
-  //       guid: "event3",
-  //       entityGuid: "entity3",
-  //       type: "create-individual",
-  //       data: { name: "Test 3" },
-  //       timestamp: "2023-01-01T00:00:02Z",
-  //       userId: "user1",
-  //       syncLevel: 1,
-  //     },
-  //   ];
+  // Run only when sync-server is running at localhost:3000
+  describe.skip("Sync with sync server", () => {
+    it("should sync events with the sync server", async () => {
+      const groupAGuid = uuidv4();
 
-  //   const mockEventStore: Partial<EventStore> = {
-  //     getLastPushExternalSyncTimestamp: jest.fn().mockResolvedValue("2023-01-01T00:00:00Z"),
-  //     getEventsSince: jest.fn().mockResolvedValue(mockEvents),
-  //     setLastPushExternalSyncTimestamp: jest.fn().mockResolvedValue(undefined),
-  //   };
+      await manager.login({ username: "admin@hdm.example", password: "admin1@" });
+      await manager.submitForm({
+        guid: uuidv4(),
+        entityGuid: groupAGuid,
+        type: "create-group",
+        data: {
+          name: "Group A",
+          members: [
+            { guid: uuidv4(), name: "Jane Doe", dateOfBirth: "1985-05-15", relationship: "Spouse" },
+            { guid: uuidv4(), name: "Jimmy Doe", dateOfBirth: "2010-03-20", relationship: "Child" },
+          ],
+        },
+        timestamp: new Date().toISOString(),
+        userId: "user-1",
+        syncLevel: SyncLevel.LOCAL,
+      });
+      expect(await manager.hasUnsyncedEvents()).toBe(true);
+      await manager.syncWithSyncServer();
+      expect(await manager.hasUnsyncedEvents()).toBe(false);
 
-  //   const mockSyncAdapter: SyncAdapter = {
-  //     pushEvents: jest.fn().mockResolvedValue([]),
-  //     pullEntities: jest.fn().mockResolvedValue([]),
-  //     pushEntities: jest.fn().mockResolvedValue([]),
-  //     onSyncComplete: jest.fn(),
-  //     startAutoSync: jest.fn(),
-  //     stopAutoSync: jest.fn(),
-  //     getServerTimestamp: jest.fn().mockResolvedValue(new Date().toISOString()),
-  //   };
+      // wait 1 sec
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
-  //   const eventBatches: unknown[] = [];
-  //   const mockMediator = {
-  //     notify: jest.fn().mockImplementation(async (command) => {
-  //       eventBatches.push(command.events);
-  //       return [];
-  //     }),
-  //   };
+      await manager.submitForm({
+        guid: uuidv4(),
+        entityGuid: groupAGuid,
+        type: "add-member",
+        data: {
+          members: [{ guid: uuidv4(), name: "Test member" }],
+        },
+        timestamp: new Date().toISOString(),
+        userId: "user-1",
+        syncLevel: SyncLevel.LOCAL,
+      });
+      expect(await manager.hasUnsyncedEvents()).toBe(true);
+      await manager.syncWithSyncServer();
+      expect(await manager.hasUnsyncedEvents()).toBe(false);
 
-  //   const manager = new EntityDataManager(
-  //     mockEventStore as EventStore,
-  //     {} as EntityStore,
-  //     mockSyncAdapter as SyncAdapter,
-  //     {} as InternalSyncManager,
-  //     {} as EventApplierService,
-  //   );
-  //   manager["mediator"] = mockMediator;
+      // wait 1 sec
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
-  //   await manager.synchronize(2); // Process in batches of 2
+      await manager.submitForm({
+        guid: uuidv4(),
+        entityGuid: uuidv4(),
+        type: "create-individual",
+        data: { name: "Harry Potter" },
+        timestamp: new Date().toISOString(),
+        userId: "user-1",
+        syncLevel: SyncLevel.LOCAL,
+      });
+      expect(await manager.hasUnsyncedEvents()).toBe(true);
+      await manager.syncWithSyncServer();
+      expect(await manager.hasUnsyncedEvents()).toBe(false);
 
-  //   expect(mockEventStore.getEventsSince).toHaveBeenCalledWith("2023-01-01T00:00:00Z");
-  //   expect(eventBatches).toHaveLength(2);
-  //   expect(eventBatches[0]).toEqual([mockEvents[0], mockEvents[1]]);
-  //   expect(eventBatches[1]).toEqual([mockEvents[2]]);
-  //   expect(mockEventStore.setLastPushExternalSyncTimestamp).toHaveBeenCalledWith(expect.any(String));
-  // });
+      const events = await eventStore.getAllEvents();
+      const entities = await entityStore.getAllEntities();
+      expect(events).toHaveLength(3);
+      expect(entities).toHaveLength(5);
+    }, 10000);
+
+    it("should not sync if unauthenticated", async () => {
+      await manager.logout();
+      await expect(manager.syncWithSyncServer()).rejects.toThrow("Unauthorized");
+    });
+  });
 });

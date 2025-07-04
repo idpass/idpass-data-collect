@@ -30,11 +30,15 @@ import {
   SearchCriteria,
   SyncLevel,
   ExternalSyncCredentials,
+  PasswordCredentials,
+  TokenCredentials,
 } from "../interfaces/types";
 import { EventApplierService } from "../services/EventApplierService";
 import { AppError } from "../utils/AppError";
 import { ExternalSyncManager } from "./ExternalSyncManager";
 import { InternalSyncManager } from "./InternalSyncManager";
+import { AuthManager } from "./AuthManager";
+
 // const MAX_GROUP_DEPTH = 5; // Maximum allowed depth for nested groups
 
 /**
@@ -146,6 +150,7 @@ export class EntityDataManager {
     private eventApplierService: EventApplierService,
     private externalSyncManager?: ExternalSyncManager,
     private internalSyncManager?: InternalSyncManager,
+    private authManager?: AuthManager,
   ) {}
 
   /**
@@ -678,30 +683,6 @@ export class EntityDataManager {
   }
 
   /**
-   * Sets the authentication token for sync server communication.
-   *
-   * Updates the JWT token used for authenticating with the remote sync server.
-   * Only available when an InternalSyncManager is configured.
-   *
-   * @param token - JWT authentication token
-   *
-   * @example
-   * ```typescript
-   * // After user login
-   * const authResponse = await loginUser(email, password);
-   * await manager.setAuthToken(authResponse.token);
-   *
-   * // Now sync operations will use the new token
-   * await manager.syncWithSyncServer();
-   * ```
-   */
-  async setAuthToken(token: string): Promise<void> {
-    if (this.internalSyncManager) {
-      await this.internalSyncManager.setAuthToken(token);
-    }
-  }
-
-  /**
    * Saves multiple audit log entries to the event store.
    *
    * Used for batch saving of audit logs, typically during sync operations
@@ -772,11 +753,12 @@ export class EntityDataManager {
    * }
    * ```
    */
-  async login(email: string, password: string): Promise<void> {
-    if (this.internalSyncManager) {
-      await this.internalSyncManager.login(email, password);
-    }
-  }
+  // Deprecated
+  // async login(email: string, password: string): Promise<void> {
+  //   if (this.internalSyncManager) {
+  //     await this.internalSyncManager.login(email, password);
+  //   }
+  // }
 
   /**
    * Retrieves all potential duplicate entity pairs detected by the system.
@@ -839,6 +821,43 @@ export class EntityDataManager {
   async syncWithExternalSystem(credentials?: ExternalSyncCredentials): Promise<void> {
     if (this.externalSyncManager) {
       await this.externalSyncManager.synchronize(credentials);
+    }
+  }
+
+  async login(credentials: PasswordCredentials | TokenCredentials | null, type?: string): Promise<void> {
+    if (this.authManager) {
+      await this.authManager.login(credentials, type);
+    }
+  }
+
+  async initializeAuthManager(): Promise<void> {
+    if (this.authManager) {
+      await this.authManager.initialize();
+    }
+  }
+
+  async logout(): Promise<void> {
+    if (this.authManager) {
+      await this.authManager.logout();
+    }
+  }
+
+  async validateToken(type: string, token: string): Promise<boolean> {
+    if (this.authManager) {
+      return this.authManager.validateToken(type, token);
+    }
+    return false;
+  }
+
+  async isAuthenticated(): Promise<boolean> {
+    if (this.authManager) {
+      return this.authManager.isAuthenticated();
+    }
+    return false;
+  }
+  async handleCallback(type: string): Promise<void> {
+    if (this.authManager) {
+      await this.authManager.handleCallback(type);
     }
   }
 }

@@ -51,8 +51,10 @@ describe("AppConfigStore", () => {
     authConfigs: [
       {
         type: "jwt",
-        secret: "test-secret",
-        expiresIn: "1h",
+        fields: {
+          secret: "test-secret",
+          expiresIn: "1h",
+        },
       },
     ],
   };

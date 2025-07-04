@@ -105,7 +105,26 @@ The admin interface should be accessible at `http://localhost:5173` or your conf
     "auth": "",
     "extraFields": {}
   },
-  "authConfigs": [],
+  "authConfigs": [
+    {
+      "type": "auth0",
+      "fields": {
+        "domain": "your-domain.auth0.com",
+        "clientId": "your-client-id",
+        "audience": "your-api-audience",
+        "scope": "openid profile email"
+      }
+    },
+    {
+      "type": "keycloak",
+      "fields": {
+        "url": "https://your-keycloak-server.com",
+        "realm": "your-realm",
+        "clientId": "your-client-id",
+        "scope": "openid profile email"
+      }
+    }
+  ],
   "syncServerUrl": "localhost:3000"
 }
 ```
@@ -148,7 +167,10 @@ import {
   EventApplierService,
   IndexedDbEntityStorageAdapter,
   IndexedDbEventStorageAdapter,
-  ExternalSyncManager
+  IndexedDbAuthStorageAdapter,
+  ExternalSyncManager,
+  InternalSyncManager,
+  AuthManager
 } from '@idpass/datacollect';
 
 // Initialize with your imported configuration
@@ -156,28 +178,52 @@ const initializeDataCollect = async (config) => {
   // Create storage adapters
   const eventStorageAdapter = new IndexedDbEventStorageAdapter('my-data-collect-events');
   const entityStorageAdapter = new IndexedDbEntityStorageAdapter('my-data-collect-entities');
+  const authStorageAdapter = new IndexedDbAuthStorageAdapter('my-data-collect-auth');
   
   // Initialize stores
-  const eventStore = new EventStoreImpl('user-id', eventStorageAdapter);
+  const eventStore = new EventStoreImpl(eventStorageAdapter);
   await eventStore.initialize();
   
   const entityStore = new EntityStoreImpl(entityStorageAdapter);
   await entityStore.initialize();
   
+  // Initialize auth storage
+  await authStorageAdapter.initialize();
+  
   // Create event applier service
-  const eventApplierService = new EventApplierService('user-id', eventStore, entityStore);
+  const eventApplierService = new EventApplierService(eventStore, entityStore);
 
   // Create internal sync manager
-  internalSyncManager = new InternalSyncManager(eventStore, entityStore, eventApplierService, config.syncServerUrl, "");
+  const internalSyncManager = new InternalSyncManager(
+    eventStore, 
+    entityStore, 
+    eventApplierService, 
+    config.syncServerUrl, 
+    authStorageAdapter
+  );
+  
+  // Create external sync manager (optional)
+  const externalSyncManager = config.externalSync ? new ExternalSyncManager(
+    eventStore, 
+    eventApplierService, 
+    config.externalSync
+  ) : null;
+  
+  // Create authentication manager
+  const authManager = new AuthManager(
+    config.authConfigs || [], // Authentication provider configurations
+    config.syncServerUrl,
+    authStorageAdapter
+  );
   
   // Create the main data manager
   const dataCollect = new EntityDataManager(
     eventStore,
     entityStore,
     eventApplierService,
-    null, // Client instance doesn't need to setup external sync
-    internalSyncManager
-
+    externalSyncManager,
+    internalSyncManager,
+    authManager
   );
   
   return dataCollect;
@@ -229,21 +275,65 @@ const searchResults = await dataCollect.searchEntities([
 console.log('Search results:', searchResults);
 ```
 
-### Step 6: Sync to Server Using Backend User
+### Step 6: Authenticate Users
+
+#### Initialize Authentication Manager
+
+```javascript
+// Initialize the authentication manager (done during setup)
+await dataCollect.initializeAuthManager();
+```
+
+#### Login with Different Authentication Methods
+
+```javascript
+// Login with username/password (for backend authentication)
+await dataCollect.login({
+  username: "admin@hdm.example",
+  password: "admin1@"
+});
+
+// Login with token (for external auth providers like Auth0/Keycloak)
+await dataCollect.login({
+  token: "your-jwt-token"
+}, "auth0"); // or "keycloak"
+
+// Check authentication status
+const isAuthenticated = await dataCollect.isAuthenticated();
+console.log('User authenticated:', isAuthenticated);
+```
+
+#### Handle Authentication Callbacks
+
+```javascript
+// Handle OAuth callbacks (for Auth0, Keycloak, etc.)
+await dataCollect.handleCallback("auth0");
+```
+
+#### Logout
+
+```javascript
+// Logout user and clear authentication tokens
+await dataCollect.logout();
+
+// Verify logout
+const isAuthenticated = await dataCollect.isAuthenticated();
+console.log('User authenticated after logout:', isAuthenticated); // Should be false
+```
+
+### Step 7: Sync to Server Using Backend User
 
 #### Authenticate with Backend
 
 ```javascript
-await manager.login("admin@hdm.example", "admin1@");
+// Login with backend credentials
+await dataCollect.login({
+  username: "admin@hdm.example", 
+  password: "admin1@"
+});
 ```
 
-#### Perform Synchronization
-
-```javascript
-await manager.syncWithSyncServer();
-```
-
-### Step 7: Verify Synced Data in Admin
+### Step 8: Verify Synced Data in Admin
 
 #### Check Admin Interface
 

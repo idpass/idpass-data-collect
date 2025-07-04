@@ -21,7 +21,7 @@ import { getDatabase } from '@/database'
 const db = getDatabase()
 const cache = new Map<string, string>()
 
-export const getSyncServerUrlByAppId = async (appId: string) => {
+export const getSyncServerUrlByAppId = async (appId: string): Promise<string> => {
   if (cache.has(appId)) {
     return cache.get(appId)
   }

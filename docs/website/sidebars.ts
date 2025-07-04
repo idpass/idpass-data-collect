@@ -268,6 +268,7 @@ const sidebars: SidebarsConfig = {
         "architecture/index",
         "architecture/event-sourcing",
         "architecture/sync-architecture",
+        "architecture/authentication",
         // TODO: Add when created
         // 'architecture/storage-adapters',
         // 'architecture/security-model',
@@ -281,7 +282,17 @@ const sidebars: SidebarsConfig = {
         "configuration/index",
         "configuration/entity-forms",
         "configuration/external-sync",
-        "configuration/auth-configs",
+        {
+          type: "category",
+          label: "Authentication Configs",
+          collapsed: true,
+          items: [
+            "configuration/auth-configs/index",
+            "configuration/auth-configs/default-auth",
+            "configuration/auth-configs/auth-configs-auth0",
+            "configuration/auth-configs/auth-configs-keycloak",
+          ],
+        },
       ],
     },
     {
@@ -294,6 +305,16 @@ const sidebars: SidebarsConfig = {
         // "deployment/scaling",
         // "deployment/monitoring",
       ],
+    },
+    {
+      type: "category",
+      label: "How-To Guides",
+      items: ["how-to/create-custom-auth-adapter"],
+    },
+    {
+      type: "category",
+      label: "Adapters",
+      items: ["adapters/openfn-adapter", "adapters/auth0-adapter", "adapters/keycloak-adapter"],
     },
     // TODO: Add these sections when documents are created
     /*

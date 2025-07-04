@@ -41,7 +41,7 @@ Central orchestrator for all data operations, providing a clean API for:
 ### Installation
 
 ```bash
-cd dataCollect
+cd datacollect
 npm install
 npm run build
 ```
@@ -53,35 +53,75 @@ import {
   EntityDataManager,
   IndexedDbEntityStorageAdapter,
   IndexedDbEventStorageAdapter,
+  IndexedDbAuthStorageAdapter,
   EventStoreImpl,
   EntityStoreImpl,
   EventApplierService,
   InternalSyncManager,
-  SyncAdapterImpl
-} from 'datacollect';
+  ExternalSyncManager,
+  AuthManager
+} from 'idpass-data-collect';
+
+// Initialize storage adapters
+const eventStorageAdapter = new IndexedDbEventStorageAdapter('my-events');
+const entityStorageAdapter = new IndexedDbEntityStorageAdapter('my-entities');
+const authStorageAdapter = new IndexedDbAuthStorageAdapter('my-auth');
 
 // Initialize stores
-const eventStore = new EventStoreImpl(userId, new IndexedDbEventStorageAdapter());
-const entityStore = new EntityStoreImpl(new IndexedDbEntityStorageAdapter());
+const eventStore = new EventStoreImpl(eventStorageAdapter);
+const entityStore = new EntityStoreImpl(entityStorageAdapter);
 await eventStore.initialize();
 await entityStore.initialize();
+await authStorageAdapter.initialize();
 
 // Set up services
-const eventApplierService = new EventApplierService(userId, eventStore, entityStore);
+const eventApplierService = new EventApplierService(eventStore, entityStore);
+
+// Create sync managers
 const internalSyncManager = new InternalSyncManager(
   eventStore,
+  entityStore,
   eventApplierService,
   'http://your-sync-server.com',
-  'your-auth-token'
+  authStorageAdapter
+);
+
+const externalSyncManager = new ExternalSyncManager(
+  eventStore,
+  eventApplierService,
+  {
+    type: 'mock-sync-server',
+    url: 'http://localhost:4000',
+    auth: '',
+    extraFields: {}
+  }
+);
+
+// Create authentication manager
+const authManager = new AuthManager(
+  [
+    {
+      type: 'auth0',
+      fields: {
+        domain: 'your-domain.auth0.com',
+        clientId: 'your-client-id',
+        audience: 'your-api-audience',
+        scope: 'openid profile email'
+      }
+    }
+  ],
+  'http://your-sync-server.com',
+  authStorageAdapter
 );
 
 // Create the main manager
 const manager = new EntityDataManager(
   eventStore,
   entityStore,
-  new SyncAdapterImpl(''),
+  eventApplierService,
+  externalSyncManager,
   internalSyncManager,
-  eventApplierService
+  authManager
 );
 ```
 

@@ -22,19 +22,23 @@ Here's a simple example of an entity form with explanations for each field:
 
 ```json
 {
-  "name": "individual",
-  "title": "Individual Registration",
-  "formio": {
-    "components": [
-      {
-        "label": "Full Name",
-        "key": "fullName",
-        "type": "textfield",
-        "input": true,
-        "required": true
+  "entityForms": [
+    {
+      "name": "individual",
+      "title": "Individual Registration",
+      "formio": {
+        "components": [
+          {
+            "label": "Full Name",
+            "key": "fullName",
+            "type": "textfield",
+            "input": true,
+            "required": true
+          }
+        ]
       }
-    ]
-  }
+    }
+  ]
 }
 ```
 

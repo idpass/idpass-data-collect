@@ -55,13 +55,16 @@ Handles bidirectional synchronization between clients and server:
 
 ### User Management
 Complete authentication and authorization system:
-- **JWT Authentication**: Secure token-based authentication
+- **JWT Authentication**: Secure token-based authentication with OAuth provider support
+- **OAuth Integration**: Support for Auth0, Keycloak, and custom OAuth providers
 - **Role-Based Access**: Admin and user roles with different permissions
+- **Multi-Provider Auth**: Configure multiple authentication providers per tenant
 - **Initial Setup**: Automatic admin user creation on first run
 
 ### Multi-Tenant Support
 Isolated environments for different organizations:
 - **App Configurations**: Custom forms and entity definitions per tenant
+- **Authentication Configs**: Per-tenant OAuth provider configurations
 - **Data Isolation**: Complete separation of tenant data
 - **External Sync Config**: Per-tenant integration settings
 
@@ -86,6 +89,8 @@ POSTGRES_TEST=postgresql://admin:admin@localhost:5432/test
 # Authentication
 INITIAL_PASSWORD=your-secure-password
 JWT_SECRET=your-jwt-secret
+
+
 
 # Server Configuration
 PORT=3000
@@ -115,6 +120,26 @@ Define tenant-specific settings using JSON configuration:
   "name": "Organization Name",
   "description": "Organization description",
   "version": "1.0.0",
+  "authConfigs": [
+    {
+      "type": "auth0",
+      "fields": {
+        "domain": "your-domain.auth0.com",
+        "clientId": "your-client-id",
+        "audience": "your-api-audience",
+        "scope": "openid profile email"
+      }
+    },
+    {
+      "type": "keycloak",
+      "fields": {
+        "url": "https://keycloak.example.com",
+        "realm": "your-realm",
+        "clientId": "your-client-id",
+        "scope": "openid profile email"
+      }
+    }
+  ],
   "entityForms": [
     {
       "name": "household",

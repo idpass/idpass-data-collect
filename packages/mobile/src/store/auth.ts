@@ -17,7 +17,6 @@
  * under the License.
  */
 
-import router from '@/router'
 import axios from 'axios'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
@@ -93,7 +92,6 @@ export const useAuthStore = defineStore('auth', () => {
     setSyncServerToken(server, null)
     setSyncServerUserId(server, null)
     setFullSyncServerUrl(server, null)
-    router.push({ name: 'home', replace: true })
   }
 
   const getSyncServerAuth = async (appId: string) => {

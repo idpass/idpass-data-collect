@@ -161,7 +161,7 @@ Get all audit log entries
 
 > **saveMerkleRoot**(`root`): `Promise`\<`void`\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:218](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L218)
+Defined in: [storage/PostgresEventStorageAdapter.ts:219](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L219)
 
 Save Merkle tree root hash
 
@@ -185,7 +185,7 @@ Save Merkle tree root hash
 
 > **getMerkleRoot**(): `Promise`\<`string`\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:230](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L230)
+Defined in: [storage/PostgresEventStorageAdapter.ts:231](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L231)
 
 Get current Merkle tree root hash
 
@@ -203,7 +203,7 @@ Get current Merkle tree root hash
 
 > **updateEventSyncLevel**(`id`, `syncLevel`): `Promise`\<`void`\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:242](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L242)
+Defined in: [storage/PostgresEventStorageAdapter.ts:243](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L243)
 
 Update the sync level of an event
 
@@ -231,7 +231,7 @@ Update the sync level of an event
 
 > **updateAuditLogSyncLevel**(`entityGuid`, `syncLevel`): `Promise`\<`void`\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:251](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L251)
+Defined in: [storage/PostgresEventStorageAdapter.ts:252](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L252)
 
 Update the sync level of an audit log entry
 
@@ -259,7 +259,7 @@ Update the sync level of an audit log entry
 
 > **getEventsSince**(`timestamp`): `Promise`\<[`FormSubmission`](../interfaces/FormSubmission.md)[]\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:260](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L260)
+Defined in: [storage/PostgresEventStorageAdapter.ts:261](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L261)
 
 Get events created since a specific timestamp
 
@@ -283,7 +283,7 @@ Get events created since a specific timestamp
 
 > **getEventsSincePagination**(`timestamp`, `limit`): `Promise`\<\{ `events`: [`FormSubmission`](../interfaces/FormSubmission.md)[]; `nextCursor`: `null` \| `string` \| `Date`; \}\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:282](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L282)
+Defined in: [storage/PostgresEventStorageAdapter.ts:284](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L284)
 
 Get events since timestamp with pagination support (10 events/page default)
 
@@ -311,7 +311,7 @@ Get events since timestamp with pagination support (10 events/page default)
 
 > **getAuditLogsSince**(`timestamp`): `Promise`\<[`AuditLogEntry`](../interfaces/AuditLogEntry.md)[]\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:317](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L317)
+Defined in: [storage/PostgresEventStorageAdapter.ts:320](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L320)
 
 Get audit logs created since a specific timestamp
 
@@ -335,7 +335,7 @@ Get audit logs created since a specific timestamp
 
 > **updateSyncLevelFromEvents**(`events`): `Promise`\<`void`\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:327](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L327)
+Defined in: [storage/PostgresEventStorageAdapter.ts:342](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L342)
 
 Update sync levels for multiple events
 
@@ -359,7 +359,7 @@ Update sync levels for multiple events
 
 > **getLastSyncTimestamp**(): `Promise`\<`string`\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:343](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L343)
+Defined in: [storage/PostgresEventStorageAdapter.ts:362](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L362)
 
 #### Returns
 
@@ -371,7 +371,7 @@ Defined in: [storage/PostgresEventStorageAdapter.ts:343](https://github.com/idpa
 
 > **setLastSyncTimestamp**(`timestamp`): `Promise`\<`void`\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:353](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L353)
+Defined in: [storage/PostgresEventStorageAdapter.ts:375](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L375)
 
 #### Parameters
 
@@ -389,7 +389,7 @@ Defined in: [storage/PostgresEventStorageAdapter.ts:353](https://github.com/idpa
 
 > **getLastRemoteSyncTimestamp**(): `Promise`\<`string`\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:362](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L362)
+Defined in: [storage/PostgresEventStorageAdapter.ts:387](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L387)
 
 Get the timestamp of the last remote sync
 
@@ -407,7 +407,7 @@ Get the timestamp of the last remote sync
 
 > **setLastRemoteSyncTimestamp**(`timestamp`): `Promise`\<`void`\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:374](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L374)
+Defined in: [storage/PostgresEventStorageAdapter.ts:400](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L400)
 
 Set the timestamp of the last remote sync
 
@@ -431,7 +431,7 @@ Set the timestamp of the last remote sync
 
 > **getLastLocalSyncTimestamp**(): `Promise`\<`string`\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:384](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L384)
+Defined in: [storage/PostgresEventStorageAdapter.ts:413](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L413)
 
 Get the timestamp of the last local sync
 
@@ -449,7 +449,7 @@ Get the timestamp of the last local sync
 
 > **setLastLocalSyncTimestamp**(`timestamp`): `Promise`\<`void`\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:396](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L396)
+Defined in: [storage/PostgresEventStorageAdapter.ts:426](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L426)
 
 Set the timestamp of the last local sync
 
@@ -473,7 +473,7 @@ Set the timestamp of the last local sync
 
 > **getLastPullExternalSyncTimestamp**(): `Promise`\<`string`\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:406](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L406)
+Defined in: [storage/PostgresEventStorageAdapter.ts:439](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L439)
 
 Get the timestamp of the last external sync pull
 
@@ -491,7 +491,7 @@ Get the timestamp of the last external sync pull
 
 > **setLastPullExternalSyncTimestamp**(`timestamp`): `Promise`\<`void`\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:418](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L418)
+Defined in: [storage/PostgresEventStorageAdapter.ts:452](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L452)
 
 Set the timestamp of the last external sync pull
 
@@ -515,7 +515,7 @@ Set the timestamp of the last external sync pull
 
 > **getLastPushExternalSyncTimestamp**(): `Promise`\<`string`\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:428](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L428)
+Defined in: [storage/PostgresEventStorageAdapter.ts:465](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L465)
 
 Get the timestamp of the last external sync push
 
@@ -533,7 +533,7 @@ Get the timestamp of the last external sync push
 
 > **setLastPushExternalSyncTimestamp**(`timestamp`): `Promise`\<`void`\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:440](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L440)
+Defined in: [storage/PostgresEventStorageAdapter.ts:478](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L478)
 
 Set the timestamp of the last external sync push
 
@@ -557,7 +557,7 @@ Set the timestamp of the last external sync push
 
 > **isEventExisted**(`guid`): `Promise`\<`boolean`\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:450](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L450)
+Defined in: [storage/PostgresEventStorageAdapter.ts:491](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L491)
 
 Check if an event with the given GUID exists
 
@@ -581,7 +581,7 @@ Check if an event with the given GUID exists
 
 > **getAuditTrailByEntityGuid**(`entityGuid`): `Promise`\<[`AuditLogEntry`](../interfaces/AuditLogEntry.md)[]\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:460](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L460)
+Defined in: [storage/PostgresEventStorageAdapter.ts:504](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L504)
 
 Get complete audit trail for a specific entity
 
@@ -605,7 +605,7 @@ Get complete audit trail for a specific entity
 
 > **clearStore**(): `Promise`\<`void`\>
 
-Defined in: [storage/PostgresEventStorageAdapter.ts:482](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L482)
+Defined in: [storage/PostgresEventStorageAdapter.ts:526](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/storage/PostgresEventStorageAdapter.ts#L526)
 
 Clear all data from the store (for testing)
 

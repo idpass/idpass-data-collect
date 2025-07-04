@@ -39,11 +39,11 @@ import { validateFormSubmission } from "../utils/formValidation";
 
 /**
  * Service responsible for applying events (FormSubmissions) to entities in the event sourcing system.
- * 
+ *
  * The EventApplierService is the core component that transforms events into entity state changes.
  * It handles all standard entity operations (create, update, delete, add/remove members) and supports
  * custom event appliers for domain-specific operations.
- * 
+ *
  * Key features:
  * - **Event Processing**: Applies form submissions to create or modify entities
  * - **Custom Event Support**: Allows registration of custom event appliers
@@ -51,13 +51,13 @@ import { validateFormSubmission } from "../utils/formValidation";
  * - **Duplicate Detection**: Automatically flags potential duplicates during entity creation
  * - **Cascading Operations**: Handles complex operations like group member management
  * - **Data Validation**: Validates all form submissions before processing
- * 
+ *
  * Architecture:
  * - Uses the Strategy pattern for pluggable event appliers
  * - Maintains referential integrity for group-member relationships
  * - Generates audit entries for all state changes
  * - Integrates with duplicate detection algorithms
- * 
+ *
  * @example
  * Basic usage:
  * ```typescript
@@ -66,7 +66,7 @@ import { validateFormSubmission } from "../utils/formValidation";
  *   eventStore,
  *   entityStore
  * );
- * 
+ *
  * // Submit a form to create an individual
  * const individual = await service.submitForm({
  *   guid: uuidv4(),
@@ -78,7 +78,7 @@ import { validateFormSubmission } from "../utils/formValidation";
  *   syncLevel: SyncLevel.LOCAL
  * });
  * ```
- * 
+ *
  * @example
  * Custom event applier:
  * ```typescript
@@ -86,8 +86,8 @@ import { validateFormSubmission } from "../utils/formValidation";
  * const customApplier: EventApplier = {
  *   apply: async (entity, form, getEntity, saveEntity) => {
  *     if (form.type === 'custom-verification') {
- *       const updated = { 
- *         ...entity, 
+ *       const updated = {
+ *         ...entity,
  *         data: { ...entity.data, verified: true, verifiedAt: form.timestamp }
  *       };
  *       return updated;
@@ -95,16 +95,16 @@ import { validateFormSubmission } from "../utils/formValidation";
  *     throw new Error(`Unsupported event type: ${form.type}`);
  *   }
  * };
- * 
+ *
  * service.registerEventApplier('custom-verification', customApplier);
- * 
+ *
  * // Now can process custom events
  * await service.submitForm({
  *   type: 'custom-verification',
  *   // ... other form properties
  * });
  * ```
- * 
+ *
  * @example
  * Group operations:
  * ```typescript
@@ -113,7 +113,7 @@ import { validateFormSubmission } from "../utils/formValidation";
  *   guid: uuidv4(),
  *   entityGuid: uuidv4(),
  *   type: 'create-group',
- *   data: { 
+ *   data: {
  *     name: 'Smith Family',
  *     members: [
  *       { guid: 'person-1', name: 'John Smith', type: 'individual' },
@@ -124,13 +124,13 @@ import { validateFormSubmission } from "../utils/formValidation";
  *   userId: 'user-123',
  *   syncLevel: SyncLevel.LOCAL
  * });
- * 
+ *
  * // Add a member to existing group
  * await service.submitForm({
  *   guid: uuidv4(),
  *   entityGuid: group.guid,
  *   type: 'add-member',
- *   data: { 
+ *   data: {
  *     members: [{ guid: 'person-3', name: 'Bob Smith', type: 'individual' }]
  *   },
  *   timestamp: new Date().toISOString(),
@@ -147,26 +147,25 @@ export class EventApplierService {
 
   /**
    * Creates a new EventApplierService instance.
-   * 
-   * @param userId - Default user ID for system-generated events
+   *
+   * @param authStorage - Storage for managing authentication tokens and username
    * @param eventStore - Store for managing events and audit logs
    * @param entityStore - Store for managing current entity state
    */
   constructor(
-    private userId: string,
     private eventStore: EventStore,
     private entityStore: EntityStore,
   ) {}
 
   /**
    * Registers a custom event applier for a specific event type.
-   * 
+   *
    * Allows extending the system with domain-specific event processing logic.
    * Custom appliers take precedence over built-in event handling.
-   * 
+   *
    * @param eventType - The event type to handle (e.g., 'custom-verification')
    * @param applier - The event applier implementation
-   * 
+   *
    * @example
    * ```typescript
    * const verificationApplier: EventApplier = {
@@ -179,7 +178,7 @@ export class EventApplierService {
    *     return updated;
    *   }
    * };
-   * 
+   *
    * service.registerEventApplier('custom-verification', verificationApplier);
    * ```
    */
@@ -189,10 +188,10 @@ export class EventApplierService {
 
   /**
    * Retrieves a registered event applier for a specific event type.
-   * 
+   *
    * @param eventType - The event type to look up
    * @returns The event applier if registered, undefined otherwise
-   * 
+   *
    * @example
    * ```typescript
    * const applier = service.getEventApplier('custom-verification');
@@ -207,14 +206,14 @@ export class EventApplierService {
 
   /**
    * Processes a form submission to create or modify entities through the event sourcing system.
-   * 
+   *
    * This is the main entry point for all entity operations. The method:
    * 1. Validates the form submission data
-   * 2. Saves the event to the event store  
+   * 2. Saves the event to the event store
    * 3. Applies the event to create/update entities
    * 4. Logs audit entries for all changes
    * 5. Flags potential duplicates automatically
-   * 
+   *
    * Supported event types:
    * - `create-group` / `update-group`: Create or modify group entities
    * - `create-individual` / `update-individual`: Create or modify individual entities
@@ -223,11 +222,11 @@ export class EventApplierService {
    * - `delete-entity`: Delete an entity and all its descendants
    * - `resolve-duplicate`: Resolve potential duplicate entities
    * - Custom events: Handled by registered event appliers
-   * 
+   *
    * @param formDataParam - The form submission containing the event data
    * @returns The resulting entity after applying the event, or null if deletion occurred
    * @throws {AppError} When validation fails or required data is missing
-   * 
+   *
    * @example
    * Create an individual:
    * ```typescript
@@ -241,7 +240,7 @@ export class EventApplierService {
    *   syncLevel: SyncLevel.LOCAL
    * });
    * ```
-   * 
+   *
    * @example
    * Create a group with members:
    * ```typescript
@@ -261,7 +260,7 @@ export class EventApplierService {
    *   syncLevel: SyncLevel.LOCAL
    * });
    * ```
-   * 
+   *
    * @example
    * Add member to existing group:
    * ```typescript
@@ -373,19 +372,19 @@ export class EventApplierService {
 
   /**
    * Creates a new individual or updates an existing one based on form data.
-   * 
+   *
    * This method handles the core logic for individual entity management:
    * - Creates new individuals with default values if none exist
    * - Merges form data with existing individual data
    * - Increments version number for optimistic concurrency control
    * - Updates timestamps and external IDs as needed
    * - Saves the entity and logs audit entries
-   * 
+   *
    * @param eventGuid - GUID of the event triggering this operation
    * @param existingIndividual - Current individual entity, if any
    * @param formData - Form submission containing the changes
    * @returns The updated individual entity
-   * 
+   *
    * @private
    */
   private async createOrUpdateIndividual(
@@ -423,7 +422,7 @@ export class EventApplierService {
 
   /**
    * Creates a new group or updates an existing one, including member management.
-   * 
+   *
    * This method handles complex group operations:
    * - Creates new groups with default values if none exist
    * - Processes nested member creation (both individuals and subgroups)
@@ -431,12 +430,12 @@ export class EventApplierService {
    * - Handles recursive group creation for nested structures
    * - Increments version numbers and updates timestamps
    * - Saves the entity and logs audit entries
-   * 
+   *
    * @param eventGuid - GUID of the event triggering this operation
    * @param existingGroup - Current group entity, if any
    * @param formData - Form submission containing the changes and member data
    * @returns The updated group entity
-   * 
+   *
    * @private
    */
   private async createOrUpdateGroup(
@@ -484,7 +483,7 @@ export class EventApplierService {
               data: member,
               type: "create-group",
               timestamp: new Date().toISOString(),
-              userId: this.userId,
+              userId: formData.userId,
               syncLevel: SyncLevel.LOCAL,
             });
             return subGroup.guid;
@@ -495,7 +494,7 @@ export class EventApplierService {
               data: member,
               type: "create-individual",
               timestamp: new Date().toISOString(),
-              userId: this.userId,
+              userId: formData.userId,
               syncLevel: SyncLevel.LOCAL,
             });
             return individualDoc.guid;
@@ -547,19 +546,19 @@ export class EventApplierService {
 
   /**
    * Removes a member from a group with cascading delete support.
-   * 
+   *
    * This method handles member removal with:
    * - Validation of group existence and member ID
    * - Removal of member from the group's memberIds array
    * - Cascading deletion for subgroups (groups that are members)
    * - Version increment and timestamp updates
    * - Audit logging of the removal operation
-   * 
+   *
    * @param eventGuid - GUID of the event triggering this operation
    * @param formData - Form submission containing the member ID to remove
    * @returns The updated group entity
    * @throws {AppError} When group doesn't exist or member ID is missing
-   * 
+   *
    * @private
    */
   async removeMemberFromGroup(eventGuid: string, formData: FormSubmission): Promise<GroupDoc> {
@@ -587,20 +586,20 @@ export class EventApplierService {
 
   /**
    * Adds a member (individual or subgroup) to an existing group.
-   * 
+   *
    * This method handles dynamic member addition with:
    * - Validation of group existence and member data
    * - Creation of new individual or subgroup entities as needed
    * - Prevention of duplicate member additions
    * - Maintenance of memberIds array integrity
    * - Audit logging of the membership change
-   * 
+   *
    * @param eventGuid - GUID of the event triggering this operation
    * @param groupId - ID of the group to add the member to
    * @param formData - Form submission containing member data
    * @returns The updated group entity
    * @throws {AppError} When group doesn't exist or member data is invalid
-   * 
+   *
    * @private
    */
   async addMemberToGroup(eventGuid: string, groupId: string, formData: FormSubmission): Promise<GroupDoc> {
@@ -668,19 +667,19 @@ export class EventApplierService {
 
   /**
    * Recursively deletes an entity and all its dependent entities.
-   * 
+   *
    * This method implements cascading deletion to maintain referential integrity:
    * - For groups: recursively deletes all member entities first
    * - For individuals: deletes the entity directly
    * - Logs audit entries for each deletion
    * - Ensures no orphaned references remain in the system
-   * 
+   *
    * This prevents broken references when groups containing subgroups are deleted.
-   * 
+   *
    * @param entityGuid - GUID of the entity to delete
    * @param eventGuid - GUID of the triggering deletion event
    * @param userId - ID of the user performing the deletion
-   * 
+   *
    * @private
    */
   private async cascadeDeleteEntity(entityGuid: string, eventGuid: string, userId: string): Promise<void> {
@@ -779,24 +778,24 @@ export class EventApplierService {
 
   /**
    * Creates and saves an audit log entry for tracking all system changes.
-   * 
+   *
    * This method generates comprehensive audit trails by:
    * - Creating unique audit entry GUIDs
    * - Recording timestamps, user IDs, and action types
    * - Linking audit entries to their triggering events
    * - Capturing the specific changes made to entities
    * - Supporting tamper-evident logging (signature field for future use)
-   * 
+   *
    * Audit logs provide complete traceability for compliance and debugging.
-   * 
+   *
    * @param userId - ID of the user who performed the action
    * @param action - Type of action performed (e.g., 'create-individual')
    * @param eventGuid - GUID of the related event/form submission
    * @param entityGuid - GUID of the entity that was affected
    * @param changes - Object containing the actual changes made
-   * 
+   *
    * @private
-   * 
+   *
    * TODO: Implement cryptographic signature generation for tamper detection
    */
   private async logAudit(
@@ -845,13 +844,13 @@ export class EventApplierService {
 
   /**
    * Searches entities using the provided criteria.
-   * 
+   *
    * Delegates to the EntityStore's search functionality to find entities
    * matching the specified criteria.
-   * 
+   *
    * @param criteria - Search criteria array with query conditions
    * @returns Array of entity pairs matching the criteria
-   * 
+   *
    * @example
    * ```typescript
    * // Search for adults
@@ -859,7 +858,7 @@ export class EventApplierService {
    *   { "data.age": { $gte: 18 } },
    *   { "type": "individual" }
    * ]);
-   * 
+   *
    * // Search for groups with specific name
    * const smithFamilies = await service.searchEntities([
    *   { "data.name": { $regex: /smith/i } },
@@ -898,20 +897,20 @@ export class EventApplierService {
 
   /**
    * Automatically flags potential duplicate entities based on data similarity.
-   * 
+   *
    * This method implements intelligent duplicate detection by:
    * - Extracting searchable fields from entity data
    * - Building search criteria from non-empty values
    * - Finding entities with similar data patterns
    * - Flagging potential duplicates for manual review
    * - Logging duplicate detection events for audit trails
-   * 
+   *
    * The duplicate detection helps maintain data quality by identifying
    * entities that may represent the same real-world person or group.
-   * 
+   *
    * @param entityGuid - GUID of the entity to check for duplicates
    * @param eventGuid - GUID of the event that created/updated the entity
-   * 
+   *
    * @private
    */
   private async flagPotentialDuplicate(entityGuid: string, eventGuid: string): Promise<void> {
@@ -953,19 +952,19 @@ export class EventApplierService {
 
   /**
    * Extracts searchable fields from entity data for duplicate detection.
-   * 
+   *
    * This method recursively processes entity data to extract primitive values
    * that can be used for similarity matching. It:
    * - Flattens nested object structures using dot notation
    * - Excludes arrays and complex objects from search criteria
    * - Filters out null, undefined, and empty string values
    * - Creates field paths like "data.address.street" for nested properties
-   * 
+   *
    * @param data - The entity data object to process
    * @returns Flattened object with searchable field paths and values
-   * 
+   *
    * @private
-   * 
+   *
    * @example
    * Input: { name: "John", address: { street: "123 Main", city: "Boston" } }
    * Output: { name: "John", "address.street": "123 Main", "address.city": "Boston" }

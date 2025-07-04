@@ -20,14 +20,28 @@ Here's a complete example of an external sync configuration with detailed field 
 
 ```json
 {
-  "type": "openfn-adapter",
-  "url": "https://api.openfn.org/workflow/trigger/abc123",
-  "extraFields": [
-    { "name": "apiKey", "value": "sk_prod_1234567890abcdef" },
-    { "name": "workflowId", "value": "wf_1234567890" },
-    { "name": "batchSize", "value": "50" },
-    { "name": "timeout", "value": "30000" }
-  ]
+  "externalSync": {
+    "type": "openfn-adapter",
+    "url": "https://api.openfn.org/workflow/trigger/abc123",
+    "extraFields": [
+      {
+        "name": "apiKey",
+        "value": "sk_prod_1234567890abcdef"
+      },
+      {
+        "name": "workflowId",
+        "value": "wf_1234567890"
+      },
+      {
+        "name": "batchSize",
+        "value": "50"
+      },
+      {
+        "name": "timeout",
+        "value": "30000"
+      }
+    ]
+  }
 }
 ```
 

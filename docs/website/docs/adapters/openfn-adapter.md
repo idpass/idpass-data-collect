@@ -1,4 +1,4 @@
-# OpenFn Adapter Documentation
+# OpenFn Adapter
 
 The OpenFn adapter enables synchronization with [OpenFn](https://www.openfn.org/), an integration platform for connecting humanitarian and development systems. This adapter allows you to push data from IDPass DataCollect to OpenFn workflows for further processing and integration with external systems.
 

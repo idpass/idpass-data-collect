@@ -22,10 +22,10 @@ import { AuditLogEntry, EventStorageAdapter, EventStore, FormSubmission, SyncLev
 
 /**
  * Merkle tree node for cryptographic integrity verification.
- * 
+ *
  * Each node contains a SHA256 hash and references to left/right child nodes.
  * Used to build tamper-evident Merkle trees for event integrity verification.
- * 
+ *
  * @private
  */
 class MerkleNode {
@@ -44,11 +44,11 @@ class MerkleNode {
 
 /**
  * Event store implementation providing tamper-evident event sourcing with Merkle tree integrity.
- * 
+ *
  * The EventStoreImpl is the core component for managing immutable event storage with cryptographic
  * integrity verification. It implements complete event sourcing capabilities including audit trails,
  * Merkle tree verification, and sync timestamp management.
- * 
+ *
  * Key features:
  * - **Immutable Event Storage**: All events are stored as immutable records
  * - **Merkle Tree Integrity**: Cryptographic verification of event integrity using SHA256
@@ -57,24 +57,23 @@ class MerkleNode {
  * - **Event Verification**: Merkle proof generation and verification
  * - **Pagination Support**: Efficient handling of large event datasets
  * - **Tamper Detection**: Cryptographic detection of unauthorized modifications
- * 
+ *
  * Architecture:
  * - Uses pluggable storage adapters for different persistence backends
  * - Maintains in-memory Merkle tree for fast integrity verification
  * - Implements event sourcing patterns with append-only semantics
  * - Provides both sync and async operations for different use cases
  * - Supports multiple sync levels (LOCAL, REMOTE, EXTERNAL)
- * 
+ *
  * @example
  * Basic usage:
  * ```typescript
  * const eventStore = new EventStoreImpl(
- *   'user-123',
  *   storageAdapter
  * );
- * 
+ *
  * await eventStore.initialize();
- * 
+ *
  * // Save an event
  * const eventId = await eventStore.saveEvent({
  *   guid: 'event-456',
@@ -85,18 +84,18 @@ class MerkleNode {
  *   userId: 'user-123',
  *   syncLevel: SyncLevel.LOCAL
  * });
- * 
+ *
  * // Verify integrity
  * const merkleRoot = eventStore.getMerkleRoot();
  * console.log('Current Merkle root:', merkleRoot);
  * ```
- * 
+ *
  * @example
  * Event verification with Merkle proofs:
  * ```typescript
  * // Get proof for an event
  * const proof = await eventStore.getProof(event);
- * 
+ *
  * // Verify event integrity
  * const isValid = eventStore.verifyEvent(event, proof);
  * if (isValid) {
@@ -105,7 +104,7 @@ class MerkleNode {
  *   console.error('Event has been tampered with!');
  * }
  * ```
- * 
+ *
  * @example
  * Audit trail management:
  * ```typescript
@@ -120,26 +119,26 @@ class MerkleNode {
  *   changes: { name: 'John Doe' },
  *   signature: 'sha256:...'
  * });
- * 
+ *
  * // Get audit trail for entity
  * const auditTrail = await eventStore.getAuditTrailByEntityGuid('person-101');
  * auditTrail.forEach(entry => {
  *   console.log(`${entry.timestamp}: ${entry.action} by ${entry.userId}`);
  * });
  * ```
- * 
+ *
  * @example
  * Sync operations:
  * ```typescript
  * // Check for events since last sync
  * const lastSync = await eventStore.getLastRemoteSyncTimestamp();
  * const newEvents = await eventStore.getEventsSince(lastSync);
- * 
+ *
  * if (newEvents.length > 0) {
  *   console.log(`${newEvents.length} events to sync`);
- *   
+ *
  *   // Process sync...
- *   
+ *
  *   // Update sync timestamp
  *   await eventStore.setLastRemoteSyncTimestamp(new Date().toISOString());
  * }
@@ -151,25 +150,21 @@ export class EventStoreImpl implements EventStore {
 
   /**
    * Creates a new EventStoreImpl instance.
-   * 
-   * @param userId - Default user ID for system-generated events
+   *
    * @param storageAdapter - Storage adapter for persistence (IndexedDB, PostgreSQL, etc.)
-   * 
+   *
    * @example
    * ```typescript
    * // With IndexedDB for browser
    * const indexedDbAdapter = new IndexedDbEventStorageAdapter('tenant-123');
-   * const browserEventStore = new EventStoreImpl('user-456', indexedDbAdapter);
-   * 
+   * const browserEventStore = new EventStoreImpl(indexedDbAdapter);
+   *
    * // With PostgreSQL for server
    * const postgresAdapter = new PostgresEventStorageAdapter(connectionString, 'tenant-123');
-   * const serverEventStore = new EventStoreImpl('system', postgresAdapter);
+   * const serverEventStore = new EventStoreImpl(postgresAdapter);
    * ```
    */
-  constructor(
-    private userId: string,
-    storageAdapter: EventStorageAdapter,
-  ) {
+  constructor(storageAdapter: EventStorageAdapter) {
     this.storageAdapter = storageAdapter;
   }
 
@@ -183,18 +178,18 @@ export class EventStoreImpl implements EventStore {
 
   /**
    * Initializes the event store and loads the Merkle tree for integrity verification.
-   * 
+   *
    * This method must be called before any other operations. It:
    * - Initializes the underlying storage adapter
    * - Loads existing events to rebuild the Merkle tree
    * - Prepares the store for cryptographic verification
-   * 
+   *
    * @throws {Error} When storage initialization fails
-   * 
+   *
    * @example
    * ```typescript
-   * const eventStore = new EventStoreImpl(userId, storageAdapter);
-   * 
+   * const eventStore = new EventStoreImpl(storageAdapter);
+   *
    * try {
    *   await eventStore.initialize();
    *   console.log('Event store ready');
@@ -239,14 +234,14 @@ export class EventStoreImpl implements EventStore {
 
   /**
    * Saves an event and updates the Merkle tree for integrity verification.
-   * 
+   *
    * The event is stored immutably and the Merkle tree is rebuilt to include
    * the new event. This ensures cryptographic integrity of the entire event log.
-   * 
+   *
    * @param form - Form submission/event to save
    * @returns Unique identifier for the saved event
    * @throws {Error} When event storage fails
-   * 
+   *
    * @example
    * ```typescript
    * const eventId = await eventStore.saveEvent({
@@ -258,7 +253,7 @@ export class EventStoreImpl implements EventStore {
    *   userId: 'user-789',
    *   syncLevel: SyncLevel.LOCAL
    * });
-   * 
+   *
    * console.log('Event saved with ID:', eventId);
    * ```
    */
@@ -283,20 +278,20 @@ export class EventStoreImpl implements EventStore {
 
   /**
    * Gets the current Merkle tree root hash for integrity verification.
-   * 
+   *
    * The root hash represents the cryptographic fingerprint of all events
    * in the store. Any modification to any event will change this hash.
-   * 
+   *
    * @returns SHA256 hash of the Merkle tree root, or empty string if no events
-   * 
+   *
    * @example
    * ```typescript
    * const rootHash = eventStore.getMerkleRoot();
    * console.log('Current integrity hash:', rootHash);
-   * 
+   *
    * // Store this hash for later verification
    * const storedHash = rootHash;
-   * 
+   *
    * // Later, after potential tampering...
    * const currentHash = eventStore.getMerkleRoot();
    * if (currentHash !== storedHash) {
@@ -310,22 +305,22 @@ export class EventStoreImpl implements EventStore {
 
   /**
    * Verifies an event's integrity using a Merkle proof.
-   * 
+   *
    * This method cryptographically verifies that an event has not been tampered
    * with by checking its Merkle proof against the current root hash.
-   * 
+   *
    * @param event - Event to verify
    * @param proof - Merkle proof path (array of sibling hashes)
    * @returns True if event is authentic and untampered, false otherwise
-   * 
+   *
    * @example
    * ```typescript
    * // Get proof for an event
    * const proof = await eventStore.getProof(suspiciousEvent);
-   * 
+   *
    * // Verify the event
    * const isValid = eventStore.verifyEvent(suspiciousEvent, proof);
-   * 
+   *
    * if (isValid) {
    *   console.log('Event integrity verified - data is authentic');
    * } else {

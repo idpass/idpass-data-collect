@@ -23,7 +23,7 @@ ID PASS DataCollect is a TypeScript library that provides a comprehensive offlin
 - **Pluggable Storage**: IndexedDB for browsers, PostgreSQL for servers
 - **Cryptographic Integrity**: SHA256-based Merkle tree for data verification
 - **Duplicate Detection**: Automatic detection of potential duplicate entities
-- **External Integration**: Built-in adapters for OpenSPP and other systems
+- **External Integration**: Built-in adapters for OpenSPP, OpenFn and other systems
 
 ## Installation
 
@@ -36,90 +36,85 @@ npm install idpass-data-collect
 ### Browser Environment
 
 ```typescript
-import { 
-  EntityDataManager, 
-  EventStoreImpl, 
+import {
+  EntityDataManager,
+  EventStoreImpl,
   EntityStoreImpl,
   EventApplierService,
   IndexedDbEntityStorageAdapter,
   IndexedDbEventStorageAdapter,
-  SyncLevel
-} from 'idpass-data-collect';
+  SyncLevel,
+} from "idpass-data-collect";
 
 // Initialize storage adapters
-const entityAdapter = new IndexedDbEntityStorageAdapter('tenant-123');
-const eventAdapter = new IndexedDbEventStorageAdapter('tenant-123');
+const entityAdapter = new IndexedDbEntityStorageAdapter("tenant-123");
+const eventAdapter = new IndexedDbEventStorageAdapter("tenant-123");
 
 // Initialize stores
 const entityStore = new EntityStoreImpl(entityAdapter);
-const eventStore = new EventStoreImpl('user-456', eventAdapter);
-const eventApplierService = new EventApplierService('user-456', eventStore, entityStore);
+const eventStore = new EventStoreImpl("user-456", eventAdapter);
+const eventApplierService = new EventApplierService("user-456", eventStore, entityStore);
 
 // Initialize manager
 const manager = new EntityDataManager(eventStore, entityStore, eventApplierService);
 
 // Initialize everything
-await Promise.all([
-  entityStore.initialize(),
-  eventStore.initialize()
-]);
+await Promise.all([entityStore.initialize(), eventStore.initialize()]);
 
 // Create an individual
 const individual = await manager.submitForm({
-  guid: 'form-123',
-  entityGuid: 'person-456', 
-  type: 'create-individual',
-  data: { name: 'John Doe', age: 30 },
+  guid: "form-123",
+  entityGuid: "person-456",
+  type: "create-individual",
+  data: { name: "John Doe", age: 30 },
   timestamp: new Date().toISOString(),
-  userId: 'user-456',
-  syncLevel: SyncLevel.LOCAL
+  userId: "user-456",
+  syncLevel: SyncLevel.LOCAL,
 });
 ```
 
 ### Server Environment
 
 ```typescript
-import { 
+import {
   EntityDataManager,
   EventStoreImpl,
   EntityStoreImpl,
   EventApplierService,
   PostgresEntityStorageAdapter,
-  PostgresEventStorageAdapter
-} from 'idpass-data-collect';
+  PostgresEventStorageAdapter,
+} from "idpass-data-collect";
 
 // Initialize PostgreSQL adapters
 const entityAdapter = new PostgresEntityStorageAdapter(
-  'postgresql://user:pass@localhost:5432/datacollect',
-  'tenant-123'
+  "postgresql://user:pass@localhost:5432/datacollect",
+  "tenant-123",
 );
-const eventAdapter = new PostgresEventStorageAdapter(
-  'postgresql://user:pass@localhost:5432/datacollect', 
-  'tenant-123'
-);
+const eventAdapter = new PostgresEventStorageAdapter("postgresql://user:pass@localhost:5432/datacollect", "tenant-123");
 
 // Initialize stores and manager
 const entityStore = new EntityStoreImpl(entityAdapter);
-const eventStore = new EventStoreImpl('system', eventAdapter);
-const eventApplierService = new EventApplierService('system', eventStore, entityStore);
+const eventStore = new EventStoreImpl("system", eventAdapter);
+const eventApplierService = new EventApplierService("system", eventStore, entityStore);
 const manager = new EntityDataManager(eventStore, entityStore, eventApplierService);
 ```
 
 ## Core Concepts
 
 ### Event Sourcing
+
 All changes to entities are stored as immutable events with cryptographic integrity verification:
 
 ```typescript
 // Events create the audit trail
 const createEvent = {
-  guid: 'event-123',
-  entityGuid: 'person-456',
-  type: 'create-individual',
-  data: { name: 'John Doe', age: 30 },
+  guid: "event-123",
+  entityGuid: "person-456",
+  type: "create-individual",
+  data: { name: "John Doe", age: 30 },
   timestamp: new Date().toISOString(),
-  userId: 'user-123',
-  syncLevel: SyncLevel.LOCAL
+  userId: "user-123",
+  syncLevel: SyncLevel.LOCAL,
 };
 
 // Submit the event
@@ -127,31 +122,33 @@ const entity = await manager.submitForm(createEvent);
 ```
 
 ### Entity State Management
+
 Entities maintain both initial state (from last sync) and current state (after applying events):
 
 ```typescript
-const entityPair = await manager.getEntity('person-456');
-console.log('Initial state:', entityPair.initial);   // State when loaded/synced
-console.log('Current state:', entityPair.modified);  // Current state after events
-console.log('Has changes:', entityPair.initial.version !== entityPair.modified.version);
+const entityPair = await manager.getEntity("person-456");
+console.log("Initial state:", entityPair.initial); // State when loaded/synced
+console.log("Current state:", entityPair.modified); // Current state after events
+console.log("Has changes:", entityPair.initial.version !== entityPair.modified.version);
 ```
 
 ### Synchronization
+
 Multi-level sync supports offline operations with eventual consistency:
 
 ```typescript
 // Check for local changes
 if (await manager.hasUnsyncedEvents()) {
   console.log(`${await manager.getUnsyncedEventsCount()} events to sync`);
-  
+
   // Sync with server
   await manager.syncWithSyncServer();
 }
 
 // Sync with external systems
 await manager.syncWithExternalSystem({
-  username: 'sync_user',
-  password: 'sync_password'
+  username: "sync_user",
+  password: "sync_password",
 });
 ```
 

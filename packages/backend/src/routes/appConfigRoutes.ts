@@ -167,12 +167,13 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
     ) {
       return;
     }
-    set(appConfig, "syncServerUrl", `${req.headers.host}`);
+    const fullUrl = req.protocol + "://" + req.get("host");
+    set(appConfig, "syncServerUrl", fullUrl);
     const publicJson = JSON.stringify(appConfig, null, 2);
 
     await fs.writeFile(publicJsonPath, publicJson);
     // get public json url with current host and port
-    const publicJsonUrl = `${req.headers.host}/${id}.json`;
+    const publicJsonUrl = `${fullUrl}/${id}.json`;
 
     // write publicJsonUrl to qr code
     const qrPath = path.join(__dirname, "..", "public", `${id}.png`);

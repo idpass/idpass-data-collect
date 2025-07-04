@@ -2,7 +2,7 @@
 
 # Class: EventStoreImpl
 
-Defined in: [components/EventStore.ts:148](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L148)
+Defined in: [components/EventStore.ts:147](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L147)
 
 Event store implementation providing tamper-evident event sourcing with Merkle tree integrity.
 
@@ -31,7 +31,6 @@ Architecture:
 Basic usage:
 ```typescript
 const eventStore = new EventStoreImpl(
-  'user-123',
   storageAdapter
 );
 
@@ -96,9 +95,9 @@ const newEvents = await eventStore.getEventsSince(lastSync);
 
 if (newEvents.length > 0) {
   console.log(`${newEvents.length} events to sync`);
-  
+
   // Process sync...
-  
+
   // Update sync timestamp
   await eventStore.setLastRemoteSyncTimestamp(new Date().toISOString());
 }
@@ -112,19 +111,13 @@ if (newEvents.length > 0) {
 
 ### Constructor
 
-> **new EventStoreImpl**(`userId`, `storageAdapter`): `EventStoreImpl`
+> **new EventStoreImpl**(`storageAdapter`): `EventStoreImpl`
 
-Defined in: [components/EventStore.ts:169](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L169)
+Defined in: [components/EventStore.ts:167](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L167)
 
 Creates a new EventStoreImpl instance.
 
 #### Parameters
-
-##### userId
-
-`string`
-
-Default user ID for system-generated events
 
 ##### storageAdapter
 
@@ -141,11 +134,11 @@ Storage adapter for persistence (IndexedDB, PostgreSQL, etc.)
 ```typescript
 // With IndexedDB for browser
 const indexedDbAdapter = new IndexedDbEventStorageAdapter('tenant-123');
-const browserEventStore = new EventStoreImpl('user-456', indexedDbAdapter);
+const browserEventStore = new EventStoreImpl(indexedDbAdapter);
 
 // With PostgreSQL for server
 const postgresAdapter = new PostgresEventStorageAdapter(connectionString, 'tenant-123');
-const serverEventStore = new EventStoreImpl('system', postgresAdapter);
+const serverEventStore = new EventStoreImpl(postgresAdapter);
 ```
 
 ## Methods
@@ -154,7 +147,7 @@ const serverEventStore = new EventStoreImpl('system', postgresAdapter);
 
 > **updateSyncLevelFromEvents**(`events`): `Promise`\<`void`\>
 
-Defined in: [components/EventStore.ts:176](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L176)
+Defined in: [components/EventStore.ts:171](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L171)
 
 Update sync levels for multiple events
 
@@ -178,7 +171,7 @@ Update sync levels for multiple events
 
 > **closeConnection**(): `Promise`\<`void`\>
 
-Defined in: [components/EventStore.ts:180](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L180)
+Defined in: [components/EventStore.ts:175](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L175)
 
 Close database connections and cleanup resources
 
@@ -196,7 +189,7 @@ Close database connections and cleanup resources
 
 > **initialize**(): `Promise`\<`void`\>
 
-Defined in: [components/EventStore.ts:206](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L206)
+Defined in: [components/EventStore.ts:201](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L201)
 
 Initializes the event store and loads the Merkle tree for integrity verification.
 
@@ -216,7 +209,7 @@ When storage initialization fails
 #### Example
 
 ```typescript
-const eventStore = new EventStoreImpl(userId, storageAdapter);
+const eventStore = new EventStoreImpl(storageAdapter);
 
 try {
   await eventStore.initialize();
@@ -236,7 +229,7 @@ try {
 
 > **saveEvent**(`form`): `Promise`\<`string`\>
 
-Defined in: [components/EventStore.ts:265](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L265)
+Defined in: [components/EventStore.ts:260](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L260)
 
 Saves an event and updates the Merkle tree for integrity verification.
 
@@ -287,7 +280,7 @@ console.log('Event saved with ID:', eventId);
 
 > **getEvents**(): `Promise`\<[`FormSubmission`](../interfaces/FormSubmission.md)[]\>
 
-Defined in: [components/EventStore.ts:272](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L272)
+Defined in: [components/EventStore.ts:267](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L267)
 
 Get events with optional filtering
 
@@ -305,7 +298,7 @@ Get events with optional filtering
 
 > **getAllEvents**(): `Promise`\<[`FormSubmission`](../interfaces/FormSubmission.md)[]\>
 
-Defined in: [components/EventStore.ts:276](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L276)
+Defined in: [components/EventStore.ts:271](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L271)
 
 Get all events in the store
 
@@ -323,7 +316,7 @@ Get all events in the store
 
 > **isEventExisted**(`guid`): `Promise`\<`boolean`\>
 
-Defined in: [components/EventStore.ts:280](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L280)
+Defined in: [components/EventStore.ts:275](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L275)
 
 Check if an event with the given GUID exists
 
@@ -347,7 +340,7 @@ Check if an event with the given GUID exists
 
 > **getMerkleRoot**(): `string`
 
-Defined in: [components/EventStore.ts:307](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L307)
+Defined in: [components/EventStore.ts:302](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L302)
 
 Gets the current Merkle tree root hash for integrity verification.
 
@@ -386,7 +379,7 @@ if (currentHash !== storedHash) {
 
 > **verifyEvent**(`event`, `proof`): `boolean`
 
-Defined in: [components/EventStore.ts:337](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L337)
+Defined in: [components/EventStore.ts:332](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L332)
 
 Verifies an event's integrity using a Merkle proof.
 
@@ -440,7 +433,7 @@ if (isValid) {
 
 > **getProof**(`event`): `Promise`\<`string`[]\>
 
-Defined in: [components/EventStore.ts:352](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L352)
+Defined in: [components/EventStore.ts:347](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L347)
 
 Get Merkle tree proof for an event
 
@@ -464,7 +457,7 @@ Get Merkle tree proof for an event
 
 > **logAuditEntry**(`entry`): `Promise`\<`void`\>
 
-Defined in: [components/EventStore.ts:378](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L378)
+Defined in: [components/EventStore.ts:373](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L373)
 
 Log a single audit entry
 
@@ -488,7 +481,7 @@ Log a single audit entry
 
 > **saveAuditLogs**(`entries`): `Promise`\<`void`\>
 
-Defined in: [components/EventStore.ts:382](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L382)
+Defined in: [components/EventStore.ts:377](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L377)
 
 Save multiple audit log entries
 
@@ -512,7 +505,7 @@ Save multiple audit log entries
 
 > **clearStore**(): `Promise`\<`void`\>
 
-Defined in: [components/EventStore.ts:394](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L394)
+Defined in: [components/EventStore.ts:389](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L389)
 
 Clear all data from the store (for testing)
 
@@ -530,7 +523,7 @@ Clear all data from the store (for testing)
 
 > **updateEventSyncLevel**(`id`, `syncLevel`): `Promise`\<`void`\>
 
-Defined in: [components/EventStore.ts:399](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L399)
+Defined in: [components/EventStore.ts:394](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L394)
 
 Update the sync level of an event
 
@@ -558,7 +551,7 @@ Update the sync level of an event
 
 > **updateAuditLogSyncLevel**(`entityId`, `syncLevel`): `Promise`\<`void`\>
 
-Defined in: [components/EventStore.ts:403](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L403)
+Defined in: [components/EventStore.ts:398](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L398)
 
 Update the sync level of an audit log entry
 
@@ -586,7 +579,7 @@ Update the sync level of an audit log entry
 
 > **getEventsSince**(`timestamp`): `Promise`\<[`FormSubmission`](../interfaces/FormSubmission.md)[]\>
 
-Defined in: [components/EventStore.ts:407](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L407)
+Defined in: [components/EventStore.ts:402](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L402)
 
 Get events created since a specific timestamp
 
@@ -610,7 +603,7 @@ Get events created since a specific timestamp
 
 > **getEventsSincePagination**(`timestamp`, `limit`): `Promise`\<\{ `events`: [`FormSubmission`](../interfaces/FormSubmission.md)[]; `nextCursor`: `null` \| `string` \| `Date`; \}\>
 
-Defined in: [components/EventStore.ts:411](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L411)
+Defined in: [components/EventStore.ts:406](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L406)
 
 Get events since timestamp with pagination support (10 events/page default)
 
@@ -638,7 +631,7 @@ Get events since timestamp with pagination support (10 events/page default)
 
 > **getAuditLogsSince**(`timestamp`): `Promise`\<[`AuditLogEntry`](../interfaces/AuditLogEntry.md)[]\>
 
-Defined in: [components/EventStore.ts:418](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L418)
+Defined in: [components/EventStore.ts:413](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L413)
 
 Get audit logs created since a specific timestamp
 
@@ -662,7 +655,7 @@ Get audit logs created since a specific timestamp
 
 > **getLastRemoteSyncTimestamp**(): `Promise`\<`string`\>
 
-Defined in: [components/EventStore.ts:422](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L422)
+Defined in: [components/EventStore.ts:417](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L417)
 
 Get the timestamp of the last remote sync
 
@@ -680,7 +673,7 @@ Get the timestamp of the last remote sync
 
 > **setLastRemoteSyncTimestamp**(`timestamp`): `Promise`\<`void`\>
 
-Defined in: [components/EventStore.ts:426](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L426)
+Defined in: [components/EventStore.ts:421](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L421)
 
 Set the timestamp of the last remote sync
 
@@ -704,7 +697,7 @@ Set the timestamp of the last remote sync
 
 > **getLastLocalSyncTimestamp**(): `Promise`\<`string`\>
 
-Defined in: [components/EventStore.ts:430](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L430)
+Defined in: [components/EventStore.ts:425](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L425)
 
 Get the timestamp of the last local sync
 
@@ -722,7 +715,7 @@ Get the timestamp of the last local sync
 
 > **setLastLocalSyncTimestamp**(`timestamp`): `Promise`\<`void`\>
 
-Defined in: [components/EventStore.ts:434](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L434)
+Defined in: [components/EventStore.ts:429](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L429)
 
 Set the timestamp of the last local sync
 
@@ -746,7 +739,7 @@ Set the timestamp of the last local sync
 
 > **getLastPullExternalSyncTimestamp**(): `Promise`\<`string`\>
 
-Defined in: [components/EventStore.ts:438](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L438)
+Defined in: [components/EventStore.ts:433](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L433)
 
 Get the timestamp of the last external sync pull
 
@@ -764,7 +757,7 @@ Get the timestamp of the last external sync pull
 
 > **setLastPullExternalSyncTimestamp**(`timestamp`): `Promise`\<`void`\>
 
-Defined in: [components/EventStore.ts:442](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L442)
+Defined in: [components/EventStore.ts:437](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L437)
 
 Set the timestamp of the last external sync pull
 
@@ -788,7 +781,7 @@ Set the timestamp of the last external sync pull
 
 > **getLastPushExternalSyncTimestamp**(): `Promise`\<`string`\>
 
-Defined in: [components/EventStore.ts:446](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L446)
+Defined in: [components/EventStore.ts:441](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L441)
 
 Get the timestamp of the last external sync push
 
@@ -806,7 +799,7 @@ Get the timestamp of the last external sync push
 
 > **setLastPushExternalSyncTimestamp**(`timestamp`): `Promise`\<`void`\>
 
-Defined in: [components/EventStore.ts:450](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L450)
+Defined in: [components/EventStore.ts:445](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L445)
 
 Set the timestamp of the last external sync push
 
@@ -830,7 +823,7 @@ Set the timestamp of the last external sync push
 
 > **getAuditTrailByEntityGuid**(`entityGuid`): `Promise`\<[`AuditLogEntry`](../interfaces/AuditLogEntry.md)[]\>
 
-Defined in: [components/EventStore.ts:454](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L454)
+Defined in: [components/EventStore.ts:449](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/components/EventStore.ts#L449)
 
 Get complete audit trail for a specific entity
 

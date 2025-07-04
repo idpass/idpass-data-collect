@@ -6,7 +6,7 @@
 
 # Interface: ExternalSyncAdapter
 
-Defined in: [interfaces/types.ts:656](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/interfaces/types.ts#L656)
+Defined in: [interfaces/types.ts:660](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/interfaces/types.ts#L660)
 
 External sync adapter interface for third-party system integration.
 
@@ -18,7 +18,7 @@ Implementations handle the specifics of syncing with different external systems.
 
 > **sync**(`credentials?`): `Promise`\<`void`\>
 
-Defined in: [interfaces/types.ts:658](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/interfaces/types.ts#L658)
+Defined in: [interfaces/types.ts:662](https://github.com/idpass/idpass-data-collect/blob/main/packages/datacollect/src/interfaces/types.ts#L662)
 
 Perform synchronization with the external system
 

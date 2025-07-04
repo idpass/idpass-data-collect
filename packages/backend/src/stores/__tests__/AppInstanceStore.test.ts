@@ -9,7 +9,6 @@ describe("AppInstanceStore", () => {
   let appInstanceStore: AppInstanceStoreImpl;
   let appConfigStore: AppConfigStoreImpl;
   let pool: Pool;
-  const userId = "test-user";
 
   const mockConfig: AppConfig = {
     id: "test-config-1",
@@ -63,7 +62,7 @@ describe("AppInstanceStore", () => {
     await appConfigStore.initialize();
     await appConfigStore.saveConfig(mockConfig);
 
-    appInstanceStore = new AppInstanceStoreImpl(appConfigStore, userId, process.env.POSTGRES_TEST || "");
+    appInstanceStore = new AppInstanceStoreImpl(appConfigStore, process.env.POSTGRES_TEST || "");
   });
 
   afterEach(async () => {

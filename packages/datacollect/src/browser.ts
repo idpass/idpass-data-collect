@@ -27,3 +27,6 @@ export * from "./interfaces/types";
 export * from "./services/EventApplierService";
 export * from "./storage/IndexedDbEntityStorageAdapter";
 export * from "./storage/IndexedDbEventStorageAdapter";
+export * from "./components/AuthManager";
+export * from "./storage/IndexedDbAuthStorageAdapter";
+export * from "./services/SingleAuthStorageImpl";

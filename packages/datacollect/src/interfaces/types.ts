@@ -671,3 +671,119 @@ export interface ExternalSyncCredentials {
   /** Password for basic authentication */
   password: string;
 }
+
+/**
+ * OpenID Connect (OIDC) configuration for authentication.
+ *
+ * Defines the configuration parameters needed to integrate with an OIDC provider
+ * for user authentication and authorization flows.
+ *
+ * @example
+ * ```typescript
+ * const oidcConfig: OIDCConfig = {
+ *   authority: "https://auth.example.com",
+ *   client_id: "datacollect-app",
+ *   redirect_uri: "https://app.example.com/callback",
+ *   post_logout_redirect_uri: "https://app.example.com/logout",
+ *   response_type: "code",
+ *   scope: "openid profile email",
+ *   state: "random-state-value",
+ *   custom: { tenant: "production" }
+ * };
+ * ```
+ */
+export interface OIDCConfig {
+  /** The OIDC provider's base URL (issuer identifier) */
+  authority: string;
+  /** Client identifier registered with the OIDC provider */
+  client_id: string;
+  /** URI where the OIDC provider redirects after successful authentication */
+  redirect_uri: string;
+  /** URI where the OIDC provider redirects after logout */
+  post_logout_redirect_uri: string;
+  /** OAuth 2.0 response type (typically "code" for authorization code flow) */
+  response_type: string;
+  /** Space-separated list of requested scopes (e.g., "openid profile email") */
+  scope: string;
+  /** Optional state parameter for CSRF protection during auth flow */
+  state?: string;
+  /** Optional custom parameters specific to the OIDC provider */
+  extraQueryParams?: Record<string, string>;
+}
+
+/**
+ * Authentication result returned after successful OIDC authentication.
+ *
+ * Contains the tokens and metadata received from the OIDC provider
+ * after a successful authentication flow.
+ *
+ * @example
+ * ```typescript
+ * const authResult: AuthResult = {
+ *   access_token: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+ *   id_token: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+ *   refresh_token: "def50200a1b2c3d4e5f6...",
+ *   expires_in: 3600,
+ *   profile: {
+ *     sub: "user-123",
+ *     name: "John Doe",
+ *     email: "john.doe@example.com"
+ *   }
+ * };
+ * ```
+ */
+export interface AuthResult {
+  /** JWT access token for API authentication */
+  access_token: string;
+  /** Optional JWT ID token containing user identity claims */
+  id_token?: string;
+  /** Optional refresh token for obtaining new access tokens */
+  refresh_token?: string;
+  /** Token lifetime in seconds from issuance */
+  expires_in: number;
+  /** Optional user profile information extracted from tokens */
+  profile?: Record<string, string>; // Optional profile information
+  user_metadata?: Record<string, string>;
+}
+
+export interface AuthConfig {
+  type: string;
+  fields: Record<string, string>;
+}
+
+export interface PasswordCredentials {
+  username: string;
+  password: string;
+}
+
+export interface TokenCredentials {
+  token: string;
+}
+
+export interface AuthAdapter {
+  initialize(): Promise<void>;
+  isAuthenticated(): Promise<boolean>;
+  login(credentials: PasswordCredentials | TokenCredentials | null): Promise<{ username: string; token: string }>;
+  logout(): Promise<void>;
+  validateToken(token: string): Promise<boolean>;
+  handleCallback(): Promise<void>;
+}
+
+export interface AuthStorageAdapter {
+  initialize(): Promise<void>;
+  getUsername(): Promise<string>;
+  getToken(): Promise<{ provider: string; token: string } | null>;
+  getTokenByProvider(provider: string): Promise<string>;
+  setUsername(username: string): Promise<void>;
+  setToken(provider: string, token: string): Promise<void>;
+  removeToken(provider: string): Promise<void>;
+  removeAllTokens(): Promise<void>;
+  closeConnection(): Promise<void>;
+  clearStore(): Promise<void>;
+}
+
+export interface SingleAuthStorage {
+  getToken(): Promise<string>;
+  setToken(token: string): Promise<void>;
+  removeToken(): Promise<void>;
+}
