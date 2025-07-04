@@ -133,20 +133,20 @@ export function useErrorHandler(appId?: string) {
       return 'Authentication redirect failed. Please try again or contact support.'
     }
     
-    if (errorStr.includes('token') || errorStr.includes('invalid')) {
-      return 'Authentication token invalid. Please try signing in again.'
-    }
-    
-    if (errorStr.includes('network') || errorStr.includes('connection')) {
-      return 'Network connection lost during authentication. Please check your connection and try again.'
-    }
-    
     if (errorStr.includes('state') || errorStr.includes('csrf')) {
       return 'Authentication security check failed. Please try signing in again.'
     }
     
     if (errorStr.includes('code') || errorStr.includes('authorization')) {
       return 'Authorization code invalid. Please try signing in again.'
+    }
+    
+    if (errorStr.includes('token') || errorStr.includes('invalid')) {
+      return 'Authentication token invalid. Please try signing in again.'
+    }
+    
+    if (errorStr.includes('network') || errorStr.includes('connection')) {
+      return 'Network connection lost during authentication. Please check your connection and try again.'
     }
 
     // Check for backend error message first
