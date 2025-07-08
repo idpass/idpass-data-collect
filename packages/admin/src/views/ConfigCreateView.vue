@@ -11,6 +11,7 @@ import merge from 'lodash/merge'
 type EntityForm = {
   name: string
   title: string
+  selfServiceUser: boolean
   dependsOn: string
   formio: unknown
 }
@@ -57,7 +58,7 @@ const nameError = ref('')
 const descriptionError = ref('')
 const entityFormsError = ref('')
 const itemEntityFormsError = ref<{
-  [key: string]: { name: string; title: string; formio: string }
+  [key: string]: { name: string; title: string; formio: string; selfServiceUser: string }
 }>({})
 const typeError = ref('')
 const urlError = ref('')
@@ -299,6 +300,7 @@ const addEntityForm = () => {
     name: '',
     title: '',
     dependsOn: '',
+    selfServiceUser: false,
     formio: null,
   })
 }
@@ -403,9 +405,15 @@ const removeAuthConfig = (index: number) => {
                     : ''
                 "
               ></v-select>
+              <v-checkbox
+                v-model="entityForm.selfServiceUser"
+                label="Self Service User"
+                hint="If checked, this entity will be used for self service user creation"
+                :error-messages="itemEntityFormsError[entityForm.name]?.selfServiceUser"
+              ></v-checkbox>
               <v-btn
                 v-if="!entityForm.formio"
-                class="mt-2"
+                class="mt-4"
                 prepend-icon="mdi-file-document-outline"
                 size="small"
                 @click="buildFormio(entityForm)"
