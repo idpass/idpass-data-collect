@@ -102,6 +102,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
       }
       const edm = appInstance.edm;
 
+      // Create entities for sync server
       for (const event of sorted) {
         event.syncLevel = 1;
         try {

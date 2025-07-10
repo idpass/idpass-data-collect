@@ -125,3 +125,23 @@ export interface AppInstanceStore {
   clearStore(): Promise<void>;
   closeConnection(): Promise<void>;
 }
+
+export interface SelfServiceUser {
+  id: number;
+  guid: string;
+  email: string;
+  phone?: string;
+  configId: string;
+  registeredAuthProviders: string[];
+}
+
+export interface SelfServiceUserStore {
+  initialize(): Promise<void>;
+  saveUser(configId: string, guid: string, email: string, phone?: string): Promise<void>;
+  getUser(configId: string, guid: string): Promise<SelfServiceUser | null>;
+  addRegisteredAuthProviders(configId: string, guid: string, registeredAuthProviders: string[]): Promise<void>;
+  removeRegisteredAuthProviders(configId: string, guid: string, registeredAuthProviders: string[]): Promise<void>;
+  deleteUser(configId: string, guid: string): Promise<void>;
+  clearStore(): Promise<void>;
+  closeConnection(): Promise<void>;
+}

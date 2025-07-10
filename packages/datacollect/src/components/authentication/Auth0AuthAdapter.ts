@@ -23,8 +23,8 @@ import axios from "axios";
 
 export class Auth0AuthAdapter implements AuthAdapter {
   private oidc: OIDCClient;
-  private appType: 'backend' | 'frontend' = 'backend';
-  
+  private appType: "backend" | "frontend" = "backend";
+
   constructor(
     private authStorage: SingleAuthStorage | null,
     public config: AuthConfig,
@@ -42,7 +42,11 @@ export class Auth0AuthAdapter implements AuthAdapter {
       },
     };
     this.oidc = new OIDCClient(oidcConfig);
-    this.appType = typeof window !== 'undefined' && window.localStorage ? 'frontend' : 'backend';
+    this.appType = typeof window !== "undefined" && window.localStorage ? "frontend" : "backend";
+  }
+
+  createUser(): Promise<void> {
+    throw new Error("Method not implemented.");
   }
 
   async initialize(): Promise<void> {
@@ -71,7 +75,7 @@ export class Auth0AuthAdapter implements AuthAdapter {
   }
 
   async validateToken(token: string): Promise<boolean> {
-    if (this.appType === 'frontend') {
+    if (this.appType === "frontend") {
       return this.validateTokenClient(token);
     } else {
       return this.validateTokenServer(token);
@@ -79,9 +83,7 @@ export class Auth0AuthAdapter implements AuthAdapter {
   }
 
   private async validateTokenServer(token: string): Promise<boolean> {
-   
     try {
-     
       // Use userinfo validation since crypto module is not available in browsers
       console.log("Using userinfo validation for Auth0 token");
       return this.checkTokenActive(token);
@@ -105,28 +107,26 @@ export class Auth0AuthAdapter implements AuthAdapter {
 
   private async checkTokenActive(token: string): Promise<boolean> {
     try {
-      
       // Call Auth0's userinfo endpoint to verify token is still active
       const userinfoUrl = `${this.config.fields.authority}/userinfo`;
       const response = await axios.get(userinfoUrl, {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
-        timeout: 5000 // 5 second timeout
+        timeout: 5000, // 5 second timeout
       });
-      
+
       // If we get a successful response with user data, the token is active
       const isActive = !!(response.status === 200 && response.data && response.data.sub);
-      if(this.config.fields.organization){
-        if(isActive && response.data.org_id === this.config.fields.organization){ 
+      if (this.config.fields.organization) {
+        if (isActive && response.data.org_id === this.config.fields.organization) {
           return true;
         }
-      }
-      else if(isActive){
+      } else if (isActive) {
         return true;
       }
-     
+
       return false;
     } catch (error) {
       console.error("Error checking token activity:", error);
@@ -139,23 +139,22 @@ export class Auth0AuthAdapter implements AuthAdapter {
     if (!config.fields) return config;
 
     const fields = { ...config.fields };
-    
+
     // Standard OAuth/OIDC fields that should not be in extraQueryParams
     const standardFields = new Set([
-      'clientId',
-      'client_id',
-      'domain',
-      'issuer',
-      'authority',
-      'redirect_uri',
-      'scope',
-      'scopes',
-      'audience',
-      'responseType',
-      'response_type',
-      'clientSecret',
-      'client_secret',
-      
+      "clientId",
+      "client_id",
+      "domain",
+      "issuer",
+      "authority",
+      "redirect_uri",
+      "scope",
+      "scopes",
+      "audience",
+      "responseType",
+      "response_type",
+      "clientSecret",
+      "client_secret",
     ]);
 
     // Collect all non-standard fields as extra query params
@@ -173,8 +172,8 @@ export class Auth0AuthAdapter implements AuthAdapter {
     }
 
     return {
-      type: config.type as 'auth0' | 'keycloak',
-      fields
+      type: config.type as "auth0" | "keycloak",
+      fields,
     };
   }
 }

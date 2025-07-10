@@ -70,12 +70,12 @@ export class AuthManager {
     if (!this.configs.length) {
       return false;
     }
-     if (!this.authStorage) {
+    if (!this.authStorage) {
       throw new Error("Auth storage is not set");
     }
     // Check adapter-based authentication
     const adapterResults = await Promise.all(Object.values(this.adapters).map((adapter) => adapter.isAuthenticated()));
-    
+
     // Check default login token if auth storage exists
     if (this.authStorage) {
       const defaultToken = await this.authStorage.getTokenByProvider("default");
@@ -138,5 +138,9 @@ export class AuthManager {
 
   async handleCallback(type: string): Promise<void> {
     return this.adapters[type]?.handleCallback();
+  }
+
+  async createUser(type: string, email: string, phoneNumber?: string): Promise<void> {
+    return this.adapters[type]?.createUser(email, phoneNumber);
   }
 }

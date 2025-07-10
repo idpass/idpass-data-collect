@@ -65,4 +65,9 @@ export class MockAuthAdapter implements AuthAdapter {
   async handleCallback(): Promise<void> {
     return Promise.resolve();
   }
+
+  async createUser(email: string): Promise<void> {
+    console.log("Creating user", email);
+    return Promise.resolve();
+  }
 }

@@ -23,7 +23,7 @@ import axios from "axios";
 
 export class KeycloakAuthAdapter implements AuthAdapter {
   private oidc: OIDCClient;
-  private appType: 'backend' | 'frontend' = 'backend';
+  private appType: "backend" | "frontend" = "backend";
 
   constructor(
     private authStorage: SingleAuthStorage | null,
@@ -42,7 +42,11 @@ export class KeycloakAuthAdapter implements AuthAdapter {
       },
     };
     this.oidc = new OIDCClient(oidcConfig);
-    this.appType = typeof window !== 'undefined' && window.localStorage ? 'frontend' : 'backend';
+    this.appType = typeof window !== "undefined" && window.localStorage ? "frontend" : "backend";
+  }
+
+  createUser(): Promise<void> {
+    throw new Error("Method not implemented.");
   }
 
   async initialize(): Promise<void> {
@@ -68,8 +72,7 @@ export class KeycloakAuthAdapter implements AuthAdapter {
   }
 
   async validateToken(token: string): Promise<boolean> {
-    
-    if (this.appType === 'frontend') {
+    if (this.appType === "frontend") {
       return this.validateTokenClient(token);
     } else {
       return this.validateTokenServer(token);
@@ -111,15 +114,15 @@ export class KeycloakAuthAdapter implements AuthAdapter {
       const userinfoUrl = `${this.config.fields.authority}/protocol/openid-connect/userinfo`;
       const response = await axios.get(userinfoUrl, {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
-        timeout: 5000 // 5 second timeout
+        timeout: 5000, // 5 second timeout
       });
 
       // If we get a successful response with user data, the token is active
       const isActive = !!(response.status === 200 && response.data && response.data.sub);
-      
+
       return isActive;
     } catch (error) {
       console.error("Error checking Keycloak token activity:", error);
@@ -132,22 +135,22 @@ export class KeycloakAuthAdapter implements AuthAdapter {
     if (!config.fields) return config;
 
     const fields = { ...config.fields };
-    
+
     // Standard OAuth/OIDC fields that should not be in extraQueryParams
     const standardFields = new Set([
-      'clientId',
-      'client_id',
-      'domain',
-      'issuer',
-      'authority',
-      'redirect_uri',
-      'scope',
-      'scopes',
-      'audience',
-      'responseType',
-      'response_type',
-      'clientSecret',
-      'client_secret'
+      "clientId",
+      "client_id",
+      "domain",
+      "issuer",
+      "authority",
+      "redirect_uri",
+      "scope",
+      "scopes",
+      "audience",
+      "responseType",
+      "response_type",
+      "clientSecret",
+      "client_secret",
     ]);
 
     // Collect all non-standard fields as extra query params
@@ -165,8 +168,8 @@ export class KeycloakAuthAdapter implements AuthAdapter {
     }
 
     return {
-      type: config.type as 'auth0' | 'keycloak',
-      fields
+      type: config.type as "auth0" | "keycloak",
+      fields,
     };
   }
 }
