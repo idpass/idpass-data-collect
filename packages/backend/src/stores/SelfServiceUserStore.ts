@@ -39,6 +39,7 @@ export class SelfServiceUserStoreImpl implements SelfServiceUserStore {
           email TEXT NOT NULL,
           phone TEXT,
           config_id TEXT NOT NULL,
+          complete_registration BOOLEAN DEFAULT FALSE,
           registered_auth_providers TEXT[] DEFAULT '{}',
           UNIQUE(config_id, guid)
         )
@@ -49,12 +50,45 @@ export class SelfServiceUserStoreImpl implements SelfServiceUserStore {
     }
   }
 
-  async saveUser(configId: string, guid: string, email: string, phone?: string): Promise<void> {
+  async createUser(configId: string, guid: string, email: string, phone?: string): Promise<void> {
     const client = await this.pool.connect();
     try {
       const query = {
         text: "INSERT INTO self_service_users (config_id, guid, email, phone) VALUES ($1, $2, $3, $4) ON CONFLICT (config_id, guid) DO UPDATE SET email = $3, phone = $4 RETURNING id",
         values: [configId, guid, email, phone],
+      };
+
+      await client.query(query);
+    } finally {
+      client.release();
+    }
+  }
+
+  async saveUsers(users: { configId: string; guid: string; email: string; phone?: string }[]): Promise<void> {
+    if (users.length === 0) {
+      return;
+    }
+
+    const client = await this.pool.connect();
+    try {
+      // Build the bulk insert query with multiple value sets
+      const values = users
+        .map((user, index) => {
+          const baseIndex = index * 4;
+          return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4})`;
+        })
+        .join(", ");
+
+      const query = {
+        text: `
+          INSERT INTO self_service_users (config_id, guid, email, phone) 
+          VALUES ${values} 
+          ON CONFLICT (config_id, guid) 
+          DO UPDATE SET 
+            email = EXCLUDED.email, 
+            phone = EXCLUDED.phone
+        `,
+        values: users.flatMap((user) => [user.configId, user.guid, user.email, user.phone]),
       };
 
       await client.query(query);
@@ -76,15 +110,70 @@ export class SelfServiceUserStoreImpl implements SelfServiceUserStore {
         return null;
       }
 
-      const { id, guid: userGuid, email, phone, config_id, registered_auth_providers } = rows[0];
+      const { id, guid: userGuid, email, phone, config_id, complete_registration, registered_auth_providers } = rows[0];
       return {
         id,
         guid: userGuid,
         email,
         phone,
         configId: config_id,
+        completeRegistration: complete_registration,
         registeredAuthProviders: registered_auth_providers || [],
       };
+    } finally {
+      client.release();
+    }
+  }
+
+  async getIncompleteRegistrationUsers(): Promise<SelfServiceUser[]> {
+    const client = await this.pool.connect();
+    try {
+      const query = {
+        text: "SELECT * FROM self_service_users WHERE complete_registration = false",
+      };
+
+      const { rows } = await client.query(query);
+      return rows.map((row) => ({
+        id: row.id,
+        guid: row.guid,
+        email: row.email,
+        phone: row.phone,
+        configId: row.config_id,
+        completeRegistration: row.complete_registration,
+        registeredAuthProviders: row.registered_auth_providers || [],
+      }));
+    } finally {
+      client.release();
+    }
+  }
+
+  async updateUser(configId: string, guid: string, user: Partial<SelfServiceUser>): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      const query = {
+        text: "UPDATE self_service_users SET complete_registration = $1, registered_auth_providers = $2 WHERE config_id = $3 AND guid = $4",
+        values: [user.completeRegistration, user.registeredAuthProviders, configId, guid],
+      };
+      await client.query(query);
+    } finally {
+      client.release();
+    }
+  }
+
+  async batchUpdateUsers(users: Partial<SelfServiceUser>[]): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      const values = users.map((user) => [
+        user.completeRegistration,
+        user.registeredAuthProviders,
+        user.configId,
+        user.guid,
+      ]);
+      const query = {
+        text: "UPDATE self_service_users SET complete_registration = $1, registered_auth_providers = $2 WHERE config_id = $3 AND guid = $4",
+        values,
+      };
+      await client.query(query);
     } finally {
       client.release();
     }

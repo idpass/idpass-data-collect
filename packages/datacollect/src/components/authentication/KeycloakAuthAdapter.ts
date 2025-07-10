@@ -45,7 +45,8 @@ export class KeycloakAuthAdapter implements AuthAdapter {
     this.appType = typeof window !== "undefined" && window.localStorage ? "frontend" : "backend";
   }
 
-  createUser(): Promise<void> {
+  async createUser(user: { email: string; phoneNumber?: string }): Promise<void> {
+    console.log("createUser", user);
     throw new Error("Method not implemented.");
   }
 

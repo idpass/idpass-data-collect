@@ -24,13 +24,13 @@ describe("SelfServiceUserStore", () => {
     await pool.end();
   });
 
-  test("saveUser and getUser should work correctly", async () => {
+  test("createUser and getUser should work correctly", async () => {
     const configId = "test-config";
     const guid = "test-guid-1";
     const email = "test@example.com";
     const phone = "+1234567890";
 
-    await store.saveUser(configId, guid, email, phone);
+    await store.createUser(configId, guid, email, phone);
 
     const savedUser = await store.getUser(configId, guid);
     expect(savedUser).not.toBeNull();
@@ -41,12 +41,12 @@ describe("SelfServiceUserStore", () => {
     expect(savedUser?.registeredAuthProviders).toEqual([]);
   });
 
-  test("saveUser should handle user without phone", async () => {
+  test("createUser should handle user without phone", async () => {
     const configId = "test-config";
     const guid = "test-guid-2";
     const email = "test2@example.com";
 
-    await store.saveUser(configId, guid, email);
+    await store.createUser(configId, guid, email);
 
     const savedUser = await store.getUser(configId, guid);
     expect(savedUser).not.toBeNull();
@@ -55,7 +55,7 @@ describe("SelfServiceUserStore", () => {
     expect(savedUser?.phone).toBeNull();
   });
 
-  test("saveUser should update existing user on conflict", async () => {
+  test("createUser should update existing user on conflict", async () => {
     const configId = "test-config";
     const guid = "test-guid-3";
     const email1 = "test3@example.com";
@@ -64,13 +64,13 @@ describe("SelfServiceUserStore", () => {
     const phone2 = "+0987654321";
 
     // Save user initially
-    await store.saveUser(configId, guid, email1, phone1);
+    await store.createUser(configId, guid, email1, phone1);
     const initialUser = await store.getUser(configId, guid);
     expect(initialUser?.email).toEqual(email1);
     expect(initialUser?.phone).toEqual(phone1);
 
     // Update the same user
-    await store.saveUser(configId, guid, email2, phone2);
+    await store.createUser(configId, guid, email2, phone2);
     const updatedUser = await store.getUser(configId, guid);
     expect(updatedUser?.email).toEqual(email2);
     expect(updatedUser?.phone).toEqual(phone2);
@@ -90,7 +90,7 @@ describe("SelfServiceUserStore", () => {
     const guid = "test-guid-4";
     const email = "test4@example.com";
 
-    await store.saveUser(configId, guid, email);
+    await store.createUser(configId, guid, email);
 
     const providers = ["auth0", "keycloak"];
     await store.addRegisteredAuthProviders(configId, guid, providers);
@@ -106,7 +106,7 @@ describe("SelfServiceUserStore", () => {
     const guid = "test-guid-5";
     const email = "test5@example.com";
 
-    await store.saveUser(configId, guid, email);
+    await store.createUser(configId, guid, email);
 
     const providers = ["auth0", "keycloak"];
     await store.addRegisteredAuthProviders(configId, guid, providers);
@@ -125,7 +125,7 @@ describe("SelfServiceUserStore", () => {
     const guid = "test-guid-6";
     const email = "test6@example.com";
 
-    await store.saveUser(configId, guid, email);
+    await store.createUser(configId, guid, email);
 
     // Add initial providers
     await store.addRegisteredAuthProviders(configId, guid, ["auth0"]);
@@ -145,7 +145,7 @@ describe("SelfServiceUserStore", () => {
     const guid = "test-guid-7";
     const email = "test7@example.com";
 
-    await store.saveUser(configId, guid, email);
+    await store.createUser(configId, guid, email);
 
     // Add providers
     await store.addRegisteredAuthProviders(configId, guid, ["auth0", "keycloak", "openid"]);
@@ -165,7 +165,7 @@ describe("SelfServiceUserStore", () => {
     const guid = "test-guid-8";
     const email = "test8@example.com";
 
-    await store.saveUser(configId, guid, email);
+    await store.createUser(configId, guid, email);
 
     // Add providers
     await store.addRegisteredAuthProviders(configId, guid, ["auth0", "keycloak"]);
@@ -184,7 +184,7 @@ describe("SelfServiceUserStore", () => {
     const guid = "test-guid-9";
     const email = "test9@example.com";
 
-    await store.saveUser(configId, guid, email);
+    await store.createUser(configId, guid, email);
 
     // Verify user exists
     const existingUser = await store.getUser(configId, guid);
@@ -205,8 +205,8 @@ describe("SelfServiceUserStore", () => {
     const email1 = "test10@example.com";
     const email2 = "test11@example.com";
 
-    await store.saveUser(configId1, guid1, email1);
-    await store.saveUser(configId2, guid2, email2);
+    await store.createUser(configId1, guid1, email1);
+    await store.createUser(configId2, guid2, email2);
 
     // Verify users exist
     const user1 = await store.getUser(configId1, guid1);
@@ -230,8 +230,8 @@ describe("SelfServiceUserStore", () => {
     const email1 = "test12@example.com";
     const email2 = "test13@example.com";
 
-    await store.saveUser(configId, guid1, email1);
-    await store.saveUser(configId, guid2, email2);
+    await store.createUser(configId, guid1, email1);
+    await store.createUser(configId, guid2, email2);
 
     const user1 = await store.getUser(configId, guid1);
     const user2 = await store.getUser(configId, guid2);
@@ -251,8 +251,8 @@ describe("SelfServiceUserStore", () => {
     const email1 = "test14@example.com";
     const email2 = "test15@example.com";
 
-    await store.saveUser(configId1, guid, email1);
-    await store.saveUser(configId2, guid, email2);
+    await store.createUser(configId1, guid, email1);
+    await store.createUser(configId2, guid, email2);
 
     const user1 = await store.getUser(configId1, guid);
     const user2 = await store.getUser(configId2, guid);
@@ -263,5 +263,146 @@ describe("SelfServiceUserStore", () => {
     expect(user2?.configId).toEqual(configId2);
     expect(user1?.email).toEqual(email1);
     expect(user2?.email).toEqual(email2);
+  });
+
+  test("saveUsers should save multiple users correctly", async () => {
+    const users = [
+      { configId: "test-config", guid: "test-guid-15", email: "test15@example.com", phone: "+1234567890" },
+      { configId: "test-config", guid: "test-guid-16", email: "test16@example.com", phone: "+0987654321" },
+      { configId: "test-config-2", guid: "test-guid-17", email: "test17@example.com" },
+    ];
+
+    await store.saveUsers(users);
+
+    const user1 = await store.getUser("test-config", "test-guid-15");
+    const user2 = await store.getUser("test-config", "test-guid-16");
+    const user3 = await store.getUser("test-config-2", "test-guid-17");
+
+    expect(user1).not.toBeNull();
+    expect(user1?.guid).toEqual("test-guid-15");
+    expect(user1?.email).toEqual("test15@example.com");
+    expect(user1?.phone).toEqual("+1234567890");
+
+    expect(user2).not.toBeNull();
+    expect(user2?.guid).toEqual("test-guid-16");
+    expect(user2?.email).toEqual("test16@example.com");
+    expect(user2?.phone).toEqual("+0987654321");
+
+    expect(user3).not.toBeNull();
+    expect(user3?.guid).toEqual("test-guid-17");
+    expect(user3?.email).toEqual("test17@example.com");
+    expect(user3?.phone).toBeNull();
+  });
+
+  test("saveUsers should handle empty array", async () => {
+    const users: { configId: string; guid: string; email: string; phone?: string }[] = [];
+
+    // This should not throw an error
+    await expect(store.saveUsers(users)).resolves.not.toThrow();
+  });
+
+  test("saveUsers should update existing users on conflict", async () => {
+    const configId = "test-config";
+    const guid = "test-guid-18";
+    const initialEmail = "initial@example.com";
+    const initialPhone = "+1111111111";
+    const updatedEmail = "updated@example.com";
+    const updatedPhone = "+2222222222";
+
+    // Save user initially
+    await store.createUser(configId, guid, initialEmail, initialPhone);
+    const initialUser = await store.getUser(configId, guid);
+    expect(initialUser?.email).toEqual(initialEmail);
+    expect(initialUser?.phone).toEqual(initialPhone);
+
+    // Update the same user using saveUsers
+    const users = [{ configId, guid, email: updatedEmail, phone: updatedPhone }];
+    await store.saveUsers(users);
+
+    const updatedUser = await store.getUser(configId, guid);
+    expect(updatedUser?.email).toEqual(updatedEmail);
+    expect(updatedUser?.phone).toEqual(updatedPhone);
+    expect(updatedUser?.id).toEqual(initialUser?.id); // Same ID, different data
+  });
+
+  test("saveUsers should handle mixed new and existing users", async () => {
+    const configId = "test-config";
+    const existingGuid = "test-guid-19";
+    const newGuid = "test-guid-20";
+    const initialEmail = "existing@example.com";
+    const updatedEmail = "updated-existing@example.com";
+    const newEmail = "new@example.com";
+
+    // Save one user initially
+    await store.createUser(configId, existingGuid, initialEmail);
+    const initialUser = await store.getUser(configId, existingGuid);
+    expect(initialUser?.email).toEqual(initialEmail);
+
+    // Save both existing (with update) and new user
+    const users = [
+      { configId, guid: existingGuid, email: updatedEmail },
+      { configId, guid: newGuid, email: newEmail },
+    ];
+    await store.saveUsers(users);
+
+    const updatedExistingUser = await store.getUser(configId, existingGuid);
+    const newUser = await store.getUser(configId, newGuid);
+
+    expect(updatedExistingUser?.email).toEqual(updatedEmail);
+    expect(updatedExistingUser?.id).toEqual(initialUser?.id);
+
+    expect(newUser).not.toBeNull();
+    expect(newUser?.guid).toEqual(newGuid);
+    expect(newUser?.email).toEqual(newEmail);
+  });
+
+  test("saveUsers should handle users with same configId and guid but different data", async () => {
+    const configId = "test-config";
+    const guid = "test-guid-21";
+    const email1 = "first@example.com";
+    const email2 = "second@example.com";
+
+    // First save
+    const users1 = [{ configId, guid, email: email1 }];
+    await store.saveUsers(users1);
+    const user1 = await store.getUser(configId, guid);
+    expect(user1?.email).toEqual(email1);
+
+    // Second save with same configId and guid but different email
+    const users2 = [{ configId, guid, email: email2 }];
+    await store.saveUsers(users2);
+    const user2 = await store.getUser(configId, guid);
+
+    expect(user2?.email).toEqual(email2);
+    expect(user2?.id).toEqual(user1?.id); // Same ID, updated data
+  });
+
+  test("saveUsers should handle users with different configIds and guids", async () => {
+    const users = [
+      { configId: "config-1", guid: "guid-1", email: "user1@example.com" },
+      { configId: "config-2", guid: "guid-2", email: "user2@example.com" },
+      { configId: "config-1", guid: "guid-3", email: "user3@example.com" },
+    ];
+
+    await store.saveUsers(users);
+
+    const user1 = await store.getUser("config-1", "guid-1");
+    const user2 = await store.getUser("config-2", "guid-2");
+    const user3 = await store.getUser("config-1", "guid-3");
+
+    expect(user1).not.toBeNull();
+    expect(user1?.configId).toEqual("config-1");
+    expect(user1?.guid).toEqual("guid-1");
+    expect(user1?.email).toEqual("user1@example.com");
+
+    expect(user2).not.toBeNull();
+    expect(user2?.configId).toEqual("config-2");
+    expect(user2?.guid).toEqual("guid-2");
+    expect(user2?.email).toEqual("user2@example.com");
+
+    expect(user3).not.toBeNull();
+    expect(user3?.configId).toEqual("config-1");
+    expect(user3?.guid).toEqual("guid-3");
+    expect(user3?.email).toEqual("user3@example.com");
   });
 });

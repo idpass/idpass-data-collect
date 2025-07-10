@@ -855,9 +855,23 @@ export class EntityDataManager {
     }
     return false;
   }
+
   async handleCallback(type: string): Promise<void> {
     if (this.authManager) {
       await this.authManager.handleCallback(type);
+    }
+  }
+
+  async getAvailableAuthProviders(): Promise<string[]> {
+    if (this.authManager) {
+      return this.authManager.getAvailableAuthProviders();
+    }
+    return [];
+  }
+
+  async createUser(type: string, user: { email: string; phoneNumber?: string }): Promise<void> {
+    if (this.authManager) {
+      await this.authManager.createUser(type, user);
     }
   }
 }

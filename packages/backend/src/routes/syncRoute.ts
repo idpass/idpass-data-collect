@@ -21,9 +21,12 @@ import { Router } from "express";
 import { AuditLogEntry, ExternalSyncCredentials, FormSubmission } from "idpass-data-collect";
 import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
-import { AppInstanceStore } from "../types";
+import { AppInstanceStore, SelfServiceUserStore } from "../types";
 
-export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
+export function createSyncRouter(
+  appInstanceStore: AppInstanceStore,
+  selfServiceUserStore: SelfServiceUserStore,
+): Router {
   const router = Router();
 
   router.get(
@@ -101,16 +104,34 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
         return res.json({ status: "error", message: "App instance not found" });
       }
       const edm = appInstance.edm;
+      const selfServiceUserToBeAdded: { configId: string; guid: string; email: string; phone?: string }[] = [];
 
       // Create entities for sync server
       for (const event of sorted) {
         event.syncLevel = 1;
         try {
-          await edm.submitForm(event);
+          const entity = await edm.submitForm(event);
+          if (entity && entity.data.isSelfServiceUser) {
+            selfServiceUserToBeAdded.push({
+              configId,
+              guid: entity.guid,
+              email: entity.data.email,
+              phone: entity.data.phone,
+            });
+          }
         } catch (error) {
           console.error(error);
           // ignore errors
         }
+      }
+
+      for (const selfServiceUser of selfServiceUserToBeAdded) {
+        await selfServiceUserStore.createUser(
+          selfServiceUser.configId,
+          selfServiceUser.guid,
+          selfServiceUser.email,
+          selfServiceUser.phone,
+        );
       }
 
       res.json({ status: "success" });

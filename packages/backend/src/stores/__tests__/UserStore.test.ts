@@ -25,14 +25,14 @@ describe("UserStore", () => {
     await pool.end();
   });
 
-  test("saveUser and getUser should work correctly", async () => {
+  test("createUser and getUser should work correctly", async () => {
     const user = {
       email: "test@example.com",
       passwordHash: "hashedPassword",
       role: Role.USER,
     };
 
-    await adapter.saveUser(user);
+    await adapter.createUser(user);
 
     const savedUser = await adapter.getUser(user.email);
     expect(savedUser?.email).toEqual(user.email);
@@ -47,7 +47,7 @@ describe("UserStore", () => {
       role: Role.USER,
     };
 
-    await adapter.saveUser(user);
+    await adapter.createUser(user);
     const savedUser = await adapter.getUser(user.email);
 
     const updatedUser: UserWithPasswordHash = {
@@ -70,7 +70,7 @@ describe("UserStore", () => {
       role: Role.USER,
     };
 
-    await adapter.saveUser(user);
+    await adapter.createUser(user);
 
     await adapter.deleteUser(user.email);
 
@@ -90,7 +90,7 @@ describe("UserStore", () => {
       passwordHash: "regularPassword",
       role: Role.USER,
     };
-    await adapter.saveUser(regularUser);
+    await adapter.createUser(regularUser);
 
     // There should still be no admin users
     hasAdmin = await adapter.hasAtLeastOneAdmin();
@@ -102,7 +102,7 @@ describe("UserStore", () => {
       passwordHash: "adminPassword",
       role: Role.ADMIN,
     };
-    await adapter.saveUser(adminUser);
+    await adapter.createUser(adminUser);
 
     // Now there should be at least one admin user
     hasAdmin = await adapter.hasAtLeastOneAdmin();
@@ -121,8 +121,8 @@ describe("UserStore", () => {
       role: Role.ADMIN,
     };
 
-    await adapter.saveUser(user1);
-    await adapter.saveUser(user2);
+    await adapter.createUser(user1);
+    await adapter.createUser(user2);
 
     const allUsers = await adapter.getAllUsers();
 

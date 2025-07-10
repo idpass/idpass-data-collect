@@ -21,8 +21,9 @@ import bcrypt from "bcrypt";
 import bodyParser from "body-parser";
 import cors from "cors";
 import express from "express";
-import path from "path";
 import fs from "fs/promises";
+import cron from "node-cron";
+import path from "path";
 import swaggerUi from "swagger-ui-express";
 import YAML from "yamljs";
 import { errorHandler, notFoundHandler, setupUncaughtHandlers } from "./middlewares/errorHandlers";
@@ -30,10 +31,21 @@ import { createAppConfigRoutes } from "./routes/appConfigRoutes";
 import { createPotentialDuplicatesRoute } from "./routes/potentialDuplicatesRoute";
 import { createSyncRouter } from "./routes/syncRoute";
 import { createUserRoutes } from "./routes/userRoutes";
+import { registerSelfServiceUsers } from "./services/registerUsers";
 import { AppConfigStoreImpl } from "./stores/AppConfigStore";
 import { AppInstanceStoreImpl } from "./stores/AppInstanceStore";
+import { SelfServiceUserStoreImpl } from "./stores/SelfServiceUserStore";
 import { UserStoreImpl } from "./stores/UserStore";
-import { Role, SyncServerConfig, SyncServerInstance } from "./types";
+import { AppInstanceStore, Role, SelfServiceUserStore, SyncServerConfig, SyncServerInstance } from "./types";
+
+function cronJobRegisterSelfServiceUsers(
+  selfServiceUserStore: SelfServiceUserStore,
+  appInstanceStore: AppInstanceStore,
+) {
+  cron.schedule("0 * * * *", async () => {
+    await registerSelfServiceUsers(selfServiceUserStore, appInstanceStore);
+  });
+}
 
 export async function run(config: SyncServerConfig): Promise<SyncServerInstance> {
   const userStore = new UserStoreImpl(config.postgresUrl);
@@ -42,7 +54,8 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   await appConfigStore.initialize();
   const appInstanceStore = new AppInstanceStoreImpl(appConfigStore, config.postgresUrl);
   await appInstanceStore.initialize();
-
+  const selfServiceUserStore = new SelfServiceUserStoreImpl(config.postgresUrl);
+  await selfServiceUserStore.initialize();
   const app = express();
 
   setupUncaughtHandlers();
@@ -81,7 +94,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   }
 
   app.use("/api/apps", createAppConfigRoutes(appConfigStore, appInstanceStore));
-  app.use("/api/sync", createSyncRouter(appInstanceStore));
+  app.use("/api/sync", createSyncRouter(appInstanceStore, selfServiceUserStore));
   app.use("/api/users", createUserRoutes(userStore));
   app.use("/api/potential-duplicates", createPotentialDuplicatesRoute(appInstanceStore));
 
@@ -116,7 +129,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
       passwordHash: hashedPassword,
       role: Role.ADMIN,
     };
-    await userStore.saveUser(initialAdmin);
+    await userStore.createUser(initialAdmin);
     console.log("Initial admin user " + initialAdmin.email + " created");
   }
 
@@ -153,6 +166,8 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
       httpServer.close(() => resolve());
     });
   }
+
+  cronJobRegisterSelfServiceUsers(selfServiceUserStore, appInstanceStore);
 
   return { httpServer, appInstanceStore, appConfigStore, userStore, clearStore, closeConnection };
 }

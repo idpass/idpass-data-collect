@@ -65,6 +65,10 @@ export class AuthManager {
     );
   }
 
+  async getAvailableAuthProviders(): Promise<string[]> {
+    return Object.keys(this.adapters);
+  }
+
   async isAuthenticated(): Promise<boolean> {
     // If there are no configs and no auth storage, return false
     if (!this.configs.length) {
@@ -140,7 +144,7 @@ export class AuthManager {
     return this.adapters[type]?.handleCallback();
   }
 
-  async createUser(type: string, email: string, phoneNumber?: string): Promise<void> {
-    return this.adapters[type]?.createUser(email, phoneNumber);
+  async createUser(type: string, user: { email: string; phoneNumber?: string }): Promise<void> {
+    return this.adapters[type]?.createUser(user);
   }
 }

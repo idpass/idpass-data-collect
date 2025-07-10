@@ -53,7 +53,7 @@ export interface UserWithPasswordHash extends User {
 export interface UserStore {
   initialize(): Promise<void>;
   getAllUsers(): Promise<User[]>;
-  saveUser(user: Omit<User, "id">): Promise<void>;
+  createUser(user: Omit<User, "id">): Promise<void>;
   getUser(email: string): Promise<UserWithPasswordHash | null>;
   getUserById(id: number): Promise<UserWithPasswordHash | null>;
   updateUser(user: User): Promise<void>;
@@ -132,13 +132,18 @@ export interface SelfServiceUser {
   email: string;
   phone?: string;
   configId: string;
+  completeRegistration: boolean;
   registeredAuthProviders: string[];
 }
 
 export interface SelfServiceUserStore {
   initialize(): Promise<void>;
-  saveUser(configId: string, guid: string, email: string, phone?: string): Promise<void>;
+  createUser(configId: string, guid: string, email: string, phone?: string): Promise<void>;
+  saveUsers(users: { configId: string; guid: string; email: string; phone?: string }[]): Promise<void>;
+  updateUser(configId: string, guid: string, user: Partial<SelfServiceUser>): Promise<void>;
+  batchUpdateUsers(users: Partial<SelfServiceUser>[]): Promise<void>;
   getUser(configId: string, guid: string): Promise<SelfServiceUser | null>;
+  getIncompleteRegistrationUsers(): Promise<SelfServiceUser[]>;
   addRegisteredAuthProviders(configId: string, guid: string, registeredAuthProviders: string[]): Promise<void>;
   removeRegisteredAuthProviders(configId: string, guid: string, registeredAuthProviders: string[]): Promise<void>;
   deleteUser(configId: string, guid: string): Promise<void>;

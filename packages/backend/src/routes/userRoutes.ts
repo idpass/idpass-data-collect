@@ -75,7 +75,7 @@ export function createUserRoutes(userStore: UserStore): Router {
       const saltRounds = 10;
       const passwordHash = await bcrypt.hash(password, saltRounds);
       const newUser = { email, passwordHash, role };
-      await userStore.saveUser(newUser);
+      await userStore.createUser(newUser);
       res.status(201).json({ message: "User created successfully" });
     }),
   );
