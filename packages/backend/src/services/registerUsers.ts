@@ -10,18 +10,17 @@
  * http://www.apache.org/licenses/LICENSE-2.0
  */
 
-// Check if users is not registered in the database and register them using conresponding auth provider
+import { cloneDeep } from "lodash";
 import { AppInstance, AppInstanceStore, SelfServiceUser, SelfServiceUserStore } from "../types";
 
+// Check if users is not registered in the database and register them using conresponding auth provider
 export async function registerSelfServiceUsers(
   selfServiceUserStore: SelfServiceUserStore,
   appInstanceStore: AppInstanceStore,
 ) {
-  console.log("Registering self service users");
   const users = await selfServiceUserStore.getIncompleteRegistrationUsers();
 
   if (users.length === 0) {
-    console.log("No incomplete registration users to register");
     return;
   }
 
@@ -49,17 +48,21 @@ export async function registerSelfServiceUsers(
   // batch register users by configId
   for (const configId in usersByConfigId) {
     const users = usersByConfigId[configId];
+    const updatedUsers: SelfServiceUser[] = [];
     const appInstance = cachedInstances[configId];
     if (!appInstance) {
       console.error(`App instance not found for configId: ${configId}`);
       continue;
     }
     const availableAuthProviders = await appInstance.edm.getAvailableAuthProviders();
-    for (const authProvider of availableAuthProviders) {
-      for (const user of users) {
-        console.log(`Registering user ${user.email} for auth provider: ${authProvider}`);
-        user.completeRegistration = true;
-        const registeredAuthProviders = new Set(user.registeredAuthProviders);
+    for (const user of users) {
+      const clonedUser = cloneDeep(user);
+      clonedUser.completeRegistration = true;
+      const registeredAuthProviders = new Set(user.registeredAuthProviders);
+      for (const authProvider of availableAuthProviders) {
+        if (registeredAuthProviders.has(authProvider)) {
+          continue;
+        }
         try {
           await appInstance.edm.createUser(authProvider, {
             email: user.email,
@@ -67,13 +70,13 @@ export async function registerSelfServiceUsers(
           });
           registeredAuthProviders.add(authProvider);
         } catch (error) {
-          user.completeRegistration = false;
+          clonedUser.completeRegistration = false;
           console.error(`Error creating user for auth provider: ${authProvider}`, error);
         }
-        user.registeredAuthProviders = Array.from(registeredAuthProviders);
       }
+      clonedUser.registeredAuthProviders = Array.from(registeredAuthProviders);
+      updatedUsers.push(clonedUser);
     }
+    await selfServiceUserStore.batchUpdateUsers(updatedUsers);
   }
-
-  await selfServiceUserStore.batchUpdateUsers(users);
 }
