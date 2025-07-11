@@ -38,10 +38,14 @@ import { SelfServiceUserStoreImpl } from "./stores/SelfServiceUserStore";
 import { UserStoreImpl } from "./stores/UserStore";
 import { AppInstanceStore, Role, SelfServiceUserStore, SyncServerConfig, SyncServerInstance } from "./types";
 
-function cronJobRegisterSelfServiceUsers(
+async function cronJobRegisterSelfServiceUsers(
   selfServiceUserStore: SelfServiceUserStore,
   appInstanceStore: AppInstanceStore,
 ) {
+  // Run once immediately
+  await registerSelfServiceUsers(selfServiceUserStore, appInstanceStore);
+
+  // Schedule cron job to run every hour
   cron.schedule("0 * * * *", async () => {
     await registerSelfServiceUsers(selfServiceUserStore, appInstanceStore);
   });
