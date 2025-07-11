@@ -129,7 +129,7 @@ describe("registerSelfServiceUsers", () => {
       });
       // Note: auth0 is not called for user2 because it's already registered
 
-      // Verify batch update is called once per configId group
+      // Verify batch update is called once with all users
       expect(mockSelfServiceUserStore.batchUpdateUsers).toHaveBeenCalledTimes(1);
       expect(mockSelfServiceUserStore.batchUpdateUsers).toHaveBeenCalledWith([
         {
@@ -197,27 +197,23 @@ describe("registerSelfServiceUsers", () => {
       expect(mockAppInstanceStore.getAppInstance).toHaveBeenCalledWith("config-1");
       expect(mockAppInstanceStore.getAppInstance).toHaveBeenCalledWith("config-2");
 
-      // Should call batchUpdateUsers twice (once per configId group)
-      expect(mockSelfServiceUserStore.batchUpdateUsers).toHaveBeenCalledTimes(2);
+      // Should call batchUpdateUsers once with all users
+      expect(mockSelfServiceUserStore.batchUpdateUsers).toHaveBeenCalledTimes(1);
 
-      // First call for config-1 users
-      expect(mockSelfServiceUserStore.batchUpdateUsers).toHaveBeenNthCalledWith(1, [
+      // All users should be updated in a single batch call
+      expect(mockSelfServiceUserStore.batchUpdateUsers).toHaveBeenCalledWith([
         {
-          ...usersWithDifferentConfigs[0],
+          ...usersWithDifferentConfigs[0], // user1 (config-1)
           completeRegistration: true,
           registeredAuthProviders: ["auth0", "keycloak"],
         },
         {
-          ...usersWithDifferentConfigs[2],
+          ...usersWithDifferentConfigs[2], // user3 (config-1) - processed second in config-1 group
           completeRegistration: true,
           registeredAuthProviders: ["auth0", "keycloak"],
         },
-      ]);
-
-      // Second call for config-2 users
-      expect(mockSelfServiceUserStore.batchUpdateUsers).toHaveBeenNthCalledWith(2, [
         {
-          ...usersWithDifferentConfigs[1],
+          ...usersWithDifferentConfigs[1], // user2 (config-2) - processed in config-2 group
           completeRegistration: true,
           registeredAuthProviders: ["auth0", "keycloak"],
         },
@@ -251,24 +247,94 @@ describe("registerSelfServiceUsers", () => {
       ]);
     });
 
-    it("should handle missing app instance gracefully", async () => {
-      mockAppInstanceStore.getAppInstance.mockResolvedValue(null);
+    it("should handle missing app instance gracefully and continue processing other configIds", async () => {
+      const usersWithMissingConfig: SelfServiceUser[] = [
+        {
+          id: 1,
+          guid: uuidv4(),
+          email: "user1@example.com",
+          phone: "+1234567890",
+          configId: "missing-config",
+          completeRegistration: false,
+          registeredAuthProviders: [],
+        },
+        {
+          id: 2,
+          guid: uuidv4(),
+          email: "user2@example.com",
+          phone: "+0987654321",
+          configId: "valid-config",
+          completeRegistration: false,
+          registeredAuthProviders: [],
+        },
+      ];
+
+      mockSelfServiceUserStore.getIncompleteRegistrationUsers.mockResolvedValue(usersWithMissingConfig);
+      mockAppInstanceStore.getAppInstance
+        .mockResolvedValueOnce(null) // missing-config returns null
+        .mockResolvedValueOnce({
+          // valid-config returns valid instance
+          configId: "valid-config",
+          edm: mockEntityDataManager,
+        });
 
       await registerSelfServiceUsers(mockSelfServiceUserStore, mockAppInstanceStore);
 
-      expect(mockGetAvailableAuthProviders).not.toHaveBeenCalled();
-      expect(mockCreateUser).not.toHaveBeenCalled();
-      expect(mockSelfServiceUserStore.batchUpdateUsers).not.toHaveBeenCalled(); // No batch update when no app instance
+      expect(mockGetAvailableAuthProviders).toHaveBeenCalledTimes(1); // Only called for valid-config
+      expect(mockCreateUser).toHaveBeenCalledTimes(2); // Only called for user2 (valid-config)
+      expect(mockSelfServiceUserStore.batchUpdateUsers).toHaveBeenCalledTimes(1);
+      expect(mockSelfServiceUserStore.batchUpdateUsers).toHaveBeenCalledWith([
+        {
+          ...usersWithMissingConfig[1],
+          completeRegistration: true,
+          registeredAuthProviders: ["auth0", "keycloak"],
+        },
+      ]);
     });
 
-    it("should handle errors when getting app instance", async () => {
-      mockAppInstanceStore.getAppInstance.mockRejectedValue(new Error("Database error"));
+    it("should handle errors when getting app instance and continue processing other configIds", async () => {
+      const usersWithErrorConfig: SelfServiceUser[] = [
+        {
+          id: 1,
+          guid: uuidv4(),
+          email: "user1@example.com",
+          phone: "+1234567890",
+          configId: "error-config",
+          completeRegistration: false,
+          registeredAuthProviders: [],
+        },
+        {
+          id: 2,
+          guid: uuidv4(),
+          email: "user2@example.com",
+          phone: "+0987654321",
+          configId: "valid-config",
+          completeRegistration: false,
+          registeredAuthProviders: [],
+        },
+      ];
+
+      mockSelfServiceUserStore.getIncompleteRegistrationUsers.mockResolvedValue(usersWithErrorConfig);
+      mockAppInstanceStore.getAppInstance
+        .mockRejectedValueOnce(new Error("Database error")) // error-config throws error
+        .mockResolvedValueOnce({
+          // valid-config returns valid instance
+          configId: "valid-config",
+          edm: mockEntityDataManager,
+        });
 
       await registerSelfServiceUsers(mockSelfServiceUserStore, mockAppInstanceStore);
 
-      expect(mockGetAvailableAuthProviders).not.toHaveBeenCalled();
-      expect(mockCreateUser).not.toHaveBeenCalled();
-      expect(mockSelfServiceUserStore.batchUpdateUsers).not.toHaveBeenCalled(); // No batch update when app instance fails
+      expect(mockGetAvailableAuthProviders).toHaveBeenCalledTimes(1); // Only called for valid-config
+      expect(mockCreateUser).toHaveBeenCalledTimes(2); // Only called for user2 (valid-config)
+      expect(mockSelfServiceUserStore.batchUpdateUsers).toHaveBeenCalledTimes(1);
+      expect(mockSelfServiceUserStore.batchUpdateUsers).toHaveBeenCalledWith([
+        {
+          ...usersWithErrorConfig[1],
+          completeRegistration: true,
+          registeredAuthProviders: ["auth0", "keycloak"],
+        },
+      ]);
     });
 
     it("should handle users without phone numbers", async () => {
@@ -363,7 +429,7 @@ describe("registerSelfServiceUsers", () => {
       ]);
     });
 
-    it("should handle mixed success and failure scenarios per configId group", async () => {
+    it("should handle mixed success and failure scenarios across different configIds", async () => {
       const usersWithMixedConfigs: SelfServiceUser[] = [
         {
           id: 1,
@@ -419,27 +485,23 @@ describe("registerSelfServiceUsers", () => {
 
       await registerSelfServiceUsers(mockSelfServiceUserStore, mockAppInstanceStore);
 
-      // Should call batchUpdateUsers twice (once per configId)
-      expect(mockSelfServiceUserStore.batchUpdateUsers).toHaveBeenCalledTimes(2);
+      // Should call batchUpdateUsers once with all users
+      expect(mockSelfServiceUserStore.batchUpdateUsers).toHaveBeenCalledTimes(1);
 
-      // First call for config-1 users (user1 and user3)
-      expect(mockSelfServiceUserStore.batchUpdateUsers).toHaveBeenNthCalledWith(1, [
+      // All users should be updated in a single batch call
+      expect(mockSelfServiceUserStore.batchUpdateUsers).toHaveBeenCalledWith([
         {
           ...usersWithMixedConfigs[0],
           completeRegistration: false, // Failed due to auth0 error
           registeredAuthProviders: ["keycloak"], // Only keycloak succeeded
         },
         {
-          ...usersWithMixedConfigs[2],
+          ...usersWithMixedConfigs[2], // User 3 (config-1) - processed second in config-1 group
           completeRegistration: true, // Both providers succeeded
           registeredAuthProviders: ["auth0", "keycloak"],
         },
-      ]);
-
-      // Second call for config-2 users (user2)
-      expect(mockSelfServiceUserStore.batchUpdateUsers).toHaveBeenNthCalledWith(2, [
         {
-          ...usersWithMixedConfigs[1],
+          ...usersWithMixedConfigs[1], // User 2 (config-2) - processed in config-2 group
           completeRegistration: true, // Both providers succeeded
           registeredAuthProviders: ["auth0", "keycloak"],
         },

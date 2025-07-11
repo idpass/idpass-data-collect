@@ -18,9 +18,10 @@ export async function registerSelfServiceUsers(
   selfServiceUserStore: SelfServiceUserStore,
   appInstanceStore: AppInstanceStore,
 ) {
+  console.log("SELF SERVICE: Starting to register users for third party auth providers");
   const users = await selfServiceUserStore.getIncompleteRegistrationUsers();
-
   if (users.length === 0) {
+    console.log("SELF SERVICE: No users to register");
     return;
   }
 
@@ -46,9 +47,9 @@ export async function registerSelfServiceUsers(
   }
 
   // batch register users by configId
+  const updatedUsers: SelfServiceUser[] = [];
   for (const configId in usersByConfigId) {
     const users = usersByConfigId[configId];
-    const updatedUsers: SelfServiceUser[] = [];
     const appInstance = cachedInstances[configId];
     if (!appInstance) {
       console.error(`App instance not found for configId: ${configId}`);
@@ -77,6 +78,7 @@ export async function registerSelfServiceUsers(
       clonedUser.registeredAuthProviders = Array.from(registeredAuthProviders);
       updatedUsers.push(clonedUser);
     }
-    await selfServiceUserStore.batchUpdateUsers(updatedUsers);
   }
+  await selfServiceUserStore.batchUpdateUsers(updatedUsers);
+  console.log("SELF SERVICE: Updated registration status for ", updatedUsers.length, " users");
 }
