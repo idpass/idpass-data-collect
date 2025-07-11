@@ -68,6 +68,7 @@ export interface EntityForm {
   name: string;
   title: string;
   dependsOn?: string;
+  isSelfServiceUser?: boolean;
   formio: object;
 }
 

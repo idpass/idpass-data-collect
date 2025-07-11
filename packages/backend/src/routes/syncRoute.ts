@@ -21,9 +21,10 @@ import { Router } from "express";
 import { AuditLogEntry, ExternalSyncCredentials, FormSubmission } from "idpass-data-collect";
 import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
-import { AppInstanceStore, SelfServiceUserStore } from "../types";
+import { AppConfigStore, AppInstanceStore, SelfServiceUserStore } from "../types";
 
 export function createSyncRouter(
+  appConfigStore: AppConfigStore,
   appInstanceStore: AppInstanceStore,
   selfServiceUserStore: SelfServiceUserStore,
 ): Router {
@@ -100,9 +101,13 @@ export function createSyncRouter(
       const sorted = events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
       const appInstance = await appInstanceStore.getAppInstance(configId || "default");
-      if (!appInstance) {
-        return res.json({ status: "error", message: "App instance not found" });
+      const appConfig = await appConfigStore.getConfig(configId || "default");
+
+      if (!appInstance || !appConfig) {
+        return res.json({ status: "error", message: "App instance or config not found" });
       }
+
+      const selfServiceForms = appConfig.entityForms?.filter((form) => form.isSelfServiceUser);
       const edm = appInstance.edm;
       const selfServiceUserToBeAdded: { configId: string; guid: string; email: string; phone?: string }[] = [];
 
@@ -111,7 +116,9 @@ export function createSyncRouter(
         event.syncLevel = 1;
         try {
           const entity = await edm.submitForm(event);
-          if (entity && entity.data.isSelfServiceUser) {
+          const isSelfServiceUser = selfServiceForms?.some((form) => form.name === entity?.data.entityName);
+          if (entity && isSelfServiceUser) {
+            console.log("Self service user found: ", entity.data.entityName);
             selfServiceUserToBeAdded.push({
               configId,
               guid: entity.guid,

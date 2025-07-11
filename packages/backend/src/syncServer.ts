@@ -94,7 +94,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   }
 
   app.use("/api/apps", createAppConfigRoutes(appConfigStore, appInstanceStore));
-  app.use("/api/sync", createSyncRouter(appInstanceStore, selfServiceUserStore));
+  app.use("/api/sync", createSyncRouter(appConfigStore, appInstanceStore, selfServiceUserStore));
   app.use("/api/users", createUserRoutes(userStore));
   app.use("/api/potential-duplicates", createPotentialDuplicatesRoute(appInstanceStore));
 
