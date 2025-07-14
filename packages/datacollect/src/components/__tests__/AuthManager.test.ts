@@ -6,12 +6,7 @@ import { AuthManager } from "../AuthManager";
 import { Auth0AuthAdapter } from "../authentication/Auth0AuthAdapter";
 import { KeycloakAuthAdapter } from "../authentication/KeycloakAuthAdapter";
 import { SingleAuthStorageImpl } from "../../services/SingleAuthStorageImpl";
-import {
-  AuthConfig,
-  AuthStorageAdapter,
-  PasswordCredentials,
-  TokenCredentials,
-} from "../../interfaces/types";
+import { AuthConfig, AuthStorageAdapter, PasswordCredentials, TokenCredentials } from "../../interfaces/types";
 import axios from "axios";
 
 // Mock axios
@@ -371,9 +366,9 @@ describe("AuthManager", () => {
       });
 
       const authManagerWithError = new AuthManager([mockAuthConfigs[0]], "http://localhost:8080", mockAuthStorage);
-      
+
       // Should not throw during initialization
       await expect(authManagerWithError.initialize()).resolves.toBeUndefined();
     });
   });
-}); 
+});

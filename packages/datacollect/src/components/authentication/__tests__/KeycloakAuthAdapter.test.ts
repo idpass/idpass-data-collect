@@ -69,7 +69,7 @@ describe("KeycloakAuthAdapter", () => {
           extraQueryParams: {
             post_logout_redirect_uri: "http://localhost:3000",
           },
-        })
+        }),
       );
     });
 
@@ -97,15 +97,15 @@ describe("KeycloakAuthAdapter", () => {
             customParam: "customValue",
             anotherParam: "anotherValue",
           },
-        })
+        }),
       );
     });
 
     it("should detect frontend environment", () => {
       // Mock window object
-      Object.defineProperty(global, 'window', {
+      Object.defineProperty(global, "window", {
         value: { localStorage: {} },
-        writable: true
+        writable: true,
       });
 
       const frontendAdapter = new KeycloakAuthAdapter(mockAuthStorage, authConfig);
@@ -238,7 +238,7 @@ describe("KeycloakAuthAdapter", () => {
   describe("validateToken", () => {
     beforeEach(() => {
       // Reset environment detection by clearing window
-      if ('window' in global) {
+      if ("window" in global) {
         delete (global as unknown as Record<string, unknown>).window;
       }
       // Also ensure window is truly undefined
@@ -247,7 +247,7 @@ describe("KeycloakAuthAdapter", () => {
 
     afterEach(() => {
       // Clean up window mock after each test
-      if ('window' in global) {
+      if ("window" in global) {
         delete (global as unknown as Record<string, unknown>).window;
       }
     });
@@ -268,16 +268,13 @@ describe("KeycloakAuthAdapter", () => {
       const result = await backendAdapter.validateToken(token);
 
       expect(result).toBe(true);
-      expect(mockedAxios.get).toHaveBeenCalledWith(
-        `${authConfig.fields.authority}/protocol/openid-connect/userinfo`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          timeout: 5000,
-        }
-      );
+      expect(mockedAxios.get).toHaveBeenCalledWith(`${authConfig.fields.authority}/protocol/openid-connect/userinfo`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 5000,
+      });
     });
 
     it("should explicitly use backend validation when no window object exists", async () => {
@@ -288,9 +285,9 @@ describe("KeycloakAuthAdapter", () => {
       const token = "backend-test-token";
       const mockResponse = {
         status: 200,
-        data: { 
-          sub: "backend-user", 
-          name: "Backend User"
+        data: {
+          sub: "backend-user",
+          name: "Backend User",
         },
       };
 
@@ -308,7 +305,7 @@ describe("KeycloakAuthAdapter", () => {
             "Content-Type": "application/json",
           },
           timeout: 5000,
-        })
+        }),
       );
       // Verify OIDC client was NOT called (not client-side validation)
       expect(mockOIDCClient.getStoredAuth).not.toHaveBeenCalled();
@@ -404,27 +401,27 @@ describe("KeycloakAuthAdapter", () => {
     it("should call validateTokenServer when appType is backend", async () => {
       // Ensure backend environment - window is undefined
       (global as unknown as Record<string, unknown>).window = undefined;
-      
+
       const backendAdapter = new KeycloakAuthAdapter(mockAuthStorage, authConfig);
       const token = "test-token";
-      
+
       // Mock successful server response
       const mockResponse = {
         status: 200,
-        data: { 
-          sub: "user123", 
-          name: "Test User"
+        data: {
+          sub: "user123",
+          name: "Test User",
         },
       };
       mockedAxios.get.mockResolvedValue(mockResponse);
-      
+
       const result = await backendAdapter.validateToken(token);
-      
+
       expect(result).toBe(true);
       // Verify server-side validation was used (axios called)
       expect(mockedAxios.get).toHaveBeenCalledWith(
         `${authConfig.fields.authority}/protocol/openid-connect/userinfo`,
-        expect.any(Object)
+        expect.any(Object),
       );
       // Verify client-side validation was NOT used
       expect(mockOIDCClient.getStoredAuth).not.toHaveBeenCalled();
@@ -470,9 +467,9 @@ describe("KeycloakAuthAdapter", () => {
     });
 
     it("should handle callback without storing token when no user returned", async () => {
-      mockOIDCClient.handleCallback.mockRejectedValue(new Error('No user found after callback'));
+      mockOIDCClient.handleCallback.mockRejectedValue(new Error("No user found after callback"));
 
-      await expect(adapter.handleCallback()).rejects.toThrow('No user found after callback');
+      await expect(adapter.handleCallback()).rejects.toThrow("No user found after callback");
 
       expect(mockOIDCClient.handleCallback).toHaveBeenCalled();
       expect(mockAuthStorage.setToken).not.toHaveBeenCalled();
@@ -537,7 +534,7 @@ describe("KeycloakAuthAdapter", () => {
             customField1: "value1",
             customField2: "value2",
           },
-        })
+        }),
       );
     });
 
@@ -555,21 +552,31 @@ describe("KeycloakAuthAdapter", () => {
       expect(MockedOIDCClient).toHaveBeenCalledWith(
         expect.objectContaining({
           extraQueryParams: {},
-        })
+        }),
       );
     });
 
     it("should not include standard fields in extraQueryParams", () => {
       MockedOIDCClient.mockClear();
       const standardFields = [
-        'clientId', 'client_id', 'domain', 'issuer', 'authority',
-        'redirect_uri', 'scope', 'scopes', 'audience', 'responseType',
-        'response_type', 'clientSecret', 'client_secret'
+        "clientId",
+        "client_id",
+        "domain",
+        "issuer",
+        "authority",
+        "redirect_uri",
+        "scope",
+        "scopes",
+        "audience",
+        "responseType",
+        "response_type",
+        "clientSecret",
+        "client_secret",
       ];
 
       const configWithStandardFields: AuthConfig = {
         type: "keycloak",
-        fields: Object.fromEntries(standardFields.map(field => [field, `${field}-value`]))
+        fields: Object.fromEntries(standardFields.map((field) => [field, `${field}-value`])),
       };
 
       new KeycloakAuthAdapter(mockAuthStorage, configWithStandardFields);
@@ -608,15 +615,12 @@ describe("KeycloakAuthAdapter", () => {
       const timeoutError = new Error("timeout of 5000ms exceeded");
 
       mockedAxios.get.mockRejectedValue(timeoutError);
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      const consoleSpy = jest.spyOn(console, "error").mockImplementation();
 
       const result = await backendAdapter.validateToken(token);
 
       expect(result).toBe(false);
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "Error checking Keycloak token activity:",
-        timeoutError
-      );
+      expect(consoleSpy).toHaveBeenCalledWith("Error checking Keycloak token activity:", timeoutError);
 
       consoleSpy.mockRestore();
     });
@@ -630,17 +634,14 @@ describe("KeycloakAuthAdapter", () => {
       const networkError = new Error("Network Error");
 
       mockedAxios.get.mockRejectedValue(networkError);
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      const consoleSpy = jest.spyOn(console, "error").mockImplementation();
 
       const result = await backendAdapter.validateToken(token);
 
       expect(result).toBe(false);
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "Error checking Keycloak token activity:",
-        networkError
-      );
+      expect(consoleSpy).toHaveBeenCalledWith("Error checking Keycloak token activity:", networkError);
 
       consoleSpy.mockRestore();
     });
   });
-}); 
+});

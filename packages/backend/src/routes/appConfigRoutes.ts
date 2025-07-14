@@ -157,16 +157,8 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
     id: string,
     appConfig: AppConfig,
   ) {
-    // check if file exists then exit
+    // Always regenerate the public JSON and QR code files
     const publicJsonPath = path.join(__dirname, "..", "public", `${id}.json`);
-    if (
-      await fs
-        .access(publicJsonPath)
-        .then(() => true)
-        .catch(() => false)
-    ) {
-      return;
-    }
     const fullUrl = req.protocol + "://" + req.get("host");
     set(appConfig, "syncServerUrl", fullUrl);
     const publicJson = JSON.stringify(appConfig, null, 2);

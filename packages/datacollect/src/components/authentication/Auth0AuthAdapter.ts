@@ -20,11 +20,16 @@
 import { AuthAdapter, AuthConfig, OIDCConfig, SingleAuthStorage } from "../../interfaces/types";
 import OIDCClient from "./OIDCClient";
 import axios from "axios";
-
+import { generatePassword } from "./PasswordGenerator";
+interface Auth0APIResponse {
+  access_token: string;
+  expires_in: number;
+  token_type: string;
+}
 export class Auth0AuthAdapter implements AuthAdapter {
   private oidc: OIDCClient;
   private appType: "backend" | "frontend" = "backend";
-
+  private apiResponse: Auth0APIResponse | null = null;
   constructor(
     private authStorage: SingleAuthStorage | null,
     public config: AuthConfig,
@@ -46,8 +51,39 @@ export class Auth0AuthAdapter implements AuthAdapter {
   }
 
   async createUser(user: { email: string; phoneNumber?: string }): Promise<void> {
-    console.log("createUser", user);
-    throw new Error("Method not implemented.");
+    let apiResponse = this.apiResponse;
+    if (!apiResponse) {
+      apiResponse = await this.authenticateAPIUser();
+    }
+    const { access_token } = apiResponse as Auth0APIResponse;
+    const tempPassword = generatePassword();
+    const url = `${this.config.fields.authority}/api/v2/users`;
+
+    if (this.config.fields.connection) {
+      try {
+        await axios.post(
+          url,
+          {
+            email: user.email,
+            ...(user.phoneNumber ? { phone_number: user.phoneNumber } : {}),
+            connection: this.config.fields.connection,
+            password: tempPassword, //change this later
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${access_token}`,
+            },
+          },
+        );
+        //send link to user
+        await this.resetPassword(user.email);
+      } catch (error) {
+        console.log(error, "error");
+        return;
+      }
+    } else {
+      throw new Error("Connection not found");
+    }
   }
 
   async initialize(): Promise<void> {
@@ -176,5 +212,37 @@ export class Auth0AuthAdapter implements AuthAdapter {
       type: config.type as "auth0" | "keycloak",
       fields,
     };
+  }
+  private async authenticateAPIUser(): Promise<Auth0APIResponse> {
+    const { api_client_id, api_client_secret, audience } = this.config.fields;
+    if (api_client_id && api_client_secret && audience) {
+      const response = await axios.post(`${this.config.fields.authority}/oauth/token`, {
+        grant_type: "client_credentials",
+        client_id: api_client_id,
+        client_secret: api_client_secret,
+        audience: audience,
+      });
+
+      this.apiResponse = response.data;
+      return response.data;
+    }
+    throw new Error("API client id, secret, and audience are required");
+  }
+  private async resetPassword(email: string): Promise<void> {
+    const { access_token } = this.apiResponse as Auth0APIResponse;
+    const url = `${this.config.fields.authority}/dbconnections/change_password`;
+    await axios.post(
+      url,
+      {
+        email: email,
+        client_id: this.config.fields.api_client_id,
+        connection: this.config.fields.connection,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${access_token}`,
+        },
+      },
+    );
   }
 }

@@ -72,7 +72,7 @@ describe("Auth0AuthAdapter", () => {
             post_logout_redirect_uri: "http://localhost:3000",
             organization: "test-org-123",
           },
-        })
+        }),
       );
     });
 
@@ -101,15 +101,15 @@ describe("Auth0AuthAdapter", () => {
             customParam: "customValue",
             anotherParam: "anotherValue",
           },
-        })
+        }),
       );
     });
 
     it("should detect frontend environment", () => {
       // Mock window object
-      Object.defineProperty(global, 'window', {
+      Object.defineProperty(global, "window", {
         value: { localStorage: {} },
-        writable: true
+        writable: true,
       });
 
       const frontendAdapter = new Auth0AuthAdapter(mockAuthStorage, authConfig);
@@ -120,9 +120,9 @@ describe("Auth0AuthAdapter", () => {
     });
     it("should detect backend environment", () => {
       // Mock window object
-      Object.defineProperty(global, 'window', {
+      Object.defineProperty(global, "window", {
         value: undefined,
-        writable: true
+        writable: true,
       });
 
       const frontendAdapter = new Auth0AuthAdapter(mockAuthStorage, authConfig);
@@ -132,7 +132,6 @@ describe("Auth0AuthAdapter", () => {
       delete (global as unknown as Record<string, unknown>).window;
     });
   });
-  
 
   describe("initialize", () => {
     it("should initialize and restore session", async () => {
@@ -267,7 +266,7 @@ describe("Auth0AuthAdapter", () => {
   describe("validateToken", () => {
     beforeEach(() => {
       // Reset environment detection by clearing window
-      if ('window' in global) {
+      if ("window" in global) {
         delete (global as unknown as Record<string, unknown>).window;
       }
       // Also ensure window is truly undefined
@@ -276,7 +275,7 @@ describe("Auth0AuthAdapter", () => {
 
     afterEach(() => {
       // Clean up window mock after each test
-      if ('window' in global) {
+      if ("window" in global) {
         delete (global as unknown as Record<string, unknown>).window;
       }
     });
@@ -323,9 +322,9 @@ describe("Auth0AuthAdapter", () => {
       const token = "test-token";
       const mockResponse = {
         status: 200,
-        data: { 
+        data: {
           name: "Test User",
-          org_id: "test-org-123"
+          org_id: "test-org-123",
         }, // Missing 'sub' field
       };
 
@@ -362,10 +361,10 @@ describe("Auth0AuthAdapter", () => {
       const token = "test-token";
       const mockResponse = {
         status: 200,
-        data: { 
-          sub: "user123", 
+        data: {
+          sub: "user123",
           name: "Test User",
-          org_id: "different-org-456" // Different organization
+          org_id: "different-org-456", // Different organization
         },
       };
 
@@ -384,9 +383,9 @@ describe("Auth0AuthAdapter", () => {
       const token = "test-token";
       const mockResponse = {
         status: 200,
-        data: { 
-          sub: "user123", 
-          name: "Test User"
+        data: {
+          sub: "user123",
+          name: "Test User",
           // Missing org_id
         },
       };
@@ -418,30 +417,27 @@ describe("Auth0AuthAdapter", () => {
     it("should call validateTokenServer when appType is backend", async () => {
       // Ensure backend environment - window is undefined
       (global as unknown as Record<string, unknown>).window = undefined;
-      
+
       const backendAdapter = new Auth0AuthAdapter(mockAuthStorage, authConfig);
       const token = "test-token";
-      
+
       // Mock successful server response
       const mockResponse = {
         status: 200,
-        data: { 
-          sub: "user123", 
+        data: {
+          sub: "user123",
           name: "Test User",
-          org_id: "test-org-123"
+          org_id: "test-org-123",
         },
       };
       mockedAxios.get.mockResolvedValue(mockResponse);
-      
+
       // Spy on the private method by checking what gets called
       const result = await backendAdapter.validateToken(token);
-      
+
       expect(result).toBe(true);
       // Verify server-side validation was used (axios called)
-      expect(mockedAxios.get).toHaveBeenCalledWith(
-        `${authConfig.fields.authority}/userinfo`,
-        expect.any(Object)
-      );
+      expect(mockedAxios.get).toHaveBeenCalledWith(`${authConfig.fields.authority}/userinfo`, expect.any(Object));
       // Verify client-side validation was NOT used
       expect(mockOIDCClient.getStoredAuth).not.toHaveBeenCalled();
     });
@@ -486,9 +482,9 @@ describe("Auth0AuthAdapter", () => {
     });
 
     it("should handle callback without storing token when no user returned", async () => {
-      mockOIDCClient.handleCallback.mockRejectedValue(new Error('No user found after callback'));
+      mockOIDCClient.handleCallback.mockRejectedValue(new Error("No user found after callback"));
 
-      await expect(adapter.handleCallback()).rejects.toThrow('No user found after callback');
+      await expect(adapter.handleCallback()).rejects.toThrow("No user found after callback");
 
       expect(mockOIDCClient.handleCallback).toHaveBeenCalled();
       expect(mockAuthStorage.setToken).not.toHaveBeenCalled();
@@ -538,7 +534,7 @@ describe("Auth0AuthAdapter", () => {
             customField1: "value1",
             customField2: "value2",
           },
-        })
+        }),
       );
     });
 
@@ -556,23 +552,33 @@ describe("Auth0AuthAdapter", () => {
       expect(MockedOIDCClient).toHaveBeenCalledWith(
         expect.objectContaining({
           extraQueryParams: {},
-        })
+        }),
       );
     });
 
     it("should not include standard fields in extraQueryParams", () => {
       // Clear previous mock calls
       MockedOIDCClient.mockClear();
-      
+
       const standardFields = [
-        'clientId', 'client_id', 'domain', 'issuer', 'authority',
-        'redirect_uri', 'scope', 'scopes', 'audience', 'responseType',
-        'response_type', 'clientSecret', 'client_secret'
+        "clientId",
+        "client_id",
+        "domain",
+        "issuer",
+        "authority",
+        "redirect_uri",
+        "scope",
+        "scopes",
+        "audience",
+        "responseType",
+        "response_type",
+        "clientSecret",
+        "client_secret",
       ];
 
       const configWithStandardFields: AuthConfig = {
         type: "auth0",
-        fields: Object.fromEntries(standardFields.map(field => [field, `${field}-value`]))
+        fields: Object.fromEntries(standardFields.map((field) => [field, `${field}-value`])),
       };
 
       new Auth0AuthAdapter(mockAuthStorage, configWithStandardFields);
@@ -584,23 +590,20 @@ describe("Auth0AuthAdapter", () => {
 
   describe("error handling", () => {
     it("should handle axios timeout in token validation", async () => {
-     (global as unknown as Record<string, unknown>).window = undefined;
+      (global as unknown as Record<string, unknown>).window = undefined;
 
       const backendAdapter = new Auth0AuthAdapter(mockAuthStorage, authConfig);
 
       const token = "test-token";
       const timeoutError = new Error("timeout of 5000ms exceeded");
-  
+
       mockedAxios.get.mockRejectedValue(timeoutError);
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      const consoleSpy = jest.spyOn(console, "error").mockImplementation();
 
       const result = await backendAdapter.validateToken(token);
 
       expect(result).toBe(false);
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "Error checking token activity:",
-        timeoutError
-      );
+      expect(consoleSpy).toHaveBeenCalledWith("Error checking token activity:", timeoutError);
 
       consoleSpy.mockRestore();
     });
@@ -610,30 +613,27 @@ describe("Auth0AuthAdapter", () => {
       const networkError = new Error("Network Error");
 
       mockedAxios.get.mockRejectedValue(networkError);
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+      const consoleSpy = jest.spyOn(console, "error").mockImplementation();
 
       const result = await adapter.validateToken(token);
 
       expect(result).toBe(false);
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "Error checking token activity:",
-        networkError
-      );
+      expect(consoleSpy).toHaveBeenCalledWith("Error checking token activity:", networkError);
 
       consoleSpy.mockRestore();
     });
 
     it("should log token validation success", async () => {
-     (global as unknown as Record<string, unknown>).window = undefined;
+      (global as unknown as Record<string, unknown>).window = undefined;
 
       const backendAdapter = new Auth0AuthAdapter(mockAuthStorage, authConfig);
       const token = "test-token";
       const mockResponse = {
         status: 200,
-        data: { 
-          sub: "user123", 
+        data: {
+          sub: "user123",
           name: "Test User",
-          org_id: "test-org-123"
+          org_id: "test-org-123",
         },
       };
 
@@ -641,7 +641,6 @@ describe("Auth0AuthAdapter", () => {
       const result = await backendAdapter.validateToken(token);
 
       expect(result).toBe(true);
-
     });
   });
 
@@ -652,20 +651,20 @@ describe("Auth0AuthAdapter", () => {
 
       const backendAdapter = new Auth0AuthAdapter(mockAuthStorage, authConfig);
       const token = "test-token";
-      
+
       // Mock successful server response
       const mockResponse = {
         status: 200,
-        data: { 
-          sub: "user123", 
+        data: {
+          sub: "user123",
           name: "Test User",
-          org_id: "test-org-123"
+          org_id: "test-org-123",
         },
       };
       mockedAxios.get.mockResolvedValue(mockResponse);
-      
+
       const result = await backendAdapter.validateToken(token);
-      
+
       expect(result).toBe(true);
       // Verify server-side validation was used (proves appType is 'backend')
       expect(mockedAxios.get).toHaveBeenCalled();
@@ -702,20 +701,20 @@ describe("Auth0AuthAdapter", () => {
 
       const backendAdapter = new Auth0AuthAdapter(mockAuthStorage, authConfig);
       const token = "test-token";
-      
+
       // Mock successful server response
       const mockResponse = {
         status: 200,
-        data: { 
-          sub: "user123", 
+        data: {
+          sub: "user123",
           name: "Test User",
-          org_id: "test-org-123"
+          org_id: "test-org-123",
         },
       };
       mockedAxios.get.mockResolvedValue(mockResponse);
-      
+
       const result = await backendAdapter.validateToken(token);
-      
+
       expect(result).toBe(true);
       // Verify server-side validation was used (proves appType is 'backend')
       expect(mockedAxios.get).toHaveBeenCalled();
@@ -725,4 +724,4 @@ describe("Auth0AuthAdapter", () => {
       delete (global as unknown as Record<string, unknown>).window;
     });
   });
-}); 
+});

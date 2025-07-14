@@ -107,7 +107,7 @@ export function createSyncRouter(
         return res.json({ status: "error", message: "App instance or config not found" });
       }
 
-      const selfServiceForms = appConfig.entityForms?.filter((form) => form.isSelfServiceUser);
+      const selfServiceForms = appConfig.entityForms?.filter((form) => form.selfServiceUser);
       const edm = appInstance.edm;
       const selfServiceUserToBeAdded: { configId: string; guid: string; email: string; phone?: string }[] = [];
 
