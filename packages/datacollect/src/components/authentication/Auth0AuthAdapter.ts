@@ -26,6 +26,28 @@ interface Auth0APIResponse {
   expires_in: number;
   token_type: string;
 }
+interface Auth0UserResponse {
+  created_at: string;
+  email: string;
+  email_verified: boolean;
+  identities: [
+    {
+      connection: string;
+      user_id: string;
+      provider: string;
+      isSocial: boolean;
+    }
+  ];
+
+  name: string;
+  nickname: string;
+  picture: string;
+  updated_at: string;
+  user_id: string;
+  user_metadata: Record<string, unknown>;
+  username: string;
+}
+
 export class Auth0AuthAdapter implements AuthAdapter {
   private oidc: OIDCClient;
   private appType: "backend" | "frontend" = "backend";
@@ -92,16 +114,20 @@ export class Auth0AuthAdapter implements AuthAdapter {
               },
             },
           );
-          console.log(response, 'response auth0');
+          const userData = response.data as Auth0UserResponse;
+          
+          if (this.config.fields.organization && userData.user_id) {
+            await this.addUserToOrganization(userData.user_id);
+          }
           //send link to user only if user creation succeeded
           await this.resetPassword(user.email);
         } catch (error: unknown) {
           if (axios.isAxiosError(error) && error.response?.status === 409) {
-            console.log(`User ${user.email} already exists, skipping creation and password reset`);
+            console.error(`User ${user.email} already exists, skipping creation and password reset`);
             // User already exists, do nothing and return
             return;
           } else {
-            console.log(`Error creating user ${user.email}`, error);
+            console.error(`Error creating user ${user.email}`, error);
             return;
           }
         }
@@ -271,5 +297,18 @@ export class Auth0AuthAdapter implements AuthAdapter {
         },
       );
     });
+  }
+  private async addUserToOrganization(userId: Auth0UserResponse['user_id']): Promise<void> {
+    const url = `${this.config.fields.audience}organizations/${this.config.fields.organization}/members`;
+    const members = [userId];
+    try {
+      await this.makeAuthenticatedRequest(async (token) => {
+        await axios.post(url, {members:members }, { headers: { Authorization: `Bearer ${token}` } });
+      });
+    } catch (error) {
+      console.error('Error adding user to organization', error);
+      return;
+    }
+   
   }
 }

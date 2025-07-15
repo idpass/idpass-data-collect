@@ -174,7 +174,6 @@ export class SelfServiceUserStoreImpl implements SelfServiceUserStore {
           return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4})`;
         })
         .join(", ");
-      console.log(users, 'users');
       const query = {
         text: `
           UPDATE self_service_users 
