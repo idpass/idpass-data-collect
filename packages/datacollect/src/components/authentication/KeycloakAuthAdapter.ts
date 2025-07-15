@@ -85,33 +85,45 @@ export class KeycloakAuthAdapter implements AuthAdapter {
     const url = `${this.config.fields.host}/admin/realms/${this.config.fields.realm}/users`;
     
     await this.makeAuthenticatedRequest(async (token) => {
-      await axios.post(
-        url,
-        {
-          username: user.email,
-          email: user.email,
-          enabled: true,
-          emailVerified: false,
-          ...(user.phoneNumber ? { 
-            attributes: {
-              phone_number: [user.phoneNumber]
-            }
-          } : {}),
-          credentials: [{
-            type: "password",
-            value: tempPassword,
-            temporary: true
-          }]
-        },
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
+      try {
+        await axios.post(
+          url,
+          {
+            username: user.email,
+            email: user.email,
+            enabled: true,
+            emailVerified: false,
+            ...(user.phoneNumber ? { 
+              attributes: {
+                phone_number: [user.phoneNumber]
+              }
+            } : {}),
+            credentials: [{
+              type: "password",
+              value: tempPassword,
+              temporary: true
+            }]
           },
-        },
-      );
-      //send link to user
-      await this.resetPassword(user.email);
+          {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
+        
+        //send link to user only if user creation succeeded
+        await this.resetPassword(user.email);
+      } catch (error: unknown) {
+        if (axios.isAxiosError(error) && error.response?.status === 409) {
+          console.log(`User ${user.email} already exists, skipping creation and password reset`);
+          // User already exists, do nothing and return
+          return;
+        } else {
+          console.log(`Error creating user ${user.email}`, error);
+          return;
+        }
+      }
     });
   }
 

@@ -161,18 +161,37 @@ export class SelfServiceUserStoreImpl implements SelfServiceUserStore {
   }
 
   async batchUpdateUsers(users: Partial<SelfServiceUser>[]): Promise<void> {
+    if (users.length === 0) {
+      return;
+    }
+
     const client = await this.pool.connect();
     try {
-      const values = users.map((user) => [
-        user.completeRegistration,
-        user.registeredAuthProviders,
-        user.configId,
-        user.guid,
-      ]);
+      // Build the VALUES clause for batch update
+      const values = users
+        .map((user, index) => {
+          const baseIndex = index * 4;
+          return `($${baseIndex + 1}, $${baseIndex + 2}, $${baseIndex + 3}, $${baseIndex + 4})`;
+        })
+        .join(", ");
+      console.log(users, 'users');
       const query = {
-        text: "UPDATE self_service_users SET complete_registration = $1, registered_auth_providers = $2 WHERE config_id = $3 AND guid = $4",
-        values,
+        text: `
+          UPDATE self_service_users 
+          SET 
+            complete_registration = v.complete_registration::boolean,
+            registered_auth_providers = v.registered_auth_providers::text[]
+          FROM (VALUES ${values}) AS v(complete_registration, registered_auth_providers, config_id, guid)
+          WHERE self_service_users.config_id = v.config_id AND self_service_users.guid = v.guid
+        `,
+        values: users.flatMap((user) => [
+          user.completeRegistration, 
+          user.registeredAuthProviders, 
+          user.configId, 
+          user.guid
+        ]),
       };
+
       await client.query(query);
     } finally {
       client.release();

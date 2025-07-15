@@ -50,37 +50,62 @@ export class Auth0AuthAdapter implements AuthAdapter {
     this.appType = typeof window !== "undefined" && window.localStorage ? "frontend" : "backend";
   }
 
-  async createUser(user: { email: string; phoneNumber?: string }): Promise<void> {
+  private async makeAuthenticatedRequest<T>(
+    requestFn: (token: string) => Promise<T>
+  ): Promise<T> {
     let apiResponse = this.apiResponse;
     if (!apiResponse) {
       apiResponse = await this.authenticateAPIUser();
     }
-    const { access_token } = apiResponse as Auth0APIResponse;
+
+    try {
+      return await requestFn(apiResponse.access_token);
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        console.log("Token expired, re-authenticating...");
+        // Re-authenticate and retry
+        apiResponse = await this.authenticateAPIUser();
+        return await requestFn(apiResponse.access_token);
+      }
+      throw error;
+    }
+  }
+
+  async createUser(user: { email: string; phoneNumber?: string }): Promise<void> {
     const tempPassword = generatePassword();
     const url = `${this.config.fields.authority}/api/v2/users`;
 
     if (this.config.fields.connection) {
-      try {
-        await axios.post(
-          url,
-          {
-            email: user.email,
-            ...(user.phoneNumber ? { phone_number: user.phoneNumber } : {}),
-            connection: this.config.fields.connection,
-            password: tempPassword, //change this later
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${access_token}`,
+      await this.makeAuthenticatedRequest(async (token) => {
+        try {
+          const response = await axios.post(
+            url,
+            {
+              email: user.email,
+              ...(user.phoneNumber ? { phone_number: user.phoneNumber } : {}),
+              connection: this.config.fields.connection,
+              password: tempPassword, //change this later
             },
-          },
-        );
-        //send link to user
-        await this.resetPassword(user.email);
-      } catch (error) {
-        console.log(error, "error");
-        return;
-      }
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            },
+          );
+          console.log(response, 'response auth0');
+          //send link to user only if user creation succeeded
+          await this.resetPassword(user.email);
+        } catch (error: unknown) {
+          if (axios.isAxiosError(error) && error.response?.status === 409) {
+            console.log(`User ${user.email} already exists, skipping creation and password reset`);
+            // User already exists, do nothing and return
+            return;
+          } else {
+            console.log(`Error creating user ${user.email}`, error);
+            return;
+          }
+        }
+      });
     } else {
       throw new Error("Connection not found");
     }
@@ -229,20 +254,22 @@ export class Auth0AuthAdapter implements AuthAdapter {
     throw new Error("API client id, secret, and audience are required");
   }
   private async resetPassword(email: string): Promise<void> {
-    const { access_token } = this.apiResponse as Auth0APIResponse;
     const url = `${this.config.fields.authority}/dbconnections/change_password`;
-    await axios.post(
-      url,
-      {
-        email: email,
-        client_id: this.config.fields.api_client_id,
-        connection: this.config.fields.connection,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${access_token}`,
+    
+    await this.makeAuthenticatedRequest(async (token) => {
+      await axios.post(
+        url,
+        {
+          email: email,
+          client_id: this.config.fields.api_client_id,
+          connection: this.config.fields.connection,
         },
-      },
-    );
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+    });
   }
 }
