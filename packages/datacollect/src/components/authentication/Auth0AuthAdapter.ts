@@ -26,6 +26,17 @@ interface Auth0APIResponse {
   expires_in: number;
   token_type: string;
 }
+interface Auth0UserInfo {
+  sub: string;
+  name?: string;
+  email?: string;
+  email_verified?: boolean;
+  picture?: string;
+  nickname?: string;
+  org_id?: string;
+  [key: string]: unknown;
+}
+
 interface Auth0UserResponse {
   created_at: string;
   email: string;
@@ -52,6 +63,7 @@ export class Auth0AuthAdapter implements AuthAdapter {
   private oidc: OIDCClient;
   private appType: "backend" | "frontend" = "backend";
   private apiResponse: Auth0APIResponse | null = null;
+  
   constructor(
     private authStorage: SingleAuthStorage | null,
     public config: AuthConfig,
@@ -72,71 +84,7 @@ export class Auth0AuthAdapter implements AuthAdapter {
     this.appType = typeof window !== "undefined" && window.localStorage ? "frontend" : "backend";
   }
 
-  private async makeAuthenticatedRequest<T>(
-    requestFn: (token: string) => Promise<T>
-  ): Promise<T> {
-    let apiResponse = this.apiResponse;
-    if (!apiResponse) {
-      apiResponse = await this.authenticateAPIUser();
-    }
-
-    try {
-      return await requestFn(apiResponse.access_token);
-    } catch (error: unknown) {
-      if (axios.isAxiosError(error) && error.response?.status === 401) {
-        console.log("Token expired, re-authenticating...");
-        // Re-authenticate and retry
-        apiResponse = await this.authenticateAPIUser();
-        return await requestFn(apiResponse.access_token);
-      }
-      throw error;
-    }
-  }
-
-  async createUser(user: { email: string; phoneNumber?: string }): Promise<void> {
-    const tempPassword = generatePassword();
-    const url = `${this.config.fields.authority}/api/v2/users`;
-
-    if (this.config.fields.connection) {
-      await this.makeAuthenticatedRequest(async (token) => {
-        try {
-          const response = await axios.post(
-            url,
-            {
-              email: user.email,
-              ...(user.phoneNumber ? { phone_number: user.phoneNumber } : {}),
-              connection: this.config.fields.connection,
-              password: tempPassword, //change this later
-            },
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            },
-          );
-          const userData = response.data as Auth0UserResponse;
-          
-          if (this.config.fields.organization && userData.user_id) {
-            await this.addUserToOrganization(userData.user_id);
-          }
-          //send link to user only if user creation succeeded
-          await this.resetPassword(user.email);
-        } catch (error: unknown) {
-          if (axios.isAxiosError(error) && error.response?.status === 409) {
-            console.error(`User ${user.email} already exists, skipping creation and password reset`);
-            // User already exists, do nothing and return
-            return;
-          } else {
-            console.error(`Error creating user ${user.email}`, error);
-            return;
-          }
-        }
-      });
-    } else {
-      throw new Error("Connection not found");
-    }
-  }
-
+  // Public methods
   async initialize(): Promise<void> {
     // Optionally restore session or tokens if needed
     await this.oidc.getStoredAuth();
@@ -170,14 +118,117 @@ export class Auth0AuthAdapter implements AuthAdapter {
     }
   }
 
-  private async validateTokenServer(token: string): Promise<boolean> {
+  async handleCallback(): Promise<void> {
+    const user = await this.oidc.handleCallback();
+    if (user && this.authStorage) {
+      await this.authStorage.setToken(user.access_token);
+    }
+  }
+
+  async getUserInfo(token?: string): Promise<Auth0UserInfo | null> {
     try {
-      // Use userinfo validation since crypto module is not available in browsers
-      console.log("Using userinfo validation for Auth0 token");
-      return this.checkTokenActive(token);
+      const accessToken = token || (await this.oidc.getStoredAuth())?.access_token;
+      if (!accessToken) {
+        return null;
+      }
+
+      const userinfoUrl = `${this.config.fields.authority}/userinfo`;
+      const response = await axios.get(userinfoUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 5000,
+      });
+
+      return response.data as Auth0UserInfo;
     } catch (error) {
-      console.error("Auth0 token validation error:", error);
-      return false;
+      console.error("Error getting user info:", error);
+      return null;
+    }
+  }
+
+  async createUser(user: { email: string; guid: string; phoneNumber?: string }): Promise<void> {
+    const tempPassword = generatePassword();
+    const url = `${this.config.fields.authority}/api/v2/users`;
+
+    if (this.config.fields.connection) {
+      await this.makeAuthenticatedRequest(async (token) => {
+        try {
+          const response = await axios.post(
+            url,
+            {
+              email: user.email,
+              ...(user.phoneNumber ? { phone_number: user.phoneNumber } : {}),
+              user_metadata: {
+                guid: user.guid,
+              },
+              connection: this.config.fields.connection,
+              password: tempPassword, //change this later
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            },
+          );
+          const userData = response.data as Auth0UserResponse;
+          
+          if (this.config.fields.organization && userData.user_id) {
+            await this.addUserToOrganization(userData.user_id);
+          }
+          //send link to user only if user creation succeeded
+          await this.resetPassword(user.email);
+        } catch (error: unknown) {
+          if (axios.isAxiosError(error) && error.response?.status === 409) {
+            // User already exists, get user ID and handle organization/password reset
+            console.log(`User ${user.email} already exists, handling existing user`);
+            try {
+              const existingUser = await this.getUserByEmail(user.email);
+              if (existingUser && existingUser.user_id) {
+                // Add user to organization if organization is configured
+                if (this.config.fields.organization) {
+                  await this.addUserToOrganization(existingUser.user_id);
+                }
+                // Send password reset for existing user
+                await this.resetPassword(user.email);
+              }
+            } catch (getUserError) {
+              console.error(`Error handling existing user ${user.email}:`, getUserError);
+            }
+            
+            // Continue to batch update - don't return early
+            return;
+          } else {
+            console.error(`Error creating user ${user.email}`, error);
+            return;
+          }
+        }
+      });
+    } else {
+      throw new Error("Connection not found");
+    }
+  }
+
+  // Private methods
+  private async makeAuthenticatedRequest<T>(
+    requestFn: (token: string) => Promise<T>
+  ): Promise<T> {
+    let apiResponse = this.apiResponse;
+    if (!apiResponse) {
+      apiResponse = await this.authenticateAPIUser();
+    }
+
+    try {
+      return await requestFn(apiResponse.access_token);
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        console.log("Token expired, re-authenticating...");
+        // Re-authenticate and retry
+        apiResponse = await this.authenticateAPIUser();
+        return await requestFn(apiResponse.access_token);
+      }
+      throw error;
     }
   }
 
@@ -186,10 +237,14 @@ export class Auth0AuthAdapter implements AuthAdapter {
     return !!auth && auth.access_token === token;
   }
 
-  async handleCallback(): Promise<void> {
-    const user = await this.oidc.handleCallback();
-    if (user && this.authStorage) {
-      await this.authStorage.setToken(user.access_token);
+  private async validateTokenServer(token: string): Promise<boolean> {
+    try {
+      // Use userinfo validation since crypto module is not available in browsers
+      console.log("Using userinfo validation for Auth0 token");
+      return this.checkTokenActive(token);
+    } catch (error) {
+      console.error("Auth0 token validation error:", error);
+      return false;
     }
   }
 
@@ -221,6 +276,74 @@ export class Auth0AuthAdapter implements AuthAdapter {
       // If userinfo call fails, token might be revoked or invalid
       return false;
     }
+  }
+
+  private async authenticateAPIUser(): Promise<Auth0APIResponse> {
+    const { api_client_id, api_client_secret, audience } = this.config.fields;
+    if (api_client_id && api_client_secret && audience) {
+      const response = await axios.post(`${this.config.fields.authority}/oauth/token`, {
+        grant_type: "client_credentials",
+        client_id: api_client_id,
+        client_secret: api_client_secret,
+        audience: audience,
+      });
+
+      this.apiResponse = response.data;
+      return response.data;
+    }
+    throw new Error("API client id, secret, and audience are required");
+  }
+
+  private async getUserByEmail(email: string): Promise<Auth0UserResponse | null> {
+    return this.makeAuthenticatedRequest(async (token) => {
+      const url = `${this.config.fields.authority}/api/v2/users-by-email`;
+      const response = await axios.get(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        params: {
+          email: email,
+        },
+      });
+      
+      // Auth0 returns an array of users, get the first one
+      const users = response.data as Auth0UserResponse[];
+      return users.length > 0 ? users[0] : null;
+    });
+  }
+
+  private async resetPassword(email: string): Promise<void> {
+    const url = `${this.config.fields.authority}/dbconnections/change_password`;
+    
+    await this.makeAuthenticatedRequest(async (token) => {
+      await axios.post(
+        url,
+        {
+          email: email,
+          client_id: this.config.fields.api_client_id,
+          connection: this.config.fields.connection,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+    });
+  }
+
+  private async addUserToOrganization(userId: Auth0UserResponse['user_id']): Promise<void> {
+    const url = `${this.config.fields.audience}organizations/${this.config.fields.organization}/members`;
+    const members = [userId];
+    try {
+      await this.makeAuthenticatedRequest(async (token) => {
+        await axios.post(url, {members:members }, { headers: { Authorization: `Bearer ${token}` } });
+      });
+    } catch (error) {
+      console.error('Error adding user to organization', error);
+      return;
+    }
+   
   }
 
   protected transformConfig(config: AuthConfig): AuthConfig {
@@ -264,51 +387,5 @@ export class Auth0AuthAdapter implements AuthAdapter {
       fields,
     };
   }
-  private async authenticateAPIUser(): Promise<Auth0APIResponse> {
-    const { api_client_id, api_client_secret, audience } = this.config.fields;
-    if (api_client_id && api_client_secret && audience) {
-      const response = await axios.post(`${this.config.fields.authority}/oauth/token`, {
-        grant_type: "client_credentials",
-        client_id: api_client_id,
-        client_secret: api_client_secret,
-        audience: audience,
-      });
-
-      this.apiResponse = response.data;
-      return response.data;
-    }
-    throw new Error("API client id, secret, and audience are required");
-  }
-  private async resetPassword(email: string): Promise<void> {
-    const url = `${this.config.fields.authority}/dbconnections/change_password`;
-    
-    await this.makeAuthenticatedRequest(async (token) => {
-      await axios.post(
-        url,
-        {
-          email: email,
-          client_id: this.config.fields.api_client_id,
-          connection: this.config.fields.connection,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
-    });
-  }
-  private async addUserToOrganization(userId: Auth0UserResponse['user_id']): Promise<void> {
-    const url = `${this.config.fields.audience}organizations/${this.config.fields.organization}/members`;
-    const members = [userId];
-    try {
-      await this.makeAuthenticatedRequest(async (token) => {
-        await axios.post(url, {members:members }, { headers: { Authorization: `Bearer ${token}` } });
-      });
-    } catch (error) {
-      console.error('Error adding user to organization', error);
-      return;
-    }
-   
-  }
+  
 }

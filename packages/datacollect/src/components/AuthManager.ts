@@ -144,7 +144,27 @@ export class AuthManager {
     return this.adapters[type]?.handleCallback();
   }
 
-  async createUser(type: string, user: { email: string; phoneNumber?: string }): Promise<void> {
+  async createUser(type: string, user: { email: string; guid: string; phoneNumber?: string }): Promise<void> {
     return this.adapters[type]?.createUser(user);
+  }
+  async getUserInfo(token: string, type?:string): Promise<Record<string, unknown> | null> {
+    // Try each adapter until one succeeds
+    if (type) {
+      return this.adapters[type]?.getUserInfo(token);
+    }
+
+    for (const [type, adapter] of Object.entries(this.adapters)) {
+      try {
+        const userInfo = await adapter.getUserInfo(token);
+        if (userInfo) {
+          console.log(`Successfully got user info from ${type}:`, userInfo);
+          return userInfo;
+        }
+      } catch (error) {
+        console.log(`Failed to get user info from ${type}:`, error);
+        // Continue to next adapter
+      }
+    }
+    return null;
   }
 }

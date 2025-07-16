@@ -20,11 +20,23 @@
 //depends on the auth0 api password policy
 //configure password policy in auth0 dashboard
 export const generatePassword = (length: number = 20) => {
-  const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@$^&#$$";
+  const lowercase = "abcdefghijklmnopqrstuvwxyz";
+  const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const numbers = "0123456789";
+  const symbols = "!@$^&#$$";
+  
+  // Ensure minimum requirements are met
   let password = "";
-  for (let i = 0; i < length; i++) {
-    const randomIndex = Math.floor(Math.random() * charset.length);
-    password += charset[randomIndex];
+  password += uppercase[Math.floor(Math.random() * uppercase.length)]; // At least 1 uppercase
+  password += numbers[Math.floor(Math.random() * numbers.length)]; // At least 1 number
+  password += symbols[Math.floor(Math.random() * symbols.length)]; // At least 1 symbol
+  
+  // Fill remaining length with random characters from all sets
+  const allChars = lowercase + uppercase + numbers + symbols;
+  for (let i = password.length; i < length; i++) {
+    password += allChars[Math.floor(Math.random() * allChars.length)];
   }
-  return password;
+  
+  // Shuffle the password to avoid predictable patterns
+  return password.split('').sort(() => Math.random() - 0.5).join('');
 };

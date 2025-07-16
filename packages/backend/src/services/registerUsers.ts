@@ -67,6 +67,7 @@ export async function registerSelfServiceUsers(
         try {
           await appInstance.edm.createUser(authProvider, {
             email: user.email,
+            guid: user.guid,
             phoneNumber: user.phone,
           });
           registeredAuthProviders.add(authProvider);

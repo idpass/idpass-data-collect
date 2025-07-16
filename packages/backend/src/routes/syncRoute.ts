@@ -216,5 +216,42 @@ export function createSyncRouter(
       }
     }),
   );
+
+  router.get(
+    "/user-info",
+    createDynamicAuthMiddleware(appInstanceStore),
+    asyncHandler(async (req, res) => {
+      const { configId = "default" } = req.query;
+      
+      const appInstance = await appInstanceStore.getAppInstance(configId as string);
+      if (!appInstance) {
+        return res.json({ status: "error", message: "App instance not found" });
+      }
+      
+      const authHeader = req.headers.authorization;
+      if (!authHeader) {
+        return res.status(401).json({ error: "Authorization header missing" });
+      }
+      
+
+      const [authType, token] = authHeader.split(" ");
+      const edm = appInstance.edm;
+      try {
+        // Get user info directly from EntityDataManager console.log("Getting user info for token:", token, " with auth type:", authType);
+        const userInfo = await edm.getUserInfo(token, authType);
+        if (!userInfo) {
+          return res.status(404).json({ error: "User info not found" });
+        }
+        res.json(userInfo);
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({
+          error: "Failed to get user info",
+          details: error,
+        });
+      }
+    }),
+  );
+
   return router;
 }

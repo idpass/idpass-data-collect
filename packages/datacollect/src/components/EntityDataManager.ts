@@ -869,9 +869,16 @@ export class EntityDataManager {
     return [];
   }
 
-  async createUser(type: string, user: { email: string; phoneNumber?: string }): Promise<void> {
+  async createUser(type: string, user: { email: string; guid: string; phoneNumber?: string }): Promise<void> {
     if (this.authManager) {
       await this.authManager.createUser(type, user);
     }
   }
+  async getUserInfo(token: string, type?: string): Promise<Record<string, unknown> | null> {
+    if (this.authManager) {
+      return this.authManager.getUserInfo(token, type);
+    }
+    return null;
+  }
+
 }
