@@ -351,6 +351,11 @@ export class Auth0AuthAdapter implements AuthAdapter {
 
     const fields = { ...config.fields };
 
+    // Remove sensitive fields that should not be included anywhere
+    delete fields.api_client_id;
+    delete fields.api_client_secret;
+    delete fields.connection
+
     // Standard OAuth/OIDC fields that should not be in extraQueryParams
     const standardFields = new Set([
       "clientId",

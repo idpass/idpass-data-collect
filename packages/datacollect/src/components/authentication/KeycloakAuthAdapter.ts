@@ -332,6 +332,8 @@ export class KeycloakAuthAdapter implements AuthAdapter {
       "clientSecret",
       "client_secret",
     ]);
+    delete fields.api_client_id;
+    delete fields.api_client_secret;
 
     // Collect all non-standard fields as extra query params
     const extraQueryParams: Record<string, string> = {};
