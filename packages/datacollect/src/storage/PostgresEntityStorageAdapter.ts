@@ -91,16 +91,16 @@ import { EntityPair, EntityStorageAdapter, SearchCriteria } from "../interfaces/
  * ```typescript
  * // Search for adults with complex criteria
  * const adults = await adapter.searchEntities([
- *   { "data.age": { $gte: 18 } },           // Age >= 18
- *   { "data.status": "active" },             // Exact string match
- *   { "data.name": { $regex: "john" } },     // Case-insensitive regex
- *   { "data.verified": true }                // Boolean match
+ *   { "age": { $gte: 18 } },           // Age >= 18
+ *   { "status": "active" },             // Exact string match
+ *   { "name": { $regex: "john" } },     // Case-insensitive regex
+ *   { "verified": true }                // Boolean match
  * ]);
  *
  * // Search with numeric ranges
  * const middleAged = await adapter.searchEntities([
- *   { "data.age": { $gte: 30 } },
- *   { "data.age": { $lte: 65 } }
+ *   { "age": { $gte: 30 } },
+ *   { "age": { $lte: 65 } }
  * ]);
  * ```
  *
@@ -281,17 +281,17 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * ```typescript
    * // Complex multi-criteria search
    * const results = await adapter.searchEntities([
-   *   { "data.age": { $gte: 21 } },          // Adults over 21
-   *   { "data.age": { $lt: 65 } },           // Under retirement age
-   *   { "data.status": "active" },            // Active status
-   *   { "data.name": { $regex: "smith" } },    // Name contains "smith"
-   *   { "data.verified": true }               // Verified accounts
+   *   { "age": { $gte: 21 } },          // Adults over 21
+   *   { "age": { $lt: 65 } },           // Under retirement age
+   *   { "status": "active" },            // Active status
+   *   { "name": { $regex: "smith" } },    // Name contains "smith"
+   *   { "verified": true }               // Verified accounts
    * ]);
    *
    * // Geographic search
    * const localUsers = await adapter.searchEntities([
-   *   { "data.address.city": "Boston" },
-   *   { "data.address.state": "MA" }
+   *   { "address.city": "Boston" },
+   *   { "address.state": "MA" }
    * ]);
    * ```
    */

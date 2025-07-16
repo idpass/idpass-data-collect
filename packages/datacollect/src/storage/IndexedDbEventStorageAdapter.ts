@@ -580,4 +580,53 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
       };
     });
   }
+
+  async getEventsSelfServicePagination(
+    entityGuid: string,
+    timestamp: string | Date,
+    limit: number,
+  ): Promise<{ events: FormSubmission[]; nextCursor: string | Date | null }> {
+    return new Promise((resolve, reject) => {
+      if (!this.db) {
+        throw new Error("IndexedDB is not initialized");
+      }
+
+      const transaction = this.db.transaction(["events"], "readonly");
+      const store = transaction.objectStore("events");
+      const index = store.index("timestamp");
+      const request = index.openCursor(IDBKeyRange.lowerBound(timestamp, true));
+
+      const events: FormSubmission[] = [];
+      let count = 0;
+
+      request.onerror = () => reject(new Error("Failed to retrieve events"));
+
+      request.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest).result;
+
+        if (cursor && count < limit) {
+          const event = cursor.value as FormSubmission;
+
+          // Check if this event has data.parentGuid that matches the entityGuid parameter
+          if (event.data && event.data.parentGuid === entityGuid) {
+            events.push(event);
+            count++;
+          }
+
+          cursor.continue();
+        } else {
+          // Sort the events by timestamp in ascending order (oldest first)
+          events.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+          // Get the last timestamp as the next cursor
+          const nextCursor = events.length > 0 ? events[events.length - 1].timestamp : null;
+
+          resolve({
+            events,
+            nextCursor,
+          });
+        }
+      };
+    });
+  }
 }

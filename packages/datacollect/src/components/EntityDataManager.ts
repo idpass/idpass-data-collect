@@ -514,13 +514,13 @@ export class EntityDataManager {
    * ```typescript
    * // Search for adults
    * const adults = await manager.searchEntities([
-   *   { "data.age": { $gte: 18 } },
+   *   { "age": { $gte: 18 } },
    *   { "type": "individual" }
    * ]);
    *
    * // Search for groups with specific name
    * const smithFamilies = await manager.searchEntities([
-   *   { "data.name": { $regex: /smith/i } },
+   *   { "name": { $regex: /smith/i } },
    *   { "type": "group" }
    * ]);
    *
@@ -874,6 +874,7 @@ export class EntityDataManager {
       await this.authManager.createUser(type, user);
     }
   }
+
   async getUserInfo(token: string, type?: string): Promise<Record<string, unknown> | null> {
     if (this.authManager) {
       return this.authManager.getUserInfo(token, type);
@@ -881,4 +882,13 @@ export class EntityDataManager {
     return null;
   }
 
+  async getUserEmailOrPhoneNumber(
+    type: string,
+    token: string,
+  ): Promise<{ email: string; phoneNumber?: string } | null> {
+    if (this.authManager) {
+      return this.authManager.getUserEmailOrPhoneNumber(type, token);
+    }
+    return null;
+  }
 }

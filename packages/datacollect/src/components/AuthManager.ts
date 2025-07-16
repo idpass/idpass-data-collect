@@ -147,7 +147,7 @@ export class AuthManager {
   async createUser(type: string, user: { email: string; guid: string; phoneNumber?: string }): Promise<void> {
     return this.adapters[type]?.createUser(user);
   }
-  async getUserInfo(token: string, type?:string): Promise<Record<string, unknown> | null> {
+  async getUserInfo(token: string, type?: string): Promise<Record<string, unknown> | null> {
     // Try each adapter until one succeeds
     if (type) {
       return this.adapters[type]?.getUserInfo(token);
@@ -166,5 +166,12 @@ export class AuthManager {
       }
     }
     return null;
+  }
+
+  async getUserEmailOrPhoneNumber(
+    type: string,
+    token: string,
+  ): Promise<{ email: string; phoneNumber?: string } | null> {
+    return this.adapters[type]?.getUserEmailOrPhoneNumber(token);
   }
 }

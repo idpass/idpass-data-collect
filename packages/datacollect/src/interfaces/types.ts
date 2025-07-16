@@ -299,6 +299,15 @@ export interface EventStore {
     events: FormSubmission[];
     nextCursor: string | Date | null;
   }>;
+  /** Get events for self-service with pagination support (10 events/page default) */
+  getEventsSelfServicePagination(
+    entityGuid: string,
+    timestamp: string | Date,
+    limit: number,
+  ): Promise<{
+    events: FormSubmission[];
+    nextCursor: string | Date | null;
+  }>;
   /** Update sync levels for multiple events */
   updateSyncLevelFromEvents(events: FormSubmission[]): Promise<void>;
   /** Get the timestamp of the last remote sync */
@@ -358,6 +367,15 @@ export interface EventStorageAdapter {
   getAuditLogsSince(timestamp: string): Promise<AuditLogEntry[]>;
   /** Get events since timestamp with pagination support (10 events/page default) */
   getEventsSincePagination(
+    timestamp: string | Date,
+    limit: number,
+  ): Promise<{
+    events: FormSubmission[];
+    nextCursor: string | Date | null;
+  }>;
+  /** Get events for self-service with pagination support (10 events/page default) */
+  getEventsSelfServicePagination(
+    entityGuid: string,
     timestamp: string | Date,
     limit: number,
   ): Promise<{
@@ -769,6 +787,7 @@ export interface AuthAdapter {
   handleCallback(): Promise<void>;
   getUserInfo(token?: string): Promise<Record<string, unknown> | null>;
   createUser(user: { email: string; guid: string; phoneNumber?: string }): Promise<void>;
+  getUserEmailOrPhoneNumber(token: string): Promise<{ email: string; phoneNumber?: string }>;
 }
 
 export interface AuthStorageAdapter {

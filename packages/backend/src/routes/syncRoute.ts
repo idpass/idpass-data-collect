@@ -19,14 +19,15 @@
 
 import { Router } from "express";
 import { AuditLogEntry, ExternalSyncCredentials, FormSubmission } from "idpass-data-collect";
-import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware } from "../middlewares/authentication";
+import { authenticateJWT, createDynamicAuthMiddleware } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
-import { AppConfigStore, AppInstanceStore, SelfServiceUserStore } from "../types";
+import { AppConfigStore, AppInstanceStore, AuthenticatedRequest, SelfServiceUserStore, SessionStore } from "../types";
 
 export function createSyncRouter(
   appConfigStore: AppConfigStore,
   appInstanceStore: AppInstanceStore,
   selfServiceUserStore: SelfServiceUserStore,
+  sessionStore: SessionStore,
 ): Router {
   const router = Router();
 
@@ -43,7 +44,7 @@ export function createSyncRouter(
 
   router.get(
     "/pull",
-    createDynamicAuthMiddleware(appInstanceStore),
+    createDynamicAuthMiddleware(appInstanceStore, sessionStore),
     asyncHandler(async (req, res) => {
       // get param timestamp
       const { since, configId = "default" } = req.query;
@@ -72,7 +73,7 @@ export function createSyncRouter(
 
   router.get(
     "/pull/callback",
-    createDynamicAuthMiddleware(appInstanceStore),
+    createDynamicAuthMiddleware(appInstanceStore, sessionStore),
     asyncHandler(async (req, res) => {
       const { configId = "default" } = req.query;
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
@@ -87,7 +88,7 @@ export function createSyncRouter(
 
   router.post(
     "/push",
-    createDynamicAuthMiddleware(appInstanceStore),
+    createDynamicAuthMiddleware(appInstanceStore, sessionStore),
     asyncHandler(async (req, res) => {
       // get body
       const events: FormSubmission[] = req.body.events;

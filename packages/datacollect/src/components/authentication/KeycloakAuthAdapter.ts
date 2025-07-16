@@ -51,7 +51,7 @@ export class KeycloakAuthAdapter implements AuthAdapter {
   private oidc: OIDCClient;
   private appType: "backend" | "frontend" = "backend";
   private apiResponse: Auth0APIResponse | null = null;
-  
+
   constructor(
     private authStorage: SingleAuthStorage | null,
     public config: AuthConfig,
@@ -77,6 +77,11 @@ export class KeycloakAuthAdapter implements AuthAdapter {
     // Optionally restore session or tokens if needed
     await this.oidc.getStoredAuth();
   }
+
+  async createUser(user: { email: string; phoneNumber?: string }): Promise<void> {
+    console.log("createUser", user);
+    throw new Error("Method not implemented.");
+  } //
 
   async isAuthenticated(): Promise<boolean> {
     const auth = await this.oidc.getStoredAuth();
@@ -142,7 +147,7 @@ export class KeycloakAuthAdapter implements AuthAdapter {
   async createUser(user: { email: string; guid: string; phoneNumber?: string }): Promise<void> {
     const tempPassword = generatePassword();
     const url = `${this.config.fields.host}/admin/realms/${this.config.fields.realm}/users`;
-    
+
     await this.makeAuthenticatedRequest(async (token) => {
       try {
         await axios.post(
@@ -152,17 +157,21 @@ export class KeycloakAuthAdapter implements AuthAdapter {
             email: user.email,
             enabled: true,
             emailVerified: false,
-            ...(user.phoneNumber ? { 
-              attributes: {
-                phone_number: [user.phoneNumber],
-                guid: [user.guid]
-              }
-            } : {}),
-            credentials: [{
-              type: "password",
-              value: tempPassword,
-              temporary: true
-            }]
+            ...(user.phoneNumber
+              ? {
+                  attributes: {
+                    phone_number: [user.phoneNumber],
+                    guid: [user.guid],
+                  },
+                }
+              : {}),
+            credentials: [
+              {
+                type: "password",
+                value: tempPassword,
+                temporary: true,
+              },
+            ],
           },
           {
             headers: {
@@ -171,21 +180,21 @@ export class KeycloakAuthAdapter implements AuthAdapter {
             },
           },
         );
-        
+
         //send link to user only if user creation succeeded
         await this.resetPassword(user.email);
       } catch (error: unknown) {
         if (axios.isAxiosError(error) && error.response?.status === 409) {
           // User already exists, handle password reset for existing user
           console.log(`User ${user.email} already exists, handling existing user`);
-          
+
           try {
             // Send password reset for existing user
             await this.resetPassword(user.email);
           } catch (resetError) {
             console.error(`Error sending password reset for existing user ${user.email}:`, resetError);
           }
-          
+
           // Continue to batch update - don't return early
           return;
         } else {
@@ -197,9 +206,7 @@ export class KeycloakAuthAdapter implements AuthAdapter {
   }
 
   // Private methods
-  private async makeAuthenticatedRequest<T>(
-    requestFn: (token: string) => Promise<T>
-  ): Promise<T> {
+  private async makeAuthenticatedRequest<T>(requestFn: (token: string) => Promise<T>): Promise<T> {
     let apiResponse = this.apiResponse;
     if (!apiResponse) {
       apiResponse = await this.authenticateAPIUser();
@@ -260,7 +267,8 @@ export class KeycloakAuthAdapter implements AuthAdapter {
     const { api_client_id, api_client_secret } = this.config.fields;
     if (api_client_id && api_client_secret) {
       const url = `${this.config.fields.host}/realms/${this.config.fields.realm}/protocol/openid-connect/token`;
-      const response = await axios.post(url, 
+      const response = await axios.post(
+        url,
         new URLSearchParams({
           grant_type: "client_credentials",
           client_id: api_client_id,
@@ -270,9 +278,8 @@ export class KeycloakAuthAdapter implements AuthAdapter {
           headers: {
             "Content-Type": "application/x-www-form-urlencoded",
           },
-        }
+        },
       );
-    
 
       this.apiResponse = response.data;
       return response.data;
@@ -294,20 +301,16 @@ export class KeycloakAuthAdapter implements AuthAdapter {
 
   private async resetPassword(email: string): Promise<void> {
     const user = await this.getUserByEmail(email);
-    
+
     await this.makeAuthenticatedRequest(async (token) => {
       const url = `${this.config.fields.host}/admin/realms/${this.config.fields.realm}/users/${user.id}`;
-      
-      await axios.put(
-        `${url}/execute-actions-email?client_id=${this.config.fields.client_id}`,
-        ["UPDATE_PASSWORD"],
-        {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+
+      await axios.put(`${url}/execute-actions-email?client_id=${this.config.fields.client_id}`, ["UPDATE_PASSWORD"], {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
     });
   }
 
@@ -353,5 +356,10 @@ export class KeycloakAuthAdapter implements AuthAdapter {
       type: config.type as "auth0" | "keycloak",
       fields,
     };
+  }
+
+  async getUserEmailOrPhoneNumber(token: string): Promise<{ email: string; phoneNumber?: string }> {
+    console.log("getUserEmailOrPhoneNumber", token);
+    throw new Error("Method not implemented.");
   }
 }

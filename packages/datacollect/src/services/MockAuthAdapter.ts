@@ -83,4 +83,8 @@ export class MockAuthAdapter implements AuthAdapter {
     console.log("Creating user", user);
     return Promise.resolve();
   }
+
+  async getUserEmailOrPhoneNumber(): Promise<{ email: string; phoneNumber?: string }> {
+    return Promise.resolve({ email: "mock-email@example.com", phoneNumber: "mock-phone-number" });
+  }
 }

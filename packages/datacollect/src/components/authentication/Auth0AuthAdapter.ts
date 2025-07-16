@@ -47,7 +47,7 @@ interface Auth0UserResponse {
       user_id: string;
       provider: string;
       isSocial: boolean;
-    }
+    },
   ];
 
   name: string;
@@ -63,7 +63,7 @@ export class Auth0AuthAdapter implements AuthAdapter {
   private oidc: OIDCClient;
   private appType: "backend" | "frontend" = "backend";
   private apiResponse: Auth0APIResponse | null = null;
-  
+
   constructor(
     private authStorage: SingleAuthStorage | null,
     public config: AuthConfig,
@@ -173,7 +173,7 @@ export class Auth0AuthAdapter implements AuthAdapter {
             },
           );
           const userData = response.data as Auth0UserResponse;
-          
+
           if (this.config.fields.organization && userData.user_id) {
             await this.addUserToOrganization(userData.user_id);
           }
@@ -196,7 +196,7 @@ export class Auth0AuthAdapter implements AuthAdapter {
             } catch (getUserError) {
               console.error(`Error handling existing user ${user.email}:`, getUserError);
             }
-            
+
             // Continue to batch update - don't return early
             return;
           } else {
@@ -211,9 +211,7 @@ export class Auth0AuthAdapter implements AuthAdapter {
   }
 
   // Private methods
-  private async makeAuthenticatedRequest<T>(
-    requestFn: (token: string) => Promise<T>
-  ): Promise<T> {
+  private async makeAuthenticatedRequest<T>(requestFn: (token: string) => Promise<T>): Promise<T> {
     let apiResponse = this.apiResponse;
     if (!apiResponse) {
       apiResponse = await this.authenticateAPIUser();
@@ -305,7 +303,7 @@ export class Auth0AuthAdapter implements AuthAdapter {
           email: email,
         },
       });
-      
+
       // Auth0 returns an array of users, get the first one
       const users = response.data as Auth0UserResponse[];
       return users.length > 0 ? users[0] : null;
@@ -314,7 +312,7 @@ export class Auth0AuthAdapter implements AuthAdapter {
 
   private async resetPassword(email: string): Promise<void> {
     const url = `${this.config.fields.authority}/dbconnections/change_password`;
-    
+
     await this.makeAuthenticatedRequest(async (token) => {
       await axios.post(
         url,
@@ -332,18 +330,17 @@ export class Auth0AuthAdapter implements AuthAdapter {
     });
   }
 
-  private async addUserToOrganization(userId: Auth0UserResponse['user_id']): Promise<void> {
+  private async addUserToOrganization(userId: Auth0UserResponse["user_id"]): Promise<void> {
     const url = `${this.config.fields.audience}organizations/${this.config.fields.organization}/members`;
     const members = [userId];
     try {
       await this.makeAuthenticatedRequest(async (token) => {
-        await axios.post(url, {members:members }, { headers: { Authorization: `Bearer ${token}` } });
+        await axios.post(url, { members: members }, { headers: { Authorization: `Bearer ${token}` } });
       });
     } catch (error) {
-      console.error('Error adding user to organization', error);
+      console.error("Error adding user to organization", error);
       return;
     }
-   
   }
 
   protected transformConfig(config: AuthConfig): AuthConfig {
@@ -354,7 +351,7 @@ export class Auth0AuthAdapter implements AuthAdapter {
     // Remove sensitive fields that should not be included anywhere
     delete fields.api_client_id;
     delete fields.api_client_secret;
-    delete fields.connection
+    delete fields.connection;
 
     // Standard OAuth/OIDC fields that should not be in extraQueryParams
     const standardFields = new Set([
@@ -392,5 +389,9 @@ export class Auth0AuthAdapter implements AuthAdapter {
       fields,
     };
   }
-  
+
+  async getUserEmailOrPhoneNumber(token: string): Promise<{ email: string; phoneNumber?: string }> {
+    console.log("getUserEmailOrPhoneNumber", token);
+    throw new Error("Method not implemented.");
+  }
 }

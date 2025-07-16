@@ -19,6 +19,8 @@
 
 import { EntityDataManager, ExternalSyncConfig } from "idpass-data-collect";
 import { Server } from "http";
+import { Request } from "express";
+
 export interface SyncServerConfig {
   port: number;
   initialPassword: string;
@@ -33,6 +35,11 @@ export interface SyncServerInstance {
   userStore: UserStore;
   clearStore: () => Promise<void>;
   closeConnection: () => Promise<void>;
+}
+
+export enum SyncRole {
+  REGISTRAR = "REGISTRAR",
+  SELF_SERVICE_USER = "SELF_SERVICE_USER",
 }
 
 export enum Role {
@@ -150,4 +157,29 @@ export interface SelfServiceUserStore {
   deleteUser(configId: string, guid: string): Promise<void>;
   clearStore(): Promise<void>;
   closeConnection(): Promise<void>;
+}
+
+export interface Session {
+  token: string;
+  entityGuid: string;
+  expiredDate: Date;
+}
+
+export interface SessionStore {
+  initialize(): Promise<void>;
+  createSession(session: Session): Promise<void>;
+  getSession(token: string): Promise<Session | null>;
+  deleteSession(token: string): Promise<void>;
+  clearStore(): Promise<void>;
+  closeConnection(): Promise<void>;
+}
+
+export interface DecodedPayload {
+  id: string;
+  email: string;
+}
+
+export interface AuthenticatedRequest extends Request {
+  user: DecodedPayload | Session;
+  syncRole: SyncRole;
 }
