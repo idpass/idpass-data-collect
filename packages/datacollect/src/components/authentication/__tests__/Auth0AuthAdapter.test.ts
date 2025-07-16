@@ -567,7 +567,6 @@ describe("Auth0AuthAdapter", () => {
   describe("createUser", () => {
     const mockUser = {
       email: "test@example.com",
-      guid: "user-guid-123",
       phoneNumber: "+1234567890",
     };
 
@@ -602,9 +601,7 @@ describe("Auth0AuthAdapter", () => {
         expect.objectContaining({
           email: mockUser.email,
           phone_number: mockUser.phoneNumber,
-          user_metadata: {
-            guid: mockUser.guid,
-          },
+        
           connection: authConfig.fields.connection,
           password: expect.any(String),
         }),
@@ -670,7 +667,7 @@ describe("Auth0AuthAdapter", () => {
     it("should handle user creation without phone number", async () => {
       const userWithoutPhone = {
         email: "test@example.com",
-        guid: "user-guid-123",
+       
       };
 
       const mockCreateResponse = {
@@ -690,9 +687,7 @@ describe("Auth0AuthAdapter", () => {
         `${authConfig.fields.authority}/api/v2/users`,
         expect.objectContaining({
           email: userWithoutPhone.email,
-          user_metadata: {
-            guid: userWithoutPhone.guid,
-          },
+          
           connection: authConfig.fields.connection,
           password: expect.any(String),
         }),

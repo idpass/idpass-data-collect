@@ -192,7 +192,7 @@ export class OIDCClient {
     return null;
   }
 
-  async createUser(user: { email: string; guid: string; phoneNumber?: string }): Promise<void> {
+  async createUser(user: { email: string; phoneNumber?: string }): Promise<void> {
     console.log("createUser", user);
     throw new Error("Method not implemented.");
   }

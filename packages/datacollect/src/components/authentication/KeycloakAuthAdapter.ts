@@ -139,7 +139,7 @@ export class KeycloakAuthAdapter implements AuthAdapter {
     }
   }
 
-  async createUser(user: { email: string; guid: string; phoneNumber?: string }): Promise<void> {
+  async createUser(user: { email: string;  phoneNumber?: string }): Promise<void> {
     const tempPassword = generatePassword();
     const url = `${this.config.fields.host}/admin/realms/${this.config.fields.realm}/users`;
     
@@ -155,7 +155,6 @@ export class KeycloakAuthAdapter implements AuthAdapter {
             ...(user.phoneNumber ? { 
               attributes: {
                 phone_number: [user.phoneNumber],
-                guid: [user.guid]
               }
             } : {}),
             credentials: [{

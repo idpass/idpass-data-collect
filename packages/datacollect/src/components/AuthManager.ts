@@ -144,7 +144,7 @@ export class AuthManager {
     return this.adapters[type]?.handleCallback();
   }
 
-  async createUser(type: string, user: { email: string; guid: string; phoneNumber?: string }): Promise<void> {
+  async createUser(type: string, user: { email: string; phoneNumber?: string }): Promise<void> {
     return this.adapters[type]?.createUser(user);
   }
   async getUserInfo(token: string, type?:string): Promise<Record<string, unknown> | null> {
