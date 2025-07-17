@@ -23,11 +23,10 @@ import {
   EntityDataManager,
   ExternalSyncCredentials,
   FormSubmission,
-  SyncRole,
 } from "idpass-data-collect";
 import { authenticateJWT, createDynamicAuthMiddleware } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
-import { AppConfigStore, AppInstanceStore, AuthenticatedRequest, SelfServiceUserStore, SessionStore } from "../types";
+import { AppConfigStore, AppInstanceStore, AuthenticatedRequest, SelfServiceUserStore, SessionStore, SyncRole } from "../types";
 
 export function createSyncRouter(
   appConfigStore: AppConfigStore,
@@ -72,8 +71,11 @@ export function createSyncRouter(
       }
 
       const syncRole = (req as AuthenticatedRequest).syncRole;
-      const entityUid = (req as AuthenticatedRequest).user?.entityGuid;
+      const user = (req as AuthenticatedRequest).user;
+      const entityUid = 'entityGuid' in user ? user.entityGuid : undefined;
+     
       if (syncRole === SyncRole.SELF_SERVICE_USER) {
+       
         if (!entityUid) {
           return res.json({
             events: [],
@@ -188,7 +190,11 @@ export function createSyncRouter(
       }
 
       try {
-        await edm.saveAuditLogs(auditLogs.map((log) => ({ ...log, userId: (req as AuthenticatedRequest).user?.id })));
+        const user = (req as AuthenticatedRequest).user;
+        const userId = 'id' in user ? user.id : undefined;
+        if (userId) {
+          await edm.saveAuditLogs(auditLogs.map((log) => ({ ...log, userId })));
+        }
       } catch (error) {
         console.error(error);
         // ignore errors
@@ -242,7 +248,7 @@ export function createSyncRouter(
 
   router.get(
     "/user-info",
-    createDynamicAuthMiddleware(appInstanceStore),
+    createDynamicAuthMiddleware(appInstanceStore, sessionStore),
     asyncHandler(async (req, res) => {
       const { configId = "default" } = req.query;
 

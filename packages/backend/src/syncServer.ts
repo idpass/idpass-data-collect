@@ -30,6 +30,7 @@ import { errorHandler, notFoundHandler, setupUncaughtHandlers } from "./middlewa
 import { createAppConfigRoutes } from "./routes/appConfigRoutes";
 import { createPotentialDuplicatesRoute } from "./routes/potentialDuplicatesRoute";
 import { createSyncRouter } from "./routes/syncRoute";
+import { SessionStoreImpl } from "./stores/SessionStore";
 import { createUserRoutes } from "./routes/userRoutes";
 import { registerSelfServiceUsers } from "./services/registerUsers";
 import { AppConfigStoreImpl } from "./stores/AppConfigStore";
@@ -60,6 +61,8 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   await appInstanceStore.initialize();
   const selfServiceUserStore = new SelfServiceUserStoreImpl(config.postgresUrl);
   await selfServiceUserStore.initialize();
+  const sessionStore = new SessionStoreImpl(config.postgresUrl);
+  await sessionStore.initialize();
   const app = express();
 
   setupUncaughtHandlers();
@@ -98,7 +101,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   }
 
   app.use("/api/apps", createAppConfigRoutes(appConfigStore, appInstanceStore));
-  app.use("/api/sync", createSyncRouter(appConfigStore, appInstanceStore, selfServiceUserStore));
+  app.use("/api/sync", createSyncRouter(appConfigStore, appInstanceStore, selfServiceUserStore, sessionStore));
   app.use("/api/users", createUserRoutes(userStore));
   app.use("/api/potential-duplicates", createPotentialDuplicatesRoute(appInstanceStore));
 

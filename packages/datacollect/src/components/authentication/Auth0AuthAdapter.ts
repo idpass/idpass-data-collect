@@ -388,12 +388,13 @@ export class Auth0AuthAdapter implements AuthAdapter {
   }
 
   async getUserEmailOrPhoneNumber(token: string): Promise<{ email: string; phoneNumber?: string }> {
+    
     const accessToken = token || (await this.oidc.getStoredAuth())?.access_token;
     if (!accessToken) {
       throw new Error("No access token found");
     }
 
-    const userinfoUrl = `${this.config.fields.authority}/protocol/openid-connect/userinfo`;
+    const userinfoUrl = `${this.config.fields.authority}/userinfo`;
     const response = await axios.get(userinfoUrl, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -404,7 +405,6 @@ export class Auth0AuthAdapter implements AuthAdapter {
 
     return {
       email: response.data.email,
-      phoneNumber: response.data.phone_number || null,
     }
   }
 }
