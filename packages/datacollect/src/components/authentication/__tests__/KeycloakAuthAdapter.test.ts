@@ -585,7 +585,6 @@ describe("KeycloakAuthAdapter", () => {
   describe("createUser", () => {
     const mockUser = {
       email: "test@example.com",
-      guid: "user-guid-123",
       phoneNumber: "+1234567890",
     };
 
@@ -625,7 +624,6 @@ describe("KeycloakAuthAdapter", () => {
           emailVerified: false,
           attributes: {
             phone_number: [mockUser.phoneNumber],
-            guid: [mockUser.guid],
           },
           credentials: [{
             type: "password",
@@ -664,7 +662,7 @@ describe("KeycloakAuthAdapter", () => {
     it("should handle user creation without phone number", async () => {
       const userWithoutPhone = {
         email: "test@example.com",
-        guid: "user-guid-123",
+        
       };
 
       const mockCreateResponse = {

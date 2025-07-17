@@ -786,8 +786,7 @@ export interface AuthAdapter {
   validateToken(token: string): Promise<boolean>;
   handleCallback(): Promise<void>;
   getUserInfo(token?: string): Promise<Record<string, unknown> | null>;
-  createUser(user: { email: string; guid: string; phoneNumber?: string }): Promise<void>;
-  getUserEmailOrPhoneNumber(token: string): Promise<{ email: string; phoneNumber?: string }>;
+  createUser(user: { email: string;  phoneNumber?: string }): Promise<void>;
 }
 
 export interface AuthStorageAdapter {

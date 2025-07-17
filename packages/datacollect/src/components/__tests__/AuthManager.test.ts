@@ -462,7 +462,7 @@ describe("AuthManager", () => {
     it("should create user using specific adapter type", async () => {
       const mockUser = {
         email: "test@example.com",
-        guid: "user-guid-123",
+       
         phoneNumber: "+1234567890",
       };
 
@@ -474,7 +474,7 @@ describe("AuthManager", () => {
     it("should create user using keycloak adapter", async () => {
       const mockUser = {
         email: "test@example.com",
-        guid: "user-guid-123",
+       
       };
 
       await authManager.createUser("keycloak", mockUser);
@@ -485,7 +485,7 @@ describe("AuthManager", () => {
     it("should handle user creation without phone number", async () => {
       const mockUser = {
         email: "test@example.com",
-        guid: "user-guid-123",
+        
       };
 
       await authManager.createUser("auth0", mockUser);
@@ -496,7 +496,7 @@ describe("AuthManager", () => {
     it("should handle adapter errors during user creation", async () => {
       const mockUser = {
         email: "test@example.com",
-        guid: "user-guid-123",
+       
       };
 
       mockAuth0Adapter.createUser.mockRejectedValue(new Error("Creation failed"));
@@ -507,7 +507,7 @@ describe("AuthManager", () => {
     it("should not throw error for unknown adapter type", async () => {
       const mockUser = {
         email: "test@example.com",
-        guid: "user-guid-123",
+       
       };
 
       await expect(authManager.createUser("unknown", mockUser)).resolves.toBeUndefined();
@@ -516,7 +516,7 @@ describe("AuthManager", () => {
     it("should handle user creation with all fields", async () => {
       const mockUser = {
         email: "test@example.com",
-        guid: "user-guid-123",
+        
         phoneNumber: "+1234567890",
       };
 
@@ -560,7 +560,7 @@ describe("AuthManager", () => {
 
       const mockUser = {
         email: "test@example.com",
-        guid: "user-guid-123",
+       
       };
 
       await expect(authManagerEmpty.createUser("nonexistent", mockUser)).resolves.toBeUndefined();

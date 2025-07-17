@@ -77,12 +77,6 @@ export class KeycloakAuthAdapter implements AuthAdapter {
     // Optionally restore session or tokens if needed
     await this.oidc.getStoredAuth();
   }
-
-  async createUser(user: { email: string; phoneNumber?: string }): Promise<void> {
-    console.log("createUser", user);
-    throw new Error("Method not implemented.");
-  } //
-
   async isAuthenticated(): Promise<boolean> {
     const auth = await this.oidc.getStoredAuth();
     // Check if we have valid authentication data
@@ -144,7 +138,7 @@ export class KeycloakAuthAdapter implements AuthAdapter {
     }
   }
 
-  async createUser(user: { email: string; guid: string; phoneNumber?: string }): Promise<void> {
+  async createUser(user: { email: string;  phoneNumber?: string }): Promise<void> {
     const tempPassword = generatePassword();
     const url = `${this.config.fields.host}/admin/realms/${this.config.fields.realm}/users`;
 
@@ -157,21 +151,16 @@ export class KeycloakAuthAdapter implements AuthAdapter {
             email: user.email,
             enabled: true,
             emailVerified: false,
-            ...(user.phoneNumber
-              ? {
-                  attributes: {
-                    phone_number: [user.phoneNumber],
-                    guid: [user.guid],
-                  },
-                }
-              : {}),
-            credentials: [
-              {
-                type: "password",
-                value: tempPassword,
-                temporary: true,
-              },
-            ],
+            ...(user.phoneNumber ? { 
+              attributes: {
+                phone_number: [user.phoneNumber],
+              }
+            } : {}),
+            credentials: [{
+              type: "password",
+              value: tempPassword,
+              temporary: true
+            }]
           },
           {
             headers: {
