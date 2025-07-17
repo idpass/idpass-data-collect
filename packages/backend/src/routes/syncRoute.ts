@@ -72,7 +72,7 @@ export function createSyncRouter(
       }
 
       const syncRole = (req as AuthenticatedRequest).syncRole;
-      const entityUid = (req as AuthenticatedRequest).user?.guid;
+      const entityUid = (req as AuthenticatedRequest).user?.entityGuid;
       if (syncRole === SyncRole.SELF_SERVICE_USER) {
         if (!entityUid) {
           return res.json({
