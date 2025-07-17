@@ -459,9 +459,15 @@ describe("PostgresEventStorageAdapter", () => {
       "2023-05-01T00:00:00.000Z",
     );
 
-    expect(descendantEvents).toHaveLength(4);
-    expect(descendantEvents.map((e) => e.entityGuid)).toEqual(["child1", "child2", "grandchild1", "child3"]);
-    expect(descendantEvents.map((e) => e.data.name)).toEqual(["Child 1", "Child 2", "Grandchild 1", "Child 3"]);
+    expect(descendantEvents).toHaveLength(5);
+    expect(descendantEvents.map((e) => e.entityGuid)).toEqual(["parent1", "child1", "child2", "grandchild1", "child3"]);
+    expect(descendantEvents.map((e) => e.data.name)).toEqual([
+      "Parent 1",
+      "Child 1",
+      "Child 2",
+      "Grandchild 1",
+      "Child 3",
+    ]);
   });
 
   test("getEventsSelfServicePagination should return empty array when no descendants exist", async () => {
@@ -493,7 +499,8 @@ describe("PostgresEventStorageAdapter", () => {
       "2023-05-01T00:00:00.000Z",
     );
 
-    expect(descendantEvents).toHaveLength(0);
+    expect(descendantEvents).toHaveLength(1);
+    expect(descendantEvents[0].entityGuid).toBe("parent1");
   });
 
   test("getEventsSelfServicePagination should handle deep descendant hierarchies", async () => {
@@ -543,8 +550,8 @@ describe("PostgresEventStorageAdapter", () => {
       "2023-05-01T00:00:00.000Z",
     );
 
-    expect(descendantEvents).toHaveLength(3);
-    expect(descendantEvents.map((e) => e.entityGuid)).toEqual(["level1", "level2", "level3"]);
+    expect(descendantEvents).toHaveLength(4);
+    expect(descendantEvents.map((e) => e.entityGuid)).toEqual(["root", "level1", "level2", "level3"]);
   });
 
   test("getEventsSelfServicePagination should filter by timestamp correctly", async () => {
@@ -697,8 +704,15 @@ describe("PostgresEventStorageAdapter", () => {
       "2023-05-01T00:00:00.000Z",
     );
 
-    expect(descendantEvents).toHaveLength(5);
-    expect(descendantEvents.map((e) => e.entityGuid)).toEqual(["branch1", "branch2", "leaf1", "leaf2", "leaf3"]);
+    expect(descendantEvents).toHaveLength(6);
+    expect(descendantEvents.map((e) => e.entityGuid)).toEqual([
+      "root",
+      "branch1",
+      "branch2",
+      "leaf1",
+      "leaf2",
+      "leaf3",
+    ]);
   });
 
   test("getEventsSelfServicePagination should sort events by timestamp in ascending order", async () => {
@@ -787,8 +801,8 @@ describe("PostgresEventStorageAdapter", () => {
       "2023-05-01T00:00:00.000Z",
     );
 
-    expect(descendantEvents).toHaveLength(1);
-    expect(descendantEvents[0].entityGuid).toBe("child1");
+    expect(descendantEvents).toHaveLength(2);
+    expect(descendantEvents.map((e) => e.entityGuid)).toEqual(["parent1", "child1"]);
   });
 });
 
@@ -1227,12 +1241,16 @@ describe("PostgresEventStorageAdapter - Tenant Tests", () => {
     const tenant1Result = await tenant1Adapter.getEventsSelfServicePagination("parent1", baseTime);
     const tenant2Result = await tenant2Adapter.getEventsSelfServicePagination("parent2", baseTime);
 
-    expect(tenant1Result.events).toHaveLength(1);
-    expect(tenant1Result.events[0].guid).toBe("tenant1-child");
+    expect(tenant1Result.events).toHaveLength(2);
+    expect(tenant1Result.events[0].guid).toBe("tenant1-parent");
     expect(tenant1Result.events[0].data.tenant).toBe("tenant1");
+    expect(tenant1Result.events[1].guid).toBe("tenant1-child");
+    expect(tenant1Result.events[1].data.tenant).toBe("tenant1");
 
-    expect(tenant2Result.events).toHaveLength(1);
-    expect(tenant2Result.events[0].guid).toBe("tenant2-child");
+    expect(tenant2Result.events).toHaveLength(2);
+    expect(tenant2Result.events[0].guid).toBe("tenant2-parent");
     expect(tenant2Result.events[0].data.tenant).toBe("tenant2");
+    expect(tenant2Result.events[1].guid).toBe("tenant2-child");
+    expect(tenant2Result.events[1].data.tenant).toBe("tenant2");
   });
 });

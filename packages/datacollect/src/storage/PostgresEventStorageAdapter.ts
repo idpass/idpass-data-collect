@@ -355,6 +355,9 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
         const descendants = new Set<string>();
         const queue = [guid];
 
+        // Add the entity itself to descendants
+        descendants.add(guid);
+
         while (queue.length > 0) {
           const current = queue.shift()!;
           const children = parentToChildren.get(current);
@@ -374,7 +377,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
 
       const descendants = findDescendants(entityGuid);
 
-      // Filter events that are descendants and sort by timestamp and filter by timestamp
+      // Filter events that are descendants (including the entity itself) and sort by timestamp and filter by timestamp
       const descendantEvents = allEvents
         .filter((event) => descendants.has(event.entityGuid))
         .filter((event) => event.timestamp >= timestamp)

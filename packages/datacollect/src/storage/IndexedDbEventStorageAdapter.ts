@@ -640,11 +640,11 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
 
     const descendants = buildDescendantMap();
 
-    // Filter events that are descendants
+    // Filter events that are descendants OR the entity itself
     const events: FormSubmission[] = [];
 
     allEvents.forEach((event) => {
-      if (descendants.has(event.entityGuid)) {
+      if (descendants.has(event.entityGuid) || event.entityGuid === entityGuid) {
         events.push(event);
       }
     });
