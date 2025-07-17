@@ -644,6 +644,14 @@ export class EntityDataManager {
     return await this.eventStore.getEventsSincePagination(timestamp, limit);
   }
 
+  async getEventsSelfServicePagination(
+    entityGuid: string,
+    timestamp: string,
+    limit: number,
+  ): Promise<{ events: FormSubmission[]; nextCursor: string | Date | null }> {
+    return await this.eventStore.getEventsSelfServicePagination(entityGuid, timestamp, limit);
+  }
+
   /**
    * Closes all database connections and cleans up resources.
    *

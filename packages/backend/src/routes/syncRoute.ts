@@ -18,7 +18,13 @@
  */
 
 import { Router } from "express";
-import { AuditLogEntry, ExternalSyncCredentials, FormSubmission } from "idpass-data-collect";
+import {
+  AuditLogEntry,
+  EntityDataManager,
+  ExternalSyncCredentials,
+  FormSubmission,
+  SyncRole,
+} from "idpass-data-collect";
 import { authenticateJWT, createDynamicAuthMiddleware } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { AppConfigStore, AppInstanceStore, AuthenticatedRequest, SelfServiceUserStore, SessionStore } from "../types";
@@ -54,7 +60,7 @@ export function createSyncRouter(
       if (!appInstance) {
         return res.json({ status: "error", message: "App instance not found" });
       }
-      const edm = appInstance.edm;
+      const edm = appInstance.edm as EntityDataManager;
       const duplicates = await edm.getPotentialDuplicates();
       if (duplicates.length > 0) {
         console.log("Duplicates exist! Please resolve them before syncing.");
@@ -63,6 +69,22 @@ export function createSyncRouter(
           nextCursor: null,
           error: "Duplicates exist! Please resolve them on admin page.",
         });
+      }
+
+      const syncRole = (req as AuthenticatedRequest).syncRole;
+      const entityUid = (req as AuthenticatedRequest).user?.guid;
+      if (syncRole === SyncRole.SELF_SERVICE_USER) {
+        if (!entityUid) {
+          return res.json({
+            events: [],
+            nextCursor: null,
+            error: "Entity not found",
+          });
+        }
+        const result = await edm.getEventsSelfServicePagination(entityUid, since as string, 10);
+        console.log("Request pulling: ", result.events?.length, " events since", since);
+        res.json(result);
+        return;
       }
 
       const result = await edm.getEventsSincePagination(since as string, 10);
@@ -223,17 +245,16 @@ export function createSyncRouter(
     createDynamicAuthMiddleware(appInstanceStore),
     asyncHandler(async (req, res) => {
       const { configId = "default" } = req.query;
-      
+
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
       if (!appInstance) {
         return res.json({ status: "error", message: "App instance not found" });
       }
-      
+
       const authHeader = req.headers.authorization;
       if (!authHeader) {
         return res.status(401).json({ error: "Authorization header missing" });
       }
-      
 
       const [authType, token] = authHeader.split(" ");
       const edm = appInstance.edm;
