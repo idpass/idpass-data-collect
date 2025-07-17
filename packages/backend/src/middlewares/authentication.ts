@@ -73,14 +73,15 @@ export function createDynamicAuthMiddleware(appInstanceStore: AppInstanceStore, 
       }
 
       const [authType, token] = authHeader.split(" ");
-
       // CHECH IF TOKEN IS FROM REGISTRAR (BUILT-IN AUTH)
-      const decoded = await authenticateJWTBackend(token);
-      if (decoded) {
-        (req as AuthenticatedRequest).user = decoded;
-        (req as AuthenticatedRequest).syncRole = SyncRole.REGISTRAR;
-        next();
-        return;
+      if (authType === "Bearer") {
+        const decoded = await authenticateJWTBackend(token);
+        if (decoded) {
+          (req as AuthenticatedRequest).user = decoded;
+          (req as AuthenticatedRequest).syncRole = SyncRole.REGISTRAR;
+          next();
+          return;
+        }
       }
 
       // CHECK IF TOKEN IS FROM SELF-SERVICE USER (DYNAMIC AUTH)
@@ -98,7 +99,7 @@ export function createDynamicAuthMiddleware(appInstanceStore: AppInstanceStore, 
         res.status(400).json({ error: "App instance not found" });
         return;
       }
-
+      //we can skip this because getUserEmailOrPhoneNumber have the same endpoint
       isValid = await appInstance.edm.validateToken(authType, token);
       if (!isValid) {
         res.status(401).json({ error: "Invalid token" });
@@ -106,6 +107,7 @@ export function createDynamicAuthMiddleware(appInstanceStore: AppInstanceStore, 
       }
 
       const userInfo = await appInstance.edm.getUserEmailOrPhoneNumber(authType, token);
+
       if (!userInfo) {
         res.status(401).json({ error: "Invalid token" });
         return;
@@ -113,8 +115,7 @@ export function createDynamicAuthMiddleware(appInstanceStore: AppInstanceStore, 
 
       // find guid from email or phone number
       const entities = await appInstance.edm.searchEntities([
-        { email: userInfo.email },
-        { phoneNumber: userInfo.phoneNumber },
+        { email: userInfo.email }
       ]);
       if (entities.length === 0) {
         res.status(401).json({ error: "Invalid token" });

@@ -25,9 +25,7 @@ import {
   AppConfigStore,
   AppInstanceStore,
   AuthenticatedRequest,
-  DecodedPayload,
   SelfServiceUserStore,
-  Session,
   SessionStore,
   SyncRole,
 } from "../types";
@@ -74,8 +72,9 @@ export function createSyncRouter(
         });
       }
       const syncRole = (req as AuthenticatedRequest).syncRole;
-      const user = (req as AuthenticatedRequest).user as Session;
-      const entityGuid = user?.entityGuid;
+      const user = (req as AuthenticatedRequest).user;
+      const entityGuid = "entityGuid" in user ? user.entityGuid : undefined;
+
       if (syncRole === SyncRole.SELF_SERVICE_USER) {
         if (!entityGuid) {
           return res.json({
@@ -191,8 +190,11 @@ export function createSyncRouter(
       }
 
       try {
-        const user = (req as AuthenticatedRequest).user as DecodedPayload;
-        await edm.saveAuditLogs(auditLogs.map((log) => ({ ...log, userId: user.id, entityGuid: user.id })));
+        const user = (req as AuthenticatedRequest).user;
+        const userId = "id" in user ? user.id : undefined;
+        if (userId) {
+          await edm.saveAuditLogs(auditLogs.map((log) => ({ ...log, userId })));
+        }
       } catch (error) {
         console.error(error);
         // ignore errors

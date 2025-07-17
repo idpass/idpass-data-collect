@@ -367,8 +367,7 @@ export class KeycloakAuthAdapter implements AuthAdapter {
     });
 
     return {
-      email: response.data.email,
-      phoneNumber: response.data.phone_number || null,
+      email: response.data.email
     }
   }
 }
