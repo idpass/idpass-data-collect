@@ -573,8 +573,8 @@ describe("Auth0AuthAdapter", () => {
     beforeEach(() => {
       // Mock the makeAuthenticatedRequest method to properly call the callback with a token
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      jest.spyOn(adapter as any, 'makeAuthenticatedRequest').mockImplementation(async (callback: any) => {
-        return await callback('mock-management-token');
+      jest.spyOn(adapter as any, "makeAuthenticatedRequest").mockImplementation(async (callback: any) => {
+        return await callback("mock-management-token");
       });
     });
 
@@ -592,7 +592,7 @@ describe("Auth0AuthAdapter", () => {
 
       // Mock resetPassword method
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      jest.spyOn(adapter as any, 'resetPassword').mockResolvedValue(undefined);
+      jest.spyOn(adapter as any, "resetPassword").mockResolvedValue(undefined);
 
       await adapter.createUser(mockUser);
 
@@ -601,7 +601,7 @@ describe("Auth0AuthAdapter", () => {
         expect.objectContaining({
           email: mockUser.email,
           phone_number: mockUser.phoneNumber,
-        
+
           connection: authConfig.fields.connection,
           password: expect.any(String),
         }),
@@ -621,18 +621,20 @@ describe("Auth0AuthAdapter", () => {
 
       mockedAxios.post.mockRejectedValue(conflictError);
       mockedAxios.get.mockResolvedValue({
-        data: [{
-          user_id: "auth0|existing123",
-          email: "test@example.com",
-        }],
+        data: [
+          {
+            user_id: "auth0|existing123",
+            email: "test@example.com",
+          },
+        ],
       });
 
       // Mock methods
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      jest.spyOn(adapter as any, 'resetPassword').mockResolvedValue(undefined);
+      jest.spyOn(adapter as any, "resetPassword").mockResolvedValue(undefined);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      jest.spyOn(adapter as any, 'addUserToOrganization').mockResolvedValue(undefined);
-      jest.spyOn(axios, 'isAxiosError').mockReturnValue(true);
+      jest.spyOn(adapter as any, "addUserToOrganization").mockResolvedValue(undefined);
+      jest.spyOn(axios, "isAxiosError").mockReturnValue(true);
 
       await adapter.createUser(mockUser);
 
@@ -667,7 +669,6 @@ describe("Auth0AuthAdapter", () => {
     it("should handle user creation without phone number", async () => {
       const userWithoutPhone = {
         email: "test@example.com",
-       
       };
 
       const mockCreateResponse = {
@@ -679,7 +680,7 @@ describe("Auth0AuthAdapter", () => {
 
       mockedAxios.post.mockResolvedValue(mockCreateResponse);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      jest.spyOn(adapter as any, 'resetPassword').mockResolvedValue(undefined);
+      jest.spyOn(adapter as any, "resetPassword").mockResolvedValue(undefined);
 
       await adapter.createUser(userWithoutPhone);
 
@@ -687,7 +688,7 @@ describe("Auth0AuthAdapter", () => {
         `${authConfig.fields.authority}/api/v2/users`,
         expect.objectContaining({
           email: userWithoutPhone.email,
-          
+
           connection: authConfig.fields.connection,
           password: expect.any(String),
         }),
@@ -696,7 +697,7 @@ describe("Auth0AuthAdapter", () => {
 
       // Should not include phone_number in the request
       const postCall = mockedAxios.post.mock.calls[0];
-      expect(postCall[1]).not.toHaveProperty('phone_number');
+      expect(postCall[1]).not.toHaveProperty("phone_number");
     });
 
     it("should add user to organization if configured", async () => {
@@ -709,7 +710,7 @@ describe("Auth0AuthAdapter", () => {
 
       mockedAxios.post.mockResolvedValue(mockCreateResponse);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      jest.spyOn(adapter as any, 'resetPassword').mockResolvedValue(undefined);
+      jest.spyOn(adapter as any, "resetPassword").mockResolvedValue(undefined);
 
       await adapter.createUser(mockUser);
 
@@ -738,7 +739,7 @@ describe("Auth0AuthAdapter", () => {
         .mockRejectedValueOnce(new Error("Organization assignment failed")); // Organization assignment fails
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      jest.spyOn(adapter as any, 'resetPassword').mockResolvedValue(undefined);
+      jest.spyOn(adapter as any, "resetPassword").mockResolvedValue(undefined);
 
       await adapter.createUser(mockUser);
 
@@ -753,8 +754,8 @@ describe("Auth0AuthAdapter", () => {
     beforeEach(() => {
       // Mock the makeAuthenticatedRequest method
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      jest.spyOn(adapter as any, 'makeAuthenticatedRequest').mockImplementation(async (callback: any) => {
-        return await callback('mock-management-token');
+      jest.spyOn(adapter as any, "makeAuthenticatedRequest").mockImplementation(async (callback: any) => {
+        return await callback("mock-management-token");
       });
     });
 
@@ -818,7 +819,7 @@ describe("Auth0AuthAdapter", () => {
       mockedAxios.post.mockResolvedValue({ status: 200 });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const makeAuthenticatedRequestSpy = jest.spyOn(adapter as any, 'makeAuthenticatedRequest');
+      const makeAuthenticatedRequestSpy = jest.spyOn(adapter as any, "makeAuthenticatedRequest");
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (adapter as any).resetPassword(testEmail);
@@ -833,8 +834,8 @@ describe("Auth0AuthAdapter", () => {
     beforeEach(() => {
       // Mock the makeAuthenticatedRequest method
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      jest.spyOn(adapter as any, 'makeAuthenticatedRequest').mockImplementation(async (callback: any) => {
-        return await callback('mock-management-token');
+      jest.spyOn(adapter as any, "makeAuthenticatedRequest").mockImplementation(async (callback: any) => {
+        return await callback("mock-management-token");
       });
     });
 
@@ -900,7 +901,7 @@ describe("Auth0AuthAdapter", () => {
       mockedAxios.post.mockResolvedValue({ status: 200 });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const makeAuthenticatedRequestSpy = jest.spyOn(adapter as any, 'makeAuthenticatedRequest');
+      const makeAuthenticatedRequestSpy = jest.spyOn(adapter as any, "makeAuthenticatedRequest");
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (adapter as any).addUserToOrganization(testUserId);
@@ -955,15 +956,12 @@ describe("Auth0AuthAdapter", () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await (adapter as any).authenticateAPIUser();
 
-      expect(mockedAxios.post).toHaveBeenCalledWith(
-        `${authConfig.fields.authority}/oauth/token`,
-        {
-          grant_type: "client_credentials",
-          client_id: authConfig.fields.api_client_id,
-          client_secret: authConfig.fields.api_client_secret,
-          audience: authConfig.fields.audience,
-        },
-      );
+      expect(mockedAxios.post).toHaveBeenCalledWith(`${authConfig.fields.authority}/oauth/token`, {
+        grant_type: "client_credentials",
+        client_id: authConfig.fields.api_client_id,
+        client_secret: authConfig.fields.api_client_secret,
+        audience: authConfig.fields.audience,
+      });
 
       expect(result).toEqual(mockTokenResponse.data);
     });
@@ -984,7 +982,7 @@ describe("Auth0AuthAdapter", () => {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await expect((adapterWithoutCredentials as any).authenticateAPIUser()).rejects.toThrow(
-        "API client id, secret, and audience are required"
+        "API client id, secret, and audience are required",
       );
     });
   });
@@ -1023,9 +1021,9 @@ describe("Auth0AuthAdapter", () => {
 
       // Verify sensitive fields are not in extraQueryParams
       const oidcConfig = MockedOIDCClient.mock.calls[0][0] as OIDCConfig;
-      expect(oidcConfig.extraQueryParams).not.toHaveProperty('api_client_id');
-      expect(oidcConfig.extraQueryParams).not.toHaveProperty('api_client_secret');
-      expect(oidcConfig.extraQueryParams).not.toHaveProperty('connection');
+      expect(oidcConfig.extraQueryParams).not.toHaveProperty("api_client_id");
+      expect(oidcConfig.extraQueryParams).not.toHaveProperty("api_client_secret");
+      expect(oidcConfig.extraQueryParams).not.toHaveProperty("connection");
     });
   });
 

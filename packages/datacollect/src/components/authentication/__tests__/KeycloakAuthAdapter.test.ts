@@ -125,7 +125,7 @@ describe("KeycloakAuthAdapter", () => {
       // Clean up
       delete (global as unknown as Record<string, unknown>).window;
     });
-    
+
     it("should detect backend environment", () => {
       // Mock window object
       Object.defineProperty(global, "window", {
@@ -591,8 +591,8 @@ describe("KeycloakAuthAdapter", () => {
     beforeEach(() => {
       // Mock the makeAuthenticatedRequest method to properly call the callback with a token
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      jest.spyOn(adapter as any, 'makeAuthenticatedRequest').mockImplementation(async (callback: any) => {
-        return await callback('mock-admin-token');
+      jest.spyOn(adapter as any, "makeAuthenticatedRequest").mockImplementation(async (callback: any) => {
+        return await callback("mock-admin-token");
       });
     });
 
@@ -611,7 +611,7 @@ describe("KeycloakAuthAdapter", () => {
 
       // Mock resetPassword method
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      jest.spyOn(adapter as any, 'resetPassword').mockResolvedValue(undefined);
+      jest.spyOn(adapter as any, "resetPassword").mockResolvedValue(undefined);
 
       await adapter.createUser(mockUser);
 
@@ -625,11 +625,13 @@ describe("KeycloakAuthAdapter", () => {
           attributes: {
             phone_number: [mockUser.phoneNumber],
           },
-          credentials: [{
-            type: "password",
-            value: expect.any(String),
-            temporary: true,
-          }],
+          credentials: [
+            {
+              type: "password",
+              value: expect.any(String),
+              temporary: true,
+            },
+          ],
         }),
         expect.objectContaining({
           headers: {
@@ -650,8 +652,8 @@ describe("KeycloakAuthAdapter", () => {
 
       // Mock resetPassword method
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      jest.spyOn(adapter as any, 'resetPassword').mockResolvedValue(undefined);
-      jest.spyOn(axios, 'isAxiosError').mockReturnValue(true);
+      jest.spyOn(adapter as any, "resetPassword").mockResolvedValue(undefined);
+      jest.spyOn(axios, "isAxiosError").mockReturnValue(true);
 
       await adapter.createUser(mockUser);
 
@@ -662,7 +664,6 @@ describe("KeycloakAuthAdapter", () => {
     it("should handle user creation without phone number", async () => {
       const userWithoutPhone = {
         email: "test@example.com",
-        
       };
 
       const mockCreateResponse = {
@@ -676,7 +677,7 @@ describe("KeycloakAuthAdapter", () => {
 
       mockedAxios.post.mockResolvedValue(mockCreateResponse);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      jest.spyOn(adapter as any, 'resetPassword').mockResolvedValue(undefined);
+      jest.spyOn(adapter as any, "resetPassword").mockResolvedValue(undefined);
 
       await adapter.createUser(userWithoutPhone);
 
@@ -687,18 +688,20 @@ describe("KeycloakAuthAdapter", () => {
           email: userWithoutPhone.email,
           enabled: true,
           emailVerified: false,
-          credentials: [{
-            type: "password",
-            value: expect.any(String),
-            temporary: true,
-          }],
+          credentials: [
+            {
+              type: "password",
+              value: expect.any(String),
+              temporary: true,
+            },
+          ],
         }),
         expect.any(Object),
       );
 
       // Should not include phone_number in attributes
       const postCall = mockedAxios.post.mock.calls[0];
-      expect(postCall[1]).not.toHaveProperty('attributes.phone_number');
+      expect(postCall[1]).not.toHaveProperty("attributes.phone_number");
     });
 
     it("should handle errors during user creation gracefully", async () => {
@@ -728,7 +731,7 @@ describe("KeycloakAuthAdapter", () => {
 
       // Mock resetPassword method
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const resetPasswordSpy = jest.spyOn(adapter as any, 'resetPassword').mockResolvedValue(undefined);
+      const resetPasswordSpy = jest.spyOn(adapter as any, "resetPassword").mockResolvedValue(undefined);
 
       await adapter.createUser(mockUser);
 
@@ -747,13 +750,13 @@ describe("KeycloakAuthAdapter", () => {
     beforeEach(() => {
       // Mock the makeAuthenticatedRequest method
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      jest.spyOn(adapter as any, 'makeAuthenticatedRequest').mockImplementation(async (callback: any) => {
-        return await callback('mock-admin-token');
+      jest.spyOn(adapter as any, "makeAuthenticatedRequest").mockImplementation(async (callback: any) => {
+        return await callback("mock-admin-token");
       });
 
       // Mock getUserByEmail method
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      jest.spyOn(adapter as any, 'getUserByEmail').mockResolvedValue(mockUser);
+      jest.spyOn(adapter as any, "getUserByEmail").mockResolvedValue(mockUser);
     });
 
     it("should send password reset request successfully", async () => {
@@ -812,7 +815,7 @@ describe("KeycloakAuthAdapter", () => {
       mockedAxios.put.mockResolvedValue({ status: 200 });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const makeAuthenticatedRequestSpy = jest.spyOn(adapter as any, 'makeAuthenticatedRequest');
+      const makeAuthenticatedRequestSpy = jest.spyOn(adapter as any, "makeAuthenticatedRequest");
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (adapter as any).resetPassword(testEmail);
@@ -824,7 +827,7 @@ describe("KeycloakAuthAdapter", () => {
       mockedAxios.put.mockResolvedValue({ status: 200 });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const getUserByEmailSpy = jest.spyOn(adapter as any, 'getUserByEmail');
+      const getUserByEmailSpy = jest.spyOn(adapter as any, "getUserByEmail");
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (adapter as any).resetPassword(testEmail);
@@ -835,7 +838,7 @@ describe("KeycloakAuthAdapter", () => {
     it("should handle getUserByEmail errors", async () => {
       const getUserError = new Error("User not found");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      jest.spyOn(adapter as any, 'getUserByEmail').mockRejectedValue(getUserError);
+      jest.spyOn(adapter as any, "getUserByEmail").mockRejectedValue(getUserError);
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await expect((adapter as any).resetPassword(testEmail)).rejects.toThrow("User not found");
@@ -853,8 +856,8 @@ describe("KeycloakAuthAdapter", () => {
     beforeEach(() => {
       // Mock the makeAuthenticatedRequest method
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      jest.spyOn(adapter as any, 'makeAuthenticatedRequest').mockImplementation(async (callback: any) => {
-        return await callback('mock-admin-token');
+      jest.spyOn(adapter as any, "makeAuthenticatedRequest").mockImplementation(async (callback: any) => {
+        return await callback("mock-admin-token");
       });
     });
 
@@ -887,7 +890,7 @@ describe("KeycloakAuthAdapter", () => {
       mockedAxios.get.mockResolvedValue({ data: [mockUser] });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const makeAuthenticatedRequestSpy = jest.spyOn(adapter as any, 'makeAuthenticatedRequest');
+      const makeAuthenticatedRequestSpy = jest.spyOn(adapter as any, "makeAuthenticatedRequest");
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (adapter as any).getUserByEmail(testEmail);
@@ -983,9 +986,9 @@ describe("KeycloakAuthAdapter", () => {
       // Verify the URLSearchParams contains the correct data
       const postCall = mockedAxios.post.mock.calls[0];
       const formData = postCall[1] as URLSearchParams;
-      expect(formData.get('grant_type')).toBe('client_credentials');
-      expect(formData.get('client_id')).toBe(authConfig.fields.api_client_id);
-      expect(formData.get('client_secret')).toBe(authConfig.fields.api_client_secret);
+      expect(formData.get("grant_type")).toBe("client_credentials");
+      expect(formData.get("client_id")).toBe(authConfig.fields.api_client_id);
+      expect(formData.get("client_secret")).toBe(authConfig.fields.api_client_secret);
 
       expect(result).toEqual(mockTokenResponse.data);
     });
@@ -1004,7 +1007,7 @@ describe("KeycloakAuthAdapter", () => {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await expect((adapterWithoutCredentials as any).authenticateAPIUser()).rejects.toThrow(
-        "API client id, and secret are required"
+        "API client id, and secret are required",
       );
     });
 
@@ -1054,8 +1057,8 @@ describe("KeycloakAuthAdapter", () => {
 
       // Verify sensitive fields are not in extraQueryParams
       const oidcConfig = MockedOIDCClient.mock.calls[0][0] as OIDCConfig;
-      expect(oidcConfig.extraQueryParams).not.toHaveProperty('api_client_id');
-      expect(oidcConfig.extraQueryParams).not.toHaveProperty('api_client_secret');
+      expect(oidcConfig.extraQueryParams).not.toHaveProperty("api_client_id");
+      expect(oidcConfig.extraQueryParams).not.toHaveProperty("api_client_secret");
     });
 
     it("should preserve standard fields and move custom fields to extraQueryParams", () => {

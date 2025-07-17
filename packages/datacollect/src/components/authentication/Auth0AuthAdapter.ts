@@ -148,7 +148,7 @@ export class Auth0AuthAdapter implements AuthAdapter {
     }
   }
 
-  async createUser(user: { email: string;  phoneNumber?: string }): Promise<void> {
+  async createUser(user: { email: string; phoneNumber?: string }): Promise<void> {
     const tempPassword = generatePassword();
     const url = `${this.config.fields.authority}/api/v2/users`;
 

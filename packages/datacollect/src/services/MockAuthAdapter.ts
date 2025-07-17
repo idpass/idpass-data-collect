@@ -70,7 +70,7 @@ export class MockAuthAdapter implements AuthAdapter {
     if (!this.authenticated && token !== "mock-token") {
       return null;
     }
-    
+
     return Promise.resolve({
       sub: "mock-user-id",
       name: "Mock User",

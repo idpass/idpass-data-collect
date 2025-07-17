@@ -65,19 +65,19 @@ describe("PasswordGenerator", () => {
 
     it("should meet Auth0 password policy requirements", () => {
       const password = generatePassword(20);
-      
+
       // At least 1 uppercase
       expect(password).toMatch(/[A-Z]/);
-      
+
       // At least 1 lowercase
       expect(password).toMatch(/[a-z]/);
-      
+
       // At least 1 number
       expect(password).toMatch(/[0-9]/);
-      
+
       // At least 1 symbol
       expect(password).toMatch(/[!@$^&#$$]/);
-      
+
       // Minimum length
       expect(password.length).toBeGreaterThanOrEqual(8);
     });
@@ -98,14 +98,14 @@ describe("PasswordGenerator", () => {
 
     it("should be properly shuffled (not predictable pattern)", () => {
       const passwords = Array.from({ length: 10 }, () => generatePassword(20));
-      
+
       // Check that not all passwords start with the same character type
-      const firstChars = passwords.map(p => p[0]);
-      const allUppercase = firstChars.every(char => /[A-Z]/.test(char));
-      const allNumbers = firstChars.every(char => /[0-9]/.test(char));
-      const allSymbols = firstChars.every(char => /[!@$^&#$$]/.test(char));
-      
+      const firstChars = passwords.map((p) => p[0]);
+      const allUppercase = firstChars.every((char) => /[A-Z]/.test(char));
+      const allNumbers = firstChars.every((char) => /[0-9]/.test(char));
+      const allSymbols = firstChars.every((char) => /[!@$^&#$$]/.test(char));
+
       expect(allUppercase || allNumbers || allSymbols).toBe(false);
     });
   });
-}); 
+});
