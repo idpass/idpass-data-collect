@@ -18,16 +18,19 @@
  */
 
 import { Router } from "express";
-import {
-  AuditLogEntry,
-  EntityDataManager,
-  ExternalSyncCredentials,
-  FormSubmission,
-  SyncRole,
-} from "idpass-data-collect";
+import { AuditLogEntry, EntityDataManager, ExternalSyncCredentials, FormSubmission } from "idpass-data-collect";
 import { authenticateJWT, createDynamicAuthMiddleware } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
-import { AppConfigStore, AppInstanceStore, AuthenticatedRequest, SelfServiceUserStore, SessionStore } from "../types";
+import {
+  AppConfigStore,
+  AppInstanceStore,
+  AuthenticatedRequest,
+  DecodedPayload,
+  SelfServiceUserStore,
+  Session,
+  SessionStore,
+  SyncRole,
+} from "../types";
 
 export function createSyncRouter(
   appConfigStore: AppConfigStore,
@@ -70,18 +73,18 @@ export function createSyncRouter(
           error: "Duplicates exist! Please resolve them on admin page.",
         });
       }
-
       const syncRole = (req as AuthenticatedRequest).syncRole;
-      const entityUid = (req as AuthenticatedRequest).user?.entityGuid;
+      const user = (req as AuthenticatedRequest).user as Session;
+      const entityGuid = user?.entityGuid;
       if (syncRole === SyncRole.SELF_SERVICE_USER) {
-        if (!entityUid) {
+        if (!entityGuid) {
           return res.json({
             events: [],
             nextCursor: null,
             error: "Entity not found",
           });
         }
-        const result = await edm.getEventsSelfServicePagination(entityUid, since as string, 10);
+        const result = await edm.getEventsSelfServicePagination(entityGuid, since as string, 10);
         console.log("Request pulling: ", result.events?.length, " events since", since);
         res.json(result);
         return;
@@ -188,7 +191,8 @@ export function createSyncRouter(
       }
 
       try {
-        await edm.saveAuditLogs(auditLogs.map((log) => ({ ...log, userId: (req as AuthenticatedRequest).user?.id })));
+        const user = (req as AuthenticatedRequest).user as DecodedPayload;
+        await edm.saveAuditLogs(auditLogs.map((log) => ({ ...log, userId: user.id, entityGuid: user.id })));
       } catch (error) {
         console.error(error);
         // ignore errors
@@ -242,7 +246,7 @@ export function createSyncRouter(
 
   router.get(
     "/user-info",
-    createDynamicAuthMiddleware(appInstanceStore),
+    createDynamicAuthMiddleware(appInstanceStore, sessionStore),
     asyncHandler(async (req, res) => {
       const { configId = "default" } = req.query;
 

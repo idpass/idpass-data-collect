@@ -453,8 +453,7 @@ export class EventStoreImpl implements EventStore {
   async getEventsSelfServicePagination(
     entityGuid: string,
     timestamp: string | Date,
-    limit: number,
-  ): Promise<{ events: FormSubmission[]; nextCursor: string | Date | null }> {
-    return await this.storageAdapter.getEventsSelfServicePagination(entityGuid, timestamp, limit);
+  ): Promise<{ events: FormSubmission[] }> {
+    return await this.storageAdapter.getEventsSelfServicePagination(entityGuid, timestamp);
   }
 }

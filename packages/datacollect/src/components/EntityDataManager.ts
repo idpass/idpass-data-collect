@@ -646,10 +646,9 @@ export class EntityDataManager {
 
   async getEventsSelfServicePagination(
     entityGuid: string,
-    timestamp: string,
-    limit: number,
-  ): Promise<{ events: FormSubmission[]; nextCursor: string | Date | null }> {
-    return await this.eventStore.getEventsSelfServicePagination(entityGuid, timestamp, limit);
+    timestamp: string | Date,
+  ): Promise<{ events: FormSubmission[] }> {
+    return await this.eventStore.getEventsSelfServicePagination(entityGuid, timestamp);
   }
 
   /**

@@ -303,10 +303,8 @@ export interface EventStore {
   getEventsSelfServicePagination(
     entityGuid: string,
     timestamp: string | Date,
-    limit: number,
   ): Promise<{
     events: FormSubmission[];
-    nextCursor: string | Date | null;
   }>;
   /** Update sync levels for multiple events */
   updateSyncLevelFromEvents(events: FormSubmission[]): Promise<void>;
@@ -377,10 +375,8 @@ export interface EventStorageAdapter {
   getEventsSelfServicePagination(
     entityGuid: string,
     timestamp: string | Date,
-    limit: number,
   ): Promise<{
     events: FormSubmission[];
-    nextCursor: string | Date | null;
   }>;
   /** Update sync levels for multiple events */
   updateSyncLevelFromEvents(events: FormSubmission[]): Promise<void>;

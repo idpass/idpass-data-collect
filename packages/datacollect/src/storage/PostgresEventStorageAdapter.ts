@@ -320,15 +320,13 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
   async getEventsSelfServicePagination(
     entityGuid: string,
     timestamp: string | Date,
-    limit: number,
-  ): Promise<{ events: FormSubmission[]; nextCursor: string | Date | null }> {
-    const timestampString = timestamp ? timestamp : new Date(0).toISOString();
+  ): Promise<{ events: FormSubmission[] }> {
     const client = await this.pool.connect();
     try {
-      // First, get all events since the timestamp to build the descendant map
+      // Get all events to build the descendant map
       const allEventsResult = await client.query(
-        "SELECT guid, entity_guid, type, data, timestamp, user_id, sync_level FROM events WHERE timestamp > $1 AND tenant_id = $2",
-        [timestampString, this.tenantId],
+        "SELECT guid, entity_guid, type, data, timestamp, user_id, sync_level FROM events WHERE tenant_id = $1",
+        [this.tenantId],
       );
 
       const allEvents = allEventsResult.rows.map((row) => ({
@@ -376,16 +374,14 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
 
       const descendants = findDescendants(entityGuid);
 
-      // Filter events that are descendants and sort by timestamp
+      // Filter events that are descendants and sort by timestamp and filter by timestamp
       const descendantEvents = allEvents
         .filter((event) => descendants.has(event.entityGuid))
+        .filter((event) => event.timestamp >= timestamp)
         .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 
-      // Apply pagination
-      const events = descendantEvents.slice(0, limit);
-      const nextCursor = descendantEvents.length > limit ? descendantEvents[limit - 1].timestamp : null;
-
-      return { events, nextCursor };
+      // Return only the events
+      return { events: descendantEvents };
     } finally {
       client.release();
     }

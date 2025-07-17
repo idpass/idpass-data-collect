@@ -584,95 +584,78 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
   async getEventsSelfServicePagination(
     entityGuid: string,
     timestamp: string | Date,
-    limit: number,
-  ): Promise<{ events: FormSubmission[]; nextCursor: string | Date | null }> {
-    return new Promise((resolve, reject) => {
-      if (!this.db) {
-        throw new Error("IndexedDB is not initialized");
-      }
+  ): Promise<{ events: FormSubmission[] }> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
 
-      const transaction = this.db.transaction(["events"], "readonly");
-      const store = transaction.objectStore("events");
-      const index = store.index("timestamp");
-      const request = index.openCursor(IDBKeyRange.lowerBound(timestamp, true));
+    const transaction = this.db.transaction(["events"], "readonly");
+    const store = transaction.objectStore("events");
 
-      const events: FormSubmission[] = [];
-      let count = 0;
-      // const descendantGuids = new Set<string>();
-      const allEvents: FormSubmission[] = [];
-
-      // First pass: collect all events and build descendant map
-      const buildDescendantMap = () => {
-        const parentToChildren = new Map<string, Set<string>>();
-
-        // Build parent-child relationships
-        allEvents.forEach((event) => {
-          if (event.data && event.data.parentGuid) {
-            if (!parentToChildren.has(event.data.parentGuid)) {
-              parentToChildren.set(event.data.parentGuid, new Set());
-            }
-            parentToChildren.get(event.data.parentGuid)!.add(event.entityGuid);
-          }
-        });
-
-        // Recursively find all descendants
-        const findDescendants = (guid: string): Set<string> => {
-          const descendants = new Set<string>();
-          const queue = [guid];
-
-          while (queue.length > 0) {
-            const current = queue.shift()!;
-            const children = parentToChildren.get(current);
-
-            if (children) {
-              children.forEach((child) => {
-                if (!descendants.has(child)) {
-                  descendants.add(child);
-                  queue.push(child);
-                }
-              });
-            }
-          }
-
-          return descendants;
-        };
-
-        return findDescendants(entityGuid);
-      };
-
-      request.onerror = () => reject(new Error("Failed to retrieve events"));
-
-      request.onsuccess = (event) => {
-        const cursor = (event.target as IDBRequest).result;
-
-        if (cursor) {
-          const eventData = cursor.value as FormSubmission;
-          allEvents.push(eventData);
-          cursor.continue();
-        } else {
-          // All events collected, now build descendant map
-          const descendants = buildDescendantMap();
-
-          // Second pass: filter events that are descendants
-          allEvents.forEach((event) => {
-            if (count < limit && descendants.has(event.entityGuid)) {
-              events.push(event);
-              count++;
-            }
-          });
-
-          // Sort the events by timestamp in ascending order (oldest first)
-          events.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-
-          // Get the last timestamp as the next cursor
-          const nextCursor = events.length > 0 ? events[events.length - 1].timestamp : null;
-
-          resolve({
-            events,
-            nextCursor,
-          });
-        }
-      };
+    // Get all events without timestamp filtering
+    const allEvents = await new Promise<FormSubmission[]>((resolve, reject) => {
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
     });
+
+    // Build descendant map
+    const buildDescendantMap = () => {
+      const parentToChildren = new Map<string, Set<string>>();
+
+      // Build parent-child relationships
+      allEvents.forEach((event) => {
+        if (event.data && event.data.parentGuid) {
+          if (!parentToChildren.has(event.data.parentGuid)) {
+            parentToChildren.set(event.data.parentGuid, new Set());
+          }
+          parentToChildren.get(event.data.parentGuid)!.add(event.entityGuid);
+        }
+      });
+
+      // Recursively find all descendants
+      const findDescendants = (guid: string): Set<string> => {
+        const descendants = new Set<string>();
+        const queue = [guid];
+
+        while (queue.length > 0) {
+          const current = queue.shift()!;
+          const children = parentToChildren.get(current);
+
+          if (children) {
+            children.forEach((child) => {
+              if (!descendants.has(child)) {
+                descendants.add(child);
+                queue.push(child);
+              }
+            });
+          }
+        }
+
+        return descendants;
+      };
+
+      return findDescendants(entityGuid);
+    };
+
+    const descendants = buildDescendantMap();
+
+    // Filter events that are descendants
+    const events: FormSubmission[] = [];
+
+    allEvents.forEach((event) => {
+      if (descendants.has(event.entityGuid)) {
+        events.push(event);
+      }
+    });
+
+    // Sort the events by timestamp in ascending order (oldest first) and filter by timestamp
+    const descendantEvents = events
+      .filter((event) => event.timestamp >= timestamp)
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+    return {
+      events: descendantEvents,
+    };
   }
 }
