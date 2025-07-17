@@ -787,6 +787,7 @@ export interface AuthAdapter {
   handleCallback(): Promise<void>;
   getUserInfo(token?: string): Promise<Record<string, unknown> | null>;
   createUser(user: { email: string; phoneNumber?: string }): Promise<void>;
+  getUserEmailOrPhoneNumber(token: string): Promise<{ email: string; phoneNumber?: string }>;
 }
 
 export interface AuthStorageAdapter {

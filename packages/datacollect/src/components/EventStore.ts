@@ -449,4 +449,12 @@ export class EventStoreImpl implements EventStore {
   getAuditTrailByEntityGuid(entityGuid: string): Promise<AuditLogEntry[]> {
     return this.storageAdapter.getAuditTrailByEntityGuid(entityGuid);
   }
+
+  async getEventsSelfServicePagination(
+    entityGuid: string,
+    timestamp: string | Date,
+    limit: number,
+  ): Promise<{ events: FormSubmission[]; nextCursor: string | Date | null }> {
+    return await this.storageAdapter.getEventsSelfServicePagination(entityGuid, timestamp, limit);
+  }
 }

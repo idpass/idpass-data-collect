@@ -598,23 +598,69 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
 
       const events: FormSubmission[] = [];
       let count = 0;
+      // const descendantGuids = new Set<string>();
+      const allEvents: FormSubmission[] = [];
+
+      // First pass: collect all events and build descendant map
+      const buildDescendantMap = () => {
+        const parentToChildren = new Map<string, Set<string>>();
+
+        // Build parent-child relationships
+        allEvents.forEach((event) => {
+          if (event.data && event.data.parentGuid) {
+            if (!parentToChildren.has(event.data.parentGuid)) {
+              parentToChildren.set(event.data.parentGuid, new Set());
+            }
+            parentToChildren.get(event.data.parentGuid)!.add(event.entityGuid);
+          }
+        });
+
+        // Recursively find all descendants
+        const findDescendants = (guid: string): Set<string> => {
+          const descendants = new Set<string>();
+          const queue = [guid];
+
+          while (queue.length > 0) {
+            const current = queue.shift()!;
+            const children = parentToChildren.get(current);
+
+            if (children) {
+              children.forEach((child) => {
+                if (!descendants.has(child)) {
+                  descendants.add(child);
+                  queue.push(child);
+                }
+              });
+            }
+          }
+
+          return descendants;
+        };
+
+        return findDescendants(entityGuid);
+      };
 
       request.onerror = () => reject(new Error("Failed to retrieve events"));
 
       request.onsuccess = (event) => {
         const cursor = (event.target as IDBRequest).result;
 
-        if (cursor && count < limit) {
-          const event = cursor.value as FormSubmission;
-
-          // Check if this event has data.parentGuid that matches the entityGuid parameter
-          if (event.data && event.data.parentGuid === entityGuid) {
-            events.push(event);
-            count++;
-          }
-
+        if (cursor) {
+          const eventData = cursor.value as FormSubmission;
+          allEvents.push(eventData);
           cursor.continue();
         } else {
+          // All events collected, now build descendant map
+          const descendants = buildDescendantMap();
+
+          // Second pass: filter events that are descendants
+          allEvents.forEach((event) => {
+            if (count < limit && descendants.has(event.entityGuid)) {
+              events.push(event);
+              count++;
+            }
+          });
+
           // Sort the events by timestamp in ascending order (oldest first)
           events.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 

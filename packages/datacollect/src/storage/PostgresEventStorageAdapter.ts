@@ -317,6 +317,80 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
     }
   }
 
+  async getEventsSelfServicePagination(
+    entityGuid: string,
+    timestamp: string | Date,
+    limit: number,
+  ): Promise<{ events: FormSubmission[]; nextCursor: string | Date | null }> {
+    const timestampString = timestamp ? timestamp : new Date(0).toISOString();
+    const client = await this.pool.connect();
+    try {
+      // First, get all events since the timestamp to build the descendant map
+      const allEventsResult = await client.query(
+        "SELECT guid, entity_guid, type, data, timestamp, user_id, sync_level FROM events WHERE timestamp > $1 AND tenant_id = $2",
+        [timestampString, this.tenantId],
+      );
+
+      const allEvents = allEventsResult.rows.map((row) => ({
+        guid: row.guid,
+        entityGuid: row.entity_guid,
+        type: row.type,
+        data: row.data,
+        timestamp: row.timestamp.toISOString(),
+        userId: row.user_id,
+        syncLevel: row.sync_level,
+      }));
+
+      // Build parent-child relationships map
+      const parentToChildren = new Map<string, Set<string>>();
+      allEvents.forEach((event) => {
+        if (event.data && event.data.parentGuid) {
+          if (!parentToChildren.has(event.data.parentGuid)) {
+            parentToChildren.set(event.data.parentGuid, new Set());
+          }
+          parentToChildren.get(event.data.parentGuid)!.add(event.entityGuid);
+        }
+      });
+
+      // Recursively find all descendants using breadth-first search
+      const findDescendants = (guid: string): Set<string> => {
+        const descendants = new Set<string>();
+        const queue = [guid];
+
+        while (queue.length > 0) {
+          const current = queue.shift()!;
+          const children = parentToChildren.get(current);
+
+          if (children) {
+            children.forEach((child) => {
+              if (!descendants.has(child)) {
+                descendants.add(child);
+                queue.push(child);
+              }
+            });
+          }
+        }
+
+        return descendants;
+      };
+
+      const descendants = findDescendants(entityGuid);
+
+      // Filter events that are descendants and sort by timestamp
+      const descendantEvents = allEvents
+        .filter((event) => descendants.has(event.entityGuid))
+        .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+      // Apply pagination
+      const events = descendantEvents.slice(0, limit);
+      const nextCursor = descendantEvents.length > limit ? descendantEvents[limit - 1].timestamp : null;
+
+      return { events, nextCursor };
+    } finally {
+      client.release();
+    }
+  }
+
   async getAuditLogsSince(timestamp: string): Promise<AuditLogEntry[]> {
     const client = await this.pool.connect();
     try {
