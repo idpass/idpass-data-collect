@@ -352,7 +352,23 @@ export class KeycloakAuthAdapter implements AuthAdapter {
   }
 
   async getUserEmailOrPhoneNumber(token: string): Promise<{ email: string; phoneNumber?: string }> {
-    console.log("getUserEmailOrPhoneNumber", token);
-    throw new Error("Method not implemented.");
+    const accessToken = token || (await this.oidc.getStoredAuth())?.access_token;
+    if (!accessToken) {
+      throw new Error("No access token found");
+    }
+
+    const userinfoUrl = `${this.config.fields.authority}/protocol/openid-connect/userinfo`;
+    const response = await axios.get(userinfoUrl, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      timeout: 5000,
+    });
+
+    return {
+      email: response.data.email,
+      phoneNumber: response.data.phone_number || null,
+    }
   }
 }
