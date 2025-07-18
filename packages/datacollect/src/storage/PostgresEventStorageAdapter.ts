@@ -325,10 +325,10 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
     try {
       // Get all events to build the descendant map
       const allEventsResult = await client.query(
-        "SELECT guid, entity_guid, type, data, timestamp, user_id, sync_level FROM events WHERE tenant_id = $1",
-        [this.tenantId],
+        "SELECT guid, entity_guid, type, data, timestamp, user_id, sync_level FROM events WHERE tenant_id = $1 AND entity_guid = $2",
+        [this.tenantId, entityGuid],
       );
-
+      
       const allEvents = allEventsResult.rows.map((row) => ({
         guid: row.guid,
         entityGuid: row.entity_guid,
@@ -349,6 +349,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
           parentToChildren.get(event.data.parentGuid)!.add(event.entityGuid);
         }
       });
+    
 
       // Recursively find all descendants using breadth-first search
       const findDescendants = (guid: string): Set<string> => {
@@ -382,9 +383,8 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
         .filter((event) => descendants.has(event.entityGuid))
         .filter((event) => event.timestamp >= timestamp)
         .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-
       // Return only the events
-      return { events: descendantEvents };
+      return { events: [...descendantEvents, ...allEvents] };
     } finally {
       client.release();
     }

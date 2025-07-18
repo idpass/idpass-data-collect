@@ -91,7 +91,18 @@ export class KeycloakAuthAdapter implements AuthAdapter {
   }
 
   async logout(): Promise<void> {
+    // First, try to invalidate the session on the Keycloak server
+    try {
+      await this.invalidateServerSession();
+    } catch (error) {
+      console.warn("Failed to invalidate Keycloak server session:", error);
+    }
+
+    // Then perform client-side logout
     await this.oidc.logout();
+    if (this.authStorage) {
+      await this.authStorage.removeToken();
+    }
   }
 
   async validateToken(token: string): Promise<boolean> {
@@ -305,6 +316,35 @@ export class KeycloakAuthAdapter implements AuthAdapter {
         },
       });
     });
+  }
+
+  private async invalidateServerSession(): Promise<void> {
+    try {
+      const auth = await this.oidc.getStoredAuth();
+      if (!auth?.access_token) {
+        return;
+      }
+
+      // Call Keycloak's logout endpoint to invalidate the server session
+      const logoutUrl = `${this.config.fields.authority}/protocol/openid-connect/logout`;
+      await axios.post(
+        logoutUrl,
+        new URLSearchParams({
+          client_id: this.config.fields.client_id,
+          refresh_token: auth.refresh_token || "",
+        }),
+        {
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            Authorization: `Bearer ${auth.access_token}`,
+          },
+          timeout: 5000,
+        }
+      );
+    } catch (error) {
+      console.error("Error invalidating Keycloak server session:", error);
+      throw error;
+    }
   }
 
   protected transformConfig(config: AuthConfig): AuthConfig {

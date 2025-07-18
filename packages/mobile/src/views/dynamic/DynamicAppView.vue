@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ChevronRight from '@/components/icons/ChevronRight.vue'
+import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
 import { TenantAppData } from '@/schemas/tenantApp.schema'
 import { store } from '@/store'
 import { EntityForm } from '@/utils/dynamicFormIoUtils'
@@ -23,6 +24,9 @@ let networkCleanup: (() => void) | null = null
 // Add error message state
 const errorMessage = ref('')
 const showError = ref(false)
+
+// Add logout confirmation state
+const showLogoutConfirmation = ref(false)
 
 const { handleError, handleAuthError } = useErrorHandler(route.params.id as string)
 
@@ -92,6 +96,10 @@ const onBack = () => {
 }
 
 const onLogout = async () => {
+  showLogoutConfirmation.value = true
+}
+
+const confirmLogout = async () => {
   await handleAuthError(route.params.id as string)
 }
 
@@ -158,13 +166,20 @@ const onSync = async () => {
     <hr />
     <div class="mb-1"></div>
 
-    <div v-if="tenantapp" class="mt-2">
-      <h5 class="mb-4">Forms</h5>
-      <ul role="list" class="list-group list-group-flush shadow-sm mt-2">
-        <li v-for="entity in highLevelEntities" :key="entity.name" class="card border-0 rounded-0">
+    <div v-if="tenantapp">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6>Entities</h6>
+      </div>
+      <ul role="list" class="list-group list-group-flush shadow-sm">
+        <li
+          v-for="entity in highLevelEntities"
+          :key="entity.name"
+          class="card border-0 rounded-0"
+        >
           <div
-            @click="router.push(`/app/${tenantapp.id}/${entity.name}`)"
             class="card-body border-bottom d-flex justify-content-between align-items-center"
+            style="cursor: pointer"
+            @click="router.push(`/app/${route.params.id}/${entity.name}`)"
           >
             <div>
               <p class="m-0 lead fw-bold text-black">
@@ -177,4 +192,17 @@ const onSync = async () => {
       </ul>
     </div>
   </div>
+
+  <!-- Logout Confirmation Dialog -->
+  <ConfirmationDialog
+    :open="showLogoutConfirmation"
+    title="Confirm Logout"
+    message="Are you sure you want to logout? This will clear all local data for this app."
+    warning="All offline data will be permanently deleted from this device."
+    confirm-text="Logout"
+    cancel-text="Cancel"
+    confirm-button-type="danger"
+    :on-confirm="confirmLogout"
+    @update:open="showLogoutConfirmation = $event"
+  />
 </template>
