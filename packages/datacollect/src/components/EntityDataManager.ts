@@ -898,4 +898,11 @@ export class EntityDataManager {
     }
     return null;
   }
+
+  async getDescendants(guid: string): Promise<string[]> {
+    if (this.entityStore) {
+      return await this.entityStore.getDescendants(guid);
+    }
+    return [];
+  }
 }

@@ -702,6 +702,58 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
   }
 
   /**
+   * Retrieves all descendant entities that have the specified GUID as their parent,
+   * including indirect descendants (children of children, etc.).
+   *
+   * Searches for entities where `data.parentId` equals the given GUID or any of its
+   * descendants. This is useful for hierarchical data structures like family trees,
+   * organizational charts, or nested entity relationships.
+   *
+   * @param guid - GUID of the parent entity
+   * @returns Array of GUIDs of all descendant entities (direct and indirect)
+   *
+   * @example
+   * ```typescript
+   * // Find all descendants of a specific person (children, grandchildren, etc.)
+   * const allDescendants = await adapter.getDescendants('person-123');
+   * console.log(`Found ${allDescendants.length} total descendants`);
+   *
+   * // Get full entity details for each descendant
+   * for (const descendantGuid of allDescendants) {
+   *   const descendantEntity = await adapter.getEntity(descendantGuid);
+   *   console.log('Descendant:', descendantEntity?.modified.data.name);
+   * }
+   * ```
+   */
+  async getDescendants(guid: string): Promise<string[]> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+
+    const allDescendants = new Set<string>();
+    const toProcess = [guid];
+
+    // Process each level of descendants until no more are found
+    while (toProcess.length > 0) {
+      const currentGuid = toProcess.shift()!;
+
+      // Find direct children of the current entity
+      const directChildren = await this.searchEntities([{ parentId: currentGuid }]);
+
+      // Add each direct child to our results and queue for further processing
+      for (const child of directChildren) {
+        const childGuid = child.guid;
+        if (!allDescendants.has(childGuid)) {
+          allDescendants.add(childGuid);
+          toProcess.push(childGuid); // Queue this child for finding its descendants
+        }
+      }
+    }
+
+    return Array.from(allDescendants);
+  }
+
+  /**
    * Clears all data from the entity store and potential duplicates store.
    *
    * ⚠️ **WARNING**: This permanently deletes all stored entities and duplicate pairs!

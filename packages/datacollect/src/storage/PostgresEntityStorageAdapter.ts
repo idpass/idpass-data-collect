@@ -510,6 +510,40 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
     }
   }
 
+  async getDescendants(guid: string): Promise<string[]> {
+    const client = await this.pool.connect();
+    try {
+      // Use a recursive CTE (Common Table Expression) to get all descendants
+      const result = await client.query(
+        `
+      WITH RECURSIVE descendants AS (
+        -- Base case: direct children
+        SELECT guid, 1 as level
+        FROM entities 
+        WHERE (initial->'data'->>'parentId' = $1 OR modified->'data'->>'parentId' = $1) 
+          AND tenant_id = $2
+        
+        UNION ALL
+        
+        -- Recursive case: children of children
+        SELECT e.guid, d.level + 1
+        FROM entities e
+        INNER JOIN descendants d ON (e.initial->'data'->>'parentId' = d.guid OR e.modified->'data'->>'parentId' = d.guid)
+        WHERE e.tenant_id = $2
+          AND d.level < 100  -- Prevent infinite loops
+      )
+      SELECT DISTINCT guid FROM descendants
+      ORDER BY guid
+    `,
+        [guid, this.tenantId],
+      );
+
+      return result.rows.map((row) => row.guid);
+    } finally {
+      client.release();
+    }
+  }
+
   async clearStore(): Promise<void> {
     const client = await this.pool.connect();
     try {

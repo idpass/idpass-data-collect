@@ -83,7 +83,7 @@ export function createSyncRouter(
             error: "Entity not found",
           });
         }
-        const result = await edm.getEventsSelfServicePagination(entityGuid, since as string, 10);
+        const result = await edm.getEventsSelfServicePagination(entityGuid, since as string);
         console.log("Request pulling: ", result.events?.length, " events since", since);
         res.json(result);
         return;
@@ -122,9 +122,6 @@ export function createSyncRouter(
       if (!Array.isArray(events)) {
         return res.json({ status: "success" });
       }
-
-      const sorted = events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
       const appInstance = await appInstanceStore.getAppInstance(configId || "default");
       const appConfig = await appConfigStore.getConfig(configId || "default");
 
@@ -132,8 +129,29 @@ export function createSyncRouter(
         return res.json({ status: "error", message: "App instance or config not found" });
       }
 
-      const selfServiceForms = appConfig.entityForms?.filter((form) => form.selfServiceUser);
       const edm = appInstance.edm;
+      const user = (req as AuthenticatedRequest).user;
+      const entityGuid = "entityGuid" in user ? user.entityGuid : undefined;
+      const syncRole = (req as AuthenticatedRequest).syncRole;
+
+      if (syncRole === SyncRole.SELF_SERVICE_USER) {
+        if (!entityGuid) {
+          return res.json({ status: "error", message: "Entity not found" });
+        }
+
+        // check if all events are for decendents of entityGuid including the entityGuid itself
+        const allEventsGuids = events.map((event) => event.data.parentGuid);
+        const decendents = await edm.getDescendants(entityGuid);
+        const isPushValid = allEventsGuids.every(
+          (guid) => decendents.some((decendentGuid: string) => decendentGuid === guid) || guid === entityGuid,
+        );
+        if (!isPushValid) {
+          return res.json({ status: "error", message: "All events must be for decendents of the entity" });
+        }
+      }
+
+      const sorted = events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      const selfServiceForms = appConfig.entityForms?.filter((form) => form.selfServiceUser);
       const selfServiceUserToBeAdded: { configId: string; guid: string; email: string; phone?: string }[] = [];
 
       // Create entities for sync server
