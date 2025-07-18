@@ -74,7 +74,6 @@ export function createSyncRouter(
       const syncRole = (req as AuthenticatedRequest).syncRole;
       const user = (req as AuthenticatedRequest).user;
       const entityGuid = "entityGuid" in user ? user.entityGuid : undefined;
-
       if (syncRole === SyncRole.SELF_SERVICE_USER) {
         if (!entityGuid) {
           return res.json({
@@ -83,7 +82,7 @@ export function createSyncRouter(
             error: "Entity not found",
           });
         }
-        const result = await edm.getEventsSelfServicePagination(entityGuid, since as string, 10);
+        const result = await edm.getEventsSelfServicePagination(entityGuid, since as string);
         console.log("Request pulling: ", result.events?.length, " events since", since);
         res.json(result);
         return;

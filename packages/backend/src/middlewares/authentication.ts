@@ -73,6 +73,7 @@ export function createDynamicAuthMiddleware(appInstanceStore: AppInstanceStore, 
       }
 
       const [authType, token] = authHeader.split(" ");
+      
       // CHECH IF TOKEN IS FROM REGISTRAR (BUILT-IN AUTH)
       if (authType === "Bearer") {
         const decoded = await authenticateJWTBackend(token);
@@ -83,6 +84,7 @@ export function createDynamicAuthMiddleware(appInstanceStore: AppInstanceStore, 
           return;
         }
       }
+
 
       // CHECK IF TOKEN IS FROM SELF-SERVICE USER (DYNAMIC AUTH)
       const session = await sessionStore.getSession(token);
@@ -117,8 +119,9 @@ export function createDynamicAuthMiddleware(appInstanceStore: AppInstanceStore, 
       const entities = await appInstance.edm.searchEntities([
         { email: userInfo.email }
       ]);
+
       if (entities.length === 0) {
-        res.status(401).json({ error: "Invalid token" });
+        res.status(401).json({ error: "No entity found" });
         return;
       }
 
@@ -149,10 +152,12 @@ export function createAuthAdminMiddleware(userStore: UserStore) {
       }
 
       const [authType, token] = authHeader.split(" ");
+     
       if (authType.toLowerCase() !== "bearer") {
         res.status(401).json({ error: "Invalid authentication type" });
         return;
       }
+     
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET || "") as DecodedPayload;
       const user = await userStore.getUser(decoded.email);

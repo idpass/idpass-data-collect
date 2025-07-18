@@ -214,6 +214,12 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
       clearMerkleRoot.onsuccess = () => resolve();
       clearMerkleRoot.onerror = () => reject(clearMerkleRoot.error);
     });
+
+    const clearSyncTimestamp = this.db.transaction(["syncTimestamp"], "readwrite").objectStore("syncTimestamp").clear();
+    await new Promise<void>((resolve, reject) => {
+      clearSyncTimestamp.onsuccess = () => resolve();
+      clearSyncTimestamp.onerror = () => reject(clearSyncTimestamp.error);
+    });
   }
 
   async updateEventSyncLevel(id: string, syncLevel: SyncLevel): Promise<void> {
