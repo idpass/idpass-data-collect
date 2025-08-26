@@ -27,7 +27,7 @@ import {
   ExternalSyncManager,
   SyncLevel,
   AuthManager,
-} from "idpass-data-collect";
+} from "@idpass/data-collect-core";
 import { v4 as uuidv4 } from "uuid";
 import { AppConfigStore, AppInstance, AppInstanceStore } from "../types";
 

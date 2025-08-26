@@ -27,7 +27,7 @@ import { App } from '@capacitor/app'
 
 import { initStore, store } from '@/store'
 import { getSyncServerUrlByAppId } from '@/utils/getSyncServerByAppId'
-import { EntityDataManager } from 'idpass-data-collect'
+import { EntityDataManager } from '@idpass/data-collect-core'
 // Auth configuration for different providers
 interface AuthConfig {
   type: 'auth0' | 'keycloak'

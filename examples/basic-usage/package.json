@@ -1,13 +1,15 @@
 {
-  "name": "idpass-datacollect-basic-example",
+  "name": "idpass-data-collect-basic-example",
   "version": "1.0.0",
   "description": "Basic usage example for ID PASS DataCollect",
   "main": "index.ts",
   "scripts": {
-    "start": "ts-node index.ts"
+    "start": "ts-node index.ts",
+    "build": "tsc",
+    "clean": "rimraf dist/"
   },
   "dependencies": {
-    "idpass-data-collect": "file:../../packages/datacollect",
+    "@idpass/data-collect-core": "workspace:*",
     "uuid": "^10.0.0",
     "fake-indexeddb": "^6.0.1",
     "core-js": "^3.0.0"

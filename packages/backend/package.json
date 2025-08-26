@@ -1,9 +1,9 @@
 {
-  "name": "idpass-data-collect-backend",
+  "name": "@idpass/data-collect-backend",
   "version": "0.0.1",
   "description": "Library to support offline data capture for a beneficiary management system",
   "engines": {
-    "node": "20.x"
+    "node": ">=22.0.0"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -32,7 +32,7 @@
     "date-fns": "^4.1.0",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
-    "idpass-data-collect": "file:../datacollect",
+    "@idpass/data-collect-core": "workspace:*",
     "jsonwebtoken": "^9.0.2",
     "lodash": "^4.17.21",
     "multer": "^1.4.5-lts.2",

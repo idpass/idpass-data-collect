@@ -4,7 +4,7 @@ import axios from "axios";
 import { get } from "lodash";
 import request from "supertest";
 import { v4 as uuidv4 } from "uuid";
-import { FormSubmission, SyncLevel } from "idpass-data-collect";
+import { FormSubmission, SyncLevel } from "@idpass/data-collect-core";
 import { run } from "../syncServer";
 import { SyncServerInstance, AppConfig } from "../types";
 

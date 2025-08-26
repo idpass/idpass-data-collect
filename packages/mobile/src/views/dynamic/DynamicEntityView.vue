@@ -6,7 +6,7 @@ import { EntityForm, getBreadcrumbFromPath } from '@/utils/dynamicFormIoUtils'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChevronRight from '@/components/icons/ChevronRight.vue'
-import { EntityDoc } from 'idpass-data-collect'
+import { EntityDoc } from '@idpass/data-collect-core'
 const route = useRoute()
 const router = useRouter()
 const database = useDatabase()

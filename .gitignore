@@ -34,6 +34,7 @@ build/Release
 
 # Dependency directories
 jspm_packages/
+.pnpm-store/
 
 # TypeScript cache
 *.tsbuildinfo
@@ -86,10 +87,6 @@ uploads/
 backend/uploads/
 backend/src/public/*.json
 backend/src/public/*.png
-packages/backend/package-lock.json
-packages/datacollect/package-lock.json
-packages/mobile/package-lock.json
 packages/backend/src/public/*.json
 packages/backend/src/public/*.png
 docker-compose.local.yaml
-packages/admin/package-lock.json
