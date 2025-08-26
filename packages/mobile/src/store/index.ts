@@ -29,7 +29,7 @@ import {
   EventApplierService,
   InternalSyncManager,
   IndexedDbAuthStorageAdapter
-} from 'idpass-data-collect'
+} from '@idpass/data-collect-core'
 
 export let store: EntityDataManager
 

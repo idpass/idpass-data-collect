@@ -17,13 +17,13 @@
  * under the License.
  */
 
-import { EntityDataManager, ExternalSyncConfig } from "idpass-data-collect";
+import { EntityDataManager, ExternalSyncConfig } from "@idpass/data-collect-core";
 import { Server } from "http";
 export interface SyncServerConfig {
   port: number;
   initialPassword: string;
-  userId: string;
   postgresUrl: string;
+  userId?: string;
 }
 
 export interface SyncServerInstance {

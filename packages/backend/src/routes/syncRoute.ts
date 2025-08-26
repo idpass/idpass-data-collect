@@ -18,7 +18,7 @@
  */
 
 import { Router } from "express";
-import { AuditLogEntry, ExternalSyncCredentials, FormSubmission } from "idpass-data-collect";
+import { AuditLogEntry, ExternalSyncCredentials, FormSubmission } from "@idpass/data-collect-core";
 import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { AppInstanceStore } from "../types";

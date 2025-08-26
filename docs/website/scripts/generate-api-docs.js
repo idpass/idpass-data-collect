@@ -228,7 +228,7 @@ function generateSidebar(spec, endpoints, tags) {
   const sidebarItems = [
     {
       type: 'doc',
-      id: 'packages/backend/api-reference-generated/idpass-datacollect-backend-api',
+      id: 'packages/backend/api-reference-generated/idpass-data-collect-backend-api',
     }
   ];
 
@@ -341,7 +341,7 @@ For live API testing, start the backend server and visit:
   return {
     content,
     frontMatter: {
-      id: 'idpass-datacollect-backend-api',
+      id: 'idpass-data-collect-backend-api',
       title: spec.info.title,
       description: spec.info.description,
       sidebar_position: 1
@@ -422,7 +422,7 @@ function generateApiDocs() {
   
   // Generate API overview
   const overview = generateApiOverview(spec);
-  const overviewPath = path.join(outputDir, 'idpass-datacollect-backend-api.md');
+  const overviewPath = path.join(outputDir, 'idpass-data-collect-backend-api.md');
   const overviewContent = generateMarkdownContent(overview.frontMatter, overview.content);
   writeFile(overviewPath, overviewContent);
   

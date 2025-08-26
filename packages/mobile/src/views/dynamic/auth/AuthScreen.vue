@@ -5,7 +5,7 @@ import AuthContainer from './AuthContainer.vue'
 import { useTenantStore } from '@/store/tenant'
 import { useAuthManagerStore } from '@/store/authManager'
 import { useErrorHandler } from '@/composables/useErrorHandler'
-import { AuthConfig } from 'idpass-data-collect'
+import { AuthConfig } from '@idpass/data-collect-core'
 const route = useRoute()
 const router = useRouter()
 

@@ -1,10 +1,13 @@
 {
-  "name": "mobile",
+  "name": "@idpass/data-collect-mobile",
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
-    "dev": "vite  --port 8081",
+    "dev": "vite  --port 8081 --host",
     "build": "vue-tsc && vite build",
     "preview": "vite preview",
     "build:ios": "npm run build && cap sync ios && cap open ios",
@@ -50,7 +53,7 @@
     "flatpickr-formio": "^4.6.13-formio.2",
     "font-awesome": "^4.7.0",
     "form-data": "^4.0.0",
-    "idpass-data-collect": "file:../datacollect",
+    "@idpass/data-collect-core": "workspace:*",
     "jquery": "^3.7.1",
     "jwt-decode": "^4.0.0",
     "libsodium-wrappers": "^0.7.15",

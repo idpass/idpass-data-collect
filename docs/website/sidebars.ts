@@ -4,7 +4,7 @@ import type { SidebarsConfig } from "@docusaurus/plugin-content-docs";
 const backendApiSidebar = [
   {
     type: "doc",
-    id: "packages/backend/api-reference-generated/idpass-datacollect-backend-api",
+    id: "packages/backend/api-reference-generated/idpass-data-collect-backend-api",
   },
   {
     type: "category",
@@ -316,6 +316,7 @@ const sidebars: SidebarsConfig = {
       label: "Adapters",
       items: ["adapters/openfn-adapter", "adapters/auth0-adapter", "adapters/keycloak-adapter"],
     },
+    "glossary",
     // TODO: Add these sections when documents are created
     /*
     {
