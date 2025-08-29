@@ -21,7 +21,7 @@ import "dotenv/config";
 import { run } from "./syncServer";
 
 run({
-  port: parseInt(process.env.PORT || "3000"),
+  port: parseInt(process.env.SYNC_SERVER_PORT || "3000"),
   initialPassword: process.env.INITIAL_PASSWORD || "admin1@",
   userId: process.env.USER_ID || "SYNC_SERVER",
   postgresUrl: process.env.POSTGRES || "",
