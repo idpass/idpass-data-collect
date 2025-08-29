@@ -35,37 +35,23 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: |
-            package-lock.json
-            docs/website/package-lock.json
-            packages/datacollect/package-lock.json
+          node-version: '22.x'
 
-      - name: Install dependencies for DataCollect
-        run: |
-          cd packages/datacollect
-          npm ci
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install
 
       - name: Build DataCollect library
-        run: |
-          cd packages/datacollect
-          npm run build
+        run: pnpm --filter=datacollect build
 
       - name: Generate TypeDoc API documentation
-        run: |
-          cd packages/datacollect
-          npx typedoc
-
-      - name: Install dependencies for Docusaurus
-        run: |
-          cd docs/website
-          npm ci
+        run: pnpm --filter=datacollect typedoc
 
       - name: Build Docusaurus site
-        run: |
-          cd docs/website
-          npm run build
+        run: pnpm --filter=website build
 
       - name: Combine documentation outputs
         run: |

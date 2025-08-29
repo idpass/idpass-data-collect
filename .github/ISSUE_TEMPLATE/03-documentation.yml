@@ -9,15 +9,6 @@ body:
       value: |
         Thanks for helping us improve our documentation! Clear documentation is essential for making ID PASS DataCollect accessible to everyone.
 
-  - type: input
-    id: contact
-    attributes:
-      label: Contact Details
-      description: How can we reach you for follow-up questions? (Optional)
-      placeholder: your.email@example.com
-    validations:
-      required: false
-
   - type: dropdown
     id: doc-type
     attributes:
@@ -37,40 +28,12 @@ body:
     validations:
       required: true
 
-  - type: dropdown
-    id: doc-location
-    attributes:
-      label: Documentation Location
-      description: Where is the documentation issue located?
-      options:
-        - Main README.md
-        - Getting Started Guide
-        - API Documentation
-        - Architecture Documentation
-        - Docker Setup Guide
-        - Examples/Tutorials
-        - Package-specific README
-        - Code comments/JSDoc
-        - Website/GitHub Pages
-        - Other (specify below)
-    validations:
-      required: true
-
   - type: input
     id: page-url
     attributes:
       label: Page URL or File Path
-      description: Link to the page or file path where the issue exists
-      placeholder: "https://github.com/idpass/idpass-data-collect/blob/main/docs/... or packages/datacollect/README.md"
-    validations:
-      required: false
-
-  - type: textarea
-    id: current-content
-    attributes:
-      label: Current Content
-      description: What does the current documentation say? (Copy/paste the problematic section)
-      placeholder: Paste the current text that needs improvement
+      description: Link to the page or file path where the issue exists (optional).
+      placeholder: "./docs/... or packages/datacollect/README.md"
     validations:
       required: false
 
@@ -82,7 +45,6 @@ body:
       placeholder: |
         The current documentation is...
         This is confusing because...
-        Users might expect...
     validations:
       required: true
 
@@ -90,51 +52,10 @@ body:
     id: suggested-improvement
     attributes:
       label: Suggested Improvement
-      description: How should the documentation be improved?
+      description: How should the documentation be improved? (optional)
       placeholder: |
         The documentation should instead say...
         We should add a section about...
-        A code example would help showing...
-    validations:
-      required: false
-
-  - type: dropdown
-    id: audience
-    attributes:
-      label: Target Audience
-      description: Who is the primary audience for this documentation?
-      multiple: true
-      options:
-        - New users/beginners
-        - Experienced developers
-        - System administrators
-        - DataCollectors
-        - Integration developers
-        - Contributors
-        - All users
-
-  - type: dropdown
-    id: priority
-    attributes:
-      label: Priority
-      description: How important is fixing this documentation issue?
-      options:
-        - Low - Minor improvement
-        - Medium - Affects user experience
-        - High - Causes confusion/blocking issues
-        - Critical - Prevents users from using the system
-    validations:
-      required: true
-
-  - type: textarea
-    id: user-context
-    attributes:
-      label: User Context
-      description: What were you trying to accomplish when you encountered this issue?
-      placeholder: |
-        I was trying to...
-        I followed the instructions to...
-        I expected to be able to...
     validations:
       required: false
 
@@ -142,7 +63,7 @@ body:
     id: additional-context
     attributes:
       label: Additional Context
-      description: Any other information that would help us improve the documentation
+      description: Any other information that would help us improve the documentation (optional).
       placeholder: Screenshots, links to related issues, examples from other projects, etc.
     validations:
       required: false
@@ -153,9 +74,7 @@ body:
       label: Checklist
       description: Please confirm the following
       options:
-        - label: I have searched for existing documentation issues before creating this one
+        - label: I have searched for existing documentation issues before creating this one.
           required: true
-        - label: I have provided specific details about what needs to be improved
+        - label: I have provided specific details about what needs to be improved.
           required: true
-        - label: I am willing to help review proposed changes to the documentation
-          required: false
