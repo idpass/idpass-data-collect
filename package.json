@@ -21,6 +21,7 @@
     "dev:admin": "pnpm --filter @idpass/data-collect-admin dev",
     "dev:backend": "pnpm --filter @idpass/data-collect-backend dev",
     "dev:mobile": "pnpm --filter @idpass/data-collect-mobile dev",
+    "dev:docs": "pnpm --filter @idpass/data-collect-docs dev",
     "check-licenses": "node scripts/check-license-headers.js",
     "check-licenses:fix": "node scripts/check-license-headers.js --fix",
     "lint": "pnpm -r --if-present run lint",
@@ -30,9 +31,9 @@
     "prepare": "[ \"$CI\" != \"true\" ] && husky install || echo 'Skipping husky in CI'"
   },
   "devDependencies": {
-    "glob": "^10.3.10",
+    "glob": "^10.4.5",
     "husky": "^8.0.3",
-    "lint-staged": "^15.2.0"
+    "lint-staged": "^15.5.2"
   },
   "lint-staged": {
     "packages/**/*.{ts,tsx,js,jsx}": [

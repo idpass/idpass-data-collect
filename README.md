@@ -87,11 +87,12 @@ npm run dev
 
 ## 📖 Documentation
 
-- [Getting Started Guide](docs/website/docs/index.md)
-- [Architecture Overview](docs/website/docs/architecture/index.md)
-- [API Reference](docs/api/datacollect/README.md)
-- [Deployment Guide](docs/deployment/README.md) _(coming soon)_
+- [Getting Started Guide](./website/docs/index.md)
+- [Architecture Overview](./website/docs/architecture/index.md)
+- [API Reference](./website/docs/api/datacollect/README.md)
+- [Deployment Guide](./website/docs/deployment/docker-deployment.md)
 - [Examples](examples/)
+- [Glossary](./website/docs/glossary.md)
 
 ## 💻 Basic Usage
 
@@ -119,7 +120,7 @@ const updated = await manager.submitForm({
 });
 ```
 
-See [examples/basic-usage](examples/basic-usage/) for a complete example.
+See [examples/basic-usage](./website/docs/examples/basic-usage/) for a complete example.
 
 ## 🏗️ Architecture
 
@@ -171,12 +172,12 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 - [GitHub Repository](https://github.com/idpass/idpass-data-collect)
 - [Issue Tracker](https://github.com/idpass/idpass-data-collect/issues)
-- [Newlogic Website](https://newlogic.com)
+- [Website](https://acn.fr)
 
 ## 👥 Authors
 
-Developed and maintained by [Newlogic](https://newlogic.com)
+Developed and maintained by [Association pour la Coopération Numérique](https://acn.fr)
 
 ---
 
-For questions or support, please [open an issue](https://github.com/idpass/idpass-data-collect/issues) or contact the maintainers.
+For questions or support, please [open an issue](.github/ISSUE_TEMPLATE) or contact the maintainers.

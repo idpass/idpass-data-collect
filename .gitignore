@@ -90,3 +90,5 @@ backend/src/public/*.png
 packages/backend/src/public/*.json
 packages/backend/src/public/*.png
 docker-compose.local.yaml
+website/docs/packages/datacollect/api/
+website/docs/packages/backend/api-reference-generated/
