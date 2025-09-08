@@ -1,8 +1,14 @@
 packages:
+  - website/
   - packages/*
 
 onlyBuiltDependencies:
   - bcrypt
+  - core-js
+  - core-js-pure
+  - esbuild
+  - sharp
+  - workerd
 
 overrides:
   '@babel/runtime@<7.26.10': '>=7.26.10'

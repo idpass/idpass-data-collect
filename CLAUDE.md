@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ID PASS DataCollect is a TypeScript-based offline-first data management system for household and individual beneficiary data. The project consists of three main modules:
 
-1. **DataCollect** (`/packages/datacollect`) - Main client library for offline data management using IndexedDB
-2. **Backend** (`/packages/backend`) - Central sync server using Express.js and PostgreSQL  
-3. **Admin** (`/packages/admin`) - Vue.js admin interface for the sync server
+1. **DataCollect** (`packages/datacollect`) - Main client library for offline data management using IndexedDB
+2. **Backend** (`packages/backend`) - Central sync server using Express.js and PostgreSQL  
+3. **Admin** (`packages/admin`) - Vue.js admin interface for the sync server
 
 ## Architecture
 
