@@ -90,7 +90,7 @@ export class InternalSyncManager {
    * @param entityStore - Store for managing current entity state
    * @param eventApplierService - Service for applying events to entities
    * @param syncServerUrl - Base URL of the remote sync server
-   * @param authToken - JWT authentication token for server requests
+   * @param authStorage - Adapter for managing authentication token persistence
    * @param configId - Configuration ID for multi-tenant setups (defaults to "default")
    */
   constructor(

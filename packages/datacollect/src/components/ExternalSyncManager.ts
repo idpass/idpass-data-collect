@@ -35,22 +35,22 @@ const adaptersMapping = {
 /**
  * Manages synchronization with external third-party systems using pluggable adapters.
  *
- * The ExternalSyncManager provides a unified interface for syncing DataCollect data
- * with various external systems like OpenSPP, SCOPE, or custom APIs. It uses the
- * Strategy pattern with pluggable adapters to handle system-specific integration logic.
+ * This class provides a unified interface for syncing DataCollect data with various
+ * external systems (e.g., OpenSPP, custom APIs) by utilizing a Strategy pattern
+ * with pluggable adapters.
  *
  * Key features:
- * - **Pluggable Adapters**: Support for multiple external systems via adapter pattern
- * - **Dynamic Loading**: Adapters are instantiated based on configuration type
- * - **Credential Management**: Secure handling of authentication credentials
- * - **Error Handling**: Graceful handling of adapter initialization and sync failures
- * - **Configuration-Driven**: Flexible configuration per external system
+ * - **Pluggable Adapters**: Support for multiple external systems via adapter pattern.
+ * - **Dynamic Loading**: Adapters are instantiated based on configuration type.
+ * - **Credential Management**: Secure handling of authentication credentials.
+ * - **Error Handling**: Graceful handling of adapter initialization and sync failures.
+ * - **Configuration-Driven**: Flexible configuration per external system.
  *
  * Architecture:
- * - Uses Strategy pattern for different external system integrations
- * - Adapters are registered in the adaptersMapping registry
- * - Each adapter implements the ExternalSyncAdapter interface
- * - Configuration determines which adapter to instantiate and how to configure it
+ * - Uses Strategy pattern for different external system integrations.
+ * - Adapters are registered in the `adaptersMapping` registry.
+ * - Each adapter implements the `ExternalSyncAdapter` interface.
+ * - Configuration determines which adapter to instantiate and how to configure it.
  *
  * @example
  * Basic usage with mock adapter:
@@ -106,9 +106,9 @@ export class ExternalSyncManager {
   /**
    * Creates a new ExternalSyncManager instance.
    *
-   * @param eventStore - Store for managing events and audit logs
-   * @param eventApplierService - Service for applying events to entities
-   * @param config - Configuration object specifying the external system type and settings
+   * @param eventStore Store for managing events and audit logs.
+   * @param eventApplierService Service for applying events to entities.
+   * @param config Configuration object specifying the external system type and settings.
    *
    * @example
    * ```typescript
@@ -141,7 +141,8 @@ export class ExternalSyncManager {
    *
    * This method must be called before attempting synchronization.
    *
-   * @throws {Error} When adapter instantiation fails
+   * @returns A Promise that resolves when the adapter is initialized.
+   * @throws {Error} When adapter instantiation fails.
    *
    * @example
    * ```typescript
@@ -172,14 +173,11 @@ export class ExternalSyncManager {
    * Performs synchronization with the external system using the configured adapter.
    *
    * Delegates the actual sync operation to the loaded adapter, which handles the
-   * system-specific integration logic. The sync operation typically involves:
-   * - Pulling data from the external system
-   * - Transforming data to DataCollect format
-   * - Applying changes using the EventApplierService
-   * - Optionally pushing local changes to the external system
+   * system-specific integration logic.
    *
-   * @param credentials - Optional authentication credentials for the external system
-   * @throws {Error} When adapter is not initialized or sync operation fails
+   * @param credentials Optional authentication credentials for the external system.
+   * @returns A Promise that resolves when the synchronization is complete.
+   * @throws {Error} When adapter is not initialized or sync operation fails.
    *
    * @example
    * ```typescript
@@ -218,7 +216,7 @@ export class ExternalSyncManager {
   /**
    * Checks if the external sync manager has been properly initialized with an adapter.
    *
-   * @returns True if an adapter is loaded and ready for synchronization
+   * @returns `true` if an adapter is loaded and ready for synchronization, `false` otherwise.
    *
    * @example
    * ```typescript

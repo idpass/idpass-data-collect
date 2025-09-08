@@ -46,7 +46,7 @@
  *   IndexedDbEventStorageAdapter,
  *   SyncLevel,
  *   EntityType
- * } from 'idpass-datacollect';
+ * } from 'idpass-data-collect';
  *
  * // Initialize storage adapters
  * const entityAdapter = new IndexedDbEntityStorageAdapter('tenant-123');
@@ -88,7 +88,7 @@
  *   PostgresEntityStorageAdapter,
  *   PostgresEventStorageAdapter,
  *   InternalSyncManager
- * } from 'idpass-datacollect';
+ * } from 'idpass-data-collect';
  *
  * // Initialize PostgreSQL adapters
  * const entityAdapter = new PostgresEntityStorageAdapter(
@@ -126,7 +126,7 @@
  * import {
  *   ExternalSyncManager,
  *   ExternalSyncConfig
- * } from 'idpass-datacollect';
+ * } from 'idpass-data-collect';
  *
  * const opensppConfig: ExternalSyncConfig = {
  *   type: 'openspp',

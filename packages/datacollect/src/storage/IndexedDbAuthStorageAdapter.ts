@@ -26,22 +26,22 @@ import { AuthStorageAdapter } from "../interfaces/types";
  * It implements the full AuthStorageAdapter interface with proper token management and multi-tenant support.
  *
  * Key features:
- * - **Secure Token Storage**: Stores authentication tokens locally in the browser using IndexedDB
- * - **Multi-Tenant Support**: Isolated token storage per tenant using tenant ID prefixes
- * - **Token Lifecycle Management**: Handles token storage, retrieval, and removal operations
- * - **Offline Capability**: Tokens persist across browser sessions and offline scenarios
- * - **Privacy-First**: Tokens are stored locally and not transmitted to external servers
+ * - **Secure Token Storage**: Stores authentication tokens locally in the browser using IndexedDB.
+ * - **Multi-Tenant Support**: Isolated token storage per tenant using tenant ID prefixes.
+ * - **Token Lifecycle Management**: Handles token storage, retrieval, and removal operations.
+ * - **Offline Capability**: Tokens persist across browser sessions and offline scenarios.
+ * - **Privacy-First**: Tokens are stored locally and not transmitted to external servers.
  *
  * Architecture:
- * - Uses IndexedDB object store with token as the primary data
- * - Implements proper error handling for IndexedDB operations
- * - Provides ACID transaction support for data consistency
- * - Supports both single and multi-tenant deployments
+ * - Uses IndexedDB object store with token as the primary data.
+ * - Implements proper error handling for IndexedDB operations.
+ * - Provides ACID transaction support for data consistency.
+ * - Supports both single and multi-tenant deployments.
  *
  * Security Considerations:
- * - Tokens are stored in the browser's IndexedDB, which is subject to browser security policies
- * - Tokens persist until explicitly removed or browser data is cleared
- * - Consider implementing token encryption for additional security if required
+ * - Tokens are stored in the browser's IndexedDB, which is subject to browser security policies.
+ * - Tokens persist until explicitly removed or browser data is cleared.
+ * - Consider implementing token encryption for additional security if required.
  *
  * @example
  * Basic usage:
@@ -124,8 +124,8 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
   /**
    * Creates a new IndexedDbAuthStorageAdapter instance.
    *
-   * @param tenantId - Optional tenant identifier for multi-tenant isolation
-   *                   When provided, creates a separate database prefixed with tenant ID
+   * @param tenantId Optional tenant identifier for multi-tenant isolation.
+   *                  When provided, creates a separate database prefixed with tenant ID.
    *
    * @example
    * ```typescript
@@ -145,10 +145,7 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
   /**
    * Retrieves the stored username.
    *
-   * Returns the single stored username, or an empty string if no username is stored.
-   * This method retrieves the username stored with a fixed key, ensuring only one username is maintained.
-   *
-   * @returns The stored username, or empty string if no username exists
+   * @returns The stored username, or an empty string if no username exists.
    */
   async getUsername(): Promise<string> {
     if (!this.db) {
@@ -176,10 +173,7 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
   /**
    * Retrieves the first available authentication token.
    *
-   * Returns the first token found in the database, or null if no tokens are stored.
-   * This method is typically called to get any available token for authentication.
-   *
-   * @returns The first available token with provider information, or null if no tokens exist
+   * @returns The first available token with provider information, or null if no tokens exist.
    */
   async getToken(): Promise<{ provider: string; token: string } | null> {
     if (!this.db) {
@@ -217,10 +211,8 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
   /**
    * Removes all stored authentication tokens from IndexedDB.
    *
-   * Clears all stored tokens, effectively logging out all users.
-   * This method is typically called during logout or when tokens expire.
-   *
-   * @throws {Error} When IndexedDB is not initialized or token removal fails
+   * @returns A Promise that resolves when all tokens are removed.
+   * @throws {Error} When IndexedDB is not initialized or token removal fails.
    */
   async removeAllTokens(): Promise<void> {
     if (!this.db) {
@@ -249,6 +241,8 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
    *
    * For IndexedDB, connections are automatically managed by the browser,
    * so this method is a no-op but maintained for interface compatibility.
+   *
+   * @returns A Promise that resolves when the connection is closed.
    */
   async closeConnection(): Promise<void> {
     return Promise.resolve();
@@ -257,14 +251,8 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
   /**
    * Initializes the IndexedDB database with required object stores for token storage.
    *
-   * Creates:
-   * - Main "tokens" object store with token as the primary data
-   * - Indexes for fast lookups: token, timestamp
-   * - Proper error handling for database creation and upgrades
-   *
-   * This method must be called before any other operations.
-   *
-   * @throws {Error} When IndexedDB is not supported or database creation fails
+   * @returns A Promise that resolves when the database is initialized.
+   * @throws {Error} When IndexedDB is not supported or database creation fails.
    *
    * @example
    * ```typescript
@@ -300,11 +288,8 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
   /**
    * Retrieves a stored authentication token by key.
    *
-   * Returns the token associated with the specified key, or an empty string if no token is found.
-   * This method is typically called before making authenticated API requests.
-   *
-   * @param provider - The provider name identifying the token to retrieve
-   * @returns The stored authentication token, or empty string if not found
+   * @param provider The provider name identifying the token to retrieve.
+   * @returns The stored authentication token, or an empty string if not found.
    */
   async getTokenByProvider(provider: string = "current_token"): Promise<string> {
     if (!this.db) {
@@ -332,12 +317,9 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
   /**
    * Stores a username in IndexedDB.
    *
-   * Saves the provided username with a fixed key, replacing any previously stored username.
-   * This method ensures only one username is maintained at a time.
-   * This method is typically called during login to store the authenticated user's username.
-   *
-   * @param username - The username to store
-   * @throws {Error} When IndexedDB is not initialized, invalid parameters provided, or username storage fails
+   * @param username The username to store.
+   * @returns A Promise that resolves when the username is stored.
+   * @throws {Error} When IndexedDB is not initialized, invalid parameters provided, or username storage fails.
    *
    * @example
    * ```typescript
@@ -381,12 +363,10 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
   /**
    * Stores an authentication token with a specific key in IndexedDB.
    *
-   * Saves the provided token with the specified key and a timestamp for tracking purposes.
-   * If a token already exists with the same key, it will be replaced with the new token.
-   *
-   * @param key - The key to associate with the token
-   * @param token - The authentication token to store (JWT, Bearer token, etc.)
-   * @throws {Error} When IndexedDB is not initialized or token storage fails
+   * @param key The key to associate with the token.
+   * @param token The authentication token to store (JWT, Bearer token, etc.).
+   * @returns A Promise that resolves when the token is stored.
+   * @throws {Error} When IndexedDB is not initialized or token storage fails.
    */
   async setToken(key: string, token: string): Promise<void> {
     if (!this.db) {
@@ -425,11 +405,9 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
   /**
    * Removes a specific authentication token by key from IndexedDB.
    *
-   * Removes the token associated with the specified key.
-   * This method is typically called during logout or when tokens expire.
-   *
-   * @param key - The key identifying the token to remove
-   * @throws {Error} When IndexedDB is not initialized or token removal fails
+   * @param key The key identifying the token to remove.
+   * @returns A Promise that resolves when the token is removed.
+   * @throws {Error} When IndexedDB is not initialized or token removal fails.
    */
   async removeToken(key: string): Promise<void> {
     if (!this.db) {
@@ -459,7 +437,8 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
    * ⚠️ **WARNING**: This permanently deletes all stored tokens!
    * Only use for testing or when intentionally clearing all authentication data.
    *
-   * @throws {Error} When IndexedDB is not initialized or clear operation fails
+   * @returns A Promise that resolves when the store is cleared.
+   * @throws {Error} When IndexedDB is not initialized or clear operation fails.
    *
    * @example
    * ```typescript
