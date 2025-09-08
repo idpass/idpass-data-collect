@@ -514,13 +514,13 @@ export class EntityDataManager {
    * ```typescript
    * // Search for adults
    * const adults = await manager.searchEntities([
-   *   { "data.age": { $gte: 18 } },
+   *   { "age": { $gte: 18 } },
    *   { "type": "individual" }
    * ]);
    *
    * // Search for groups with specific name
    * const smithFamilies = await manager.searchEntities([
-   *   { "data.name": { $regex: /smith/i } },
+   *   { "name": { $regex: /smith/i } },
    *   { "type": "group" }
    * ]);
    *
@@ -642,6 +642,13 @@ export class EntityDataManager {
     limit: number,
   ): Promise<{ events: FormSubmission[]; nextCursor: string | Date | null }> {
     return await this.eventStore.getEventsSincePagination(timestamp, limit);
+  }
+
+  async getEventsSelfServicePagination(
+    entityGuid: string,
+    timestamp: string | Date,
+  ): Promise<{ events: FormSubmission[] }> {
+    return await this.eventStore.getEventsSelfServicePagination(entityGuid, timestamp);
   }
 
   /**
@@ -855,9 +862,47 @@ export class EntityDataManager {
     }
     return false;
   }
+
   async handleCallback(type: string): Promise<void> {
     if (this.authManager) {
       await this.authManager.handleCallback(type);
     }
+  }
+
+  async getAvailableAuthProviders(): Promise<string[]> {
+    if (this.authManager) {
+      return this.authManager.getAvailableAuthProviders();
+    }
+    return [];
+  }
+
+  async createUser(type: string, user: { email: string; phoneNumber?: string }): Promise<void> {
+    if (this.authManager) {
+      await this.authManager.createUser(type, user);
+    }
+  }
+
+  async getUserInfo(token: string, type?: string): Promise<Record<string, unknown> | null> {
+    if (this.authManager) {
+      return this.authManager.getUserInfo(token, type);
+    }
+    return null;
+  }
+
+  async getUserEmailOrPhoneNumber(
+    type: string,
+    token: string,
+  ): Promise<{ email: string; phoneNumber?: string } | null> {
+    if (this.authManager) {
+      return this.authManager.getUserEmailOrPhoneNumber(type, token);
+    }
+    return null;
+  }
+
+  async getDescendants(guid: string): Promise<string[]> {
+    if (this.entityStore) {
+      return await this.entityStore.getDescendants(guid);
+    }
+    return [];
   }
 }

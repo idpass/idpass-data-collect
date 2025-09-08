@@ -282,6 +282,282 @@ describe("PostgresEntityStorageAdapter", () => {
     expect(potentialDuplicatesAfter).toEqual([{ entityGuid: "3", duplicateGuid: "4" }]);
   });
 
+  test("getDescendants should return all descendant entities (direct and indirect)", async () => {
+    // Create a hierarchical structure:
+    // parent1
+    // ├── child1
+    // │   ├── grandchild1
+    // │   └── grandchild2
+    // └── child2
+    //     └── grandchild3
+
+    const parent1: EntityDoc = {
+      id: "parent1",
+      guid: "parent1",
+      type: EntityType.Individual,
+      data: { name: "Parent 1", parentId: null },
+      version: 1,
+      lastUpdated: "2023-05-01T10:00:00.000Z",
+    };
+
+    const child1: EntityDoc = {
+      id: "child1",
+      guid: "child1",
+      type: EntityType.Individual,
+      data: { name: "Child 1", parentId: "parent1" },
+      version: 1,
+      lastUpdated: "2023-05-01T11:00:00.000Z",
+    };
+
+    const child2: EntityDoc = {
+      id: "child2",
+      guid: "child2",
+      type: EntityType.Individual,
+      data: { name: "Child 2", parentId: "parent1" },
+      version: 1,
+      lastUpdated: "2023-05-01T12:00:00.000Z",
+    };
+
+    const grandchild1: EntityDoc = {
+      id: "grandchild1",
+      guid: "grandchild1",
+      type: EntityType.Individual,
+      data: { name: "Grandchild 1", parentId: "child1" },
+      version: 1,
+      lastUpdated: "2023-05-01T13:00:00.000Z",
+    };
+
+    const grandchild2: EntityDoc = {
+      id: "grandchild2",
+      guid: "grandchild2",
+      type: EntityType.Individual,
+      data: { name: "Grandchild 2", parentId: "child1" },
+      version: 1,
+      lastUpdated: "2023-05-01T14:00:00.000Z",
+    };
+
+    const grandchild3: EntityDoc = {
+      id: "grandchild3",
+      guid: "grandchild3",
+      type: EntityType.Individual,
+      data: { name: "Grandchild 3", parentId: "child2" },
+      version: 1,
+      lastUpdated: "2023-05-01T15:00:00.000Z",
+    };
+
+    // Save all entities
+    await adapter.saveEntity({ guid: "parent1", initial: parent1, modified: parent1 });
+    await adapter.saveEntity({ guid: "child1", initial: child1, modified: child1 });
+    await adapter.saveEntity({ guid: "child2", initial: child2, modified: child2 });
+    await adapter.saveEntity({ guid: "grandchild1", initial: grandchild1, modified: grandchild1 });
+    await adapter.saveEntity({ guid: "grandchild2", initial: grandchild2, modified: grandchild2 });
+    await adapter.saveEntity({ guid: "grandchild3", initial: grandchild3, modified: grandchild3 });
+
+    // Test getting descendants of parent1
+    const descendants = await adapter.getDescendants("parent1");
+    expect(descendants).toHaveLength(5);
+    expect(descendants).toContain("child1");
+    expect(descendants).toContain("child2");
+    expect(descendants).toContain("grandchild1");
+    expect(descendants).toContain("grandchild2");
+    expect(descendants).toContain("grandchild3");
+
+    // Test getting descendants of child1
+    const child1Descendants = await adapter.getDescendants("child1");
+    expect(child1Descendants).toHaveLength(2);
+    expect(child1Descendants).toContain("grandchild1");
+    expect(child1Descendants).toContain("grandchild2");
+
+    // Test getting descendants of child2
+    const child2Descendants = await adapter.getDescendants("child2");
+    expect(child2Descendants).toHaveLength(1);
+    expect(child2Descendants).toContain("grandchild3");
+
+    // Test getting descendants of a leaf node (should return empty array)
+    const grandchild1Descendants = await adapter.getDescendants("grandchild1");
+    expect(grandchild1Descendants).toHaveLength(0);
+
+    // Test getting descendants of non-existent entity
+    const nonExistentDescendants = await adapter.getDescendants("non-existent");
+    expect(nonExistentDescendants).toHaveLength(0);
+  });
+
+  test("getDescendants should handle entities without parentId field", async () => {
+    const entity1: EntityDoc = {
+      id: "entity1",
+      guid: "entity1",
+      type: EntityType.Individual,
+      data: { name: "Entity 1" }, // No parentId field
+      version: 1,
+      lastUpdated: "2023-05-01T10:00:00.000Z",
+    };
+
+    const entity2: EntityDoc = {
+      id: "entity2",
+      guid: "entity2",
+      type: EntityType.Individual,
+      data: { name: "Entity 2", parentId: "entity1" },
+      version: 1,
+      lastUpdated: "2023-05-01T11:00:00.000Z",
+    };
+
+    await adapter.saveEntity({ guid: "entity1", initial: entity1, modified: entity1 });
+    await adapter.saveEntity({ guid: "entity2", initial: entity2, modified: entity2 });
+
+    // entity1 has no parentId, so it shouldn't be found as a descendant
+    const descendants = await adapter.getDescendants("entity1");
+    expect(descendants).toHaveLength(1);
+    expect(descendants).toContain("entity2");
+  });
+
+  test("getDescendants should handle circular references gracefully", async () => {
+    const entity1: EntityDoc = {
+      id: "entity1",
+      guid: "entity1",
+      type: EntityType.Individual,
+      data: { name: "Entity 1", parentId: "entity2" },
+      version: 1,
+      lastUpdated: "2023-05-01T10:00:00.000Z",
+    };
+
+    const entity2: EntityDoc = {
+      id: "entity2",
+      guid: "entity2",
+      type: EntityType.Individual,
+      data: { name: "Entity 2", parentId: "entity1" },
+      version: 1,
+      lastUpdated: "2023-05-01T11:00:00.000Z",
+    };
+
+    await adapter.saveEntity({ guid: "entity1", initial: entity1, modified: entity1 });
+    await adapter.saveEntity({ guid: "entity2", initial: entity2, modified: entity2 });
+
+    // Should not cause infinite loop and should return the other entity
+    const descendants = await adapter.getDescendants("entity1");
+    expect(descendants).toHaveLength(2);
+    expect(descendants).toContain("entity2");
+    expect(descendants).toContain("entity1");
+  });
+
+  test("getDescendants should work with both initial and modified data", async () => {
+    const parent: EntityDoc = {
+      id: "parent",
+      guid: "parent",
+      type: EntityType.Individual,
+      data: { name: "Parent" },
+      version: 1,
+      lastUpdated: "2023-05-01T10:00:00.000Z",
+    };
+
+    const child: EntityDoc = {
+      id: "child",
+      guid: "child",
+      type: EntityType.Individual,
+      data: { name: "Child", parentId: "parent" },
+      version: 1,
+      lastUpdated: "2023-05-01T11:00:00.000Z",
+    };
+
+    // Save with different parentId in initial vs modified
+    const childWithDifferentParentId: EntityDoc = {
+      ...child,
+      data: { name: "Child", parentId: "other-parent" }, // Different parentId in initial
+    };
+
+    await adapter.saveEntity({
+      guid: "parent",
+      initial: parent,
+      modified: parent,
+    });
+    await adapter.saveEntity({
+      guid: "child",
+      initial: childWithDifferentParentId,
+      modified: child,
+    });
+
+    // Should find the child as a descendant because modified data has parentId: "parent"
+    const descendants = await adapter.getDescendants("parent");
+    expect(descendants).toHaveLength(1);
+    expect(descendants).toContain("child");
+  });
+
+  test("getDescendants should respect tenant isolation", async () => {
+    const tenantAAdapter = new PostgresEntityStorageAdapter(process.env.POSTGRES_TEST || "", "tenant-a");
+    const tenantBAdapter = new PostgresEntityStorageAdapter(process.env.POSTGRES_TEST || "", "tenant-b");
+
+    await tenantAAdapter.initialize();
+    await tenantBAdapter.initialize();
+    await tenantAAdapter.clearStore();
+    await tenantBAdapter.clearStore();
+
+    // Create entities for tenant A
+    const parentA: EntityDoc = {
+      id: "parent",
+      guid: "parent-a",
+      type: EntityType.Individual,
+      data: { name: "Parent A" },
+      version: 1,
+      lastUpdated: "2023-05-01T10:00:00.000Z",
+    };
+
+    const childA: EntityDoc = {
+      id: "child",
+      guid: "child-a",
+      type: EntityType.Individual,
+      data: { name: "Child A", parentId: "parent-a" },
+      version: 1,
+      lastUpdated: "2023-05-01T11:00:00.000Z",
+    };
+
+    // Create entities for tenant B
+    const parentB: EntityDoc = {
+      id: "parent",
+      guid: "parent-b",
+      type: EntityType.Individual,
+      data: { name: "Parent B" },
+      version: 1,
+      lastUpdated: "2023-05-01T10:00:00.000Z",
+    };
+
+    const childB: EntityDoc = {
+      id: "child",
+      guid: "child-b",
+      type: EntityType.Individual,
+      data: { name: "Child B", parentId: "parent-b" },
+      version: 1,
+      lastUpdated: "2023-05-01T11:00:00.000Z",
+    };
+
+    // Save entities to different tenants
+    await tenantAAdapter.saveEntity({ guid: "parent-a", initial: parentA, modified: parentA });
+    await tenantAAdapter.saveEntity({ guid: "child-a", initial: childA, modified: childA });
+    await tenantBAdapter.saveEntity({ guid: "parent-b", initial: parentB, modified: parentB });
+    await tenantBAdapter.saveEntity({ guid: "child-b", initial: childB, modified: childB });
+
+    // Test tenant A descendants
+    const tenantADescendants = await tenantAAdapter.getDescendants("parent-a");
+    expect(tenantADescendants).toHaveLength(1);
+    expect(tenantADescendants).toContain("child-a");
+
+    // Test tenant B descendants
+    const tenantBDescendants = await tenantBAdapter.getDescendants("parent-b");
+    expect(tenantBDescendants).toHaveLength(1);
+    expect(tenantBDescendants).toContain("child-b");
+
+    // Verify cross-tenant isolation
+    const tenantACrossDescendants = await tenantAAdapter.getDescendants("parent-b");
+    expect(tenantACrossDescendants).toHaveLength(0);
+
+    const tenantBCrossDescendants = await tenantBAdapter.getDescendants("parent-a");
+    expect(tenantBCrossDescendants).toHaveLength(0);
+
+    // Cleanup
+    await tenantAAdapter.clearStore();
+    await tenantBAdapter.clearStore();
+    await tenantAAdapter.closeConnection();
+    await tenantBAdapter.closeConnection();
+  });
+
   describe("tenantId isolation", () => {
     let tenantAAdapter: PostgresEntityStorageAdapter;
     let tenantBAdapter: PostgresEntityStorageAdapter;

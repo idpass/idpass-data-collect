@@ -18,49 +18,48 @@
  */
 
 export class OIDCCLientStore implements Storage {
-  private dbName = 'oidc-client-store'
-  private storeName = 'oidc-state'
-  private db: IDBDatabase | null = null
-  private _length = 0
+  private dbName = "oidc-client-store";
+  private storeName = "oidc-state";
+  private db: IDBDatabase | null = null;
+  private _length = 0;
 
   constructor() {
-    if (typeof window === 'undefined') {
-      console.log('IndexedDB is not available in this environment')
-      return
+    if (typeof window === "undefined") {
+      console.log("IndexedDB is not available in this environment");
+      return;
     }
-    this.initDB()
+    this.initDB();
   }
 
   get length(): number {
-    return this._length
+    return this._length;
   }
 
   private async initDB(): Promise<void> {
-
     return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, 1)
+      const request = indexedDB.open(this.dbName, 1);
 
-      request.onerror = () => reject(request.error)
-      
+      request.onerror = () => reject(request.error);
+
       request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result
+        const db = (event.target as IDBOpenDBRequest).result;
         if (!db.objectStoreNames.contains(this.storeName)) {
-          db.createObjectStore(this.storeName)
+          db.createObjectStore(this.storeName);
         }
-      }
+      };
 
       request.onsuccess = () => {
-        this.db = request.result
+        this.db = request.result;
         // Update length after initialization
-        this.updateLength()
-        resolve()
-      }
-    })
+        this.updateLength();
+        resolve();
+      };
+    });
   }
 
   private async updateLength(): Promise<void> {
-    const keys = await this.getAllKeys()
-    this._length = keys.length
+    const keys = await this.getAllKeys();
+    this._length = keys.length;
   }
 
   /**
@@ -72,15 +71,15 @@ export class OIDCCLientStore implements Storage {
   key(_index: number): string | null {
     // We'll implement this synchronously since Storage interface requires it
     // It will return null if the index is out of bounds or if DB isn't initialized
-    return null
+    return null;
   }
 
   clear(): void {
-    if (!this.db) return
-    const transaction = this.db.transaction([this.storeName], 'readwrite')
-    const store = transaction.objectStore(this.storeName)
-    store.clear()
-    this._length = 0
+    if (!this.db) return;
+    const transaction = this.db.transaction([this.storeName], "readwrite");
+    const store = transaction.objectStore(this.storeName);
+    store.clear();
+    this._length = 0;
   }
 
   /**
@@ -92,7 +91,7 @@ export class OIDCCLientStore implements Storage {
   getItem(_key: string): string | null {
     // We need a synchronous version for the Storage interface
     // Return null if not initialized or error occurs
-    return null
+    return null;
   }
 
   /**
@@ -104,7 +103,7 @@ export class OIDCCLientStore implements Storage {
   setItem(_key: string, _value: string): void {
     // We need a synchronous version for the Storage interface
     // No-op if not initialized
-    return
+    return;
   }
 
   /**
@@ -115,61 +114,61 @@ export class OIDCCLientStore implements Storage {
   removeItem(_key: string): void {
     // We need a synchronous version for the Storage interface
     // No-op if not initialized
-    return
+    return;
   }
 
   // Async versions of the methods for actual usage
   async getItemAsync(key: string): Promise<string | null> {
-    if (!this.db) await this.initDB()
+    if (!this.db) await this.initDB();
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([this.storeName], 'readonly')
-      const store = transaction.objectStore(this.storeName)
-      const request = store.get(key)
+      const transaction = this.db!.transaction([this.storeName], "readonly");
+      const store = transaction.objectStore(this.storeName);
+      const request = store.get(key);
 
-      request.onerror = () => reject(request.error)
-      request.onsuccess = () => resolve(request.result || null)
-    })
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result || null);
+    });
   }
 
   async setItemAsync(key: string, value: string): Promise<void> {
-    if (!this.db) await this.initDB()
+    if (!this.db) await this.initDB();
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([this.storeName], 'readwrite')
-      const store = transaction.objectStore(this.storeName)
-      const request = store.put(value, key)
+      const transaction = this.db!.transaction([this.storeName], "readwrite");
+      const store = transaction.objectStore(this.storeName);
+      const request = store.put(value, key);
 
-      request.onerror = () => reject(request.error)
+      request.onerror = () => reject(request.error);
       request.onsuccess = () => {
-        this.updateLength()
-        resolve()
-      }
-    })
+        this.updateLength();
+        resolve();
+      };
+    });
   }
 
   async removeItemAsync(key: string): Promise<void> {
-    if (!this.db) await this.initDB()
+    if (!this.db) await this.initDB();
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([this.storeName], 'readwrite')
-      const store = transaction.objectStore(this.storeName)
-      const request = store.delete(key)
+      const transaction = this.db!.transaction([this.storeName], "readwrite");
+      const store = transaction.objectStore(this.storeName);
+      const request = store.delete(key);
 
-      request.onerror = () => reject(request.error)
+      request.onerror = () => reject(request.error);
       request.onsuccess = () => {
-        this.updateLength()
-        resolve()
-      }
-    })
+        this.updateLength();
+        resolve();
+      };
+    });
   }
 
   private async getAllKeys(): Promise<string[]> {
-    if (!this.db) await this.initDB()
+    if (!this.db) await this.initDB();
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([this.storeName], 'readonly')
-      const store = transaction.objectStore(this.storeName)
-      const request = store.getAllKeys()
+      const transaction = this.db!.transaction([this.storeName], "readonly");
+      const store = transaction.objectStore(this.storeName);
+      const request = store.getAllKeys();
 
-      request.onerror = () => reject(request.error)
-      request.onsuccess = () => resolve(request.result.map(key => key.toString()))
-    })
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result.map((key) => key.toString()));
+    });
   }
 }

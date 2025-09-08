@@ -46,7 +46,7 @@ export class UserStoreImpl implements UserStore {
     }
   }
 
-  async saveUser(user: Omit<UserWithPasswordHash, "id">): Promise<void> {
+  async createUser(user: Omit<UserWithPasswordHash, "id">): Promise<void> {
     const client = await this.pool.connect();
     try {
       const { email, passwordHash, role } = user;

@@ -91,16 +91,16 @@ import { EntityPair, EntityStorageAdapter, SearchCriteria } from "../interfaces/
  * ```typescript
  * // Search for adults with complex criteria
  * const adults = await adapter.searchEntities([
- *   { "data.age": { $gte: 18 } },           // Age >= 18
- *   { "data.status": "active" },             // Exact string match
- *   { "data.name": { $regex: "john" } },     // Case-insensitive regex
- *   { "data.verified": true }                // Boolean match
+ *   { "age": { $gte: 18 } },           // Age >= 18
+ *   { "status": "active" },             // Exact string match
+ *   { "name": { $regex: "john" } },     // Case-insensitive regex
+ *   { "verified": true }                // Boolean match
  * ]);
  *
  * // Search with numeric ranges
  * const middleAged = await adapter.searchEntities([
- *   { "data.age": { $gte: 30 } },
- *   { "data.age": { $lte: 65 } }
+ *   { "age": { $gte: 30 } },
+ *   { "age": { $lte: 65 } }
  * ]);
  * ```
  *
@@ -281,17 +281,17 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * ```typescript
    * // Complex multi-criteria search
    * const results = await adapter.searchEntities([
-   *   { "data.age": { $gte: 21 } },          // Adults over 21
-   *   { "data.age": { $lt: 65 } },           // Under retirement age
-   *   { "data.status": "active" },            // Active status
-   *   { "data.name": { $regex: "smith" } },    // Name contains "smith"
-   *   { "data.verified": true }               // Verified accounts
+   *   { "age": { $gte: 21 } },          // Adults over 21
+   *   { "age": { $lt: 65 } },           // Under retirement age
+   *   { "status": "active" },            // Active status
+   *   { "name": { $regex: "smith" } },    // Name contains "smith"
+   *   { "verified": true }               // Verified accounts
    * ]);
    *
    * // Geographic search
    * const localUsers = await adapter.searchEntities([
-   *   { "data.address.city": "Boston" },
-   *   { "data.address.state": "MA" }
+   *   { "address.city": "Boston" },
+   *   { "address.state": "MA" }
    * ]);
    * ```
    */
@@ -505,6 +505,40 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
         "DELETE FROM potential_duplicates WHERE entity_guid = $1 AND duplicate_guid = $2 AND tenant_id = $3",
         [duplicates[0].entityGuid, duplicates[0].duplicateGuid, this.tenantId],
       );
+    } finally {
+      client.release();
+    }
+  }
+
+  async getDescendants(guid: string): Promise<string[]> {
+    const client = await this.pool.connect();
+    try {
+      // Use a recursive CTE (Common Table Expression) to get all descendants
+      const result = await client.query(
+        `
+      WITH RECURSIVE descendants AS (
+        -- Base case: direct children
+        SELECT guid, 1 as level
+        FROM entities 
+        WHERE (initial->'data'->>'parentId' = $1 OR modified->'data'->>'parentId' = $1) 
+          AND tenant_id = $2
+        
+        UNION ALL
+        
+        -- Recursive case: children of children
+        SELECT e.guid, d.level + 1
+        FROM entities e
+        INNER JOIN descendants d ON (e.initial->'data'->>'parentId' = d.guid OR e.modified->'data'->>'parentId' = d.guid)
+        WHERE e.tenant_id = $2
+          AND d.level < 100  -- Prevent infinite loops
+      )
+      SELECT DISTINCT guid FROM descendants
+      ORDER BY guid
+    `,
+        [guid, this.tenantId],
+      );
+
+      return result.rows.map((row) => row.guid);
     } finally {
       client.release();
     }

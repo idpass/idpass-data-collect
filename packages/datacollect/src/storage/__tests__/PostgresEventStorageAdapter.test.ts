@@ -392,6 +392,418 @@ describe("PostgresEventStorageAdapter", () => {
     ]);
     expect(nextCursorWithCursor).toBe("2023-05-03T14:00:00.000Z");
   });
+
+  test("getEventsSelfServicePagination should return all descendant events", async () => {
+    const events: FormSubmission[] = [
+      {
+        guid: "event1",
+        entityGuid: "parent1",
+        timestamp: "2023-05-01T10:00:00.000Z",
+        type: "",
+        data: { name: "Parent 1", parentGuid: null },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event2",
+        entityGuid: "child1",
+        timestamp: "2023-05-02T11:00:00.000Z",
+        type: "",
+        data: { name: "Child 1", parentGuid: "parent1" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event3",
+        entityGuid: "child2",
+        timestamp: "2023-05-03T12:00:00.000Z",
+        type: "",
+        data: { name: "Child 2", parentGuid: "parent1" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event4",
+        entityGuid: "grandchild1",
+        timestamp: "2023-05-04T13:00:00.000Z",
+        type: "",
+        data: { name: "Grandchild 1", parentGuid: "child1" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event5",
+        entityGuid: "unrelated",
+        timestamp: "2023-05-05T14:00:00.000Z",
+        type: "",
+        data: { name: "Unrelated", parentGuid: null },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event6",
+        entityGuid: "child3",
+        timestamp: "2023-05-06T15:00:00.000Z",
+        type: "",
+        data: { name: "Child 3", parentGuid: "parent1" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+    ];
+
+    await adapter.saveEvents(events);
+
+    // Test getting all descendant events since the beginning of time
+    const { events: descendantEvents } = await adapter.getEventsSelfServicePagination(
+      "parent1",
+      "2023-05-01T00:00:00.000Z",
+    );
+
+    expect(descendantEvents).toHaveLength(5);
+    expect(descendantEvents.map((e) => e.entityGuid)).toEqual(["parent1", "child1", "child2", "grandchild1", "child3"]);
+    expect(descendantEvents.map((e) => e.data.name)).toEqual([
+      "Parent 1",
+      "Child 1",
+      "Child 2",
+      "Grandchild 1",
+      "Child 3",
+    ]);
+  });
+
+  test("getEventsSelfServicePagination should return empty array when no descendants exist", async () => {
+    const events: FormSubmission[] = [
+      {
+        guid: "event1",
+        entityGuid: "parent1",
+        timestamp: "2023-05-01T10:00:00.000Z",
+        type: "",
+        data: { name: "Parent 1", parentGuid: null },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event2",
+        entityGuid: "unrelated",
+        timestamp: "2023-05-02T11:00:00.000Z",
+        type: "",
+        data: { name: "Unrelated", parentGuid: null },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+    ];
+
+    await adapter.saveEvents(events);
+
+    const { events: descendantEvents } = await adapter.getEventsSelfServicePagination(
+      "parent1",
+      "2023-05-01T00:00:00.000Z",
+    );
+
+    expect(descendantEvents).toHaveLength(1);
+    expect(descendantEvents[0].entityGuid).toBe("parent1");
+  });
+
+  test("getEventsSelfServicePagination should handle deep descendant hierarchies", async () => {
+    const events: FormSubmission[] = [
+      {
+        guid: "event1",
+        entityGuid: "root",
+        timestamp: "2023-05-01T10:00:00.000Z",
+        type: "",
+        data: { name: "Root", parentGuid: null },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event2",
+        entityGuid: "level1",
+        timestamp: "2023-05-02T11:00:00.000Z",
+        type: "",
+        data: { name: "Level 1", parentGuid: "root" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event3",
+        entityGuid: "level2",
+        timestamp: "2023-05-03T12:00:00.000Z",
+        type: "",
+        data: { name: "Level 2", parentGuid: "level1" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event4",
+        entityGuid: "level3",
+        timestamp: "2023-05-04T13:00:00.000Z",
+        type: "",
+        data: { name: "Level 3", parentGuid: "level2" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+    ];
+
+    await adapter.saveEvents(events);
+
+    const { events: descendantEvents } = await adapter.getEventsSelfServicePagination(
+      "root",
+      "2023-05-01T00:00:00.000Z",
+    );
+
+    expect(descendantEvents).toHaveLength(4);
+    expect(descendantEvents.map((e) => e.entityGuid)).toEqual(["root", "level1", "level2", "level3"]);
+  });
+
+  test("getEventsSelfServicePagination should filter by timestamp correctly", async () => {
+    const events: FormSubmission[] = [
+      {
+        guid: "event1",
+        entityGuid: "child1",
+        timestamp: "2023-05-01T10:00:00.000Z",
+        type: "",
+        data: { name: "Child 1", parentGuid: "parent1" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event2",
+        entityGuid: "child2",
+        timestamp: "2023-05-02T11:00:00.000Z",
+        type: "",
+        data: { name: "Child 2", parentGuid: "parent1" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event3",
+        entityGuid: "child3",
+        timestamp: "2023-05-03T12:00:00.000Z",
+        type: "",
+        data: { name: "Child 3", parentGuid: "parent1" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+    ];
+
+    await adapter.saveEvents(events);
+
+    // Test filtering by timestamp - should only return events after 2023-05-02T12:00:00.000Z
+    const { events: descendantEvents } = await adapter.getEventsSelfServicePagination(
+      "parent1",
+      "2023-05-02T12:00:00.000Z",
+    );
+
+    expect(descendantEvents).toHaveLength(1);
+    expect(descendantEvents.map((e) => e.entityGuid)).toEqual(["child3"]);
+  });
+
+  test("getEventsSelfServicePagination should return all descendants when timestamp is before all events", async () => {
+    const events: FormSubmission[] = [
+      {
+        guid: "event1",
+        entityGuid: "child1",
+        timestamp: "2023-05-01T10:00:00.000Z",
+        type: "",
+        data: { name: "Child 1", parentGuid: "parent1" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event2",
+        entityGuid: "child2",
+        timestamp: "2023-05-02T11:00:00.000Z",
+        type: "",
+        data: { name: "Child 2", parentGuid: "parent1" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event3",
+        entityGuid: "child3",
+        timestamp: "2023-05-03T12:00:00.000Z",
+        type: "",
+        data: { name: "Child 3", parentGuid: "parent1" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+    ];
+
+    await adapter.saveEvents(events);
+
+    const { events: descendantEvents } = await adapter.getEventsSelfServicePagination(
+      "parent1",
+      "2023-05-01T00:00:00.000Z",
+    );
+
+    expect(descendantEvents).toHaveLength(3);
+    expect(descendantEvents.map((e) => e.entityGuid)).toEqual(["child1", "child2", "child3"]);
+  });
+
+  test("getEventsSelfServicePagination should handle complex branching hierarchies", async () => {
+    const events: FormSubmission[] = [
+      {
+        guid: "event1",
+        entityGuid: "root",
+        timestamp: "2023-05-01T10:00:00.000Z",
+        type: "",
+        data: { name: "Root", parentGuid: null },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event2",
+        entityGuid: "branch1",
+        timestamp: "2023-05-02T11:00:00.000Z",
+        type: "",
+        data: { name: "Branch 1", parentGuid: "root" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event3",
+        entityGuid: "branch2",
+        timestamp: "2023-05-03T12:00:00.000Z",
+        type: "",
+        data: { name: "Branch 2", parentGuid: "root" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event4",
+        entityGuid: "leaf1",
+        timestamp: "2023-05-04T13:00:00.000Z",
+        type: "",
+        data: { name: "Leaf 1", parentGuid: "branch1" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event5",
+        entityGuid: "leaf2",
+        timestamp: "2023-05-05T14:00:00.000Z",
+        type: "",
+        data: { name: "Leaf 2", parentGuid: "branch1" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event6",
+        entityGuid: "leaf3",
+        timestamp: "2023-05-06T15:00:00.000Z",
+        type: "",
+        data: { name: "Leaf 3", parentGuid: "branch2" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+    ];
+
+    await adapter.saveEvents(events);
+
+    const { events: descendantEvents } = await adapter.getEventsSelfServicePagination(
+      "root",
+      "2023-05-01T00:00:00.000Z",
+    );
+
+    expect(descendantEvents).toHaveLength(6);
+    expect(descendantEvents.map((e) => e.entityGuid)).toEqual([
+      "root",
+      "branch1",
+      "branch2",
+      "leaf1",
+      "leaf2",
+      "leaf3",
+    ]);
+  });
+
+  test("getEventsSelfServicePagination should sort events by timestamp in ascending order", async () => {
+    const events: FormSubmission[] = [
+      {
+        guid: "event1",
+        entityGuid: "child3",
+        timestamp: "2023-05-03T12:00:00.000Z",
+        type: "",
+        data: { name: "Child 3", parentGuid: "parent1" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event2",
+        entityGuid: "child1",
+        timestamp: "2023-05-01T10:00:00.000Z",
+        type: "",
+        data: { name: "Child 1", parentGuid: "parent1" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event3",
+        entityGuid: "child2",
+        timestamp: "2023-05-02T11:00:00.000Z",
+        type: "",
+        data: { name: "Child 2", parentGuid: "parent1" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+    ];
+
+    await adapter.saveEvents(events);
+
+    const { events: descendantEvents } = await adapter.getEventsSelfServicePagination(
+      "parent1",
+      "2023-05-01T00:00:00.000Z",
+    );
+
+    expect(descendantEvents).toHaveLength(3);
+    // Should be sorted by timestamp in ascending order
+    expect(descendantEvents.map((e) => e.entityGuid)).toEqual(["child1", "child2", "child3"]);
+    expect(descendantEvents.map((e) => e.timestamp)).toEqual([
+      "2023-05-01T10:00:00.000Z",
+      "2023-05-02T11:00:00.000Z",
+      "2023-05-03T12:00:00.000Z",
+    ]);
+  });
+
+  test("getEventsSelfServicePagination should handle events without parentGuid", async () => {
+    const events: FormSubmission[] = [
+      {
+        guid: "event1",
+        entityGuid: "parent1",
+        timestamp: "2023-05-01T10:00:00.000Z",
+        type: "",
+        data: { name: "Parent 1" }, // No parentGuid
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event2",
+        entityGuid: "child1",
+        timestamp: "2023-05-02T11:00:00.000Z",
+        type: "",
+        data: { name: "Child 1", parentGuid: "parent1" },
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "event3",
+        entityGuid: "child2",
+        timestamp: "2023-05-03T12:00:00.000Z",
+        type: "",
+        data: { name: "Child 2" }, // No parentGuid
+        userId: "",
+        syncLevel: SyncLevel.LOCAL,
+      },
+    ];
+
+    await adapter.saveEvents(events);
+
+    const { events: descendantEvents } = await adapter.getEventsSelfServicePagination(
+      "parent1",
+      "2023-05-01T00:00:00.000Z",
+    );
+
+    expect(descendantEvents).toHaveLength(2);
+    expect(descendantEvents.map((e) => e.entityGuid)).toEqual(["parent1", "child1"]);
+  });
 });
 
 describe("PostgresEventStorageAdapter - Tenant Tests", () => {
@@ -775,5 +1187,70 @@ describe("PostgresEventStorageAdapter - Tenant Tests", () => {
 
     await defaultAdapter.clearStore();
     await defaultAdapter.closeConnection();
+  });
+
+  test("getEventsSelfServicePagination should respect tenant isolation", async () => {
+    const baseTime = "2023-05-01T00:00:00.000Z";
+    const tenant1Events: FormSubmission[] = [
+      {
+        guid: "tenant1-parent",
+        entityGuid: "parent1",
+        timestamp: "2023-05-01T10:00:00.000Z",
+        type: "form_submission",
+        data: { name: "Parent 1", parentGuid: null, tenant: "tenant1" },
+        userId: "user1",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "tenant1-child",
+        entityGuid: "child1",
+        timestamp: "2023-05-02T11:00:00.000Z",
+        type: "form_submission",
+        data: { name: "Child 1", parentGuid: "parent1", tenant: "tenant1" },
+        userId: "user1",
+        syncLevel: SyncLevel.LOCAL,
+      },
+    ];
+
+    const tenant2Events: FormSubmission[] = [
+      {
+        guid: "tenant2-parent",
+        entityGuid: "parent2",
+        timestamp: "2023-05-01T10:00:00.000Z",
+        type: "form_submission",
+        data: { name: "Parent 2", parentGuid: null, tenant: "tenant2" },
+        userId: "user2",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "tenant2-child",
+        entityGuid: "child2",
+        timestamp: "2023-05-02T11:00:00.000Z",
+        type: "form_submission",
+        data: { name: "Child 2", parentGuid: "parent2", tenant: "tenant2" },
+        userId: "user2",
+        syncLevel: SyncLevel.LOCAL,
+      },
+    ];
+
+    // Save events for both tenants
+    await tenant1Adapter.saveEvents(tenant1Events);
+    await tenant2Adapter.saveEvents(tenant2Events);
+
+    // Get descendant events for both tenants
+    const tenant1Result = await tenant1Adapter.getEventsSelfServicePagination("parent1", baseTime);
+    const tenant2Result = await tenant2Adapter.getEventsSelfServicePagination("parent2", baseTime);
+
+    expect(tenant1Result.events).toHaveLength(2);
+    expect(tenant1Result.events[0].guid).toBe("tenant1-parent");
+    expect(tenant1Result.events[0].data.tenant).toBe("tenant1");
+    expect(tenant1Result.events[1].guid).toBe("tenant1-child");
+    expect(tenant1Result.events[1].data.tenant).toBe("tenant1");
+
+    expect(tenant2Result.events).toHaveLength(2);
+    expect(tenant2Result.events[0].guid).toBe("tenant2-parent");
+    expect(tenant2Result.events[0].data.tenant).toBe("tenant2");
+    expect(tenant2Result.events[1].guid).toBe("tenant2-child");
+    expect(tenant2Result.events[1].data.tenant).toBe("tenant2");
   });
 });

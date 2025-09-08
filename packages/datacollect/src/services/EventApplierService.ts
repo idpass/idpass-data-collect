@@ -855,13 +855,13 @@ export class EventApplierService {
    * ```typescript
    * // Search for adults
    * const adults = await service.searchEntities([
-   *   { "data.age": { $gte: 18 } },
+   *   { "age": { $gte: 18 } },
    *   { "type": "individual" }
    * ]);
    *
    * // Search for groups with specific name
    * const smithFamilies = await service.searchEntities([
-   *   { "data.name": { $regex: /smith/i } },
+   *   { "name": { $regex: /smith/i } },
    *   { "type": "group" }
    * ]);
    * ```

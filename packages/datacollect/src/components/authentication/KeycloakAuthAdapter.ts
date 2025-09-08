@@ -20,10 +20,37 @@
 import { AuthAdapter, AuthConfig, AuthResult, OIDCConfig, SingleAuthStorage } from "../../interfaces/types";
 import OIDCClient from "./OIDCClient";
 import axios from "axios";
+import { generatePassword } from "./PasswordGenerator";
+interface Auth0APIResponse {
+  access_token: string;
+  expires_in: number;
+  token_type: string;
+  refresh_expires_in: number;
+  scope: string;
+}
 
+interface KeycloakUserInfo {
+  sub: string;
+  name?: string;
+  preferred_username?: string;
+  given_name?: string;
+  family_name?: string;
+  email?: string;
+  email_verified?: boolean;
+  [key: string]: unknown;
+}
+
+interface KCUser {
+  id: string;
+  email: string;
+  username: string;
+  firstName: string;
+  lastName: string;
+}
 export class KeycloakAuthAdapter implements AuthAdapter {
   private oidc: OIDCClient;
-  private appType: 'backend' | 'frontend' = 'backend';
+  private appType: "backend" | "frontend" = "backend";
+  private apiResponse: Auth0APIResponse | null = null;
 
   constructor(
     private authStorage: SingleAuthStorage | null,
@@ -42,14 +69,14 @@ export class KeycloakAuthAdapter implements AuthAdapter {
       },
     };
     this.oidc = new OIDCClient(oidcConfig);
-    this.appType = typeof window !== 'undefined' && window.localStorage ? 'frontend' : 'backend';
+    this.appType = typeof window !== "undefined" && window.localStorage ? "frontend" : "backend";
   }
 
+  // Public methods
   async initialize(): Promise<void> {
     // Optionally restore session or tokens if needed
     await this.oidc.getStoredAuth();
   }
-
   async isAuthenticated(): Promise<boolean> {
     const auth = await this.oidc.getStoredAuth();
     // Check if we have valid authentication data
@@ -64,32 +91,26 @@ export class KeycloakAuthAdapter implements AuthAdapter {
   }
 
   async logout(): Promise<void> {
+    // First, try to invalidate the session on the Keycloak server
+    try {
+      await this.invalidateServerSession();
+    } catch (error) {
+      console.warn("Failed to invalidate Keycloak server session:", error);
+    }
+
+    // Then perform client-side logout
     await this.oidc.logout();
+    if (this.authStorage) {
+      await this.authStorage.removeToken();
+    }
   }
 
   async validateToken(token: string): Promise<boolean> {
-    
-    if (this.appType === 'frontend') {
+    if (this.appType === "frontend") {
       return this.validateTokenClient(token);
     } else {
       return this.validateTokenServer(token);
     }
-  }
-
-  private async validateTokenServer(token: string): Promise<boolean> {
-    try {
-      // Use userinfo validation since JWKS requires Node.js crypto
-      console.log("Using userinfo validation for Keycloak token");
-      return this.checkTokenActive(token);
-    } catch (error) {
-      console.error("Keycloak token validation error:", error);
-      return false;
-    }
-  }
-
-  private async validateTokenClient(token: string): Promise<boolean> {
-    const auth = await this.oidc.getStoredAuth();
-    return !!auth && auth.access_token === token;
   }
 
   async handleCallback(): Promise<void> {
@@ -105,21 +126,139 @@ export class KeycloakAuthAdapter implements AuthAdapter {
     return this.oidc.getStoredAuth();
   }
 
+  async getUserInfo(token?: string): Promise<Record<string, unknown> | null> {
+    try {
+      const accessToken = token || (await this.oidc.getStoredAuth())?.access_token;
+      if (!accessToken) {
+        return null;
+      }
+
+      const userinfoUrl = `${this.config.fields.authority}/protocol/openid-connect/userinfo`;
+      const response = await axios.get(userinfoUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 5000,
+      });
+
+      return response.data as KeycloakUserInfo;
+    } catch (error) {
+      console.error("Error getting user info:", error);
+      return null;
+    }
+  }
+
+  async createUser(user: { email: string; phoneNumber?: string }): Promise<void> {
+    const tempPassword = generatePassword();
+    const url = `${this.config.fields.host}/admin/realms/${this.config.fields.realm}/users`;
+
+    await this.makeAuthenticatedRequest(async (token) => {
+      try {
+        await axios.post(
+          url,
+          {
+            username: user.email,
+            email: user.email,
+            enabled: true,
+            emailVerified: false,
+            ...(user.phoneNumber
+              ? {
+                  attributes: {
+                    phone_number: [user.phoneNumber],
+                  },
+                }
+              : {}),
+            credentials: [
+              {
+                type: "password",
+                value: tempPassword,
+                temporary: true,
+              },
+            ],
+          },
+          {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
+
+        //send link to user only if user creation succeeded
+        await this.resetPassword(user.email);
+      } catch (error: unknown) {
+        if (axios.isAxiosError(error) && error.response?.status === 409) {
+          // User already exists, handle password reset for existing user
+          console.log(`User ${user.email} already exists, handling existing user`);
+
+          try {
+            // Send password reset for existing user
+            await this.resetPassword(user.email);
+          } catch (resetError) {
+            console.error(`Error sending password reset for existing user ${user.email}:`, resetError);
+          }
+
+          // Continue to batch update - don't return early
+          return;
+        } else {
+          console.log(`Error creating user ${user.email}`, error);
+          return;
+        }
+      }
+    });
+  }
+
+  // Private methods
+  private async makeAuthenticatedRequest<T>(requestFn: (token: string) => Promise<T>): Promise<T> {
+    let apiResponse = this.apiResponse;
+    if (!apiResponse) {
+      apiResponse = await this.authenticateAPIUser();
+    }
+
+    try {
+      return await requestFn(apiResponse.access_token);
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        console.log("Token expired, re-authenticating...");
+        // Re-authenticate and retry
+        apiResponse = await this.authenticateAPIUser();
+        return await requestFn(apiResponse.access_token);
+      }
+      throw error;
+    }
+  }
+
+  private async validateTokenServer(token: string): Promise<boolean> {
+    try {
+      // Use userinfo validation since JWKS requires Node.js crypto
+      return this.checkTokenActive(token);
+    } catch (error) {
+      console.error("Keycloak token validation error:", error);
+      return false;
+    }
+  }
+
+  private async validateTokenClient(token: string): Promise<boolean> {
+    const auth = await this.oidc.getStoredAuth();
+    return !!auth && auth.access_token === token;
+  }
+
   private async checkTokenActive(token: string): Promise<boolean> {
     try {
       // Call Keycloak's userinfo endpoint to verify token is still active
       const userinfoUrl = `${this.config.fields.authority}/protocol/openid-connect/userinfo`;
       const response = await axios.get(userinfoUrl, {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
-        timeout: 5000 // 5 second timeout
+        timeout: 5000, // 5 second timeout
       });
 
       // If we get a successful response with user data, the token is active
       const isActive = !!(response.status === 200 && response.data && response.data.sub);
-      
+
       return isActive;
     } catch (error) {
       console.error("Error checking Keycloak token activity:", error);
@@ -128,27 +267,109 @@ export class KeycloakAuthAdapter implements AuthAdapter {
     }
   }
 
+  private async authenticateAPIUser(): Promise<Auth0APIResponse> {
+    const { api_client_id, api_client_secret } = this.config.fields;
+    if (api_client_id && api_client_secret) {
+      const url = `${this.config.fields.host}/realms/${this.config.fields.realm}/protocol/openid-connect/token`;
+      const response = await axios.post(
+        url,
+        new URLSearchParams({
+          grant_type: "client_credentials",
+          client_id: api_client_id,
+          client_secret: api_client_secret,
+        }),
+        {
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+        },
+      );
+
+      this.apiResponse = response.data;
+      return response.data;
+    }
+    throw new Error("API client id, and secret are required");
+  }
+
+  private async getUserByEmail(email: string): Promise<KCUser> {
+    return this.makeAuthenticatedRequest(async (token) => {
+      const url = `${this.config.fields.host}/admin/realms/${this.config.fields.realm}/users?email=${email}&exact=true`;
+      const response = await axios.get(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      return response.data[0]; // Return first user from array
+    });
+  }
+
+  private async resetPassword(email: string): Promise<void> {
+    const user = await this.getUserByEmail(email);
+
+    await this.makeAuthenticatedRequest(async (token) => {
+      const url = `${this.config.fields.host}/admin/realms/${this.config.fields.realm}/users/${user.id}`;
+
+      await axios.put(`${url}/execute-actions-email?client_id=${this.config.fields.client_id}`, ["UPDATE_PASSWORD"], {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    });
+  }
+
+  private async invalidateServerSession(): Promise<void> {
+    try {
+      const auth = await this.oidc.getStoredAuth();
+      if (!auth?.access_token) {
+        return;
+      }
+
+      // Call Keycloak's logout endpoint to invalidate the server session
+      const logoutUrl = `${this.config.fields.authority}/protocol/openid-connect/logout`;
+      await axios.post(
+        logoutUrl,
+        new URLSearchParams({
+          client_id: this.config.fields.client_id,
+          refresh_token: auth.refresh_token || "",
+        }),
+        {
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            Authorization: `Bearer ${auth.access_token}`,
+          },
+          timeout: 5000,
+        }
+      );
+    } catch (error) {
+      console.error("Error invalidating Keycloak server session:", error);
+      throw error;
+    }
+  }
+
   protected transformConfig(config: AuthConfig): AuthConfig {
     if (!config.fields) return config;
 
     const fields = { ...config.fields };
-    
+
     // Standard OAuth/OIDC fields that should not be in extraQueryParams
     const standardFields = new Set([
-      'clientId',
-      'client_id',
-      'domain',
-      'issuer',
-      'authority',
-      'redirect_uri',
-      'scope',
-      'scopes',
-      'audience',
-      'responseType',
-      'response_type',
-      'clientSecret',
-      'client_secret'
+      "clientId",
+      "client_id",
+      "domain",
+      "issuer",
+      "authority",
+      "redirect_uri",
+      "scope",
+      "scopes",
+      "audience",
+      "responseType",
+      "response_type",
+      "clientSecret",
+      "client_secret",
     ]);
+    delete fields.api_client_id;
+    delete fields.api_client_secret;
 
     // Collect all non-standard fields as extra query params
     const extraQueryParams: Record<string, string> = {};
@@ -165,8 +386,28 @@ export class KeycloakAuthAdapter implements AuthAdapter {
     }
 
     return {
-      type: config.type as 'auth0' | 'keycloak',
-      fields
+      type: config.type as "auth0" | "keycloak",
+      fields,
     };
+  }
+
+  async getUserEmailOrPhoneNumber(token: string): Promise<{ email: string; phoneNumber?: string }> {
+    const accessToken = token || (await this.oidc.getStoredAuth())?.access_token;
+    if (!accessToken) {
+      throw new Error("No access token found");
+    }
+
+    const userinfoUrl = `${this.config.fields.authority}/protocol/openid-connect/userinfo`;
+    const response = await axios.get(userinfoUrl, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      timeout: 5000,
+    });
+
+    return {
+      email: response.data.email
+    }
   }
 }

@@ -317,6 +317,79 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
     }
   }
 
+  async getEventsSelfServicePagination(
+    entityGuid: string,
+    timestamp: string | Date,
+  ): Promise<{ events: FormSubmission[] }> {
+    const client = await this.pool.connect();
+    try {
+      // Get all events to build the descendant map
+      const allEventsResult = await client.query(
+        "SELECT guid, entity_guid, type, data, timestamp, user_id, sync_level FROM events WHERE tenant_id = $1 AND entity_guid = $2",
+        [this.tenantId, entityGuid],
+      );
+      
+      const allEvents = allEventsResult.rows.map((row) => ({
+        guid: row.guid,
+        entityGuid: row.entity_guid,
+        type: row.type,
+        data: row.data,
+        timestamp: row.timestamp.toISOString(),
+        userId: row.user_id,
+        syncLevel: row.sync_level,
+      }));
+
+      // Build parent-child relationships map
+      const parentToChildren = new Map<string, Set<string>>();
+      allEvents.forEach((event) => {
+        if (event.data && event.data.parentGuid) {
+          if (!parentToChildren.has(event.data.parentGuid)) {
+            parentToChildren.set(event.data.parentGuid, new Set());
+          }
+          parentToChildren.get(event.data.parentGuid)!.add(event.entityGuid);
+        }
+      });
+    
+
+      // Recursively find all descendants using breadth-first search
+      const findDescendants = (guid: string): Set<string> => {
+        const descendants = new Set<string>();
+        const queue = [guid];
+
+        // Add the entity itself to descendants
+        descendants.add(guid);
+
+        while (queue.length > 0) {
+          const current = queue.shift()!;
+          const children = parentToChildren.get(current);
+
+          if (children) {
+            children.forEach((child) => {
+              if (!descendants.has(child)) {
+                descendants.add(child);
+                queue.push(child);
+              }
+            });
+          }
+        }
+
+        return descendants;
+      };
+
+      const descendants = findDescendants(entityGuid);
+
+      // Filter events that are descendants (including the entity itself) and sort by timestamp and filter by timestamp
+      const descendantEvents = allEvents
+        .filter((event) => descendants.has(event.entityGuid))
+        .filter((event) => event.timestamp >= timestamp)
+        .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+      // Return only the events
+      return { events: [...descendantEvents, ...allEvents] };
+    } finally {
+      client.release();
+    }
+  }
+
   async getAuditLogsSince(timestamp: string): Promise<AuditLogEntry[]> {
     const client = await this.pool.connect();
     try {

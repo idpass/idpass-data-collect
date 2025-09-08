@@ -65,4 +65,26 @@ export class MockAuthAdapter implements AuthAdapter {
   async handleCallback(): Promise<void> {
     return Promise.resolve();
   }
+
+  async getUserInfo(token?: string): Promise<Record<string, unknown> | null> {
+    if (!this.authenticated && token !== "mock-token") {
+      return null;
+    }
+
+    return Promise.resolve({
+      sub: "mock-user-id",
+      name: "Mock User",
+      email: "mock@example.com",
+      email_verified: true,
+    });
+  }
+
+  async createUser(user: { email: string; phoneNumber?: string }): Promise<void> {
+    console.log("Creating user", user);
+    return Promise.resolve();
+  }
+
+  async getUserEmailOrPhoneNumber(): Promise<{ email: string; phoneNumber?: string }> {
+    return Promise.resolve({ email: "mock-email@example.com", phoneNumber: "mock-phone-number" });
+  }
 }

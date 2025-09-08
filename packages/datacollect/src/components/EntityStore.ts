@@ -21,11 +21,11 @@ import { EntityStore, EntityDoc, EntityStorageAdapter, SearchCriteria, EntityPai
 
 /**
  * Entity store implementation for managing current entity state with change tracking.
- * 
+ *
  * The EntityStoreImpl provides the current state view in the event sourcing architecture.
  * It maintains both the initial state (from last sync/load) and the current modified state
  * for each entity, enabling conflict resolution and change tracking.
- * 
+ *
  * Key responsibilities:
  * - **State Management**: Maintains current entity state derived from events
  * - **Change Tracking**: Tracks changes between initial and current state
@@ -33,22 +33,22 @@ import { EntityStore, EntityDoc, EntityStorageAdapter, SearchCriteria, EntityPai
  * - **Search Operations**: Provides flexible entity querying capabilities
  * - **Sync Coordination**: Marks entities as synced and manages sync states
  * - **External ID Mapping**: Maps between internal and external system IDs
- * 
+ *
  * Architecture:
  * - Uses pluggable storage adapters for different persistence backends
  * - Implements CQRS query side - provides read operations for entities
  * - Maintains entity pairs (initial + modified) for conflict resolution
  * - Supports flexible search criteria with MongoDB-style queries
- * 
+ *
  * @example
  * Basic usage:
  * ```typescript
  * const entityStore = new EntityStoreImpl(storageAdapter);
  * await entityStore.initialize();
- * 
+ *
  * // Save entity state
  * await entityStore.saveEntity(initialEntity, modifiedEntity);
- * 
+ *
  * // Retrieve entity
  * const entityPair = await entityStore.getEntity('entity-123');
  * if (entityPair) {
@@ -57,7 +57,7 @@ import { EntityStore, EntityDoc, EntityStorageAdapter, SearchCriteria, EntityPai
  *   console.log('Has changes:', entityPair.initial.version !== entityPair.modified.version);
  * }
  * ```
- * 
+ *
  * @example
  * Search operations:
  * ```typescript
@@ -66,14 +66,14 @@ import { EntityStore, EntityDoc, EntityStorageAdapter, SearchCriteria, EntityPai
  *   { "data.age": { $gte: 18 } },
  *   { "type": "individual" }
  * ]);
- * 
+ *
  * // Find groups by name pattern
  * const families = await entityStore.searchEntities([
  *   { "data.name": { $regex: /family/i } },
  *   { "type": "group" }
  * ]);
  * ```
- * 
+ *
  * @example
  * Duplicate management:
  * ```typescript
@@ -81,10 +81,10 @@ import { EntityStore, EntityDoc, EntityStorageAdapter, SearchCriteria, EntityPai
  * await entityStore.savePotentialDuplicates([
  *   { entityGuid: 'person-123', duplicateGuid: 'person-456' }
  * ]);
- * 
+ *
  * // Get all potential duplicates for review
  * const duplicates = await entityStore.getPotentialDuplicates();
- * 
+ *
  * // Resolve duplicates after manual review
  * await entityStore.resolvePotentialDuplicates(resolvedDuplicates);
  * ```
@@ -94,15 +94,15 @@ export class EntityStoreImpl implements EntityStore {
 
   /**
    * Creates a new EntityStoreImpl instance.
-   * 
+   *
    * @param entityStorageAdapter - Storage adapter for persistence (IndexedDB, PostgreSQL, etc.)
-   * 
+   *
    * @example
    * ```typescript
    * // With IndexedDB for browser
    * const indexedDbAdapter = new IndexedDbEntityStorageAdapter('tenant-123');
    * const browserEntityStore = new EntityStoreImpl(indexedDbAdapter);
-   * 
+   *
    * // With PostgreSQL for server
    * const postgresAdapter = new PostgresEntityStorageAdapter(connectionString, 'tenant-123');
    * const serverEntityStore = new EntityStoreImpl(postgresAdapter);
@@ -114,7 +114,7 @@ export class EntityStoreImpl implements EntityStore {
 
   /**
    * Closes database connections and cleans up resources.
-   * 
+   *
    * Should be called when the EntityStore is no longer needed to prevent memory leaks.
    */
   async closeConnection(): Promise<void> {
@@ -123,9 +123,9 @@ export class EntityStoreImpl implements EntityStore {
 
   /**
    * Initializes the entity store and prepares it for operations.
-   * 
+   *
    * This method must be called before any other operations.
-   * 
+   *
    * @throws {Error} When storage initialization fails
    */
   async initialize(): Promise<void> {
@@ -134,9 +134,9 @@ export class EntityStoreImpl implements EntityStore {
 
   /**
    * Deletes an entity from the store.
-   * 
+   *
    * ⚠️ **WARNING**: This permanently removes the entity and cannot be undone!
-   * 
+   *
    * @param id - Internal database ID of the entity to delete
    * @throws {Error} When deletion fails
    */
@@ -146,12 +146,12 @@ export class EntityStoreImpl implements EntityStore {
 
   /**
    * Searches entities using flexible criteria.
-   * 
+   *
    * Supports MongoDB-style query syntax for complex searches.
-   * 
+   *
    * @param criteria - Search criteria array with query conditions
    * @returns Array of entity pairs matching the criteria
-   * 
+   *
    * @example
    * ```typescript
    * // Search for adults
@@ -159,7 +159,7 @@ export class EntityStoreImpl implements EntityStore {
    *   { "data.age": { $gte: 18 } },
    *   { "type": "individual" }
    * ]);
-   * 
+   *
    * // Search for groups containing "family"
    * const families = await entityStore.searchEntities([
    *   { "data.name": { $regex: /family/i } },
@@ -173,16 +173,16 @@ export class EntityStoreImpl implements EntityStore {
 
   /**
    * Retrieves a specific entity by its internal database ID.
-   * 
+   *
    * @param id - Internal database ID of the entity
    * @returns Entity pair with initial and current state, or null if not found
-   * 
+   *
    * @example
    * ```typescript
    * const entityPair = await entityStore.getEntity('entity-123');
    * if (entityPair) {
    *   console.log('Found entity:', entityPair.modified.data.name);
-   *   
+   *
    *   // Check if entity has local changes
    *   const hasChanges = entityPair.initial.version !== entityPair.modified.version;
    *   if (hasChanges) {
@@ -199,13 +199,13 @@ export class EntityStoreImpl implements EntityStore {
 
   /**
    * Saves an entity with both initial and current state for change tracking.
-   * 
+   *
    * The initial state represents the entity as it was when last synced/loaded,
    * while the modified state represents the current state after applying events.
-   * 
+   *
    * @param initial - Initial state of the entity (from last sync)
    * @param modified - Current modified state of the entity
-   * 
+   *
    * @example
    * ```typescript
    * // Save a new entity
@@ -218,10 +218,10 @@ export class EntityStoreImpl implements EntityStore {
    *   lastUpdated: new Date().toISOString(),
    *   syncLevel: SyncLevel.LOCAL
    * };
-   * 
+   *
    * // Initially, both states are the same
    * await entityStore.saveEntity(newEntity, newEntity);
-   * 
+   *
    * // Later, after modifications
    * const modifiedEntity = { ...newEntity, data: { ...newEntity.data, age: 31 }, version: 2 };
    * await entityStore.saveEntity(newEntity, modifiedEntity); // Keep original initial state
@@ -233,18 +233,18 @@ export class EntityStoreImpl implements EntityStore {
 
   /**
    * Retrieves all entities from the store.
-   * 
+   *
    * @returns Array of all entity pairs with initial and current state
-   * 
+   *
    * @example
    * ```typescript
    * const allEntities = await entityStore.getAllEntities();
-   * 
+   *
    * // Find entities with local changes
-   * const modifiedEntities = allEntities.filter(pair => 
+   * const modifiedEntities = allEntities.filter(pair =>
    *   pair.initial.version !== pair.modified.version
    * );
-   * 
+   *
    * console.log(`${modifiedEntities.length} entities have local changes`);
    * ```
    */
@@ -254,17 +254,17 @@ export class EntityStoreImpl implements EntityStore {
 
   /**
    * Retrieves entities modified since a specific timestamp.
-   * 
+   *
    * Useful for incremental sync operations to identify entities that need synchronization.
-   * 
+   *
    * @param timestamp - ISO timestamp to filter entities from
    * @returns Array of entity pairs modified after the specified timestamp
-   * 
+   *
    * @example
    * ```typescript
    * const lastSync = '2024-01-01T00:00:00Z';
    * const modifiedEntities = await entityStore.getModifiedEntitiesSince(lastSync);
-   * 
+   *
    * console.log(`${modifiedEntities.length} entities modified since last sync`);
    * modifiedEntities.forEach(pair => {
    *   console.log(`${pair.modified.data.name} was updated at ${pair.modified.lastUpdated}`);
@@ -278,18 +278,18 @@ export class EntityStoreImpl implements EntityStore {
 
   /**
    * Marks an entity as synced by updating its initial state to match current state.
-   * 
+   *
    * This method is typically called after successfully syncing an entity with the server,
    * to indicate that the current state is now the baseline for future change detection.
-   * 
+   *
    * @param id - Internal database ID of the entity to mark as synced
-   * 
+   *
    * @example
    * ```typescript
    * // After successfully syncing entity to server
    * await syncEntityToServer(entityId);
    * await entityStore.markEntityAsSynced(entityId);
-   * 
+   *
    * // Now the entity is considered "clean" with no local changes
    * const entityPair = await entityStore.getEntity(entityId);
    * console.log('Has changes:', entityPair.initial.version !== entityPair.modified.version); // false
@@ -305,13 +305,13 @@ export class EntityStoreImpl implements EntityStore {
 
   /**
    * Retrieves an entity by its external system ID.
-   * 
+   *
    * Used for mapping between internal entities and external system records
    * during synchronization operations.
-   * 
+   *
    * @param externalId - External system identifier for the entity
    * @returns Entity pair if found, null otherwise
-   * 
+   *
    * @example
    * ```typescript
    * // Find entity by OpenSPP ID
@@ -328,12 +328,12 @@ export class EntityStoreImpl implements EntityStore {
 
   /**
    * Saves potential duplicate entity pairs for manual review.
-   * 
+   *
    * The system automatically detects potential duplicates during entity creation
    * based on similarity algorithms. These pairs require manual review and resolution.
-   * 
+   *
    * @param duplicates - Array of entity GUID pairs that are potential duplicates
-   * 
+   *
    * @example
    * ```typescript
    * // System detected potential duplicates during entity creation
@@ -341,7 +341,7 @@ export class EntityStoreImpl implements EntityStore {
    *   { entityGuid: 'person-123', duplicateGuid: 'person-456' },
    *   { entityGuid: 'person-789', duplicateGuid: 'person-101' }
    * ];
-   * 
+   *
    * await entityStore.savePotentialDuplicates(duplicates);
    * console.log('Potential duplicates saved for review');
    * ```
@@ -352,21 +352,21 @@ export class EntityStoreImpl implements EntityStore {
 
   /**
    * Retrieves all potential duplicate entity pairs awaiting review.
-   * 
+   *
    * @returns Array of entity GUID pairs that are potential duplicates
-   * 
+   *
    * @example
    * ```typescript
    * const duplicates = await entityStore.getPotentialDuplicates();
-   * 
+   *
    * for (const pair of duplicates) {
    *   const entity1 = await entityStore.getEntity(pair.entityGuid);
    *   const entity2 = await entityStore.getEntity(pair.duplicateGuid);
-   *   
+   *
    *   console.log('Potential duplicate pair:');
    *   console.log('Entity 1:', entity1?.modified.data);
    *   console.log('Entity 2:', entity2?.modified.data);
-   *   
+   *
    *   // Present to user for manual review...
    * }
    * ```
@@ -377,19 +377,19 @@ export class EntityStoreImpl implements EntityStore {
 
   /**
    * Resolves potential duplicate pairs after manual review.
-   * 
+   *
    * Removes the specified duplicate pairs from the pending list,
    * indicating they have been reviewed and resolved by a user.
-   * 
+   *
    * @param duplicates - Array of duplicate pairs that have been resolved
-   * 
+   *
    * @example
    * ```typescript
    * // After user manually reviews and resolves duplicates
    * const resolvedDuplicates = [
    *   { entityGuid: 'person-123', duplicateGuid: 'person-456' } // User confirmed these are different people
    * ];
-   * 
+   *
    * await entityStore.resolvePotentialDuplicates(resolvedDuplicates);
    * console.log('Duplicate pairs resolved and removed from pending list');
    * ```
@@ -398,12 +398,16 @@ export class EntityStoreImpl implements EntityStore {
     return this.entityStorageAdapter.resolvePotentialDuplicates(duplicates);
   }
 
+  getDescendants(guid: string): Promise<string[]> {
+    return this.entityStorageAdapter.getDescendants(guid);
+  }
+
   /**
    * Clears all entities from the store.
-   * 
+   *
    * ⚠️ **WARNING**: This permanently deletes all entity data and cannot be undone!
    * Only use for testing or when intentionally resetting the system.
-   * 
+   *
    * @example
    * ```typescript
    * // For testing only

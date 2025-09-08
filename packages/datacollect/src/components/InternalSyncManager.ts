@@ -341,7 +341,7 @@ export class InternalSyncManager {
     let nextCursor: string | Date | null = await this.eventStore.getLastRemoteSyncTimestamp();
     let lastSuccessfulTimestamp: string | null = null;
 
-    while (nextCursor !== null) { 
+    while (nextCursor !== null && typeof nextCursor === "string") { 
       const result = await this.pullFromRemote(nextCursor.toString());
       const { events, nextCursor: newCursor } = result;
 

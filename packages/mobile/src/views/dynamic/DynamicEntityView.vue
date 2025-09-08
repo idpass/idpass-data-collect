@@ -3,10 +3,12 @@ import { useDatabase } from '@/database'
 import { TenantAppData } from '@/schemas/tenantApp.schema'
 import { store } from '@/store'
 import { EntityForm, getBreadcrumbFromPath } from '@/utils/dynamicFormIoUtils'
+import { checkIfSelfServiceUser, canAddNewEntity } from '@/utils/selfServiceUtils'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChevronRight from '@/components/icons/ChevronRight.vue'
 import { EntityDoc } from 'idpass-data-collect'
+
 const route = useRoute()
 const router = useRouter()
 const database = useDatabase()
@@ -18,12 +20,14 @@ const storedEntityData = ref<
     modified: EntityDoc
   }[]
 >()
+const canAddNew = ref(true) // Controls whether "Add new" button is shown
 
 const props = defineProps<{
   id: string
   parentGuid: string
   entity: string
 }>()
+
 // get the tenantapp from the database
 onMounted(async () => {
   const foundDocuments = await database.tenantapps
@@ -39,12 +43,8 @@ onMounted(async () => {
     (entity) => entity.name === route.params.entity
   )
 
-  // entityData.value = tenantapp.value.entityData.find(
-  //   (entity) => entity.name === route.params.entity
-  // )
   // get the entity data from the store
   const entityData = await store.searchEntities([{ entityName: entityForm.value.name }])
-  console.log('entityData', entityData)
   const entityList = entityData.filter((entity) => {
     // check if the entity is a child of the parent
     if (!entity.modified.data.parentGuid) {
@@ -52,10 +52,24 @@ onMounted(async () => {
     }
     return entity.modified.data.parentGuid === props.parentGuid
   })
-  console.log('entityList', entityList)
+
 
   storedEntityData.value = entityList
+
+  // Check if user is a self-service user and apply appropriate restrictions
+  const isSelfServiceUser = await checkIfSelfServiceUser(
+    route.params.id as string,
+    tenantapp.value
+  )
+
+  // Determine if "Add new" should be allowed based on user type and context
+  canAddNew.value = canAddNewEntity(
+    isSelfServiceUser,
+    props.parentGuid,
+    entityList.length
+  )
 })
+
 const onBack = () => {
   // go back to the previous route
   router.go(-1)
@@ -79,7 +93,7 @@ const onBack = () => {
     <small>{{ getBreadcrumbFromPath(route.path) }}</small>
     <div class="mb-1"></div>
 
-    <div class="d-flex justify-content-end">
+    <div v-if="canAddNew" class="d-flex justify-content-end">
       <div class="mb-2">
         <button
           class="btn btn-primary btn-block mt-1"

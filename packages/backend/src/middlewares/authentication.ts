@@ -19,16 +19,16 @@
 
 import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
-import { AppInstanceStore, Role, UserStore } from "../types";
-
-export interface DecodedPayload {
-  id: string;
-  email: string;
-}
-
-export interface AuthenticatedRequest extends Request {
-  user: DecodedPayload;
-}
+import {
+  AppInstanceStore,
+  DecodedPayload,
+  Role,
+  Session,
+  SessionStore,
+  SyncRole,
+  UserStore,
+  AuthenticatedRequest,
+} from "../types";
 
 export const authenticateJWT = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -62,7 +62,7 @@ export async function authenticateJWTBackend(token: string): Promise<DecodedPayl
   }
 }
 
-export function createDynamicAuthMiddleware(appInstanceStore: AppInstanceStore) {
+export function createDynamicAuthMiddleware(appInstanceStore: AppInstanceStore, sessionStore: SessionStore) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const authHeader = req.headers.authorization;
@@ -73,33 +73,67 @@ export function createDynamicAuthMiddleware(appInstanceStore: AppInstanceStore) 
       }
 
       const [authType, token] = authHeader.split(" ");
-      if (authType.toLowerCase() === "bearer") {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || "") as DecodedPayload;
-        (req as AuthenticatedRequest).user = decoded;
+      
+      // CHECH IF TOKEN IS FROM REGISTRAR (BUILT-IN AUTH)
+      if (authType === "Bearer") {
+        const decoded = await authenticateJWTBackend(token);
+        if (decoded) {
+          (req as AuthenticatedRequest).user = decoded;
+          (req as AuthenticatedRequest).syncRole = SyncRole.REGISTRAR;
+          next();
+          return;
+        }
       }
 
-      // get app instance from request
+
+      // CHECK IF TOKEN IS FROM SELF-SERVICE USER (DYNAMIC AUTH)
+      const session = await sessionStore.getSession(token);
+      if (session) {
+        (req as AuthenticatedRequest).user = session;
+        (req as AuthenticatedRequest).syncRole = SyncRole.SELF_SERVICE_USER;
+        next();
+        return;
+      }
+
       const configId = req.body.configId || req.query.configId || "default";
-      
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
       if (!appInstance) {
         res.status(400).json({ error: "App instance not found" });
         return;
       }
-    
+      //we can skip this because getUserEmailOrPhoneNumber have the same endpoint
       isValid = await appInstance.edm.validateToken(authType, token);
-      
-      if (!isValid) {
-        const decoded = await authenticateJWTBackend(token);
-        if (decoded) {
-          isValid = true;
-        }
-      }
       if (!isValid) {
         res.status(401).json({ error: "Invalid token" });
         return;
       }
 
+      const userInfo = await appInstance.edm.getUserEmailOrPhoneNumber(authType, token);
+
+      if (!userInfo) {
+        res.status(401).json({ error: "Invalid token" });
+        return;
+      }
+
+      // find guid from email or phone number
+      const entities = await appInstance.edm.searchEntities([
+        { email: userInfo.email }
+      ]);
+
+      if (entities.length === 0) {
+        res.status(401).json({ error: "No entity found" });
+        return;
+      }
+
+      const entity = entities[0].modified;
+      const newSession: Session = {
+        token: token,
+        entityGuid: entity.guid,
+        expiredDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours from now
+      };
+      await sessionStore.createSession(newSession);
+      (req as AuthenticatedRequest).user = newSession;
+      (req as AuthenticatedRequest).syncRole = SyncRole.SELF_SERVICE_USER;
       next();
     } catch (error) {
       console.error(error);
@@ -118,10 +152,12 @@ export function createAuthAdminMiddleware(userStore: UserStore) {
       }
 
       const [authType, token] = authHeader.split(" ");
+     
       if (authType.toLowerCase() !== "bearer") {
         res.status(401).json({ error: "Invalid authentication type" });
         return;
       }
+     
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET || "") as DecodedPayload;
       const user = await userStore.getUser(decoded.email);

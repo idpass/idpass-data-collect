@@ -21,11 +21,11 @@ import { EntityPair, EntityStorageAdapter, SearchCriteria } from "../interfaces/
 
 /**
  * IndexedDB implementation of the EntityStorageAdapter for browser-based entity persistence.
- * 
+ *
  * This adapter provides offline-first entity storage using the browser's IndexedDB API.
  * It implements the full EntityStorageAdapter interface with optimized indexing for fast
  * queries and efficient duplicate detection.
- * 
+ *
  * Key features:
  * - **Offline Storage**: Stores entities locally in the browser using IndexedDB
  * - **Multi-Tenant Support**: Isolated databases per tenant using tenant ID prefixes
@@ -33,19 +33,19 @@ import { EntityPair, EntityStorageAdapter, SearchCriteria } from "../interfaces/
  * - **Search Capabilities**: Flexible search with operators ($gt, $lt, $eq, $regex)
  * - **Duplicate Detection**: Built-in storage for potential duplicate pairs
  * - **Change Tracking**: Tracks initial and modified entity states for sync
- * 
+ *
  * Architecture:
  * - Uses IndexedDB object stores with compound keys for efficient storage
  * - Implements cursor-based iteration for memory-efficient operations
  * - Provides ACID transaction support for data consistency
  * - Supports both simple and complex search criteria
- * 
+ *
  * @example
  * Basic usage:
  * ```typescript
  * const adapter = new IndexedDbEntityStorageAdapter('tenant-123');
  * await adapter.initialize();
- * 
+ *
  * // Save an entity pair
  * const entityPair: EntityPair = {
  *   guid: 'person-456',
@@ -53,33 +53,33 @@ import { EntityPair, EntityStorageAdapter, SearchCriteria } from "../interfaces/
  *   modified: updatedEntity
  * };
  * await adapter.saveEntity(entityPair);
- * 
+ *
  * // Retrieve entity
  * const retrieved = await adapter.getEntity('person-456');
  * ```
- * 
+ *
  * @example
  * Search entities:
  * ```typescript
  * // Search for adults
  * const adults = await adapter.searchEntities([
- *   { "modified.data.age": { $gt: 18 } },
- *   { "modified.type": "individual" }
+ *   { "age": { $gt: 18 } },
+ *   { "type": "individual" }
  * ]);
- * 
+ *
  * // Search by name pattern
  * const smiths = await adapter.searchEntities([
- *   { "modified.data.name": { $regex: "smith" } }
+ *   { "name": { $regex: "smith" } }
  * ]);
  * ```
- * 
+ *
  * @example
  * Multi-tenant setup:
  * ```typescript
  * // Tenant-specific adapter
  * const tenantAdapter = new IndexedDbEntityStorageAdapter('org-xyz');
  * await tenantAdapter.initialize(); // Creates database: entityStore_org-xyz
- * 
+ *
  * // Default adapter
  * const defaultAdapter = new IndexedDbEntityStorageAdapter();
  * await defaultAdapter.initialize(); // Creates database: entityStore
@@ -92,15 +92,15 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
 
   /**
    * Creates a new IndexedDbEntityStorageAdapter instance.
-   * 
+   *
    * @param tenantId - Optional tenant identifier for multi-tenant isolation
    *                   When provided, creates a separate database prefixed with tenant ID
-   * 
+   *
    * @example
    * ```typescript
    * // Default database (entityStore)
    * const adapter = new IndexedDbEntityStorageAdapter();
-   * 
+   *
    * // Tenant-specific database (entityStore_org-123)
    * const tenantAdapter = new IndexedDbEntityStorageAdapter('org-123');
    * ```
@@ -113,7 +113,7 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
 
   /**
    * Closes the IndexedDB connection and cleans up resources.
-   * 
+   *
    * For IndexedDB, connections are automatically managed by the browser,
    * so this method is a no-op but maintained for interface compatibility.
    */
@@ -123,17 +123,17 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
 
   /**
    * Initializes the IndexedDB database with required object stores and indexes.
-   * 
+   *
    * Creates:
    * - Main "entities" object store with GUID as primary key
    * - Indexes for fast lookups: guid, lastUpdated, type_lastUpdated, name, externalId
    * - "potentialDuplicates" object store for duplicate detection
    * - Compound key indexes for efficient duplicate pair management
-   * 
+   *
    * This method must be called before any other operations.
-   * 
+   *
    * @throws {Error} When IndexedDB is not supported or database creation fails
-   * 
+   *
    * @example
    * ```typescript
    * const adapter = new IndexedDbEntityStorageAdapter('tenant-123');
@@ -175,14 +175,14 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
 
   /**
    * Retrieves all entities stored in the database.
-   * 
+   *
    * @returns Array of all entity pairs
-   * 
+   *
    * @example
    * ```typescript
    * const allEntities = await adapter.getAllEntities();
    * console.log(`Found ${allEntities.length} entities`);
-   * 
+   *
    * // Filter by type
    * const individuals = allEntities.filter(e => e.modified.type === 'individual');
    * const groups = allEntities.filter(e => e.modified.type === 'group');
@@ -194,36 +194,36 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
 
   /**
    * Searches entities using flexible criteria with support for operators and string matching.
-   * 
+   *
    * Supports multiple search operators:
    * - `$gt`: Greater than comparison
-   * - `$lt`: Less than comparison  
+   * - `$lt`: Less than comparison
    * - `$eq`: Exact equality
    * - `$regex`: Regular expression pattern matching
    * - String values: Case-insensitive substring search
    * - Numeric values: Exact equality
-   * 
+   *
    * Searches both initial and modified entity states, as well as nested data properties.
-   * 
+   *
    * @param criteria - Array of search criteria objects
    * @returns Array of entity pairs matching all criteria
-   * 
+   *
    * @example
    * ```typescript
    * // Search for adults with age greater than 18
    * const adults = await adapter.searchEntities([
-   *   { "modified.data.age": { $gt: 18 } },
-   *   { "modified.type": "individual" }
+   *   { "age": { $gt: 18 } },
+   *   { "type": "individual" }
    * ]);
-   * 
+   *
    * // Search by name pattern (case-insensitive)
    * const johns = await adapter.searchEntities([
-   *   { "modified.data.name": { $regex: "john" } }
+   *   { "name": { $regex: "john" } }
    * ]);
-   * 
+   *
    * // Simple substring search
    * const smithFamilies = await adapter.searchEntities([
-   *   { "modified.data.familyName": "smith" }
+   *   { "familyName": "smith" }
    * ]);
    * ```
    */
@@ -295,13 +295,13 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
 
   /**
    * Saves an entity pair (initial and modified states) to IndexedDB.
-   * 
+   *
    * Stores both the initial state (for conflict resolution) and modified state
    * (current version) with the entity's GUID as the primary key.
-   * 
+   *
    * @param entity - Entity pair containing initial and modified states
    * @throws {Error} When IndexedDB is not initialized or save operation fails
-   * 
+   *
    * @example
    * ```typescript
    * const entityPair: EntityPair = {
@@ -309,7 +309,7 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
    *   initial: originalEntity,
    *   modified: { ...originalEntity, data: { ...originalEntity.data, age: 31 } }
    * };
-   * 
+   *
    * await adapter.saveEntity(entityPair);
    * ```
    */
@@ -335,12 +335,12 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
 
   /**
    * Retrieves an entity pair by its GUID.
-   * 
+   *
    * Uses the optimized GUID index for fast lookups.
-   * 
+   *
    * @param guid - Global unique identifier of the entity
    * @returns Entity pair if found, null otherwise
-   * 
+   *
    * @example
    * ```typescript
    * const entity = await adapter.getEntity('person-123');
@@ -381,13 +381,13 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
 
   /**
    * Retrieves an entity pair by its external system identifier.
-   * 
+   *
    * Useful for finding entities that have been synced with external systems
    * like OpenSPP or other third-party platforms.
-   * 
+   *
    * @param externalId - External system identifier
    * @returns Entity pair if found, null otherwise
-   * 
+   *
    * @example
    * ```typescript
    * // Find entity by OpenSPP ID
@@ -426,7 +426,7 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
 
   /**
    * Internal method to retrieve all entities from IndexedDB.
-   * 
+   *
    * @returns Array of all entity pairs
    * @private
    */
@@ -456,18 +456,18 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
 
   /**
    * Retrieves entities that have been modified since a specific timestamp.
-   * 
+   *
    * Uses the lastUpdated index for efficient timestamp-based queries.
    * Essential for incremental synchronization operations.
-   * 
+   *
    * @param timestamp - ISO timestamp to filter from (exclusive)
    * @returns Array of entity pairs modified after the timestamp
-   * 
+   *
    * @example
    * ```typescript
    * const lastSync = '2024-01-01T00:00:00.000Z';
    * const modified = await adapter.getModifiedEntitiesSince(lastSync);
-   * 
+   *
    * console.log(`${modified.length} entities modified since last sync`);
    * for (const entity of modified) {
    *   console.log(`${entity.modified.data.name} updated at ${entity.modified.lastUpdated}`);
@@ -509,13 +509,13 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
 
   /**
    * Marks an entity as synced by updating its lastUpdated timestamp.
-   * 
+   *
    * Used by sync managers to track which entities have been successfully
    * synchronized with remote systems.
-   * 
+   *
    * @param id - GUID of the entity to mark as synced
    * @throws {Error} When IndexedDB is not initialized
-   * 
+   *
    * @example
    * ```typescript
    * // After successful sync
@@ -541,13 +541,13 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
 
   /**
    * Deletes an entity and cleans up any related duplicate entries.
-   * 
+   *
    * Removes the entity from both the main store and any potential duplicate
    * pairs where this entity appears as either the primary or duplicate entity.
-   * 
+   *
    * @param id - GUID of the entity to delete
    * @throws {Error} When IndexedDB is not initialized
-   * 
+   *
    * @example
    * ```typescript
    * await adapter.deleteEntity('person-123');
@@ -585,20 +585,20 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
 
   /**
    * Saves potential duplicate entity pairs for manual review.
-   * 
+   *
    * Stores pairs of entity GUIDs that may represent the same real-world entity.
    * These pairs are typically identified by automated duplicate detection algorithms.
-   * 
+   *
    * @param duplicates - Array of entity GUID pairs flagged as potential duplicates
    * @throws {Error} When IndexedDB is not initialized
-   * 
+   *
    * @example
    * ```typescript
    * const duplicatePairs = [
    *   { entityGuid: 'person-123', duplicateGuid: 'person-456' },
    *   { entityGuid: 'person-789', duplicateGuid: 'person-101' }
    * ];
-   * 
+   *
    * await adapter.savePotentialDuplicates(duplicatePairs);
    * console.log('Duplicate pairs saved for review');
    * ```
@@ -622,21 +622,21 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
 
   /**
    * Retrieves all potential duplicate entity pairs awaiting review.
-   * 
+   *
    * Returns pairs of entity GUIDs that have been flagged by duplicate detection
    * algorithms and need manual review and resolution.
-   * 
+   *
    * @returns Array of entity GUID pairs flagged as potential duplicates
    * @throws {Error} When IndexedDB is not initialized
-   * 
+   *
    * @example
    * ```typescript
    * const duplicates = await adapter.getPotentialDuplicates();
-   * 
+   *
    * for (const pair of duplicates) {
    *   const entity1 = await adapter.getEntity(pair.entityGuid);
    *   const entity2 = await adapter.getEntity(pair.duplicateGuid);
-   *   
+   *
    *   console.log('Potential duplicate detected:');
    *   console.log('Entity 1:', entity1?.modified.data);
    *   console.log('Entity 2:', entity2?.modified.data);
@@ -665,20 +665,20 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
 
   /**
    * Resolves potential duplicate pairs by removing them from the review queue.
-   * 
+   *
    * Typically called after manual review when duplicates have been confirmed
    * as either true duplicates (and merged/deleted) or false positives.
-   * 
+   *
    * @param duplicates - Array of duplicate pairs to mark as resolved
    * @throws {Error} When IndexedDB is not initialized
-   * 
+   *
    * @example
    * ```typescript
    * // After manual review and resolution
    * const resolvedPairs = [
    *   { entityGuid: 'person-123', duplicateGuid: 'person-456' }
    * ];
-   * 
+   *
    * await adapter.resolvePotentialDuplicates(resolvedPairs);
    * console.log('Duplicate pairs marked as resolved');
    * ```
@@ -702,13 +702,65 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
   }
 
   /**
+   * Retrieves all descendant entities that have the specified GUID as their parent,
+   * including indirect descendants (children of children, etc.).
+   *
+   * Searches for entities where `data.parentId` equals the given GUID or any of its
+   * descendants. This is useful for hierarchical data structures like family trees,
+   * organizational charts, or nested entity relationships.
+   *
+   * @param guid - GUID of the parent entity
+   * @returns Array of GUIDs of all descendant entities (direct and indirect)
+   *
+   * @example
+   * ```typescript
+   * // Find all descendants of a specific person (children, grandchildren, etc.)
+   * const allDescendants = await adapter.getDescendants('person-123');
+   * console.log(`Found ${allDescendants.length} total descendants`);
+   *
+   * // Get full entity details for each descendant
+   * for (const descendantGuid of allDescendants) {
+   *   const descendantEntity = await adapter.getEntity(descendantGuid);
+   *   console.log('Descendant:', descendantEntity?.modified.data.name);
+   * }
+   * ```
+   */
+  async getDescendants(guid: string): Promise<string[]> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+
+    const allDescendants = new Set<string>();
+    const toProcess = [guid];
+
+    // Process each level of descendants until no more are found
+    while (toProcess.length > 0) {
+      const currentGuid = toProcess.shift()!;
+
+      // Find direct children of the current entity
+      const directChildren = await this.searchEntities([{ parentId: currentGuid }]);
+
+      // Add each direct child to our results and queue for further processing
+      for (const child of directChildren) {
+        const childGuid = child.guid;
+        if (!allDescendants.has(childGuid)) {
+          allDescendants.add(childGuid);
+          toProcess.push(childGuid); // Queue this child for finding its descendants
+        }
+      }
+    }
+
+    return Array.from(allDescendants);
+  }
+
+  /**
    * Clears all data from the entity store and potential duplicates store.
-   * 
+   *
    * ⚠️ **WARNING**: This permanently deletes all stored entities and duplicate pairs!
    * Only use for testing or when intentionally resetting the local database.
-   * 
+   *
    * @throws {Error} When IndexedDB is not initialized or clear operation fails
-   * 
+   *
    * @example
    * ```typescript
    * // For testing environments only

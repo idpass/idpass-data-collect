@@ -214,6 +214,12 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
       clearMerkleRoot.onsuccess = () => resolve();
       clearMerkleRoot.onerror = () => reject(clearMerkleRoot.error);
     });
+
+    const clearSyncTimestamp = this.db.transaction(["syncTimestamp"], "readwrite").objectStore("syncTimestamp").clear();
+    await new Promise<void>((resolve, reject) => {
+      clearSyncTimestamp.onsuccess = () => resolve();
+      clearSyncTimestamp.onerror = () => reject(clearSyncTimestamp.error);
+    });
   }
 
   async updateEventSyncLevel(id: string, syncLevel: SyncLevel): Promise<void> {
@@ -579,5 +585,83 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
         }
       };
     });
+  }
+
+  async getEventsSelfServicePagination(
+    entityGuid: string,
+    timestamp: string | Date,
+  ): Promise<{ events: FormSubmission[] }> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+
+    const transaction = this.db.transaction(["events"], "readonly");
+    const store = transaction.objectStore("events");
+
+    // Get all events without timestamp filtering
+    const allEvents = await new Promise<FormSubmission[]>((resolve, reject) => {
+      const request = store.getAll();
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+
+    // Build descendant map
+    const buildDescendantMap = () => {
+      const parentToChildren = new Map<string, Set<string>>();
+
+      // Build parent-child relationships
+      allEvents.forEach((event) => {
+        if (event.data && event.data.parentGuid) {
+          if (!parentToChildren.has(event.data.parentGuid)) {
+            parentToChildren.set(event.data.parentGuid, new Set());
+          }
+          parentToChildren.get(event.data.parentGuid)!.add(event.entityGuid);
+        }
+      });
+
+      // Recursively find all descendants
+      const findDescendants = (guid: string): Set<string> => {
+        const descendants = new Set<string>();
+        const queue = [guid];
+
+        while (queue.length > 0) {
+          const current = queue.shift()!;
+          const children = parentToChildren.get(current);
+
+          if (children) {
+            children.forEach((child) => {
+              if (!descendants.has(child)) {
+                descendants.add(child);
+                queue.push(child);
+              }
+            });
+          }
+        }
+
+        return descendants;
+      };
+
+      return findDescendants(entityGuid);
+    };
+
+    const descendants = buildDescendantMap();
+
+    // Filter events that are descendants OR the entity itself
+    const events: FormSubmission[] = [];
+
+    allEvents.forEach((event) => {
+      if (descendants.has(event.entityGuid) || event.entityGuid === entityGuid) {
+        events.push(event);
+      }
+    });
+
+    // Sort the events by timestamp in ascending order (oldest first) and filter by timestamp
+    const descendantEvents = events
+      .filter((event) => event.timestamp >= timestamp)
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+    return {
+      events: descendantEvents,
+    };
   }
 }

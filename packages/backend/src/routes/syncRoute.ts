@@ -18,12 +18,24 @@
  */
 
 import { Router } from "express";
-import { AuditLogEntry, ExternalSyncCredentials, FormSubmission } from "idpass-data-collect";
-import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware } from "../middlewares/authentication";
+import { AuditLogEntry, EntityDataManager, ExternalSyncCredentials, FormSubmission } from "idpass-data-collect";
+import { authenticateJWT, createDynamicAuthMiddleware } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
-import { AppInstanceStore } from "../types";
+import {
+  AppConfigStore,
+  AppInstanceStore,
+  AuthenticatedRequest,
+  SelfServiceUserStore,
+  SessionStore,
+  SyncRole,
+} from "../types";
 
-export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
+export function createSyncRouter(
+  appConfigStore: AppConfigStore,
+  appInstanceStore: AppInstanceStore,
+  selfServiceUserStore: SelfServiceUserStore,
+  sessionStore: SessionStore,
+): Router {
   const router = Router();
 
   router.get(
@@ -39,7 +51,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
 
   router.get(
     "/pull",
-    createDynamicAuthMiddleware(appInstanceStore),
+    createDynamicAuthMiddleware(appInstanceStore, sessionStore),
     asyncHandler(async (req, res) => {
       // get param timestamp
       const { since, configId = "default" } = req.query;
@@ -49,7 +61,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
       if (!appInstance) {
         return res.json({ status: "error", message: "App instance not found" });
       }
-      const edm = appInstance.edm;
+      const edm = appInstance.edm as EntityDataManager;
       const duplicates = await edm.getPotentialDuplicates();
       if (duplicates.length > 0) {
         console.log("Duplicates exist! Please resolve them before syncing.");
@@ -58,6 +70,22 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
           nextCursor: null,
           error: "Duplicates exist! Please resolve them on admin page.",
         });
+      }
+      const syncRole = (req as AuthenticatedRequest).syncRole;
+      const user = (req as AuthenticatedRequest).user;
+      const entityGuid = "entityGuid" in user ? user.entityGuid : undefined;
+      if (syncRole === SyncRole.SELF_SERVICE_USER) {
+        if (!entityGuid) {
+          return res.json({
+            events: [],
+            nextCursor: null,
+            error: "Entity not found",
+          });
+        }
+        const result = await edm.getEventsSelfServicePagination(entityGuid, since as string);
+        console.log("Request pulling: ", result.events?.length, " events since", since);
+        res.json(result);
+        return;
       }
 
       const result = await edm.getEventsSincePagination(since as string, 10);
@@ -68,7 +96,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
 
   router.get(
     "/pull/callback",
-    createDynamicAuthMiddleware(appInstanceStore),
+    createDynamicAuthMiddleware(appInstanceStore, sessionStore),
     asyncHandler(async (req, res) => {
       const { configId = "default" } = req.query;
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
@@ -83,7 +111,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
 
   router.post(
     "/push",
-    createDynamicAuthMiddleware(appInstanceStore),
+    createDynamicAuthMiddleware(appInstanceStore, sessionStore),
     asyncHandler(async (req, res) => {
       // get body
       const events: FormSubmission[] = req.body.events;
@@ -93,23 +121,66 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
       if (!Array.isArray(events)) {
         return res.json({ status: "success" });
       }
+      const appInstance = await appInstanceStore.getAppInstance(configId || "default");
+      const appConfig = await appConfigStore.getConfig(configId || "default");
+
+      if (!appInstance || !appConfig) {
+        return res.json({ status: "error", message: "App instance or config not found" });
+      }
+
+      const edm = appInstance.edm;
+      const user = (req as AuthenticatedRequest).user;
+      const entityGuid = "entityGuid" in user ? user.entityGuid : undefined;
+      const syncRole = (req as AuthenticatedRequest).syncRole;
+
+      if (syncRole === SyncRole.SELF_SERVICE_USER) {
+        if (!entityGuid) {
+          return res.json({ status: "error", message: "Entity not found" });
+        }
+
+        // check if all events are for decendents of entityGuid including the entityGuid itself
+        const allEventsGuids = events.map((event) => event.data.parentGuid);
+        const decendents = await edm.getDescendants(entityGuid);
+        const isPushValid = allEventsGuids.every(
+          (guid) => decendents.some((decendentGuid: string) => decendentGuid === guid) || guid === entityGuid,
+        );
+        if (!isPushValid) {
+          return res.json({ status: "error", message: "All events must be for decendents of the entity" });
+        }
+      }
 
       const sorted = events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      const selfServiceForms = appConfig.entityForms?.filter((form) => form.selfServiceUser);
+      const selfServiceUserToBeAdded: { configId: string; guid: string; email: string; phone?: string }[] = [];
 
-      const appInstance = await appInstanceStore.getAppInstance(configId || "default");
-      if (!appInstance) {
-        return res.json({ status: "error", message: "App instance not found" });
-      }
-      const edm = appInstance.edm;
-
+      // Create entities for sync server
       for (const event of sorted) {
         event.syncLevel = 1;
         try {
-          await edm.submitForm(event);
+          const entity = await edm.submitForm(event);
+          const isSelfServiceUser = selfServiceForms?.some((form) => form.name === entity?.data.entityName);
+          if (entity && isSelfServiceUser) {
+            console.log("Self service user found: ", entity.data.entityName);
+            selfServiceUserToBeAdded.push({
+              configId,
+              guid: entity.guid,
+              email: entity.data.email,
+              phone: entity.data.phone,
+            });
+          }
         } catch (error) {
           console.error(error);
           // ignore errors
         }
+      }
+
+      for (const selfServiceUser of selfServiceUserToBeAdded) {
+        await selfServiceUserStore.createUser(
+          selfServiceUser.configId,
+          selfServiceUser.guid,
+          selfServiceUser.email,
+          selfServiceUser.phone,
+        );
       }
 
       res.json({ status: "success" });
@@ -136,7 +207,11 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
       }
 
       try {
-        await edm.saveAuditLogs(auditLogs.map((log) => ({ ...log, userId: (req as AuthenticatedRequest).user?.id })));
+        const user = (req as AuthenticatedRequest).user;
+        const userId = "id" in user ? user.id : undefined;
+        if (userId) {
+          await edm.saveAuditLogs(auditLogs.map((log) => ({ ...log, userId })));
+        }
       } catch (error) {
         console.error(error);
         // ignore errors
@@ -187,5 +262,41 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
       }
     }),
   );
+
+  router.get(
+    "/user-info",
+    createDynamicAuthMiddleware(appInstanceStore, sessionStore),
+    asyncHandler(async (req, res) => {
+      const { configId = "default" } = req.query;
+
+      const appInstance = await appInstanceStore.getAppInstance(configId as string);
+      if (!appInstance) {
+        return res.json({ status: "error", message: "App instance not found" });
+      }
+
+      const authHeader = req.headers.authorization;
+      if (!authHeader) {
+        return res.status(401).json({ error: "Authorization header missing" });
+      }
+
+      const [authType, token] = authHeader.split(" ");
+      const edm = appInstance.edm;
+      try {
+        // Get user info directly from EntityDataManager console.log("Getting user info for token:", token, " with auth type:", authType);
+        const userInfo = await edm.getUserInfo(token, authType);
+        if (!userInfo) {
+          return res.status(404).json({ error: "User info not found" });
+        }
+        res.json(userInfo);
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({
+          error: "Failed to get user info",
+          details: error,
+        });
+      }
+    }),
+  );
+
   return router;
 }

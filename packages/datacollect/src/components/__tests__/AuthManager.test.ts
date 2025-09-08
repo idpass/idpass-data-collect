@@ -6,12 +6,7 @@ import { AuthManager } from "../AuthManager";
 import { Auth0AuthAdapter } from "../authentication/Auth0AuthAdapter";
 import { KeycloakAuthAdapter } from "../authentication/KeycloakAuthAdapter";
 import { SingleAuthStorageImpl } from "../../services/SingleAuthStorageImpl";
-import {
-  AuthConfig,
-  AuthStorageAdapter,
-  PasswordCredentials,
-  TokenCredentials,
-} from "../../interfaces/types";
+import { AuthConfig, AuthStorageAdapter, PasswordCredentials, TokenCredentials } from "../../interfaces/types";
 import axios from "axios";
 
 // Mock axios
@@ -94,6 +89,8 @@ describe("AuthManager", () => {
       logout: jest.fn().mockResolvedValue(undefined),
       validateToken: jest.fn().mockResolvedValue(true),
       handleCallback: jest.fn().mockResolvedValue(undefined),
+      getUserInfo: jest.fn().mockResolvedValue(null),
+      createUser: jest.fn().mockResolvedValue(undefined),
       config: mockAuthConfigs[0],
     } as Partial<Auth0AuthAdapter> as jest.Mocked<Auth0AuthAdapter>;
 
@@ -108,6 +105,8 @@ describe("AuthManager", () => {
       validateToken: jest.fn().mockResolvedValue(true),
       handleCallback: jest.fn().mockResolvedValue(undefined),
       getStoredAuth: jest.fn().mockResolvedValue(null),
+      getUserInfo: jest.fn().mockResolvedValue(null),
+      createUser: jest.fn().mockResolvedValue(undefined),
       config: mockAuthConfigs[1],
     } as Partial<KeycloakAuthAdapter> as jest.Mocked<KeycloakAuthAdapter>;
 
@@ -356,6 +355,173 @@ describe("AuthManager", () => {
     });
   });
 
+  describe("getUserInfo", () => {
+    beforeEach(async () => {
+      await authManager.initialize();
+    });
+
+    it("should get user info using specific adapter type", async () => {
+      const mockUserInfo = {
+        sub: "user123",
+        name: "Test User",
+        email: "test@example.com",
+      };
+
+      mockAuth0Adapter.getUserInfo.mockResolvedValue(mockUserInfo);
+
+      const result = await authManager.getUserInfo("test-token", "auth0");
+
+      expect(result).toEqual(mockUserInfo);
+      expect(mockAuth0Adapter.getUserInfo).toHaveBeenCalledWith("test-token");
+    });
+
+    it("should try all adapters when no type specified", async () => {
+      const mockUserInfo = {
+        sub: "user123",
+        name: "Test User",
+        email: "test@example.com",
+      };
+
+      mockAuth0Adapter.getUserInfo.mockResolvedValue(null);
+      mockKeycloakAdapter.getUserInfo.mockResolvedValue(mockUserInfo);
+
+      const result = await authManager.getUserInfo("test-token");
+
+      expect(result).toEqual(mockUserInfo);
+      expect(mockAuth0Adapter.getUserInfo).toHaveBeenCalledWith("test-token");
+      expect(mockKeycloakAdapter.getUserInfo).toHaveBeenCalledWith("test-token");
+    });
+
+    it("should return null when no adapter returns user info", async () => {
+      mockAuth0Adapter.getUserInfo.mockResolvedValue(null);
+      mockKeycloakAdapter.getUserInfo.mockResolvedValue(null);
+
+      const result = await authManager.getUserInfo("test-token");
+
+      expect(result).toBeNull();
+      expect(mockAuth0Adapter.getUserInfo).toHaveBeenCalledWith("test-token");
+      expect(mockKeycloakAdapter.getUserInfo).toHaveBeenCalledWith("test-token");
+    });
+
+    it("should return first successful result when multiple adapters succeed", async () => {
+      const mockUserInfo1 = {
+        sub: "user123",
+        name: "Auth0 User",
+        email: "auth0@example.com",
+      };
+
+      const mockUserInfo2 = {
+        sub: "user456",
+        name: "Keycloak User",
+        email: "keycloak@example.com",
+      };
+
+      mockAuth0Adapter.getUserInfo.mockResolvedValue(mockUserInfo1);
+      mockKeycloakAdapter.getUserInfo.mockResolvedValue(mockUserInfo2);
+
+      const result = await authManager.getUserInfo("test-token");
+
+      expect(result).toEqual(mockUserInfo1);
+      expect(mockAuth0Adapter.getUserInfo).toHaveBeenCalledWith("test-token");
+      // Should not call keycloak adapter since auth0 already succeeded
+      expect(mockKeycloakAdapter.getUserInfo).not.toHaveBeenCalled();
+    });
+
+    it("should handle adapter errors gracefully", async () => {
+      const mockUserInfo = {
+        sub: "user123",
+        name: "Test User",
+        email: "test@example.com",
+      };
+
+      mockAuth0Adapter.getUserInfo.mockRejectedValue(new Error("Auth0 error"));
+      mockKeycloakAdapter.getUserInfo.mockResolvedValue(mockUserInfo);
+
+      const consoleSpy = jest.spyOn(console, "log").mockImplementation();
+
+      const result = await authManager.getUserInfo("test-token");
+
+      expect(result).toEqual(mockUserInfo);
+      expect(consoleSpy).toHaveBeenCalledWith("Failed to get user info from auth0:", expect.any(Error));
+
+      consoleSpy.mockRestore();
+    });
+
+    it("should return null for unknown adapter type", async () => {
+      const result = await authManager.getUserInfo("test-token");
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("createUser", () => {
+    beforeEach(async () => {
+      await authManager.initialize();
+    });
+
+    it("should create user using specific adapter type", async () => {
+      const mockUser = {
+        email: "test@example.com",
+
+        phoneNumber: "+1234567890",
+      };
+
+      await authManager.createUser("auth0", mockUser);
+
+      expect(mockAuth0Adapter.createUser).toHaveBeenCalledWith(mockUser);
+    });
+
+    it("should create user using keycloak adapter", async () => {
+      const mockUser = {
+        email: "test@example.com",
+      };
+
+      await authManager.createUser("keycloak", mockUser);
+
+      expect(mockKeycloakAdapter.createUser).toHaveBeenCalledWith(mockUser);
+    });
+
+    it("should handle user creation without phone number", async () => {
+      const mockUser = {
+        email: "test@example.com",
+      };
+
+      await authManager.createUser("auth0", mockUser);
+
+      expect(mockAuth0Adapter.createUser).toHaveBeenCalledWith(mockUser);
+    });
+
+    it("should handle adapter errors during user creation", async () => {
+      const mockUser = {
+        email: "test@example.com",
+      };
+
+      mockAuth0Adapter.createUser.mockRejectedValue(new Error("Creation failed"));
+
+      await expect(authManager.createUser("auth0", mockUser)).rejects.toThrow("Creation failed");
+    });
+
+    it("should not throw error for unknown adapter type", async () => {
+      const mockUser = {
+        email: "test@example.com",
+      };
+
+      await expect(authManager.createUser("unknown", mockUser)).resolves.toBeUndefined();
+    });
+
+    it("should handle user creation with all fields", async () => {
+      const mockUser = {
+        email: "test@example.com",
+
+        phoneNumber: "+1234567890",
+      };
+
+      await authManager.createUser("keycloak", mockUser);
+
+      expect(mockKeycloakAdapter.createUser).toHaveBeenCalledWith(mockUser);
+    });
+  });
+
   describe("edge cases", () => {
     it("should handle empty configs array", async () => {
       const authManagerEmpty = new AuthManager([], "http://localhost:8080", mockAuthStorage);
@@ -371,9 +537,28 @@ describe("AuthManager", () => {
       });
 
       const authManagerWithError = new AuthManager([mockAuthConfigs[0]], "http://localhost:8080", mockAuthStorage);
-      
+
       // Should not throw during initialization
       await expect(authManagerWithError.initialize()).resolves.toBeUndefined();
     });
+
+    it("should handle getUserInfo with no adapters", async () => {
+      const authManagerEmpty = new AuthManager([], "http://localhost:8080", mockAuthStorage);
+      await authManagerEmpty.initialize();
+
+      const result = await authManagerEmpty.getUserInfo("test-token");
+      expect(result).toBeNull();
+    });
+
+    it("should handle createUser with no adapters", async () => {
+      const authManagerEmpty = new AuthManager([], "http://localhost:8080", mockAuthStorage);
+      await authManagerEmpty.initialize();
+
+      const mockUser = {
+        email: "test@example.com",
+      };
+
+      await expect(authManagerEmpty.createUser("nonexistent", mockUser)).resolves.toBeUndefined();
+    });
   });
-}); 
+});

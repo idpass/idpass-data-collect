@@ -25,7 +25,7 @@ import { detectPlatform } from '@/utils/device'
 import { useTenantStore } from '@/store/tenant'
 import { App } from '@capacitor/app'
 
-import { initStore, store } from '@/store'
+import { closeStore, initStore, store } from '@/store'
 import { getSyncServerUrlByAppId } from '@/utils/getSyncServerByAppId'
 import { EntityDataManager } from 'idpass-data-collect'
 // Auth configuration for different providers
@@ -135,10 +135,9 @@ export const useAuthManagerStore = defineStore('authManager', () => {
     try {
       isLoading.value = true
       error.value = null
-
-      // Use the properly initialized authManager
+      
       await authManager.value.logout()
-
+      await closeStore(targetAppId)
       // Update state
       isAuthenticated.value = false
       currentProvider.value = null
@@ -147,6 +146,7 @@ export const useAuthManagerStore = defineStore('authManager', () => {
       if (mobileAuthStorage.value) {
         mobileAuthStorage.value.clearLastProvider(targetAppId || undefined)
       }
+     
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Logout failed'
       console.error('Logout error:', err)

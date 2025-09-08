@@ -299,6 +299,13 @@ export interface EventStore {
     events: FormSubmission[];
     nextCursor: string | Date | null;
   }>;
+  /** Get events for self-service with pagination support (10 events/page default) */
+  getEventsSelfServicePagination(
+    entityGuid: string,
+    timestamp: string | Date,
+  ): Promise<{
+    events: FormSubmission[];
+  }>;
   /** Update sync levels for multiple events */
   updateSyncLevelFromEvents(events: FormSubmission[]): Promise<void>;
   /** Get the timestamp of the last remote sync */
@@ -363,6 +370,13 @@ export interface EventStorageAdapter {
   ): Promise<{
     events: FormSubmission[];
     nextCursor: string | Date | null;
+  }>;
+  /** Get events for self-service with pagination support (10 events/page default) */
+  getEventsSelfServicePagination(
+    entityGuid: string,
+    timestamp: string | Date,
+  ): Promise<{
+    events: FormSubmission[];
   }>;
   /** Update sync levels for multiple events */
   updateSyncLevelFromEvents(events: FormSubmission[]): Promise<void>;
@@ -516,6 +530,8 @@ export interface EntityStore {
   getPotentialDuplicates(): Promise<Array<{ entityGuid: string; duplicateGuid: string }>>;
   /** Resolve potential duplicate pairs (mark as reviewed) */
   resolvePotentialDuplicates(duplicates: Array<{ entityGuid: string; duplicateGuid: string }>): Promise<void>;
+  /** Get all descendants of a GUID */
+  getDescendants(guid: string): Promise<string[]>;
   /** Clear all data from the store (for testing) */
   clearStore(): Promise<void>;
   /** Close database connections and cleanup resources */
@@ -549,6 +565,8 @@ export interface EntityStorageAdapter {
   getPotentialDuplicates(): Promise<Array<{ entityGuid: string; duplicateGuid: string }>>;
   /** Resolve potential duplicate pairs (mark as reviewed) */
   resolvePotentialDuplicates(duplicates: Array<{ entityGuid: string; duplicateGuid: string }>): Promise<void>;
+  /** Get all descendants of a GUID */
+  getDescendants(guid: string): Promise<string[]>;
   /** Clear all data from storage (for testing) */
   clearStore(): Promise<void>;
   /** Close database connections and cleanup resources */
@@ -767,6 +785,9 @@ export interface AuthAdapter {
   logout(): Promise<void>;
   validateToken(token: string): Promise<boolean>;
   handleCallback(): Promise<void>;
+  getUserInfo(token?: string): Promise<Record<string, unknown> | null>;
+  createUser(user: { email: string; phoneNumber?: string }): Promise<void>;
+  getUserEmailOrPhoneNumber(token: string): Promise<{ email: string; phoneNumber?: string }>;
 }
 
 export interface AuthStorageAdapter {

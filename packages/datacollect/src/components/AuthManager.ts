@@ -65,17 +65,21 @@ export class AuthManager {
     );
   }
 
+  async getAvailableAuthProviders(): Promise<string[]> {
+    return Object.keys(this.adapters);
+  }
+
   async isAuthenticated(): Promise<boolean> {
     // If there are no configs and no auth storage, return false
     if (!this.configs.length) {
       return false;
     }
-     if (!this.authStorage) {
+    if (!this.authStorage) {
       throw new Error("Auth storage is not set");
     }
     // Check adapter-based authentication
     const adapterResults = await Promise.all(Object.values(this.adapters).map((adapter) => adapter.isAuthenticated()));
-    
+
     // Check default login token if auth storage exists
     if (this.authStorage) {
       const defaultToken = await this.authStorage.getTokenByProvider("default");
@@ -138,5 +142,36 @@ export class AuthManager {
 
   async handleCallback(type: string): Promise<void> {
     return this.adapters[type]?.handleCallback();
+  }
+
+  async createUser(type: string, user: { email: string; phoneNumber?: string }): Promise<void> {
+    return this.adapters[type]?.createUser(user);
+  }
+  async getUserInfo(token: string, type?: string): Promise<Record<string, unknown> | null> {
+    // Try each adapter until one succeeds
+    if (type) {
+      return this.adapters[type]?.getUserInfo(token);
+    }
+
+    for (const [type, adapter] of Object.entries(this.adapters)) {
+      try {
+        const userInfo = await adapter.getUserInfo(token);
+        if (userInfo) {
+          console.log(`Successfully got user info from ${type}:`, userInfo);
+          return userInfo;
+        }
+      } catch (error) {
+        console.log(`Failed to get user info from ${type}:`, error);
+        // Continue to next adapter
+      }
+    }
+    return null;
+  }
+
+  async getUserEmailOrPhoneNumber(
+    type: string,
+    token: string,
+  ): Promise<{ email: string; phoneNumber?: string } | null> {
+    return this.adapters[type]?.getUserEmailOrPhoneNumber(token);
   }
 }
