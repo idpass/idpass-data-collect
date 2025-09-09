@@ -1,6 +1,6 @@
 {
   "name": "@idpass/data-collect-core",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Library to support offline data capture for a beneficiary management system",
   "engines": {
     "node": ">=22.0.0"
