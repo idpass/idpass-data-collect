@@ -1,4 +1,4 @@
-package com.openspp.selfreg;
+package org.idpass.datacollectapp;
 
 import com.getcapacitor.BridgeActivity;
 
