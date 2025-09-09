@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 def propertiesFile = rootProject.file('keys.properties')
 android {
-    namespace "com.openspp.selfreg"
+    namespace "org.idpass.datacollectapp"
     compileSdkVersion rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.openspp.selfreg"
+        applicationId "org.idpass.datacollectapp"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
