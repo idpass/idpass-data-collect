@@ -1,6 +1,6 @@
 {
   "name": "@idpass/data-collect-docs",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "docusaurus": "docusaurus",
@@ -8,6 +8,7 @@
     "build": "pnpm run generate-api-docs && docusaurus build",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
+    "deploy:cloudflare": "wrangler pages deploy build",
     "clear": "docusaurus clear && pnpm run clear-api-docs",
     "serve": "docusaurus serve",
     "write-translations": "docusaurus write-translations",
@@ -18,12 +19,12 @@
     "clear-api-docs": "rm -rf docs/packages/backend/api-reference-generated && rm -rf docs/packages/datacollect/api"
   },
   "dependencies": {
+    "@cmfcmf/docusaurus-search-local": "^1.2.0",
     "@docusaurus/core": "3.8.1",
     "@docusaurus/preset-classic": "3.8.1",
     "@docusaurus/theme-mermaid": "3.8.1",
     "@mdx-js/react": "3.0.0",
     "clsx": "2.0.0",
-    "docusaurus-plugin-search-local": "^2.1.2",
     "prism-react-renderer": "2.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
