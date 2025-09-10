@@ -333,7 +333,7 @@ VITE_DEVELOP=true
 
 ```typescript
 const config: CapacitorConfig = {
-  appId: "com.openspp.selfreg",
+  appId: "org.idpass.selfreg",
   appName: "ID PASS DataCollect",
   webDir: "dist",
   server: {
