@@ -156,7 +156,6 @@ describe("EntityDataManager", () => {
   // let exportImportManager: ExportImportManager;
   // let groupService: GroupService;
   const internalUrl = "http://localhost:3000";
-  // const internalUrl = "http://hdm-sync.openspp.org:3000";
   const externalUrl = "http://localhost:3001";
   beforeEach(async () => {
     jest.clearAllMocks();

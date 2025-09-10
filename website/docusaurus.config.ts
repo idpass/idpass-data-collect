@@ -45,17 +45,7 @@ const config: Config = {
   ],
 
   plugins: [
-    // [
-    //   // TODO: fix local search
-    //   require.resolve('docusaurus-plugin-search-local'),
-    //   {
-    //     hashed: true,
-    //     indexPages: true,
-    //     docsDir: './docs',
-    //     docsRouteBasePath: '/',
-    //     highlightSearchTermsOnTargetPage: true,
-    //   },
-    // ],
+    require.resolve('docusaurus-lunr-search'),
     [
       'docusaurus-plugin-typedoc',
       {
@@ -100,7 +90,9 @@ const config: Config = {
     ],
   ],
 
-  themes: ['@docusaurus/theme-mermaid'],
+  themes: [
+    '@docusaurus/theme-mermaid',
+  ],
   
   markdown: {
     mermaid: true,
@@ -116,25 +108,21 @@ const config: Config = {
         src: 'img/logo.svg',
       },
       items: [
-        // {
-        //   type: 'search',
-        //   position: 'right',
-        // },
         {
           type: 'docSidebar',
           sidebarId: 'docsSidebar',
-          position: 'right',
+          position: 'left',
           label: 'Documentation',
         },
         {
           to: 'packages',
           label: 'Packages',
-          position: 'right',
+          position: 'left',
         },
         {
           to: 'architecture',
           label: 'Architecture',
-          position: 'right',
+          position: 'left',
         },
         {
           href: 'https://github.com/idpass/idpass-data-collect',
@@ -142,10 +130,17 @@ const config: Config = {
           className: 'header-github-link',
           'aria-label': 'GitHub repository',
         },
+        {
+          type: "localeDropdown",
+          position: "right",
+        },
+        // {
+        //   type: "docsVersionDropdown",
+        //   position: "right",
+        // },
       ],
     },
     footer: {
-      style: 'dark',
       links: [
         {
           title: 'Documentation',
