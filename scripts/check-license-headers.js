@@ -39,7 +39,7 @@ const FILE_PATTERNS = [
   'packages/**/*.tsx',
   'packages/**/*.js',
   'packages/**/*.jsx',
-  '!packages/**/node_modules/**',
+  '!**/node_modules/**',
   '!packages/**/dist/**',
   '!packages/**/build/**',
   '!packages/**/*.test.ts',
