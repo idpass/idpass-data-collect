@@ -1,0 +1,2186 @@
+{
+  "item": [
+    {
+      "id": "f2a9f9ac-9450-401c-bb32-c5c0e2d6103b",
+      "name": "users",
+      "item": [
+        {
+          "id": "735a432e-51a4-4f91-a92f-4f3f0175c7e9",
+          "name": "Get all users",
+          "request": {
+            "name": "Get all users",
+            "description": {
+              "content": "Retrieve all users (Admin only)",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "users"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{bearerToken}}"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "id": "a39d53c0-d807-41bf-b208-de7fccab11ca",
+              "name": "List of users",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "users"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "[\n  {\n    \"id\": 1,\n    \"email\": \"user@example.com\",\n    \"role\": \"USER\"\n  },\n  {\n    \"id\": 1,\n    \"email\": \"user@example.com\",\n    \"role\": \"USER\"\n  }\n]",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "54e2fae0-a3a8-41a5-b4d8-e6726742df02",
+              "name": "Admin access required",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "users"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"Error description\",\n  \"message\": \"Detailed error message\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        },
+        {
+          "id": "c0233945-fe85-4fdd-9e04-27c29b1a5d10",
+          "name": "Create new user",
+          "request": {
+            "name": "Create new user",
+            "description": {
+              "content": "Create a new user account (Admin only)",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "users"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{bearerToken}}"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"<email>\",\n  \"password\": \"<password>\",\n  \"role\": \"<string>\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "13ab7207-7b89-4689-aefd-7d420d47eb95",
+              "name": "User created successfully",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "users"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\",\n  \"role\": \"USER\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Created",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"message\": \"User created successfully\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "19527a57-6625-4d5e-ae82-1c91b6d63ba8",
+              "name": "Admin access required",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "users"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\",\n  \"role\": \"USER\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Forbidden",
+              "code": 403,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"Error description\",\n  \"message\": \"Detailed error message\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        },
+        {
+          "id": "f084cd6e-401b-4366-9ee9-bdf58625d55c",
+          "name": "User login",
+          "request": {
+            "name": "User login",
+            "description": {
+              "content": "Authenticate user with email and password, returns JWT token",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "users",
+                "login"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "auth": null,
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"<email>\",\n  \"password\": \"<password>\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "0851375a-b305-4c8c-ba47-9a627a28e059",
+              "name": "Login successful",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "users",
+                    "login"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"password123\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n  \"userId\": 1\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "c0010d4a-0e40-4a74-98f9-3d76a49d7a4a",
+              "name": "Invalid credentials",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "users",
+                    "login"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"password123\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"Error description\",\n  \"message\": \"Detailed error message\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        },
+        {
+          "id": "0b0122e7-3c7a-4da1-98c2-4fb3c188cb21",
+          "name": "Validate JWT token",
+          "request": {
+            "name": "Validate JWT token",
+            "description": {
+              "content": "Check if the provided JWT token is valid",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "users",
+                "check-token"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "method": "GET",
+            "auth": null
+          },
+          "response": [
+            {
+              "id": "06459301-4f86-4f1e-bded-d7eb4e84d493",
+              "name": "Token is valid",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "users",
+                    "check-token"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"message\": \"Token is valid\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "fceb0fc4-38eb-430c-bba1-0f17287e499a",
+              "name": "Invalid or expired token",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "users",
+                    "check-token"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "Unauthorized",
+              "code": 401,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"Error description\",\n  \"message\": \"Detailed error message\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        },
+        {
+          "id": "a7b153ec-f04e-4f8c-860c-35c0b8fa1314",
+          "name": "Update user",
+          "request": {
+            "name": "Update user",
+            "description": {
+              "content": "Update an existing user (Admin only)",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "users",
+                ":id"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "disabled": false,
+                  "type": "any",
+                  "value": "<integer>",
+                  "key": "id",
+                  "description": "(Required) "
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "method": "PUT",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{bearerToken}}"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"<email>\",\n  \"password\": \"<password>\",\n  \"role\": \"<string>\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "0667b678-8769-4f80-9401-85ba6d61f8ab",
+              "name": "User updated successfully",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "users",
+                    ":id"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": [
+                    {
+                      "disabled": false,
+                      "type": "any",
+                      "value": "<integer>",
+                      "key": "id",
+                      "description": "(Required) "
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "PUT",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"<email>\",\n  \"password\": \"<password>\",\n  \"role\": \"USER\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"message\": \"User updated successfully\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "2cff31bd-7af0-4b61-8047-3f9f840c6012",
+              "name": "User not found",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "users",
+                    ":id"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": [
+                    {
+                      "disabled": false,
+                      "type": "any",
+                      "value": "<integer>",
+                      "key": "id",
+                      "description": "(Required) "
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "PUT",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"<email>\",\n  \"password\": \"<password>\",\n  \"role\": \"USER\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"Error description\",\n  \"message\": \"Detailed error message\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        },
+        {
+          "id": "bd87d140-03e1-46fc-93e7-0a3ce365ff5c",
+          "name": "Delete user",
+          "request": {
+            "name": "Delete user",
+            "description": {
+              "content": "Delete a user by email (Admin only)",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "users",
+                ":email"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "disabled": false,
+                  "type": "any",
+                  "value": "<email>",
+                  "key": "email",
+                  "description": "(Required) "
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "method": "DELETE",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{bearerToken}}"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "id": "4c2b3ad0-7d9d-4e86-8da2-eabdb3787702",
+              "name": "User deleted successfully",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "users",
+                    ":email"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": [
+                    {
+                      "disabled": false,
+                      "type": "any",
+                      "value": "<email>",
+                      "key": "email",
+                      "description": "(Required) "
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "DELETE",
+                "body": {}
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"message\": \"User deleted successfully\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        },
+        {
+          "id": "d0c268bc-d75b-4886-89ac-1e0e69eec388",
+          "name": "Get current user",
+          "request": {
+            "name": "Get current user",
+            "description": {
+              "content": "Get the current authenticated user's information",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "users",
+                "me"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "method": "GET",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{bearerToken}}"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "id": "11f15a90-74d8-4210-92e8-b568e35abe02",
+              "name": "Current user information",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "users",
+                    "me"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"id\": 1,\n  \"email\": \"user@example.com\",\n  \"role\": \"USER\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "7a77b11a-6f03-4337-9527-a95fe2be76b1",
+              "name": "User not found",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "users",
+                    "me"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "Not Found",
+              "code": 404,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"Error description\",\n  \"message\": \"Detailed error message\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        }
+      ],
+      "event": []
+    },
+    {
+      "id": "329ebb6c-8485-41d0-a51e-0de92898273e",
+      "name": "sync",
+      "item": [
+        {
+          "id": "40b4e808-d9a7-414b-bce4-fcbb8f17fadb",
+          "name": "Count entities",
+          "request": {
+            "name": "Count entities",
+            "description": {
+              "content": "Get the total count of entities for a specific app configuration",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "sync",
+                "count-entities"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [
+                {
+                  "disabled": false,
+                  "key": "configId",
+                  "value": "default",
+                  "description": "Application configuration ID"
+                }
+              ],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "method": "GET",
+            "auth": null
+          },
+          "response": [
+            {
+              "id": "4a3caa22-e2aa-4e2b-be4b-36b8acecf40f",
+              "name": "Entity count",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "sync",
+                    "count-entities"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [
+                    {
+                      "key": "configId",
+                      "value": "default"
+                    }
+                  ],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"count\": 42\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        },
+        {
+          "id": "1b68636e-f68e-464f-b6f8-261348b9dcda",
+          "name": "pull",
+          "item": [
+            {
+              "id": "0b9403d1-437a-4793-aa47-d5030352c85c",
+              "name": "Pull events from server",
+              "request": {
+                "name": "Pull events from server",
+                "description": {
+                  "content": "Retrieve events from server since a specific timestamp with pagination",
+                  "type": "text/plain"
+                },
+                "url": {
+                  "path": [
+                    "sync",
+                    "pull"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [
+                    {
+                      "disabled": false,
+                      "key": "since",
+                      "value": "<dateTime>",
+                      "description": "Timestamp to pull events since"
+                    },
+                    {
+                      "disabled": false,
+                      "key": "configId",
+                      "value": "default",
+                      "description": "Application configuration ID"
+                    }
+                  ],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "auth": null
+              },
+              "response": [
+                {
+                  "id": "c61f844f-7072-4bcd-9ade-baacc01c965f",
+                  "name": "Events retrieved successfully",
+                  "originalRequest": {
+                    "url": {
+                      "path": [
+                        "sync",
+                        "pull"
+                      ],
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "query": [
+                        {
+                          "key": "since",
+                          "value": "2024-01-01T00:00:00.000Z"
+                        },
+                        {
+                          "key": "configId",
+                          "value": "default"
+                        }
+                      ],
+                      "variable": []
+                    },
+                    "header": [
+                      {
+                        "description": {
+                          "content": "Added as a part of security scheme: bearer",
+                          "type": "text/plain"
+                        },
+                        "key": "Authorization",
+                        "value": "Bearer <token>"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "GET",
+                    "body": {}
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "body": "{\n  \"events\": [\n    {\n      \"guid\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"type\": \"create-group\",\n      \"entityGuid\": \"550e8400-e29b-41d4-a716-446655440001\",\n      \"data\": {\n        \"key_0\": 7682,\n        \"key_1\": false,\n        \"key_2\": 4128.584530079207\n      },\n      \"timestamp\": \"2024-01-15T10:30:00.000Z\",\n      \"userId\": \"1\",\n      \"syncLevel\": 1\n    },\n    {\n      \"guid\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"type\": \"create-group\",\n      \"entityGuid\": \"550e8400-e29b-41d4-a716-446655440001\",\n      \"data\": {\n        \"key_0\": false,\n        \"key_1\": true\n      },\n      \"timestamp\": \"2024-01-15T10:30:00.000Z\",\n      \"userId\": \"1\",\n      \"syncLevel\": 1\n    }\n  ],\n  \"nextCursor\": \"string\"\n}",
+                  "cookie": [],
+                  "_postman_previewlanguage": "json"
+                }
+              ],
+              "event": [],
+              "protocolProfileBehavior": {
+                "disableBodyPruning": true
+              }
+            },
+            {
+              "id": "bccbfdf4-16be-4f55-8822-90bb003b670b",
+              "name": "Pull audit logs from server",
+              "request": {
+                "name": "Pull audit logs from server",
+                "description": {
+                  "content": "Retrieve audit log entries since a specific timestamp",
+                  "type": "text/plain"
+                },
+                "url": {
+                  "path": [
+                    "sync",
+                    "pull",
+                    "audit-logs"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [
+                    {
+                      "disabled": false,
+                      "key": "since",
+                      "value": "<dateTime>",
+                      "description": "Timestamp to pull audit logs since"
+                    },
+                    {
+                      "disabled": false,
+                      "key": "configId",
+                      "value": "default",
+                      "description": "Application configuration ID"
+                    }
+                  ],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "auth": null
+              },
+              "response": [
+                {
+                  "id": "524a9a14-1098-4bd7-8941-072e7dce79b1",
+                  "name": "Audit logs retrieved successfully",
+                  "originalRequest": {
+                    "url": {
+                      "path": [
+                        "sync",
+                        "pull",
+                        "audit-logs"
+                      ],
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "query": [
+                        {
+                          "key": "since",
+                          "value": "2024-01-01T00:00:00.000Z"
+                        },
+                        {
+                          "key": "configId",
+                          "value": "default"
+                        }
+                      ],
+                      "variable": []
+                    },
+                    "header": [
+                      {
+                        "description": {
+                          "content": "Added as a part of security scheme: bearer",
+                          "type": "text/plain"
+                        },
+                        "key": "Authorization",
+                        "value": "Bearer <token>"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "GET",
+                    "body": {}
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "body": "[\n  {\n    \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"action\": \"entity_created\",\n    \"entityId\": \"entity-123\",\n    \"entityType\": \"group\",\n    \"userId\": \"1\",\n    \"timestamp\": \"2024-01-15T10:30:00.000Z\",\n    \"details\": {\n      \"key_0\": true\n    }\n  },\n  {\n    \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"action\": \"entity_created\",\n    \"entityId\": \"entity-123\",\n    \"entityType\": \"group\",\n    \"userId\": \"1\",\n    \"timestamp\": \"2024-01-15T10:30:00.000Z\",\n    \"details\": {\n      \"key_0\": \"string\",\n      \"key_1\": \"string\",\n      \"key_2\": 2150.1403900956316\n    }\n  }\n]",
+                  "cookie": [],
+                  "_postman_previewlanguage": "json"
+                }
+              ],
+              "event": [],
+              "protocolProfileBehavior": {
+                "disableBodyPruning": true
+              }
+            }
+          ],
+          "event": []
+        },
+        {
+          "id": "196c82bf-9bac-45b3-930f-7eae452782dd",
+          "name": "push",
+          "item": [
+            {
+              "id": "b705391e-99d7-42e3-87b0-5d7d0d246fd9",
+              "name": "Push events to server",
+              "request": {
+                "name": "Push events to server",
+                "description": {
+                  "content": "Send form submission events to the server for processing",
+                  "type": "text/plain"
+                },
+                "url": {
+                  "path": [
+                    "sync",
+                    "push"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "auth": null,
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"events\": [\n    {\n      \"guid\": \"<uuid>\",\n      \"type\": \"<string>\",\n      \"entityGuid\": \"<uuid>\",\n      \"data\": {\n        \"key_0\": 8482,\n        \"key_1\": 5365.721544511379,\n        \"key_2\": \"string\"\n      },\n      \"timestamp\": \"<dateTime>\",\n      \"userId\": \"<string>\",\n      \"syncLevel\": \"<integer>\"\n    },\n    {\n      \"guid\": \"<uuid>\",\n      \"type\": \"<string>\",\n      \"entityGuid\": \"<uuid>\",\n      \"data\": {\n        \"key_0\": \"string\"\n      },\n      \"timestamp\": \"<dateTime>\",\n      \"userId\": \"<string>\",\n      \"syncLevel\": \"<integer>\"\n    }\n  ],\n  \"configId\": \"<string>\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [
+                {
+                  "id": "c8a46e04-3ca6-4640-b97e-baafebd5ce15",
+                  "name": "Events processed successfully",
+                  "originalRequest": {
+                    "url": {
+                      "path": [
+                        "sync",
+                        "push"
+                      ],
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "query": [],
+                      "variable": []
+                    },
+                    "header": [
+                      {
+                        "description": {
+                          "content": "Added as a part of security scheme: bearer",
+                          "type": "text/plain"
+                        },
+                        "key": "Authorization",
+                        "value": "Bearer <token>"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "POST",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"events\": [\n    {\n      \"guid\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"type\": \"create-group\",\n      \"entityGuid\": \"550e8400-e29b-41d4-a716-446655440001\",\n      \"data\": {\n        \"key_0\": false\n      },\n      \"timestamp\": \"2024-01-15T10:30:00.000Z\",\n      \"userId\": \"1\",\n      \"syncLevel\": 1\n    },\n    {\n      \"guid\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"type\": \"create-group\",\n      \"entityGuid\": \"550e8400-e29b-41d4-a716-446655440001\",\n      \"data\": {\n        \"key_0\": 1379,\n        \"key_1\": 2663\n      },\n      \"timestamp\": \"2024-01-15T10:30:00.000Z\",\n      \"userId\": \"1\",\n      \"syncLevel\": 1\n    }\n  ],\n  \"configId\": \"default\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "body": "{\n  \"status\": \"success\"\n}",
+                  "cookie": [],
+                  "_postman_previewlanguage": "json"
+                }
+              ],
+              "event": [],
+              "protocolProfileBehavior": {
+                "disableBodyPruning": true
+              }
+            },
+            {
+              "id": "54b31f74-8767-4ffe-b9a4-64ca2742af7e",
+              "name": "Push audit logs to server",
+              "request": {
+                "name": "Push audit logs to server",
+                "description": {
+                  "content": "Send audit log entries to the server",
+                  "type": "text/plain"
+                },
+                "url": {
+                  "path": [
+                    "sync",
+                    "push",
+                    "audit-logs"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "auth": null,
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"auditLogs\": [\n    {\n      \"id\": \"<uuid>\",\n      \"action\": \"<string>\",\n      \"entityId\": \"<string>\",\n      \"entityType\": \"<string>\",\n      \"userId\": \"<string>\",\n      \"timestamp\": \"<dateTime>\",\n      \"details\": {\n        \"key_0\": \"string\",\n        \"key_1\": 5958.387830552625\n      }\n    },\n    {\n      \"id\": \"<uuid>\",\n      \"action\": \"<string>\",\n      \"entityId\": \"<string>\",\n      \"entityType\": \"<string>\",\n      \"userId\": \"<string>\",\n      \"timestamp\": \"<dateTime>\",\n      \"details\": {\n        \"key_0\": true\n      }\n    }\n  ],\n  \"configId\": \"<string>\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [
+                {
+                  "id": "73d066c1-fd0a-454d-bc4a-7f457e92bb72",
+                  "name": "Audit logs processed successfully",
+                  "originalRequest": {
+                    "url": {
+                      "path": [
+                        "sync",
+                        "push",
+                        "audit-logs"
+                      ],
+                      "host": [
+                        "{{baseUrl}}"
+                      ],
+                      "query": [],
+                      "variable": []
+                    },
+                    "header": [
+                      {
+                        "description": {
+                          "content": "Added as a part of security scheme: bearer",
+                          "type": "text/plain"
+                        },
+                        "key": "Authorization",
+                        "value": "Bearer <token>"
+                      },
+                      {
+                        "key": "Accept",
+                        "value": "application/json"
+                      }
+                    ],
+                    "method": "POST",
+                    "body": {
+                      "mode": "raw",
+                      "raw": "{\n  \"auditLogs\": [\n    {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"action\": \"entity_created\",\n      \"entityId\": \"entity-123\",\n      \"entityType\": \"group\",\n      \"userId\": \"1\",\n      \"timestamp\": \"2024-01-15T10:30:00.000Z\",\n      \"details\": {\n        \"key_0\": 8264\n      }\n    },\n    {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440000\",\n      \"action\": \"entity_created\",\n      \"entityId\": \"entity-123\",\n      \"entityType\": \"group\",\n      \"userId\": \"1\",\n      \"timestamp\": \"2024-01-15T10:30:00.000Z\",\n      \"details\": {\n        \"key_0\": 7673,\n        \"key_1\": 7223.931923042992\n      }\n    }\n  ],\n  \"configId\": \"default\"\n}",
+                      "options": {
+                        "raw": {
+                          "language": "json"
+                        }
+                      }
+                    }
+                  },
+                  "status": "OK",
+                  "code": 200,
+                  "header": [
+                    {
+                      "key": "Content-Type",
+                      "value": "application/json"
+                    }
+                  ],
+                  "body": "{\n  \"status\": \"success\"\n}",
+                  "cookie": [],
+                  "_postman_previewlanguage": "json"
+                }
+              ],
+              "event": [],
+              "protocolProfileBehavior": {
+                "disableBodyPruning": true
+              }
+            }
+          ],
+          "event": []
+        },
+        {
+          "id": "adc7a181-7f78-4462-9ac6-ee33d07fd242",
+          "name": "Trigger external sync",
+          "request": {
+            "name": "Trigger external sync",
+            "description": {
+              "content": "Synchronize data with external systems using configured adapters",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "sync",
+                "external"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "auth": null,
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"configId\": \"default\",\n  \"credentials\": {\n    \"username\": \"<string>\",\n    \"password\": \"<password>\",\n    \"url\": \"<uri>\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "89a4df4b-2ac0-495a-a6b4-da3df87232cc",
+              "name": "External sync completed",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "sync",
+                    "external"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"configId\": \"default\",\n  \"credentials\": {\n    \"username\": \"api_user\",\n    \"password\": \"api_password\",\n    \"url\": \"https://external-system.com/api\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"status\": \"success\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        }
+      ],
+      "event": []
+    },
+    {
+      "id": "73a7f0fe-b2f0-4fd5-84a2-cbde16fa8ee8",
+      "name": "app-configs",
+      "item": [
+        {
+          "id": "899180f3-8316-4c0c-9395-eaec6ad42796",
+          "name": "Get all app configurations",
+          "request": {
+            "name": "Get all app configurations",
+            "description": {
+              "content": "Retrieve all application configurations",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "app-configs"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "method": "GET",
+            "auth": null
+          },
+          "response": [
+            {
+              "id": "08733bb3-c724-4538-8663-6a634047da89",
+              "name": "List of app configurations",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "app-configs"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "[\n  {\n    \"id\": \"my-app-config\",\n    \"name\": \"My Application\",\n    \"description\": \"DataCollection for rural communities\",\n    \"version\": \"1.0.0\",\n    \"url\": \"https://my-app.com\",\n    \"entityForms\": [\n      {\n        \"id\": \"group-form\",\n        \"name\": \"Group Registration\",\n        \"title\": \"Register New Group\",\n        \"dependsOn\": \"individual-form\",\n        \"formio\": {\n          \"key_0\": 2220.4223660214416,\n          \"key_1\": 4557\n        }\n      },\n      {\n        \"id\": \"group-form\",\n        \"name\": \"Group Registration\",\n        \"title\": \"Register New Group\",\n        \"dependsOn\": \"individual-form\",\n        \"formio\": {\n          \"key_0\": 1765,\n          \"key_1\": 2833.255846511331,\n          \"key_2\": 2710\n        }\n      }\n    ],\n    \"entityData\": [\n      {\n        \"name\": \"regions\",\n        \"data\": [\n          {\n            \"id\": \"region-001\",\n            \"name\": \"Central Region\",\n            \"parentId\": \"country-001\"\n          },\n          {\n            \"id\": \"region-001\",\n            \"name\": \"Central Region\",\n            \"parentId\": \"country-001\"\n          }\n        ]\n      },\n      {\n        \"name\": \"regions\",\n        \"data\": [\n          {\n            \"id\": \"region-001\",\n            \"name\": \"Central Region\",\n            \"parentId\": \"country-001\"\n          },\n          {\n            \"id\": \"region-001\",\n            \"name\": \"Central Region\",\n            \"parentId\": \"country-001\"\n          }\n        ]\n      }\n    ],\n    \"externalSync\": {\n      \"type\": \"openspp\",\n      \"auth\": \"basic\",\n      \"url\": \"https://openspp.org/api\",\n      \"key_0\": 1192,\n      \"key_1\": 8418.840507711478,\n      \"key_2\": 9445.822928264502,\n      \"key_3\": 4316\n    }\n  },\n  {\n    \"id\": \"my-app-config\",\n    \"name\": \"My Application\",\n    \"description\": \"DataCollection for rural communities\",\n    \"version\": \"1.0.0\",\n    \"url\": \"https://my-app.com\",\n    \"entityForms\": [\n      {\n        \"id\": \"group-form\",\n        \"name\": \"Group Registration\",\n        \"title\": \"Register New Group\",\n        \"dependsOn\": \"individual-form\",\n        \"formio\": {\n          \"key_0\": 388,\n          \"key_1\": \"string\"\n        }\n      },\n      {\n        \"id\": \"group-form\",\n        \"name\": \"Group Registration\",\n        \"title\": \"Register New Group\",\n        \"dependsOn\": \"individual-form\",\n        \"formio\": {\n          \"key_0\": 4801.8573241055365,\n          \"key_1\": false\n        }\n      }\n    ],\n    \"entityData\": [\n      {\n        \"name\": \"regions\",\n        \"data\": [\n          {\n            \"id\": \"region-001\",\n            \"name\": \"Central Region\",\n            \"parentId\": \"country-001\"\n          },\n          {\n            \"id\": \"region-001\",\n            \"name\": \"Central Region\",\n            \"parentId\": \"country-001\"\n          }\n        ]\n      },\n      {\n        \"name\": \"regions\",\n        \"data\": [\n          {\n            \"id\": \"region-001\",\n            \"name\": \"Central Region\",\n            \"parentId\": \"country-001\"\n          },\n          {\n            \"id\": \"region-001\",\n            \"name\": \"Central Region\",\n            \"parentId\": \"country-001\"\n          }\n        ]\n      }\n    ],\n    \"externalSync\": {\n      \"type\": \"openspp\",\n      \"auth\": \"basic\",\n      \"url\": \"https://openspp.org/api\",\n      \"key_0\": \"string\",\n      \"key_1\": 3503.243920687964,\n      \"key_2\": false\n    }\n  }\n]",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        },
+        {
+          "id": "c73b28be-b023-4311-87c5-59aa55935fa7",
+          "name": "Upload app configuration",
+          "request": {
+            "name": "Upload app configuration",
+            "description": {
+              "content": "Upload a new application configuration as JSON file",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "app-configs"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "multipart/form-data"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "auth": null,
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "config",
+                  "type": "file",
+                  "description": "JSON file containing app configuration"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "id": "ddaf9277-1233-4064-b5f6-346cdc8ac66b",
+              "name": "Configuration uploaded successfully",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "app-configs"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "description": {
+                        "content": "JSON file containing app configuration",
+                        "type": "text/plain"
+                      },
+                      "key": "config",
+                      "value": "<binary>",
+                      "type": "text"
+                    }
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"status\": \"success\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            },
+            {
+              "id": "d15da021-e6c6-4246-9e5b-cece1fa24959",
+              "name": "No JSON file uploaded or invalid file",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "app-configs"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "description": {
+                        "content": "JSON file containing app configuration",
+                        "type": "text/plain"
+                      },
+                      "key": "config",
+                      "value": "<binary>",
+                      "type": "text"
+                    }
+                  ]
+                }
+              },
+              "status": "Bad Request",
+              "code": 400,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"error\": \"Error description\",\n  \"message\": \"Detailed error message\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        },
+        {
+          "id": "95061f3e-f2ed-4373-8f1e-caa0f6776f60",
+          "name": "Delete app configuration",
+          "request": {
+            "name": "Delete app configuration",
+            "description": {
+              "content": "Delete an application configuration and associated data",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "app-configs",
+                ":id"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": [
+                {
+                  "disabled": false,
+                  "type": "any",
+                  "value": "<string>",
+                  "key": "id",
+                  "description": "(Required) "
+                }
+              ]
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "method": "DELETE",
+            "auth": null
+          },
+          "response": [
+            {
+              "id": "43867e02-4e29-4af0-a90a-f0989e41d7c2",
+              "name": "Configuration deleted successfully",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "app-configs",
+                    ":id"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": [
+                    {
+                      "disabled": false,
+                      "type": "any",
+                      "value": "<string>",
+                      "key": "id",
+                      "description": "(Required) "
+                    }
+                  ]
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "DELETE",
+                "body": {}
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"status\": \"success\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        }
+      ],
+      "event": []
+    },
+    {
+      "id": "092e5e62-c736-4a23-9ff2-baae9b9f41cc",
+      "name": "potential-duplicates",
+      "item": [
+        {
+          "id": "dcb0a83b-71b6-4c9d-a729-c62d0b57dbb5",
+          "name": "Get potential duplicates",
+          "request": {
+            "name": "Get potential duplicates",
+            "description": {
+              "content": "Retrieve list of potential duplicate entities that need resolution",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "potential-duplicates"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [
+                {
+                  "disabled": false,
+                  "key": "configId",
+                  "value": "<string>",
+                  "description": "Application configuration ID"
+                }
+              ],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "method": "GET",
+            "auth": null
+          },
+          "response": [
+            {
+              "id": "e2763342-677b-4828-81a5-53d43e36eed6",
+              "name": "List of potential duplicates",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "potential-duplicates"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [
+                    {
+                      "key": "configId",
+                      "value": "<string>"
+                    }
+                  ],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "GET",
+                "body": {}
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "[\n  {\n    \"newEntity\": {\n      \"key_0\": 6555.281895187814\n    },\n    \"existingEntity\": {\n      \"key_0\": 4295.194721035649,\n      \"key_1\": 3924.201629237134,\n      \"key_2\": \"string\",\n      \"key_3\": 979\n    },\n    \"similarity\": 0.85\n  },\n  {\n    \"newEntity\": {\n      \"key_0\": 3231,\n      \"key_1\": \"string\"\n    },\n    \"existingEntity\": {\n      \"key_0\": \"string\",\n      \"key_1\": 6403,\n      \"key_2\": \"string\"\n    },\n    \"similarity\": 0.85\n  }\n]",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        },
+        {
+          "id": "b286503e-3681-4ddf-961c-eecf511cbfba",
+          "name": "Resolve duplicate entities",
+          "request": {
+            "name": "Resolve duplicate entities",
+            "description": {
+              "content": "Resolve potential duplicate entities by merging or deleting",
+              "type": "text/plain"
+            },
+            "url": {
+              "path": [
+                "potential-duplicates",
+                "resolve"
+              ],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "query": [],
+              "variable": []
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "method": "POST",
+            "auth": null,
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newItem\": \"<string>\",\n  \"existingItem\": \"<string>\",\n  \"shouldDeleteNewItem\": \"<boolean>\",\n  \"configId\": \"<string>\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [
+            {
+              "id": "c1d8acd1-16de-4f78-a8da-d12b3ca4906d",
+              "name": "Duplicate resolved successfully",
+              "originalRequest": {
+                "url": {
+                  "path": [
+                    "potential-duplicates",
+                    "resolve"
+                  ],
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "query": [],
+                  "variable": []
+                },
+                "header": [
+                  {
+                    "description": {
+                      "content": "Added as a part of security scheme: bearer",
+                      "type": "text/plain"
+                    },
+                    "key": "Authorization",
+                    "value": "Bearer <token>"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "application/json"
+                  }
+                ],
+                "method": "POST",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"newItem\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"existingItem\": \"550e8400-e29b-41d4-a716-446655440001\",\n  \"shouldDeleteNewItem\": true,\n  \"configId\": \"default\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"status\": \"success\"\n}",
+              "cookie": [],
+              "_postman_previewlanguage": "json"
+            }
+          ],
+          "event": [],
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          }
+        }
+      ],
+      "event": []
+    }
+  ],
+  "event": [],
+  "variable": [
+    {
+      "type": "string",
+      "value": "http://localhost:3000",
+      "key": "baseUrl"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{bearerToken}}"
+      }
+    ]
+  },
+  "info": {
+    "_postman_id": "38f5ad79-b1d1-4d5d-9f35-143f591b9bf9",
+    "name": "ID PASS DataCollect Backend API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": {
+      "content": "REST API for ID PASS DataCollect backend server, providing synchronization, user management, and application configuration endpoints.\n\n## Authentication\n\nMost endpoints require JWT authentication. Include the token in the Authorization header:\n```\nAuthorization: Bearer <your-jwt-token>\n```\n\n## Multi-tenant Support\n\nThe API supports multiple application configurations identified by `configId`. Each configuration can have its own entity forms, data, and external sync settings.\n\n## Synchronization\n\nThe sync endpoints support bidirectional synchronization between clients and server, as well as external system integration. Events are synchronized with pagination for efficient data transfer.\n\n\nContact Support:\n Name: OpenSPP",
+      "type": "text/plain"
+    }
+  }
+}

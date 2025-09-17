@@ -110,9 +110,9 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   const hasAdmin = await userStore.hasAtLeastOneAdmin();
   if (!hasAdmin) {
     const SALT_ROUNDS = 10;
-    const hashedPassword = await bcrypt.hash(config.initialPassword, SALT_ROUNDS);
+    const hashedPassword = await bcrypt.hash(config.adminPassword, SALT_ROUNDS);
     const initialAdmin = {
-      email: "admin@hdm.example",
+      email: config.adminEmail,
       passwordHash: hashedPassword,
       role: Role.ADMIN,
     };

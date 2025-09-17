@@ -20,9 +20,18 @@
 import "dotenv/config";
 import { run } from "./syncServer";
 
+const {
+  SYNC_SERVER_PORT: port = "3000",
+  ADMIN_PASSWORD: adminPassword = "admin1@",
+  ADMIN_EMAIL: adminEmail = "admin@example.com",
+  USER_ID: userId = "SYNC_SERVER",
+  POSTGRES: postgresUrl = "",
+} = process.env;
+
 run({
-  port: parseInt(process.env.SYNC_SERVER_PORT || "3000"),
-  initialPassword: process.env.INITIAL_PASSWORD || "admin1@",
-  userId: process.env.USER_ID || "SYNC_SERVER",
-  postgresUrl: process.env.POSTGRES || "",
+  port: parseInt(port),
+  adminPassword,
+  adminEmail,
+  userId,
+  postgresUrl,
 });
