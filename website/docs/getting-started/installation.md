@@ -49,7 +49,7 @@ npm test
 cd packages/backend
 npm install
 
-# Create environment file
+# Create environment file from the docker directory
 cp ../../docker/.env.example .env
 ```
 
@@ -57,7 +57,8 @@ cp ../../docker/.env.example .env
 ```env
 POSTGRES=postgresql://admin:admin@localhost:5432/postgres
 POSTGRES_TEST=postgresql://admin:admin@localhost:5432/test
-INITIAL_PASSWORD=your-secure-password
+ADMIN_EMAIL=admin@hdm.example
+ADMIN_PASSWORD=your-secure-password
 JWT_SECRET=your-jwt-secret-key
 PORT=3000
 ```
@@ -122,17 +123,19 @@ cd idpass-data-collect
 
 #### 2. Configure Environment
 ```bash
-# Copy environment files
-cp docker/.env.example .env
-cp docker/postgresql.env.example postgresql.env
+cd docker
 
-# Edit .env with your configuration
+cp .env.example .env
+cp .env.example .env
+
+# Edit .env and postgresql.env with your configuration
 nano .env
+nano postgresql.env
 ```
 
 #### 3. Build and Start Services
 ```bash
-docker-compose -f docker-compose.dev.yaml up -d
+docker compose -f docker-compose.dev.yaml up -d
 ```
 
 **Services will be available at:**
@@ -259,6 +262,9 @@ await manager.syncWithSyncServer();
 ```
 
 ### Test Backend API
+
+You can use the Postman collection to test the backend API. Download it here: [IDPASS DataCollect Backend Postman Collection](/api/idpass-backend.postman_collection.json).
+
 ```bash
 # Test health endpoint
 curl http://localhost:3000/api/health
@@ -317,7 +323,7 @@ import 'fake-indexeddb/auto';
 ## Production Considerations
 
 ### Security
-- Use strong passwords for `INITIAL_PASSWORD` and `JWT_SECRET`
+- Use strong passwords for `ADMIN_PASSWORD`, `ADMIN_EMAIL` and `JWT_SECRET`
 - Configure proper authentication providers (Auth0, Keycloak)
 - Enable HTTPS in production
 - Configure PostgreSQL with proper authentication

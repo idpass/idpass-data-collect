@@ -25,8 +25,6 @@ import multer from "multer";
 import fs from "fs/promises";
 import qrcode from "qrcode";
 import path from "path";
-import { ParamsDictionary } from "express-serve-static-core";
-import { ParsedQs } from "qs";
 import { set } from "lodash";
 
 export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanceStore: AppInstanceStore): Router {
@@ -153,7 +151,7 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
   );
 
   async function generatePublicJsonAndQR(
-    req: Request<ParamsDictionary, unknown, unknown, ParsedQs, Record<string, unknown>>,
+    req: Request,
     id: string,
     appConfig: AppConfig,
   ) {

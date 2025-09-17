@@ -85,7 +85,8 @@ POSTGRES=postgresql://admin:admin@localhost:5432/postgres
 POSTGRES_TEST=postgresql://admin:admin@localhost:5432/test
 
 # Authentication
-INITIAL_PASSWORD=your-secure-password
+ADMIN_EMAIL=admin@hdm.example
+ADMIN_PASSWORD=your-secure-password
 JWT_SECRET=your-jwt-secret
 
 

@@ -110,7 +110,8 @@ jobs:
           POSTGRES: postgresql://test:test@localhost:5432/test
           POSTGRES_TEST: postgresql://test:test@localhost:5432/test
           JWT_SECRET: test_secret
-          INITIAL_PASSWORD: test_password
+          ADMIN_EMAIL: admin@example.com
+          ADMIN_PASSWORD: test_password
         run: pnpm test
 
       - name: Build projects

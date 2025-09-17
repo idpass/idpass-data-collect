@@ -21,9 +21,6 @@ First, clone the ID PASS DataCollect repository to your local machine:
 
 ```bash
 git clone https://github.com/idpass/idpass-data-collect.git
-```
-
-```bash
 cd idpass-data-collect
 ```
 
@@ -36,7 +33,11 @@ cd docker
 ```
 
 ```bash
-cp postgresql.env.example postgresql.env
+cp .env.example .env
+```
+
+```bash
+cp .env.example .env
 ```
 
 ```bash
@@ -52,7 +53,7 @@ _Screenshot Placeholder: A screenshot showing the `docker` directory with `postg
 From the `docker` directory, run Docker Compose to build and start the services, specifically including the OpenSPP adapter:
 
 ```bash
-docker-compose -f docker-compose.dev.yaml -f adapters/openspp/docker-compose.openspp.yaml up --build -d
+docker compose -f docker-compose.dev.yaml -f adapters/openspp/docker-compose.openspp.yaml up --build -d
 ```
 
 This command will:
@@ -69,7 +70,7 @@ _Screenshot Placeholder: A screenshot of the terminal output after running the `
 After the containers are up and running, you can verify their status:
 
 ```bash
-docker-compose -f docker-compose.dev.yaml -f adapters/openspp/docker-compose.openspp.yaml ps
+docker compose -f docker-compose.dev.yaml -f adapters/openspp/docker-compose.openspp.yaml ps
 ```
 
 You should see a list of running services. The application should be accessible at `http://localhost:8080` (or your configured port).
@@ -81,11 +82,11 @@ _Screenshot Placeholder: A screenshot of the `docker-compose ps` output, showing
 To stop and remove the running Docker containers and networks, use:
 
 ```bash
-docker-compose -f docker-compose.dev.yaml -f adapters/openspp/docker-compose.openspp.yaml down
+docker compose -f docker-compose.dev.yaml -f adapters/openspp/docker-compose.openspp.yaml down
 ```
 
 To remove all volumes associated with the containers (useful for a clean slate):
 
 ```bash
-docker-compose -f docker-compose.dev.yaml -f adapters/openspp/docker-compose.openspp.yaml down --volumes
+docker compose -f docker-compose.dev.yaml -f adapters/openspp/docker-compose.openspp.yaml down --volumes
 ```

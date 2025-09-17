@@ -32,13 +32,22 @@ describe("Sync Server", () => {
   // const externalUrl = "http://localhost:3001";
   const userId = "sync-server-test";
 
-  beforeAll(async () => {});
-
-  beforeEach(async () => {
+  beforeAll(async () => {
+    process.env.POSTGRES_TEST = process.env.POSTGRES_TEST || "postgresql://admin:admin@localhost:5432/test";
     app = await run({
       port: 3000,
-      initialPassword: "admin1@",
-      userId,
+      adminPassword: "admin1@",
+      adminEmail: "admin@example.com",
+      postgresUrl: process.env.POSTGRES_TEST || "",
+    });
+  });
+
+  beforeEach(async () => {
+    await app.clearStore();
+    app = await run({
+      port: 3000,
+      adminPassword: "admin1@",
+      adminEmail: "admin@example.com",
       postgresUrl: process.env.POSTGRES_TEST || "",
     });
     await app.appConfigStore.saveConfig(mockConfig);
@@ -53,7 +62,7 @@ describe("Sync Server", () => {
   describe("GET /sync/pull", () => {
     it("should return events since the given timestamp", async () => {
       const adminLoginResponse = await axios.post(internalUrl + "/api/users/login", {
-        email: "admin@hdm.example",
+        email: "admin@example.com",
         password: "admin1@",
       });
       const adminToken = get(adminLoginResponse.data, "token") ?? "";
@@ -107,7 +116,7 @@ describe("Sync Server", () => {
 
     it("should return an empty array if duplicates exist", async () => {
       const adminLoginResponse = await axios.post(internalUrl + "/api/users/login", {
-        email: "admin@hdm.example",
+        email: "admin@example.com",
         password: "admin1@",
       });
       const adminToken = get(adminLoginResponse.data, "token") ?? "";
@@ -173,7 +182,7 @@ describe("Sync Server", () => {
   describe("POST /sync/push", () => {
     it("should push events to the event store", async () => {
       const adminLoginResponse = await axios.post(internalUrl + "/api/users/login", {
-        email: "admin@hdm.example",
+        email: "admin@example.com",
         password: "admin1@",
       });
       const adminToken = get(adminLoginResponse.data, "token") ?? "";
@@ -293,7 +302,7 @@ describe("Sync Server", () => {
   describe("POST /potential-duplicates/resolve", () => {
     it("should resolve potential duplicates and delete the new item", async () => {
       const adminLoginResponse = await axios.post(internalUrl + "/api/users/login", {
-        email: "admin@hdm.example",
+        email: "admin@example.com",
         password: "admin1@",
       });
       const adminToken = get(adminLoginResponse.data, "token") ?? "";

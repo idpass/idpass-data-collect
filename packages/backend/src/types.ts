@@ -21,7 +21,8 @@ import { EntityDataManager, ExternalSyncConfig } from "@idpass/data-collect-core
 import { Server } from "http";
 export interface SyncServerConfig {
   port: number;
-  initialPassword: string;
+  adminPassword: string;
+  adminEmail: string;
   postgresUrl: string;
   userId?: string;
 }
