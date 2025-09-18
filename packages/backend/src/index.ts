@@ -22,11 +22,19 @@ import { run } from "./syncServer";
 
 const {
   SYNC_SERVER_PORT: port = "3000",
-  ADMIN_PASSWORD: adminPassword = "admin1@",
-  ADMIN_EMAIL: adminEmail = "admin@example.com",
   USER_ID: userId = "SYNC_SERVER",
-  POSTGRES: postgresUrl = "",
+  ADMIN_PASSWORD: adminPassword,
+  ADMIN_EMAIL: adminEmail,
+  POSTGRES: postgresUrl,
 } = process.env;
+
+if (!adminPassword || !adminEmail) {
+  throw new Error("Initial admin credentials must be set");
+}
+
+if (!postgresUrl) {
+  throw new Error("PostgreSQL connection string must be set");
+}
 
 run({
   port: parseInt(port),

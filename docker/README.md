@@ -175,7 +175,7 @@ docker run --rm -v postgres-data:/data -v $(pwd):/backup alpine tar xzf /backup/
 All services communicate through the `hdm-network` bridge network. Service names can be used as hostnames within the network.
 
 ### Service URLs (internal)
-- Sync Server: http://sync-server:3000
+- Sync Server: http://localhost:3000
 - Admin UI: http://admin-ui
 - PostgreSQL: postgres:5432
 - OpenSPP: http://openspp:8069 (when enabled)
