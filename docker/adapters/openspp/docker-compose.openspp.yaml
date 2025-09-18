@@ -51,7 +51,7 @@ services:
     ports:
       - "5173:80"
     environment:
-      - VITE_API_URL=http://sync-server:3000
+      - VITE_API_URL=http://localhost:3000
     depends_on:
       - sync-server
     networks:
