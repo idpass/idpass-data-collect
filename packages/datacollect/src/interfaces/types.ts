@@ -649,7 +649,7 @@ export type ExternalSyncConfig = {
   /** URL of the external system */
   url: string;
   /** Extra fields for the external system */
-  extraFields: { name: string; value: string }[];
+  extraFields?: { name: string; value: string }[];
 };
 
 /**

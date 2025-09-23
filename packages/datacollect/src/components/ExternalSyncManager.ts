@@ -21,6 +21,7 @@ import { EventStore, ExternalSyncAdapter, ExternalSyncConfig, ExternalSyncCreden
 import { EventApplierService } from "../services/EventApplierService";
 import MockSyncServerAdapter from "../services/MockSyncServerAdapter";
 import OpenFnSyncAdapter from "./openfn/OpenFnSyncAdapter";
+import OpenSppSyncAdapter from "./openspp/OpenSppSyncAdapter";
 
 /**
  * Registry of available external sync adapters mapped by their type identifiers.
@@ -30,6 +31,7 @@ import OpenFnSyncAdapter from "./openfn/OpenFnSyncAdapter";
 const adaptersMapping = {
   "mock-sync-server": MockSyncServerAdapter,
   "openfn-adapter": OpenFnSyncAdapter,
+  "openspp-adapter": OpenSppSyncAdapter,
 };
 
 /**
