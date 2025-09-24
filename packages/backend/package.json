@@ -52,6 +52,7 @@
     "@types/jest": "^29.5.14",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/lodash": "^4.17.10",
+    "@types/node": "^24.5.2",
     "@types/pg": "^8.11.10",
     "@types/qrcode": "^1.5.5",
     "@types/supertest": "^6.0.2",
