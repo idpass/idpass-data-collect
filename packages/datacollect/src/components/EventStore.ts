@@ -147,6 +147,7 @@ class MerkleNode {
 export class EventStoreImpl implements EventStore {
   private merkleRoot: MerkleNode | null = null;
   private storageAdapter: EventStorageAdapter;
+  private logger = console;
 
   /**
    * Creates a new EventStoreImpl instance.
@@ -212,14 +213,24 @@ export class EventStoreImpl implements EventStore {
 
   private async loadMerkleTree(): Promise<void> {
     const events = await this.storageAdapter.getEvents();
-    const rootHash = await this.storageAdapter.getMerkleRoot();
-    this.merkleRoot = rootHash ? new MerkleNode(rootHash) : null;
-    this.updateMerkleTree(events);
+    const persistedRoot = await this.storageAdapter.getMerkleRoot();
+    const recalculatedRoot = this.updateMerkleTree(events);
+
+    if (persistedRoot && persistedRoot !== recalculatedRoot) {
+      this.logger.warn(
+        "Merkle root mismatch detected. Recalculating to preserve integrity.",
+      );
+    }
+
+    if (persistedRoot !== recalculatedRoot) {
+      await this.storageAdapter.saveMerkleRoot(recalculatedRoot);
+    }
   }
 
-  private updateMerkleTree(events: FormSubmission[]): void {
+  private updateMerkleTree(events: FormSubmission[]): string {
     const leaves = events.map((event) => new MerkleNode(JSON.stringify(event)));
     this.merkleRoot = this.buildMerkleTree(leaves);
+    return this.getMerkleRoot();
   }
 
   private buildMerkleTree(nodes: MerkleNode[]): MerkleNode | null {
@@ -432,6 +443,7 @@ export class EventStoreImpl implements EventStore {
   async clearStore(): Promise<void> {
     await this.storageAdapter.clearStore();
     this.merkleRoot = null;
+    await this.storageAdapter.saveMerkleRoot("");
   }
 
   /**

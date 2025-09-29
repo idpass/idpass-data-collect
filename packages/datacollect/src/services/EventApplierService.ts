@@ -37,6 +37,11 @@ import { AppError } from "../utils/AppError";
 
 import { validateFormSubmission } from "../utils/formValidation";
 
+type ConflictResolutionResult =
+  | { resolution: "no-conflict"; baseEntity?: EntityDoc }
+  | { resolution: "local-wins"; entity: EntityDoc }
+  | { resolution: "remote-wins"; baseEntity?: EntityDoc };
+
 /**
  * Service responsible for applying events (FormSubmissions) to entities in the event sourcing system.
  *
@@ -288,19 +293,27 @@ export class EventApplierService {
 
       const eventGuid = await this.eventStore.saveEvent(formData);
 
+      const conflictResult = await this.handleIncomingConflict(entityPair, formData, eventGuid);
+
+      if (conflictResult.resolution === "local-wins") {
+        return conflictResult.entity;
+      }
+
+      const baseEntity = conflictResult.baseEntity ?? entityPair?.modified;
+
       let updatedEntity: EntityDoc | null = null;
       if (formData.type === "create-group" || formData.type === "update-group") {
         this.logger.debug(`Creating or updating group: ${JSON.stringify(formData)}`);
         updatedEntity = await this.createOrUpdateGroup(
           eventGuid,
-          entityPair?.modified as GroupDoc | undefined,
+          baseEntity as GroupDoc | undefined,
           formData,
         );
       } else if (formData.type === "create-individual" || formData.type === "update-individual") {
         this.logger.debug(`Creating or updating individual: ${JSON.stringify(formData)}`);
         updatedEntity = await this.createOrUpdateIndividual(
           eventGuid,
-          entityPair?.modified as IndividualDoc | undefined,
+          baseEntity as IndividualDoc | undefined,
           formData,
         );
       } else if (formData.type === "add-member") {
@@ -331,7 +344,7 @@ export class EventApplierService {
         }
         this.logger.debug(`Applying event: ${JSON.stringify(formData)}`);
         updatedEntity = await applier.apply(
-          entityPair?.modified || this.createNewEntity(entityGuid, formData),
+          baseEntity || this.createNewEntity(entityGuid, formData),
           formData,
           async (entityId: string) => {
             return await this.entityStore.getEntity(entityId);
@@ -367,6 +380,75 @@ export class EventApplierService {
       // }
       // throw new AppError('SUBMIT_FORM_ERROR', 'Failed to submit form', { formData, originalError: error });
     }
+  }
+
+  private async handleIncomingConflict(
+    entityPair: EntityPair | null,
+    formData: FormSubmission,
+    eventGuid: string,
+  ): Promise<ConflictResolutionResult> {
+    if (!entityPair) {
+      return { resolution: "no-conflict" };
+    }
+
+    if (!this.isRemoteEvent(formData)) {
+      return { resolution: "no-conflict", baseEntity: entityPair.modified };
+    }
+
+    if (!this.hasLocalChanges(entityPair)) {
+      return { resolution: "no-conflict", baseEntity: entityPair.modified };
+    }
+
+    const localTimestamp = this.parseTimestamp(entityPair.modified.lastUpdated);
+    const remoteTimestamp = this.parseTimestamp(formData.timestamp);
+
+    if (localTimestamp >= remoteTimestamp) {
+      await this.logConflictResolution(eventGuid, entityPair.modified.guid, formData, "kept-local", {
+        localLastUpdated: entityPair.modified.lastUpdated,
+        remoteTimestamp: formData.timestamp,
+        localVersion: entityPair.modified.version,
+      });
+      return { resolution: "local-wins", entity: entityPair.modified };
+    }
+
+    await this.logConflictResolution(eventGuid, entityPair.modified.guid, formData, "applied-remote", {
+      localLastUpdated: entityPair.modified.lastUpdated,
+      remoteTimestamp: formData.timestamp,
+      localVersion: entityPair.modified.version,
+    });
+
+    const baseline = entityPair.initial ? cloneDeep(entityPair.initial) : cloneDeep(entityPair.modified);
+    return { resolution: "remote-wins", baseEntity: baseline };
+  }
+
+  private isRemoteEvent(formData: FormSubmission): boolean {
+    return formData.syncLevel === SyncLevel.REMOTE || formData.syncLevel === SyncLevel.EXTERNAL;
+  }
+
+  private hasLocalChanges(entityPair: EntityPair): boolean {
+    return entityPair.initial.version !== entityPair.modified.version;
+  }
+
+  private parseTimestamp(value?: string): number {
+    if (!value) {
+      return 0;
+    }
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
+  private async logConflictResolution(
+    eventGuid: string,
+    entityGuid: string,
+    formData: FormSubmission,
+    resolution: "kept-local" | "applied-remote",
+    details: Record<string, unknown>,
+  ): Promise<void> {
+    await this.logAudit("system", "conflict-resolution", eventGuid, entityGuid, {
+      resolution,
+      eventType: formData.type,
+      ...details,
+    });
   }
 
   /**

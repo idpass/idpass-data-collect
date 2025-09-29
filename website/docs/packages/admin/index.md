@@ -127,6 +127,7 @@ Entity and data visualization:
 - Search and filtering capabilities
 - Export functionality
 - Data validation reports
+- Potential duplicates review queue fed by sync conflict detection
 
 ## Authentication Flow
 
