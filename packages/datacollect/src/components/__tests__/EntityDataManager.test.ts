@@ -1523,6 +1523,71 @@ describe("EntityDataManager", () => {
     expect(potentialDuplicatesAfter).toHaveLength(0);
   });
 
+  it("should resolve sync conflicts using latest timestamp precedence", async () => {
+    const entityGuid = uuidv4();
+    const baseTimestamp = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+    await manager.submitForm({
+      guid: uuidv4(),
+      entityGuid,
+      type: "create-individual",
+      data: { name: "Baseline Name" },
+      timestamp: baseTimestamp,
+      userId: "remote-user",
+      syncLevel: SyncLevel.REMOTE,
+    });
+
+    const localUpdate = await manager.submitForm({
+      guid: uuidv4(),
+      entityGuid,
+      type: "update-individual",
+      data: { name: "Local Name" },
+      timestamp: new Date().toISOString(),
+      userId: "local-user",
+      syncLevel: SyncLevel.LOCAL,
+    });
+
+    expect(localUpdate?.data.name).toBe("Local Name");
+
+    const olderRemoteTimestamp = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    const remoteOlderResult = await manager.submitForm({
+      guid: uuidv4(),
+      entityGuid,
+      type: "update-individual",
+      data: { name: "Remote Older" },
+      timestamp: olderRemoteTimestamp,
+      userId: "remote-user",
+      syncLevel: SyncLevel.REMOTE,
+    });
+
+    expect(remoteOlderResult?.data.name).toBe("Local Name");
+
+    const entityAfterLocalWin = await manager.getEntity(entityGuid);
+    expect(entityAfterLocalWin.modified.data.name).toBe("Local Name");
+
+    const futureRemoteTimestamp = new Date(Date.now() + 60 * 1000).toISOString();
+    const remoteNewerResult = await manager.submitForm({
+      guid: uuidv4(),
+      entityGuid,
+      type: "update-individual",
+      data: { name: "Remote Newer" },
+      timestamp: futureRemoteTimestamp,
+      userId: "remote-user",
+      syncLevel: SyncLevel.REMOTE,
+    });
+
+    expect(remoteNewerResult?.data.name).toBe("Remote Newer");
+
+    const entityAfterRemoteWin = await manager.getEntity(entityGuid);
+    expect(entityAfterRemoteWin.modified.data.name).toBe("Remote Newer");
+
+    const auditLogs = await eventStore.getAuditLogsSince("1970-01-01T00:00:00Z");
+    const conflictLogs = auditLogs.filter((log) => log.action === "conflict-resolution");
+    expect(conflictLogs).toHaveLength(2);
+    expect(conflictLogs[0].changes).toMatchObject({ resolution: "kept-local" });
+    expect(conflictLogs[1].changes).toMatchObject({ resolution: "applied-remote" });
+  });
+
   it("should get the number of unsynced events", async () => {
     const unsyncedEventsCount = await manager.getUnsyncedEventsCount();
     expect(unsyncedEventsCount).toBe(0);

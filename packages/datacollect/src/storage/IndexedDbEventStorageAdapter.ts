@@ -255,9 +255,18 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
 
     const transaction = this.db.transaction(["merkleRoot"], "readwrite");
     const objectStore = transaction.objectStore("merkleRoot");
-    const request = objectStore.put({ id: 1, root });
+
+    if (!root) {
+      await new Promise<void>((resolve, reject) => {
+        const request = objectStore.delete(1);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+      return;
+    }
 
     await new Promise<void>((resolve, reject) => {
+      const request = objectStore.put({ id: 1, root });
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });

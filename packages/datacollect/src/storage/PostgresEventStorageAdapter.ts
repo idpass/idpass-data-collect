@@ -159,6 +159,9 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
           root TEXT
         )
       `);
+      await client.query(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_merkle_root_tenant_unique ON merkle_root(tenant_id)",
+      );
       await client.query(`
         CREATE TABLE IF NOT EXISTS last_remote_sync_timestamp (
           id SERIAL PRIMARY KEY,
@@ -349,10 +352,15 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
   async saveMerkleRoot(root: string): Promise<void> {
     const client = await this.pool.connect();
     try {
-      await client.query("INSERT INTO merkle_root (root, tenant_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", [
-        root,
-        this.tenantId,
-      ]);
+      if (!root) {
+        await client.query("DELETE FROM merkle_root WHERE tenant_id = $1", [this.tenantId]);
+        return;
+      }
+
+      await client.query(
+        "INSERT INTO merkle_root (root, tenant_id) VALUES ($1, $2) ON CONFLICT (tenant_id) DO UPDATE SET root = EXCLUDED.root",
+        [root, this.tenantId],
+      );
     } finally {
       client.release();
     }
