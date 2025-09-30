@@ -42,7 +42,11 @@ class MockSyncServerAdapter implements ExternalSyncAdapter {
     this.url = this.config?.url;
   }
 
-  async pushData(): Promise<void> {
+  async authenticate(_credentials?: ExternalSyncCredentials): Promise<boolean> {
+    return true;
+  }
+
+  async pushData(_credentials?: ExternalSyncCredentials): Promise<void> {
     if (!this.url) {
       throw new Error("URL is required");
     }
@@ -83,7 +87,7 @@ class MockSyncServerAdapter implements ExternalSyncAdapter {
     return timestamps.length > 0 ? timestamps.reduce((latest, current) => (current > latest ? current : latest)) : null;
   }
 
-  async pullData(): Promise<void> {
+  async pullData(_credentials?: ExternalSyncCredentials): Promise<void> {
     const lastPullExternalSyncTimestamp = await this.eventStore.getLastPullExternalSyncTimestamp();
 
     // save entities to entity store
@@ -130,6 +134,7 @@ class MockSyncServerAdapter implements ExternalSyncAdapter {
 
   async sync(credentials?: ExternalSyncCredentials): Promise<void> {
     console.log("sync", credentials);
+    await this.authenticate(credentials);
     await this.pushData();
     await this.pullData();
   }

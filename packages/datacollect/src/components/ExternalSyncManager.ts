@@ -167,8 +167,13 @@ export class ExternalSyncManager {
       return;
     }
 
-    // @ts-expect-error - config is typed as ExternalSyncConfig but narrowed depending on the adapter
-    this.adapter = new adapterModule(this.eventStore, this.eventApplierService, this.config);
+    const AdapterCtor = adapterModule as unknown as new (
+      eventStore: EventStore,
+      eventApplierService: EventApplierService,
+      config: ExternalSyncConfig,
+    ) => ExternalSyncAdapter;
+
+    this.adapter = new AdapterCtor(this.eventStore, this.eventApplierService, this.config);
   }
 
   /**
@@ -212,7 +217,27 @@ export class ExternalSyncManager {
     if (!this.adapter) {
       throw new Error("Adapter not initialized");
     }
-    await this.adapter.sync(credentials);
+    if (this.adapter.authenticate) {
+      const isAuthenticated = await this.adapter.authenticate(credentials);
+      if (!isAuthenticated) {
+        throw new Error("External authentication failed");
+      }
+    }
+
+    const supportsPush = typeof this.adapter.pushData === "function";
+    const supportsPull = typeof this.adapter.pullData === "function";
+
+    if (supportsPush) {
+      await this.adapter.pushData(credentials);
+    }
+
+    if (supportsPull) {
+      await this.adapter.pullData(credentials);
+    }
+
+    if (!supportsPush && !supportsPull && typeof this.adapter.sync === "function") {
+      await this.adapter.sync(credentials);
+    }
   }
 
   /**

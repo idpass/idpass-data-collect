@@ -26,6 +26,7 @@ import {
   ExternalSyncCredentials,
   FormSubmission,
   SyncLevel,
+  getExternalField,
 } from "../../interfaces/types";
 import { EventApplierService } from "../../services/EventApplierService";
 import axios from "axios";
@@ -53,24 +54,42 @@ interface GroupedData {
 
 class OpenSppSyncAdapter implements ExternalSyncAdapter {
   private url: string;
-  private batchSize: number;
+  private batchSize = 100;
   private odooClient: OdooClient | null = null;
   private exportModels: Record<string, any> = exportModels;
-  
+  private lastCredentials: ExternalSyncCredentials | null = null;
+
   constructor(
     private eventStore: EventStore,
     private eventApplierService: EventApplierService,
     private config: ExternalSyncConfig,
   ) {
     this.url = (this.config?.url as string | undefined) ?? "";
-    this.batchSize = (this.config?.batchSize as number | undefined) ?? 100;
+    const configuredBatchSize = getExternalField(this.config, "batchSize");
+    if (configuredBatchSize) {
+      const parsed = parseInt(configuredBatchSize, 10);
+      if (!Number.isNaN(parsed)) {
+        this.batchSize = parsed;
+      }
+    }
+  }
+
+  async authenticate(credentials?: ExternalSyncCredentials): Promise<boolean> {
+    try {
+      await this.ensureClient(credentials);
+      return true;
+    } catch (error) {
+      console.error("OpenSPP authentication error:", error);
+      return false;
+    }
   }
   // This only pushes new data to the server
   //TO DO: implement batch size and update
-  async pushData(): Promise<void> {
+  async pushData(credentials?: ExternalSyncCredentials): Promise<void> {
     if (!this.url) {
       throw new Error("URL is required");
     }
+    await this.ensureClient(credentials);
     // get last sync timestamp
     let lastPushExternalSyncTimestamp = await this.eventStore.getLastPushExternalSyncTimestamp();
 
@@ -267,6 +286,12 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
   }
 
   async pullData(): Promise<void> {
+    throw new Error("OpenSPP pull data is a work in progress.");
+  }
+
+  /*
+  async pullData(credentials?: ExternalSyncCredentials): Promise<void> {
+    await this.ensureClient(credentials);
     const lastPullExternalSyncTimestamp = await this.eventStore.getLastPullExternalSyncTimestamp();
 
     // save entities to entity store
@@ -291,6 +316,7 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
 
     return;
   }
+  
 
   private convertPulledDataToEvents(pulledData: unknown[]): FormSubmission[] {
     if (Array.isArray(pulledData)) {
@@ -310,31 +336,46 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       syncLevel: SyncLevel.REMOTE,
     };
   }
+  */
 
   async sync(credentials?: ExternalSyncCredentials): Promise<void> {
-    const { url, database, registrarGroup } = this.config;
+    const authenticated = await this.authenticate(credentials);
+    if (!authenticated) {
+      throw new Error("Failed to authenticate with OpenSPP");
+    }
+    await this.pushData(credentials);
+    // await this.pullData(credentials);
+  }
 
-    if (!url || !database || !credentials) {
+  private async ensureClient(credentials?: ExternalSyncCredentials): Promise<void> {
+    if (credentials) {
+      this.lastCredentials = credentials;
+    }
+
+    if (this.odooClient) {
+      return;
+    }
+
+    const auth = this.lastCredentials;
+    const database = getExternalField(this.config, "database");
+    const registrarGroup = getExternalField(this.config, "registrarGroup");
+
+    if (!this.url || !database || !auth) {
       throw new Error("URL, database and credentials are required");
     }
+
     const odooConfig: OdooConfig = {
-      host: url as string,
-      database: database as string,
-      username: credentials?.username as string,
-      password: credentials?.password as string,
-      registrarGroup: registrarGroup as string
+      host: this.url,
+      database,
+      username: auth.username,
+      password: auth.password,
+      registrarGroup,
     };
 
     this.odooClient = new OdooClient(odooConfig);
-    try {
-      await this.odooClient.login();
-    } catch (error) {
-      throw new Error("Failed to login to Odoo");
-    }
-
-    await this.pushData();
-    // await this.pullData();
+    await this.odooClient.login();
   }
+
   async createHouseholdData(apgId: number, apgMember: any, administrativeArea: any): Promise<number | undefined> {
     const registration_date = apgMember.registration_date || "";
     const gps = apgMember.data.location_gps ? JSON.parse(apgMember.data.location_gps) : null;

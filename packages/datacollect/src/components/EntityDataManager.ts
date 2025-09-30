@@ -39,6 +39,11 @@ import { ExternalSyncManager } from "./ExternalSyncManager";
 import { InternalSyncManager } from "./InternalSyncManager";
 import { AuthManager } from "./AuthManager";
 
+export interface ReadAuditOptions {
+  actorId?: string;
+  metadata?: Record<string, unknown>;
+}
+
 // const MAX_GROUP_DEPTH = 5; // Maximum allowed depth for nested groups
 
 /**
@@ -225,8 +230,10 @@ export class EntityDataManager {
    * const entityEvents = events.filter(e => e.entityGuid === 'entity-456');
    * ```
    */
-  async getAllEvents(): Promise<FormSubmission[]> {
-    return await this.eventStore.getAllEvents();
+  async getAllEvents(options: ReadAuditOptions = {}): Promise<FormSubmission[]> {
+    const events = await this.eventStore.getAllEvents();
+    await this.logReadAudit("read-events", "events", { count: events.length }, options);
+    return events;
   }
 
   /**
@@ -257,8 +264,12 @@ export class EntityDataManager {
    * );
    * ```
    */
-  async getAllEntities(): Promise<{ initial: EntityDoc; modified: EntityDoc }[]> {
-    return await this.entityStore.getAllEntities();
+  async getAllEntities(
+    options: ReadAuditOptions = {},
+  ): Promise<{ initial: EntityDoc; modified: EntityDoc }[]> {
+    const entities = await this.entityStore.getAllEntities();
+    await this.logReadAudit("read-all-entities", "*", { count: entities.length }, options);
+    return entities;
   }
 
   /**
@@ -290,7 +301,10 @@ export class EntityDataManager {
    * }
    * ```
    */
-  async getEntity(id: string): Promise<{ initial: EntityDoc; modified: EntityDoc }> {
+  async getEntity(
+    id: string,
+    options: ReadAuditOptions = {},
+  ): Promise<{ initial: EntityDoc; modified: EntityDoc }> {
     try {
       const entityPair = await this.entityStore.getEntity(id);
       if (!entityPair) {
@@ -303,16 +317,21 @@ export class EntityDataManager {
 
       this.logger.debug(`Updated entity after applying events: ${JSON.stringify(updatedEntity)}`);
 
+      let result: { initial: EntityDoc; modified: EntityDoc };
       if (updatedEntity.type === "group") {
         const groupWithDetails = await this.loadGroupDetails(updatedEntity as GroupDoc);
         this.logger.debug(`Group with loaded details: ${JSON.stringify(groupWithDetails)}`);
-        return {
+        result = {
           initial: entityPair.initial,
           modified: groupWithDetails,
         };
+      } else {
+        result = { initial: entityPair.initial, modified: updatedEntity };
       }
 
-      return { initial: entityPair.initial, modified: updatedEntity };
+      await this.logReadAudit("read-entity", id, { entityType: result.modified.type }, options);
+
+      return result;
     } catch (error) {
       this.logger.error(`Error in getEntity: ${error}`);
       throw error;
@@ -518,8 +537,13 @@ export class EntityDataManager {
    * // TODO: Document the exact query syntax supported
    * ```
    */
-  async searchEntities(criteria: SearchCriteria): Promise<{ initial: EntityDoc; modified: EntityDoc }[]> {
-    return await this.entityStore.searchEntities(criteria);
+  async searchEntities(
+    criteria: SearchCriteria,
+    options: ReadAuditOptions = {},
+  ): Promise<{ initial: EntityDoc; modified: EntityDoc }[]> {
+    const results = await this.entityStore.searchEntities(criteria);
+    await this.logReadAudit("search-entities", "*", { criteria, resultCount: results.length }, options);
+    return results;
   }
 
   /**
@@ -545,9 +569,14 @@ export class EntityDataManager {
    * }
    * ```
    */
-  async getAuditTrailByEntityGuid(entityGuid: string): Promise<AuditLogEntry[]> {
+  async getAuditTrailByEntityGuid(
+    entityGuid: string,
+    options: ReadAuditOptions = {},
+  ): Promise<AuditLogEntry[]> {
     try {
-      return await this.eventStore.getAuditTrailByEntityGuid(entityGuid);
+      const auditTrail = await this.eventStore.getAuditTrailByEntityGuid(entityGuid);
+      await this.logReadAudit("read-audit-trail", entityGuid, { count: auditTrail.length }, options);
+      return auditTrail;
     } catch (error) {
       throw new AppError("AUDIT_TRAIL_ERROR", `Failed to retrieve audit trail for entity ${entityGuid}`, {
         entityGuid,
@@ -768,6 +797,46 @@ export class EntityDataManager {
     if (this.externalSyncManager) {
       await this.externalSyncManager.synchronize(credentials);
     }
+  }
+
+  private async logReadAudit(
+    action: string,
+    entityGuid: string,
+    details: Record<string, unknown>,
+    options: ReadAuditOptions,
+  ): Promise<void> {
+    try {
+      const auditEntry: AuditLogEntry = {
+        guid: uuidv4(),
+        timestamp: new Date().toISOString(),
+        userId: this.getAuditActorId(options.actorId),
+        action,
+        eventGuid: "",
+        entityGuid,
+        changes: {
+          ...details,
+          ...(options.metadata ? { metadata: options.metadata } : {}),
+        },
+        signature: "",
+      };
+
+      await this.eventStore.logAuditEntry(auditEntry);
+    } catch (error) {
+      this.logger.error(`Failed to log read audit entry for action ${action}: ${error}`);
+    }
+  }
+
+  private getAuditActorId(explicitActorId?: string): string {
+    if (explicitActorId) {
+      return explicitActorId;
+    }
+
+    const currentUser = this.authManager?.getCurrentUser();
+    if (currentUser?.id) {
+      return currentUser.id;
+    }
+
+    return "system";
   }
 
   /**
