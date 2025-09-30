@@ -78,7 +78,7 @@ const loadApp = async (url: string) => {
   try {
     const response = await fetch(url)
     const json = await response.json()
-    await database.tenantapps.insert({
+    await database.tenantapps.upsert({
       ...json
     })
   } catch (error) {
