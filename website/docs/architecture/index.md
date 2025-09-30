@@ -280,7 +280,7 @@ class PostgresEntityStorageAdapter implements EntityStorageAdapter {
 ### Data Protection
 
 - **Encryption in transit** using HTTPS/TLS
-- **Encryption at rest** for sensitive data fields
+- **Configurable encryption at rest (planned)** for sensitive data fields via pluggable adapters
 - **Audit logging** for all data access and changes
 
 ### Privacy Features

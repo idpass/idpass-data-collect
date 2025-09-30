@@ -94,6 +94,7 @@ export class AuthManager {
     private authStorage?: AuthStorageAdapter,
   ) {}
   private adapters: Record<string, AuthAdapter> = {};
+  private currentUser: { id: string; username?: string } | null = null;
 
   /**
    * Initializes the AuthManager by instantiating and configuring authentication adapters.
@@ -122,6 +123,13 @@ export class AuthManager {
       },
       {} as Record<string, AuthAdapter>,
     );
+
+    if (this.authStorage) {
+      const username = await this.authStorage.getUsername();
+      if (username) {
+        this.currentUser = { id: username, username };
+      }
+    }
   }
 
   /**
@@ -167,7 +175,24 @@ export class AuthManager {
       throw new Error("Auth storage is not set");
     }
     if (type) {
-      this.adapters[type]?.login(credentials);
+      const adapter = this.adapters[type];
+      if (!adapter) {
+        throw new Error(`Authentication adapter for type ${type} is not initialized`);
+      }
+
+      const result = await adapter.login(credentials);
+
+      if (result?.token) {
+        await this.authStorage.setToken(type, result.token);
+      }
+      if (result?.username) {
+        await this.authStorage.setUsername(result.username);
+      }
+
+      this.currentUser = {
+        id: result?.username || type,
+        username: result?.username,
+      };
     } else if (credentials && "username" in credentials) {
       await this.defaultLogin(credentials);
     }
@@ -202,6 +227,12 @@ export class AuthManager {
       });
       const token = response.data.token;
       await this.authStorage.setToken("default", token);
+      if (response.data.userId) {
+        this.currentUser = { id: response.data.userId, username: credentials.username };
+      } else {
+        this.currentUser = { id: credentials.username, username: credentials.username };
+      }
+      await this.authStorage.setUsername(credentials.username);
       return;
     } catch (error) {
       console.error("Failed to login to sync server using default login");
@@ -219,6 +250,7 @@ export class AuthManager {
     if (this.authStorage) {
       await this.authStorage.removeAllTokens();
     }
+    this.currentUser = null;
   }
 
   /**
@@ -230,6 +262,10 @@ export class AuthManager {
    */
   async validateToken(type: string, token: string): Promise<boolean> {
     return this.adapters[type]?.validateToken(token) ?? false;
+  }
+
+  getCurrentUser(): { id: string; username?: string } | null {
+    return this.currentUser;
   }
 
   /**

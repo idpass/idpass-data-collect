@@ -203,10 +203,10 @@ Complete OpenAPI 3.0 YAML specification for client generation and tooling.
 ### Available Adapters
 
 #### OpenSPP Adapter
-Integration with OpenSPP social protection platform:
-- Bidirectional data synchronization
-- Beneficiary registration and updates
-- Program enrollment management
+Integration with OpenSPP social protection platform :
+- Push household and individual registrations from DataCollect into OpenSPP
+- Requires Odoo credential configuration per tenant
+- Pull support and advanced enrollment workflows are planned; treat current integration as beta
 
 #### OpenFn Adapter
 Integration with OpenFn workflow automation:

@@ -641,6 +641,8 @@ export interface Conflict {
  * };
  * ```
  */
+export type ExternalSyncField = { name: string; value: string };
+
 export type ExternalSyncConfig = {
   /** Type of external system (e.g., 'openspp', 'mock-sync-server') */
   type: string;
@@ -649,8 +651,18 @@ export type ExternalSyncConfig = {
   /** URL of the external system */
   url: string;
   /** Extra fields for the external system */
-  extraFields?: { name: string; value: string }[];
+  extraFields?: ExternalSyncField[];
 };
+
+/**
+ * Helper to query strongly typed values from ExternalSyncConfig.extraFields.
+ */
+export function getExternalField(
+  config: ExternalSyncConfig,
+  fieldName: string,
+): string | undefined {
+  return config.extraFields?.find((field) => field.name === fieldName)?.value;
+}
 
 /**
  * External sync adapter interface for third-party system integration.
@@ -658,8 +670,17 @@ export type ExternalSyncConfig = {
  * Implementations handle the specifics of syncing with different external systems.
  */
 export interface ExternalSyncAdapter {
-  /** Perform synchronization with the external system */
-  sync(credentials?: ExternalSyncCredentials): Promise<void>;
+  /** Optional hook to authenticate with the external system before data transfer */
+  authenticate?(credentials?: ExternalSyncCredentials): Promise<boolean>;
+  /** Push local changes to the external system */
+  pushData(credentials?: ExternalSyncCredentials): Promise<void>;
+  /** Pull remote changes from the external system */
+  pullData(credentials?: ExternalSyncCredentials): Promise<void>;
+  /**
+   * Backwards compatibility helper for adapters that implement a combined sync routine.
+   * ExternalSyncManager will fall back to this when push/pull are not available.
+   */
+  sync?(credentials?: ExternalSyncCredentials): Promise<void>;
 }
 
 /**

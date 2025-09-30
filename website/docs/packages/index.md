@@ -49,7 +49,7 @@ graph TB
 
 - 🗃️ **PostgreSQL Storage**: Centralized, reliable data persistence
 - 🔄 **Multi-Client Sync**: Synchronize data across multiple client instances
-- 🔌 **External Integration**: Connect with third-party systems (OpenSPP, OpenFn)
+- 🔌 **External Integration**: Connect with third-party systems (OpenFn, OpenSPP)
 - 👥 **Multi-Tenant**: Support for multiple organizations and configurations
 
 **Use Cases**: Central data management, team collaboration, system integration
