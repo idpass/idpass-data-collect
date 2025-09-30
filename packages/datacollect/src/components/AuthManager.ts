@@ -140,24 +140,21 @@ export class AuthManager {
    * @throws {Error} If `AuthStorageAdapter` is not set when checking default token.
    */
   async isAuthenticated(): Promise<boolean> {
-    // If there are no configs and no auth storage, return false
-    if (!this.configs.length) {
-      return false;
-    }
-     if (!this.authStorage) {
+    if (!this.authStorage) {
       throw new Error("Auth storage is not set");
     }
-    // Check adapter-based authentication
-    const adapterResults = await Promise.all(Object.values(this.adapters).map((adapter) => adapter.isAuthenticated()));
-    
-    // Check default login token if auth storage exists
-    if (this.authStorage) {
-      const defaultToken = await this.authStorage.getTokenByProvider("default");
-      const hasDefaultToken = !!defaultToken;
-      return adapterResults.some((result) => result) || hasDefaultToken;
-    }
 
-    return adapterResults.some((result) => result);
+    const adapters = Object.values(this.adapters);
+    const adapterResults = adapters.length
+      ? await Promise.all(adapters.map((adapter) => adapter.isAuthenticated()))
+      : [];
+
+    const hasAdapterSession = adapterResults.some((result) => result);
+    const defaultToken = await this.authStorage.getTokenByProvider("default");
+    const hasDefaultToken = !!defaultToken;
+
+    // Even when no adapters are configured, a stored default token should allow access.
+    return hasAdapterSession || hasDefaultToken;
   }
 
   /**
