@@ -15,9 +15,9 @@ const showDeleteDialog = ref(false)
 const editedIndex = ref(-1)
 
 const headers = [
-  { text: 'Email', value: 'email' },
-  { text: 'Role', value: 'role' },
-  { text: 'Actions', value: 'actions', sortable: false },
+  { title: 'Email', value: 'email' },
+  { title: 'Role', value: 'role' },
+  { title: 'Actions', value: 'actions', sortable: false },
 ]
 
 const roles = ['ADMIN', 'USER']
@@ -116,7 +116,6 @@ onMounted(() => {
 
         <!-- Users Table -->
         <v-data-table :headers="headers" :items="users" :loading="loading" class="elevation-1">
-          <!-- eslint-disable vue/valid-v-slot -->
           <template #item.actions="{ item }">
             <v-btn
               variant="text"
