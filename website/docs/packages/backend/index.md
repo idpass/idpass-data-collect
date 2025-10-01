@@ -190,7 +190,7 @@ Complete OpenAPI 3.0 YAML specification for client generation and tooling.
 - `POST /api/sync/external` - External system sync
 
 **App Configuration**
-- `GET /api/apps` - List configurations
+- `GET /api/apps` - List configurations (supports `page`, `pageSize`, `sortBy`, `sortOrder`, and `search` query params; includes entity counts)
 - `POST /api/apps` - Upload configuration
 - `DELETE /api/apps/{id}` - Delete configuration
 

@@ -77,7 +77,7 @@ The GitHub Actions workflow automatically:
 - Audit log endpoints for tracking changes
 
 ### App Configuration
-- `GET /api/apps` - List configurations
+- `GET /api/apps` - List configurations (supports `page`, `pageSize`, `sortBy`, `sortOrder`, and `search` query params; returns entity counts per app)
 - `POST /api/apps` - Upload new configuration
 - `DELETE /api/apps/{id}` - Delete configuration
 
