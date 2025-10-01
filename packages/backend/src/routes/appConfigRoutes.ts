@@ -51,9 +51,79 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
     "/",
     authenticateJWT,
     asyncHandler(async (req, res) => {
-      // get all app configs
+      const {
+        page = "1",
+        pageSize = "12",
+        sortBy = "name",
+        sortOrder = "asc",
+        search,
+      } = req.query;
+
+      const pageNumber = Math.max(parseInt(page as string, 10) || 1, 1);
+      const pageSizeNumber = Math.min(Math.max(parseInt(pageSize as string, 10) || 12, 1), 100);
+      const sortKey = typeof sortBy === "string" ? sortBy : "name";
+      const order = typeof sortOrder === "string" && sortOrder.toLowerCase() === "desc" ? "desc" : "asc";
+      const searchTerm = typeof search === "string" ? search.trim().toLowerCase() : "";
+
       const appConfigs = await appConfigStore.getConfigs();
-      res.json(appConfigs);
+
+      const appsWithCounts = await Promise.all(
+        appConfigs.map(async (config) => {
+          const appInstance = await appInstanceStore.getAppInstance(config.id);
+          const entities = await appInstance?.edm.getAllEntities();
+
+          return {
+            id: config.id,
+            name: config.name,
+            version: config.version || "",
+            externalSync: config.externalSync || {},
+            entitiesCount: entities?.length || 0,
+          };
+        }),
+      );
+
+      const filteredApps = searchTerm
+        ? appsWithCounts.filter((app) =>
+            [app.name, app.id, app.version].some((value) => {
+              const lowered = value ? value.toLowerCase() : "";
+              return lowered.includes(searchTerm);
+            }),
+          )
+        : appsWithCounts;
+
+      const sortedApps = [...filteredApps].sort((a, b) => {
+        const direction = order === "asc" ? 1 : -1;
+
+        switch (sortKey) {
+          case "entitiesCount":
+            return direction * (a.entitiesCount - b.entitiesCount);
+          case "id":
+            return direction * a.id.localeCompare(b.id, undefined, { sensitivity: "base" });
+          case "name":
+          default:
+            return direction * a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+        }
+      });
+
+      const total = sortedApps.length;
+      const totalPages = total > 0 ? Math.ceil(total / pageSizeNumber) : 0;
+      const currentPage = totalPages > 0 ? Math.min(pageNumber, totalPages) : 1;
+      const start = totalPages > 0 ? (currentPage - 1) * pageSizeNumber : 0;
+      const end = start + pageSizeNumber;
+      const paginatedApps = totalPages > 0 ? sortedApps.slice(start, end) : [];
+
+      res.json({
+        data: paginatedApps,
+        meta: {
+          total,
+          page: currentPage,
+          pageSize: pageSizeNumber,
+          totalPages,
+          sortBy: sortKey,
+          sortOrder: order,
+          search: searchTerm,
+        },
+      });
     }),
   );
 

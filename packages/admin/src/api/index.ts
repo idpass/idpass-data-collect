@@ -61,11 +61,44 @@ export const initializeInstance = () => {
   )
 }
 
-export const getApps = async () => {
+export interface AppListParams {
+  page?: number
+  pageSize?: number
+  sortBy?: 'name' | 'id' | 'entitiesCount'
+  sortOrder?: 'asc' | 'desc'
+  search?: string
+}
+
+export interface AppListItem {
+  id: string
+  name: string
+  version: string
+  entitiesCount: number
+  externalSync: Record<string, string>
+}
+
+export interface AppListMeta {
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+  sortBy: string
+  sortOrder: string
+  search: string
+}
+
+export interface AppListResponse {
+  data: AppListItem[]
+  meta: AppListMeta
+}
+
+export const getApps = async (params: AppListParams = {}): Promise<AppListResponse> => {
   if (!instance) {
     throw new Error('Instance not initialized')
   }
-  const response = await instance.get(APPS_URL)
+  const response = await instance.get(APPS_URL, {
+    params,
+  })
   return response.data
 }
 
