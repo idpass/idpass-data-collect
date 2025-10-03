@@ -264,7 +264,7 @@ const validateForm = () => {
     isValid = false
   }
   // if at least one auth config is added, then at least one field is required
-  if (form.value.authConfigs.length > 0) {
+  if (form.value.authConfigs?.length > 0) {
     console.log(form.value.authConfigs)
     form.value.authConfigs.forEach((authConfig, index) => {
       if (authConfig.type === '') {
