@@ -96,19 +96,16 @@ function checkLicenseHeader(filePath) {
 
 function findFiles(patterns) {
   const files = new Set();
-  
-  patterns.forEach(pattern => {
-    if (pattern.startsWith('!')) {
-      // Remove files matching this pattern
-      const filesToRemove = glob.sync(pattern.substring(1), { nodir: true });
-      filesToRemove.forEach(file => files.delete(file));
-    } else {
-      // Add files matching this pattern
-      const filesToAdd = glob.sync(pattern, { nodir: true });
-      filesToAdd.forEach(file => files.add(file));
-    }
+  const includePatterns = patterns.filter(pattern => !pattern.startsWith('!'));
+  const ignorePatterns = patterns
+    .filter(pattern => pattern.startsWith('!'))
+    .map(pattern => pattern.substring(1));
+
+  includePatterns.forEach(pattern => {
+    const matches = glob.sync(pattern, { nodir: true, ignore: ignorePatterns });
+    matches.forEach(file => files.add(file));
   });
-  
+
   return Array.from(files);
 }
 
