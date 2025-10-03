@@ -74,8 +74,8 @@ const copyApp = async (id: string) => {
 
 <template>
   <v-card>
-    <v-card-title class="d-flex justify-space-between align-center">
-      {{ app.name }}
+    <v-card-title>
+      <span :title="app.name">{{ app.name }}</span>
       <v-menu
         v-model="menu"
         :position-x="menuPosition.x"
@@ -132,3 +132,20 @@ const copyApp = async (id: string) => {
     @submit="onCredentialsSubmit"
   />
 </template>
+
+<style scoped>
+.v-card-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  column-gap: 0.5rem;
+}
+
+.v-card-title span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>
