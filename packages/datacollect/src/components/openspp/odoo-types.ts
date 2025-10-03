@@ -30,7 +30,7 @@ export interface OdooAuthResult {
   session_id: string;
   name?: string;
   company_id?: number;
-  user_context?: Record<string, any>;
+  user_context?: Record<string, unknown>;
 }
 
 export interface OdooUser {
@@ -43,7 +43,7 @@ export interface OdooUser {
 export interface OdooRpcParams {
   jsonrpc: string;
   method: string;
-  params: any;
+  params: Record<string, unknown>;
   id: number;
 }
 
@@ -53,30 +53,30 @@ export interface OdooRpcResponse<T> {
   result?: T;
   error?: {
     code: number;
-    message: string;
-    data: {
-      name: string;
-      debug: string;
       message: string;
-      arguments: any[];
-    };
+      data: {
+        name: string;
+        debug: string;
+        message: string;
+        arguments: unknown[];
+      };
   };
 }
 
 export interface OdooSearchReadParams {
   model: string;
-  domain: Array<any>;
+  domain: unknown[];
   fields: string[];
   limit?: number | null;
   offset?: number;
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
 }
 
 export interface OdooCallKwParams {
   model: string;
   method: string;
-  args: any[];
-  kwargs: Record<string, any>;
+  args: unknown[];
+  kwargs: Record<string, unknown>;
 }
 
 // Base model interface that all Odoo models should extend

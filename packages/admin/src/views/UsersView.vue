@@ -20,6 +20,8 @@ const headers = [
   { title: 'Actions', value: 'actions', sortable: false },
 ]
 
+const itemActionsSlot = 'item.actions'
+
 const roles = ['ADMIN', 'USER']
 
 const defaultItem = {
@@ -116,7 +118,7 @@ onMounted(() => {
 
         <!-- Users Table -->
         <v-data-table :headers="headers" :items="users" :loading="loading" class="elevation-1">
-          <template #item.actions="{ item }">
+          <template v-slot:[itemActionsSlot]="{ item }">
             <v-btn
               variant="text"
               icon="mdi-pencil"

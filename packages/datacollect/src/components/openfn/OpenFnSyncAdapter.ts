@@ -71,7 +71,7 @@ class OpenFnSyncAdapter implements ExternalSyncAdapter {
     );
   }
 
-  async pushData(_credentials?: ExternalSyncCredentials): Promise<void> {
+  async pushData(): Promise<void> {
     if (!this.url) {
       throw new Error("URL is required");
     }

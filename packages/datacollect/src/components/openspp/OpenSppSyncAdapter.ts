@@ -17,46 +17,42 @@
  * under the License.
  */
 
-import { get } from "lodash";
-import { v4 as uuidv4 } from "uuid";
 import {
   EventStore,
   ExternalSyncAdapter,
   ExternalSyncConfig,
   ExternalSyncCredentials,
   FormSubmission,
-  SyncLevel,
   getExternalField,
 } from "../../interfaces/types";
 import { EventApplierService } from "../../services/EventApplierService";
-import axios from "axios";
 import OdooClient from "./OdooClient";
 import { OdooConfig } from "./odoo-types";
-import { exportModels } from "./models";
-interface Event {
-  guid: string;
-  entityGuid: string;
-  type: string;
-  data: any;
-  timestamp: string;
-  userId: string;
-  syncLevel: number;
-}
 
 interface GroupedData {
-  apg: Event;
+  apg: FormSubmission;
   households: {
-    household: Event;
-    individuals: Event[];
+    household: FormSubmission;
+    individuals: FormSubmission[];
   }[];
-  crops: Event[];
+  crops: FormSubmission[];
+}
+
+interface AdministrativeArea {
+  province_id: number | undefined;
+  district_id: number | undefined;
+  area_id: number | undefined;
+}
+
+interface RegisteredIndividual {
+  id?: number | null;
+  membershipKind?: number | null;
 }
 
 class OpenSppSyncAdapter implements ExternalSyncAdapter {
   private url: string;
   private batchSize = 100;
   private odooClient: OdooClient | null = null;
-  private exportModels: Record<string, any> = exportModels;
   private lastCredentials: ExternalSyncCredentials | null = null;
 
   constructor(
@@ -93,19 +89,6 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     // get last sync timestamp
     let lastPushExternalSyncTimestamp = await this.eventStore.getLastPushExternalSyncTimestamp();
 
-    const dropdowns = {} as Record<string, any>;
-    for (const key in this.exportModels) {
-      try {
-        const value = this.exportModels[key];
-        if (value && this.odooClient) {
-          const data = await this.odooClient.searchRead(value.model, [], value.fields);
-          dropdowns[key] = data;
-        }
-      } catch (error) {
-        console.error(`Error fetching dropdown ${key}:`, error);
-        continue;
-      }
-    }
     // get all events since last sync
     // const eventsToPush = await this.eventStore.getEventsSince(lastPushExternalSyncTimestamp);
 
@@ -116,137 +99,140 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       return event.data.entityName === "apg" || (isLatest && isCreate);
     });
     const groupedEvents = this.groupEventByApgId(filteredEvents);
-    let updatedEvents: FormSubmission[] = [];
+    const updatedEvents: FormSubmission[] = [];
 
-    for (const [apgGuid, groupData] of Object.entries(groupedEvents)) {
+    for (const groupData of Object.values(groupedEvents)) {
       try {
-        const apgId = parseInt(groupData.apg.data.id);
-        const administrativeArea = {
-          province_id: parseInt(groupData.apg.data.province_id) || null,
-          district_id: parseInt(groupData.apg.data.district_id) || null,
-          area_id: parseInt(groupData.apg.data.village_id) || null,
+        const apgPayload = groupData.apg.data as Record<string, unknown>;
+        const apgId = this.parseInteger(apgPayload.id);
+        if (!apgId) {
+          console.error("Unable to determine APG identifier for event", groupData.apg);
+          continue;
+        }
+
+        const administrativeArea: AdministrativeArea = {
+          province_id: this.parseInteger(apgPayload.province_id),
+          district_id: this.parseInteger(apgPayload.district_id),
+          area_id: this.parseInteger(apgPayload.village_id),
         };
 
-        // Process households
-        if (groupData.households.length > 0) {
-          for (const householdGroup of groupData.households) {
-            try {
-              const apgMember = householdGroup.household;
-              const householdId = await this.createHouseholdData(apgId, apgMember, administrativeArea);
+        for (const householdGroup of groupData.households) {
+          try {
+            const householdEvent = householdGroup.household;
+            const householdData = householdEvent.data as Record<string, unknown>;
+            const householdId = await this.createHouseholdData(apgId, householdEvent, administrativeArea);
 
-              if (apgMember.data.bank_details?.length > 0 && householdId) {
-                for (const bankDetail of apgMember.data.bank_details) {
-                  try {
-                    await this.createBankAccount(householdId, bankDetail);
-                  } catch (error) {
-                    console.error("Error creating household bank account:", error);
-                    continue;
-                  }
-                }
-              }
-
-              // Create document IDs if array exists
-              if (apgMember.data.document_ids?.length > 0 && householdId) {
-                for (const document of apgMember.data.document_ids) {
-                  try {
-                    await this.createRegistrantID(householdId, document);
-                  } catch (error) {
-                    console.error("Error creating household document ID:", error);
-                    continue;
-                  }
-                }
-              }
-              if (householdId) {
-                updatedEvents.push(apgMember);
-              }
-              // Process individuals under household
-              const individualIds = [];
-              for (const member of householdGroup.individuals) {
+            const householdBankDetails = this.getRecordArray(householdData, "bank_details");
+            if (householdBankDetails.length > 0 && householdId) {
+              for (const bankDetail of householdBankDetails) {
                 try {
-                  const individualId = await this.createIndividualData(apgId, member, administrativeArea);
-                  const registeredIndividual = {
-                    id: individualId,
-                    registrant_kind: dropdowns.registrant_kind?.find(
-                      (item: Record<string, any>) => item.name?.toLowerCase() === "apg",
-                    ),
-                    membership_kind: member.data.relationship,
-                  };
-                  if (individualId) {
-                    updatedEvents.push(member);
-                  }
-
-                  // Create bank accounts if bank details array exists
-                  if (member.data.bank_details?.length > 0 && individualId) {
-                    for (const bankDetail of member.data.bank_details) {
-                      try {
-                        await this.createBankAccount(individualId, bankDetail);
-                      } catch (error) {
-                        console.error("Error creating individual bank account:", error);
-                        continue;
-                      }
-                    }
-                  }
-
-                  // Create document IDs if array exists
-                  if (member.data.document_ids?.length > 0 && individualId) {
-                    for (const document of member.data.document_ids) {
-                      try {
-                        await this.createRegistrantID(individualId, document);
-                      } catch (error) {
-                        console.error("Error creating individual document ID:", error);
-                        continue;
-                      }
-                    }
-                  }
-
-                  // Add training records if exists
-                  if (member.data.training_records?.length > 0 && individualId) {
-                    for (const training of member.data.training_records) {
-                      try {
-                        await this.createTrainingRecord(training, individualId);
-                      } catch (error) {
-                        console.error("Error creating training record:", error);
-                        continue;
-                      }
-                    }
-                  }
-                  individualIds.push(registeredIndividual);
+                  await this.createBankAccount(householdId, bankDetail);
                 } catch (error) {
-                  console.error("Error processing individual:", error);
+                  console.error("Error creating household bank account:", error);
+                }
+              }
+            }
+
+            const householdDocuments = this.getRecordArray(householdData, "document_ids");
+            if (householdDocuments.length > 0 && householdId) {
+              for (const document of householdDocuments) {
+                try {
+                  await this.createRegistrantID(householdId, document);
+                } catch (error) {
+                  console.error("Error creating household document ID:", error);
+                }
+              }
+            }
+
+            if (householdId) {
+              updatedEvents.push(householdEvent);
+            }
+
+            const individualIds: RegisteredIndividual[] = [];
+
+            for (const member of householdGroup.individuals) {
+              try {
+                const memberData = member.data as Record<string, unknown>;
+                const individualId = await this.createIndividualData(apgId, member, administrativeArea);
+
+                if (individualId) {
+                  updatedEvents.push(member);
+                }
+
+                const memberBankDetails = this.getRecordArray(memberData, "bank_details");
+                if (memberBankDetails.length > 0 && individualId) {
+                  for (const bankDetail of memberBankDetails) {
+                    try {
+                      await this.createBankAccount(individualId, bankDetail);
+                    } catch (error) {
+                      console.error("Error creating individual bank account:", error);
+                    }
+                  }
+                }
+
+                const memberDocuments = this.getRecordArray(memberData, "document_ids");
+                if (memberDocuments.length > 0 && individualId) {
+                  for (const document of memberDocuments) {
+                    try {
+                      await this.createRegistrantID(individualId, document);
+                    } catch (error) {
+                      console.error("Error creating individual document ID:", error);
+                    }
+                  }
+                }
+
+                const trainingRecords = this.getRecordArray(memberData, "training_records");
+                if (trainingRecords.length > 0 && individualId) {
+                  for (const training of trainingRecords) {
+                    try {
+                      await this.createTrainingRecord(training, individualId);
+                    } catch (error) {
+                      console.error("Error creating training record:", error);
+                    }
+                  }
+                }
+
+                const membershipKind = this.parseInteger(memberData.relationship);
+                individualIds.push({
+                  id: individualId ?? null,
+                  membershipKind,
+                });
+              } catch (error) {
+                console.error("Error processing individual:", error);
+              }
+            }
+
+            if (individualIds.length > 0 && householdId) {
+              for (const registered of individualIds) {
+                if (!registered.id) {
                   continue;
                 }
-              }
 
-              // Link individuals to household
-              if (individualIds.length > 0) {
-                for (const ind of individualIds) {
-                  try {
-                    if (householdId && ind.id) {
-                      await this.odooClient?.addMembersToGroup(householdId, [
-                        {
-                          individual: ind.id,
-                          kind: [ind.membership_kind],
-                        },
-                      ]);
-                    }
-                  } catch (error) {
-                    console.error(`Error linking member ${ind.id} to household:`, error);
-                  }
+                const membership =
+                  typeof registered.membershipKind === "number" ? [[registered.membershipKind]] : undefined;
+
+                try {
+                  await this.odooClient?.addMembersToGroup(householdId, [
+                    {
+                      individual: registered.id,
+                      ...(membership ? { kind: membership } : {}),
+                    },
+                  ]);
+                } catch (error) {
+                  console.error(`Error linking member ${registered.id} to household:`, error);
                 }
               }
-
-              // Link household to APG
-              if (householdId && apgId) {
-                await this.odooClient?.addMembersToGroup(apgId, [
-                  {
-                    individual: householdId,
-                  },
-                ]);
-              }
-            } catch (error) {
-              console.error("Error processing household:", error);
-              continue;
             }
+
+            if (householdId) {
+              await this.odooClient?.addMembersToGroup(apgId, [
+                {
+                  individual: householdId,
+                },
+              ]);
+            }
+          } catch (error) {
+            console.error("Error processing household:", error);
           }
         }
 
@@ -376,159 +362,172 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     await this.odooClient.login();
   }
 
-  async createHouseholdData(apgId: number, apgMember: any, administrativeArea: any): Promise<number | undefined> {
-    const registration_date = apgMember.registration_date || "";
-    const gps = apgMember.data.location_gps ? JSON.parse(apgMember.data.location_gps) : null;
-    const coords = gps
-      ? {
-          longitude: gps.coords.longitude,
-          latitude: gps.coords.latitude,
-        }
-      : null;
+  async createHouseholdData(
+    apgId: number,
+    apgMember: FormSubmission,
+    administrativeArea: AdministrativeArea,
+  ): Promise<number | undefined> {
+    const householdPayload = apgMember.data as Record<string, unknown>;
+    const gpsCoordinates = this.parseCoordinates(householdPayload.location_gps);
+
     const householdData = {
       is_registrant: true,
       is_group: true,
-      name: apgMember.data.name,
+      name: this.getString(householdPayload, "name") ?? "",
       kind: 1,
-      // registration_date: registration_date,
-      hh_size: apgMember.data.household_size || 0,
+      hh_size: this.parseInteger(householdPayload.household_size) ?? 0,
       hh_status: "active",
-      ethnic_group: apgMember.data.belongs_to_ethnic_group === "yes" ? true : false,
-      longitude: coords ? coords.longitude : null,
-      latitude: coords ? coords.latitude : null,
+      ethnic_group: this.isAffirmative(householdPayload.belongs_to_ethnic_group),
+      longitude: gpsCoordinates?.longitude,
+      latitude: gpsCoordinates?.latitude,
       ...administrativeArea,
     };
-    return await this.odooClient?.createHousehold(apgId, householdData);
-  }
-  async createIndividualData(apgId: number, member: any, administrativeArea: any) {
-    const ind_reg_date = member.data.registration_date || "";
 
-    const gps = member.data.location_gps ? JSON.parse(member.data.location_gps) : null;
-    const coords = gps
-      ? {
-          longitude: gps.coords.longitude,
-          latitude: gps.coords.latitude,
-        }
-      : null;
-    const memberData = {
+    return this.odooClient?.createHousehold(apgId, householdData);
+  }
+
+  async createIndividualData(
+    apgId: number,
+    member: FormSubmission,
+    administrativeArea: AdministrativeArea,
+  ): Promise<number | undefined> {
+    const memberPayload = member.data as Record<string, unknown>;
+    const gpsCoordinates = this.parseCoordinates(memberPayload.location_gps);
+    const firstName = this.getString(memberPayload, "first_name") ?? "";
+    const lastName = this.getString(memberPayload, "last_name") ?? "";
+    const displayName = this.getString(memberPayload, "name") || `${firstName} ${lastName}`.trim();
+    const birthdate = this.getString(memberPayload, "date_of_birth");
+
+    const individualData = {
       is_registrant: true,
-      given_name: member.data.first_name,
-      family_name: member.data.last_name,
-      addl_name: member.data.middle_name,
-      name: member.data.name || `${member.data.first_name} ${member.data.last_name}`,
-      // registration_date: ind_reg_date,
-      gender: member.data.gender || null,
-      birthdate: member.data.date_of_birth ? this.formatDate(member.data.date_of_birth) : null,
-      ethnic_group: member.data.belongs_to_ethnic_group === "yes" ? true : false,
-      email: member.data.email_address || "",
-      marital_status_id: member.data.marital_status || null,
-      profession: member.data.profession || "",
-      longitude: coords ? coords.longitude : null,
-      latitude: coords ? coords.latitude : null,
-      highest_education_level_id: member.data.education_level || null,
-      phone: member.data.phone_number || "",
+      given_name: firstName,
+      family_name: lastName,
+      addl_name: this.getString(memberPayload, "middle_name"),
+      name: displayName,
+      gender: this.getString(memberPayload, "gender"),
+      birthdate: birthdate ? this.formatDate(birthdate) : null,
+      ethnic_group: this.isAffirmative(memberPayload.belongs_to_ethnic_group),
+      email: this.getString(memberPayload, "email_address") ?? "",
+      marital_status_id: this.parseInteger(memberPayload.marital_status),
+      profession: this.getString(memberPayload, "profession") ?? "",
+      longitude: gpsCoordinates?.longitude,
+      latitude: gpsCoordinates?.latitude,
+      highest_education_level_id: this.parseInteger(memberPayload.education_level),
+      phone: this.getString(memberPayload, "phone_number") ?? "",
       ...administrativeArea,
     };
 
-    return await this.odooClient?.createIndividual(apgId, memberData);
+    return this.odooClient?.createIndividual(apgId, individualData);
   }
-  async createTrainingRecord(training: any, partnerId: number) {
-    return await this.odooClient?.create("spp.training", {
+
+  async createTrainingRecord(training: Record<string, unknown>, partnerId: number): Promise<number | undefined> {
+    const trainingStart = this.getString(training, "training_start_date");
+    const trainingEnd = this.getString(training, "training_end_date");
+
+    return this.odooClient?.create("spp.training", {
       registrant_id: partnerId,
-      type_of_training: training.training_type,
-      training_period: training.training_start_date ? this.formatDate(training.training_start_date) : null,
-      training_end: training.training_end_date ? this.formatDate(training.training_end_date) : null,
+      type_of_training: this.getString(training, "training_type") ?? "",
+      training_period: trainingStart ? this.formatDate(trainingStart) : null,
+      training_end: trainingEnd ? this.formatDate(trainingEnd) : null,
     });
   }
-  async createRegistrantID(partnerId: number, data: any) {
-    try {
-      return await this.odooClient?.create("g2p.reg.id", {
-        partner_id: partnerId,
-        id_type: data.id_type,
-        value: data.id_number,
-        issuance_date: data.id_issuance_date ? this.formatDate(data.id_issuance_date) : null,
-        expiry_date: data.id_expiry_date ? this.formatDate(data.id_expiry_date) : null,
-        description: data.id_description || "",
-      });
-    } catch (error) {
-      throw new Error("Failed to create registrant ID");
-    }
+
+  async createRegistrantID(partnerId: number, data: Record<string, unknown>): Promise<number | undefined> {
+    const issuanceDate = this.getString(data, "id_issuance_date");
+    const expiryDate = this.getString(data, "id_expiry_date");
+
+    return this.odooClient?.create("g2p.reg.id", {
+      partner_id: partnerId,
+      id_type: this.getString(data, "id_type") ?? "",
+      value: this.getString(data, "id_number") ?? "",
+      issuance_date: issuanceDate ? this.formatDate(issuanceDate) : null,
+      expiry_date: expiryDate ? this.formatDate(expiryDate) : null,
+      description: this.getString(data, "id_description") ?? "",
+    });
   }
 
-  async createBankAccount(partnerId: number, data: any): Promise<number | undefined> {
-    try {
-      if (data.bank_name) {
-        return this.odooClient?.create("res.partner.bank", {
-          partner_id: partnerId,
-          bank_id: data.bank_name,
-          acc_number: data.account_number || "",
-          account_type: data.account_type || "",
-          acc_holder_name: data.account_owner_name || "",
-        });
-      }
-    } catch (error) {
-      throw new Error("Failed to create bank account");
+  async createBankAccount(partnerId: number, data: Record<string, unknown>): Promise<number | undefined> {
+    const bankId = this.parseInteger(data.bank_name);
+    if (!bankId) {
+      return undefined;
     }
+
+    return this.odooClient?.create("res.partner.bank", {
+      partner_id: partnerId,
+      bank_id: bankId,
+      acc_number: this.getString(data, "account_number") ?? "",
+      account_type: this.getString(data, "account_type") ?? "",
+      acc_holder_name: this.getString(data, "account_owner_name") ?? "",
+    });
   }
-  async processCrop(apgCrop: any, apgId: number) {
+
+  async processCrop(apgCrop: FormSubmission, apgId: number): Promise<number | null | undefined> {
     try {
-      const cropActivities = apgCrop.data.crop_activities;
-      let cropExternalId;
+      const cropPayload = apgCrop.data as Record<string, unknown>;
+      const cropActivities = this.getRecordArray(cropPayload, "crop_activities");
+      let cropExternalId: number | null | undefined;
+
       const landRecord = {
         land_farm_id: apgId,
-        province_id: apgCrop.data.province_id,
-        district_id: apgCrop.data.district_id,
-        area_id: apgCrop.data.area_id,
-        land_size: apgCrop.data.land_size,
-        land_size_unit: apgCrop.data.land_size_unit,
-        agricultural_land_size: apgCrop.data.agricultural_land_size,
-        agricultural_land_size_unit: apgCrop.data.agricultural_land_size_unit,
+        province_id: this.parseInteger(cropPayload.province_id),
+        district_id: this.parseInteger(cropPayload.district_id),
+        area_id: this.parseInteger(cropPayload.area_id),
+        land_size: this.parseNumber(cropPayload.land_size),
+        land_size_unit: this.getString(cropPayload, "land_size_unit"),
+        agricultural_land_size: this.parseNumber(cropPayload.agricultural_land_size),
+        agricultural_land_size_unit: this.getString(cropPayload, "agricultural_land_size_unit"),
       };
       const newLandRecord = await this.odooClient?.create("spp.land.record", landRecord);
 
       for (const cropActivity of cropActivities) {
+        const activity = cropActivity as Record<string, unknown>;
+        const sowingDate = this.getString(activity, "sowing_date");
+        const harvestDate = this.getString(activity, "harvest_date");
+
         const product = {
           prod_farm_id: apgId,
           activity_type: "crop",
-          species_id: cropActivity.species_id || null,
-          seasonal_timeline_id: apgCrop.data.seasonal_timeline_id,
+          species_id: this.parseInteger(activity.species_id),
+          seasonal_timeline_id: this.parseInteger(cropPayload.seasonal_timeline_id),
         };
+
         const cropActivityData = {
           crop_land_id: newLandRecord,
           activity_type: "crop",
-          species_id: cropActivity.species_id || null,
-          crop_id: cropActivity.crop_id || null,
-          crop_species: cropActivity.species || null,
-          seeds_origin: cropActivity.seeds_origin || null,
-          purpose: cropActivity.purpose || null,
-          season_id: cropActivity.season_id || null,
-          sowing_date: cropActivity.sowing_date ? this.formatDate(cropActivity.sowing_date) : null,
-          harvest_date: cropActivity.harvest_date ? this.formatDate(cropActivity.harvest_date) : null,
-          expected_yield: cropActivity.expected_yield || null,
-          expected_yield_unit: cropActivity.expected_yield_unit || null,
-          actual_yield: cropActivity.actual_yield || null,
-          irrigation_type_ids: cropActivity.irrigation_type_ids || [],
-          chemical_usage_ids: cropActivity.chemical_usage_ids || [],
-          fertilizer_usage_ids: cropActivity.fertilizer_usage_ids || [],
+          species_id: this.parseInteger(activity.species_id),
+          crop_id: this.parseInteger(activity.crop_id),
+          crop_species: this.getString(activity, "species"),
+          seeds_origin: this.getString(activity, "seeds_origin"),
+          purpose: this.getString(activity, "purpose"),
+          season_id: this.parseInteger(activity.season_id),
+          sowing_date: sowingDate ? this.formatDate(sowingDate) : null,
+          harvest_date: harvestDate ? this.formatDate(harvestDate) : null,
+          expected_yield: this.parseNumber(activity.expected_yield),
+          expected_yield_unit: this.getString(activity, "expected_yield_unit"),
+          actual_yield: this.parseNumber(activity.actual_yield),
+          irrigation_type_ids: this.getNumberArray(activity, "irrigation_type_ids"),
+          chemical_usage_ids: this.getNumberArray(activity, "chemical_usage_ids"),
+          fertilizer_usage_ids: this.getNumberArray(activity, "fertilizer_usage_ids"),
         };
+
         try {
           await this.odooClient?.create("spp.farm.activity", product);
         } catch (error) {
-          console.error(`Error creating spp.farm.activity product : ${JSON.stringify(product)}`);
+          console.error(`Error creating spp.farm.activity product : ${JSON.stringify(product)}`, error);
           return null;
         }
+
         try {
           cropExternalId = await this.odooClient?.create("spp.farm.activity", cropActivityData);
         } catch (error) {
-          console.error(`Error creating spp.farm.activity cropActivityData : ${JSON.stringify(cropActivityData)}`);
+          console.error(`Error creating spp.farm.activity cropActivityData : ${JSON.stringify(cropActivityData)}`, error);
           return null;
         }
       }
+
+      return cropExternalId;
     } catch (error) {
-      // Log error but don't throw it
-      console.error("Error processing crop for member:", apgCrop.prod_farm_id, error);
-      // alert(`Error processing crop ${JSON.stringify(error)}`)
-      // Continue execution
+      console.error("Error processing crop for member:", apgCrop.entityGuid, error);
       return null;
     }
   }
@@ -578,6 +577,69 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     const newDate = new Date(date);
     return newDate.toISOString().split("T")[0];
   }
+
+  private parseNumber(value: unknown): number | undefined {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === "string") {
+      const parsed = Number(value);
+      return Number.isNaN(parsed) ? undefined : parsed;
+    }
+    return undefined;
+  }
+
+  private parseInteger(value: unknown): number | undefined {
+    const parsed = this.parseNumber(value);
+    return parsed === undefined ? undefined : Math.trunc(parsed);
+  }
+
+  private parseCoordinates(value: unknown): { longitude: number | undefined; latitude: number | undefined } | null {
+    if (typeof value !== "string") {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(value) as {
+        coords?: { longitude?: unknown; latitude?: unknown };
+      };
+      const longitude = this.parseNumber(parsed?.coords?.longitude);
+      const latitude = this.parseNumber(parsed?.coords?.latitude);
+      if (longitude === undefined && latitude === undefined) {
+        return null;
+      }
+      return { longitude, latitude };
+    } catch {
+      return null;
+    }
+  }
+
+  private getString(data: Record<string, unknown>, key: string): string | undefined {
+    const value = data[key];
+    return typeof value === "string" ? value : undefined;
+  }
+
+  private getRecordArray(data: Record<string, unknown>, key: string): Record<string, unknown>[] {
+    const value = data[key];
+    return Array.isArray(value) ? (value as Record<string, unknown>[]) : [];
+  }
+
+  private getNumberArray(data: Record<string, unknown>, key: string): number[] {
+    return this.toNumberArray(data[key]);
+  }
+
+  private isAffirmative(value: unknown): boolean {
+    return typeof value === "string" && value.toLowerCase() === "yes";
+  }
+
+  private toNumberArray(value: unknown): number[] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return (value as unknown[])
+      .map((entry) => this.parseNumber(entry))
+      .filter((entry): entry is number => entry !== undefined);
+  }
+
 }
 
 export default OpenSppSyncAdapter;
