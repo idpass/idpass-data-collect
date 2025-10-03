@@ -30,7 +30,6 @@ describe("Sync Server", () => {
 
   const internalUrl = "http://localhost:3000";
   // const externalUrl = "http://localhost:3001";
-  const userId = "sync-server-test";
 
   beforeAll(async () => {
     process.env.POSTGRES_TEST = process.env.POSTGRES_TEST || "postgresql://admin:admin@localhost:5432/test";
@@ -87,7 +86,6 @@ describe("Sync Server", () => {
         syncLevel: SyncLevel.LOCAL,
       };
 
-      console.log(app.appInstanceStore.getAppInstance(mockConfig.id));
       const manager = (await app.appInstanceStore.getAppInstance(mockConfig.id))?.edm;
       await manager?.submitForm(formData1);
       await manager?.submitForm(formData2);

@@ -15,11 +15,14 @@ describe('OpenFnSyncAdapter', () => {
     eventStore = {
       getLastPullExternalSyncTimestamp: jest.fn(),
       setLastPullExternalSyncTimestamp: jest.fn(),
-    } as any;
+      getLastPushExternalSyncTimestamp: jest.fn(),
+      setLastPushExternalSyncTimestamp: jest.fn(),
+      getEventsSince: jest.fn(),
+    } as unknown as jest.Mocked<EventStore>;
 
     eventApplierService = {
       submitForm: jest.fn(),
-    } as any;
+    } as unknown as jest.Mocked<EventApplierService>;
 
     config = {
       url: 'http://openfn.org/inbox/123',

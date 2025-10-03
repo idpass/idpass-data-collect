@@ -17,7 +17,12 @@
  * under the License.
  */
 
-export const exportModels = {
+export interface ExportModelConfig {
+  model: string;
+  fields: string[];
+}
+
+export const exportModels: Record<string, ExportModelConfig> = {
   registrant_kind: {
     model: "g2p.group.kind",
     fields: ["name", "id"],

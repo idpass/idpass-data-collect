@@ -23,7 +23,6 @@ import {
   EventStore,
   ExternalSyncAdapter,
   ExternalSyncConfig,
-  ExternalSyncCredentials,
   FormSubmission,
   SyncLevel,
 } from "../interfaces/types";
@@ -42,11 +41,11 @@ class MockSyncServerAdapter implements ExternalSyncAdapter {
     this.url = this.config?.url;
   }
 
-  async authenticate(_credentials?: ExternalSyncCredentials): Promise<boolean> {
+  async authenticate(): Promise<boolean> {
     return true;
   }
 
-  async pushData(_credentials?: ExternalSyncCredentials): Promise<void> {
+  async pushData(): Promise<void> {
     if (!this.url) {
       throw new Error("URL is required");
     }
@@ -87,7 +86,7 @@ class MockSyncServerAdapter implements ExternalSyncAdapter {
     return timestamps.length > 0 ? timestamps.reduce((latest, current) => (current > latest ? current : latest)) : null;
   }
 
-  async pullData(_credentials?: ExternalSyncCredentials): Promise<void> {
+  async pullData(): Promise<void> {
     const lastPullExternalSyncTimestamp = await this.eventStore.getLastPullExternalSyncTimestamp();
 
     // save entities to entity store
@@ -132,9 +131,8 @@ class MockSyncServerAdapter implements ExternalSyncAdapter {
     };
   }
 
-  async sync(credentials?: ExternalSyncCredentials): Promise<void> {
-    console.log("sync", credentials);
-    await this.authenticate(credentials);
+  async sync(): Promise<void> {
+    await this.authenticate();
     await this.pushData();
     await this.pullData();
   }

@@ -27,13 +27,22 @@ import {
   GroupMembership,
 } from "./odoo-types";
 
+interface JsonRpcErrorPayload {
+  message?: string;
+}
+
+interface JsonRpcResponse<T> {
+  result: T;
+  error?: JsonRpcErrorPayload;
+}
+
 export default class OdooClient {
   private host: string;
   private db: string;
   private uid: number | null = null;
   private password: string | null = null;
   private username: string | null = null;
-  private registrarGroup:string;
+  private registrarGroup: string;
 
   constructor(config: OdooConfig) {
     this.host = config.host;
@@ -47,10 +56,9 @@ export default class OdooClient {
     return Math.floor(Math.random() * 1000000000);
   }
 
-  private async makeRequest<T>(data: any): Promise<T> {
+  private async makeRequest<T>(data: Record<string, unknown>): Promise<T> {
     try {
-     
-      const response = await axios.post(
+      const response = await axios.post<JsonRpcResponse<T>>(
         `${this.host}/jsonrpc`,
         {
           jsonrpc: "2.0",
@@ -79,15 +87,16 @@ export default class OdooClient {
   }
 
   private async checkUserGroups(uid: number): Promise<boolean> {
+    type ResUsersGroupInfo = { groups_id?: number[] };
+    type ResGroupRecord = { res_id?: number };
+
     try {
-      // Get user's groups
-      const userInfo = await this.callKw("res.users", "read", [[uid], ["groups_id"]]);
-      if (!userInfo || !userInfo[0]) {
+      const userInfo = await this.callKw<ResUsersGroupInfo[]>("res.users", "read", [[uid], ["groups_id"]]);
+      if (!Array.isArray(userInfo) || !userInfo[0]) {
         return false;
       }
 
-      // Get registration group ID
-      const groups = await this.callKw("ir.model.data", "search_read", [
+      const groups = await this.callKw<ResGroupRecord[]>("ir.model.data", "search_read", [
         [
           ["model", "=", "res.groups"],
           ["name", "=", this.registrarGroup],
@@ -95,12 +104,12 @@ export default class OdooClient {
         ["res_id", "name"],
       ]);
 
-      if (!groups || !groups[0]) {
+      if (!Array.isArray(groups) || !groups[0]?.res_id) {
         return false;
       }
 
-      // Check if user has the required group
-      return userInfo[0].groups_id.includes(groups[0].res_id);
+      const userGroups = userInfo[0].groups_id ?? [];
+      return userGroups.includes(groups[0].res_id);
     } catch (error) {
       console.error("Error checking user groups:", error);
       return false;
@@ -124,8 +133,6 @@ export default class OdooClient {
 
     // Check if user is admin
     this.uid = result;
-    this.password = this.password;
-
     const hasRequiredRoles = await this.checkUserGroups(result);
     if (!hasRequiredRoles) {
       throw new Error("Insufficient permissions");
@@ -134,22 +141,22 @@ export default class OdooClient {
     return this.uid;
   }
 
-  async callKw(
+  async callKw<T = unknown>(
     model: string,
     method: string,
-    args: any[] = [],
+    args: unknown[] = [],
     language: string | null = null, // Add language parameter
-  ): Promise<any> {
+  ): Promise<T> {
     if (!this.uid || !this.password) {
       throw new Error("Not authenticated");
     }
-    let context = {};
+    let context: Record<string, unknown> = {};
     // Add language to the context if provided
     if (language) {
       context = { ...context, lang: language };
     }
 
-    return this.makeRequest({
+    return this.makeRequest<T>({
       method: "call",
       params: {
         service: "object",
@@ -161,30 +168,30 @@ export default class OdooClient {
 
   // Keep all the existing methods but they'll now use the new callKw implementation
   async createGroup(data: Partial<OpenSPPGroup>): Promise<number> {
-    return this.callKw("res.partner", "create_from_xml_rpc", [[[], data]]);
+    return this.callKw<number>("res.partner", "create_from_xml_rpc", [[[], data]]);
   }
 
   async searchRead<T extends OdooBaseModel = OdooBaseModel>(
     model: string,
-    domain: any[] = [],
+    domain: unknown[] = [],
     fields: string[] = [],
     language: string | null = null,
     limit: number | null = null,
     offset: number = 0,
   ): Promise<T[]> {
-    return this.callKw(model, "search_read", [domain, fields, limit, offset], language);
+    return this.callKw<T[]>(model, "search_read", [domain, fields, limit, offset], language);
   }
 
   async createHousehold(apgId: number, data: Partial<OpenSPPHousehold>): Promise<number> {
-    return this.callKw("res.partner", "create_from_xml_rpc", [[apgId], data]);
+    return this.callKw<number>("res.partner", "create_from_xml_rpc", [[apgId], data]);
   }
 
   async createIndividual(apgId: number, data: Partial<OpenSPPIndividual>): Promise<number> {
-    return this.callKw("res.partner", "create_from_xml_rpc", [[apgId], data]);
+    return this.callKw<number>("res.partner", "create_from_xml_rpc", [[apgId], data]);
   }
 
   async addMembersToGroup(groupId: number, memberships: GroupMembership[]): Promise<boolean> {
-    return this.callKw("res.partner", "write", [
+    return this.callKw<boolean>("res.partner", "write", [
       [groupId],
       {
         group_membership_ids: memberships.map((m) => [0, 0, m]),
@@ -197,31 +204,31 @@ export default class OdooClient {
     ids: number[],
     fields: string[] = [],
   ): Promise<T[]> {
-    return this.callKw(model, "read", [ids, fields]);
+    return this.callKw<T[]>(model, "read", [ids, fields]);
   }
 
-  async create<T = number>(model: string, data: Record<string, any>): Promise<T> {
-    return this.callKw(model, "create", [data]);
+  async create<T = number>(model: string, data: Record<string, unknown>): Promise<T> {
+    return this.callKw<T>(model, "create", [data]);
   }
 
-  async write<T = boolean>(model: string, ids: number[], data: Record<string, any>): Promise<T> {
-    return this.callKw(model, "write", [ids, data]);
+  async write<T = boolean>(model: string, ids: number[], data: Record<string, unknown>): Promise<T> {
+    return this.callKw<T>(model, "write", [ids, data]);
   }
 
   async unlink<T = boolean>(model: string, ids: number[]): Promise<T> {
-    return this.callKw(model, "unlink", [ids]);
+    return this.callKw<T>(model, "unlink", [ids]);
   }
 
-  async callMethod<T = any>(
+  async callMethod<T = unknown>(
     model: string,
     method: string,
-    args: any[] = [],
-    kwargs: Record<string, any> = {},
+    args: unknown[] = [],
+    kwargs: Record<string, unknown> = {},
   ): Promise<T> {
-    return this.callKw(model, method, [...args, kwargs]);
+    return this.callKw<T>(model, method, [...args, kwargs]);
   }
 
-  async getSessionInfo(): Promise<any> {
+  async getSessionInfo(): Promise<unknown> {
     return this.callKw("res.users", "get_session_info", []);
   }
 
