@@ -1,6 +1,8 @@
 import "dotenv/config";
 
 import axios from "axios";
+import fs from "fs/promises";
+import path from "path";
 import { get } from "lodash";
 import request from "supertest";
 import { v4 as uuidv4 } from "uuid";
@@ -10,6 +12,7 @@ import { SyncServerInstance, AppConfig } from "../types";
 
 const mockConfig: AppConfig = {
   id: "mock-config",
+  artifactId: "mock-config-artifact",
   name: "Mock Config",
   description: "Mock Config Description",
   version: "1.0.0",
@@ -336,6 +339,47 @@ describeIfPostgres("Sync Server", () => {
           syncLevel: SyncLevel.REMOTE,
         },
       ]);
+    });
+  });
+
+  describe("Public artifacts fallback", () => {
+    const artifactPaths = () => {
+      const publicFolder = path.join(__dirname, "..", "public", "artifacts");
+      return {
+        json: path.join(publicFolder, `${mockConfig.artifactId}.json`),
+        png: path.join(publicFolder, `${mockConfig.artifactId}.png`),
+      };
+    };
+
+    it("regenerates the config JSON when it is missing", async () => {
+      const currentApp = requireApp();
+      const { json, png } = artifactPaths();
+      await fs.unlink(json).catch(() => {});
+      await fs.unlink(png).catch(() => {});
+
+      const response = await request(currentApp.httpServer).get(`/artifacts/${mockConfig.artifactId}.json`);
+
+      expect(response.status).toBe(200);
+      expect(response.headers["content-type"]).toContain("application/json");
+      expect(response.headers["content-disposition"]).toContain("attachment");
+      const payload = JSON.parse(response.text);
+      expect(payload.id).toBe(mockConfig.id);
+      expect(payload.syncServerUrl).toBe(baseUrl);
+
+      await expect(fs.access(json)).resolves.toBeUndefined();
+      await expect(fs.access(png)).resolves.toBeUndefined();
+    });
+
+    it("regenerates the QR code when it is missing", async () => {
+      const currentApp = requireApp();
+      const { png } = artifactPaths();
+      await fs.unlink(png).catch(() => {});
+
+      const response = await request(currentApp.httpServer).get(`/artifacts/${mockConfig.artifactId}.png`);
+
+      expect(response.status).toBe(200);
+      expect(response.headers["content-type"]).toBe("image/png");
+      await expect(fs.access(png)).resolves.toBeUndefined();
     });
   });
 

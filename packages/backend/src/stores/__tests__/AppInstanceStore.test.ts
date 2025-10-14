@@ -44,6 +44,7 @@ describeIfPostgres("AppInstanceStore", () => {
 
   const mockConfig: AppConfig = {
     id: "test-config-1",
+    artifactId: "artifact-instance-1",
     name: "Test Config",
     description: "Test configuration",
     version: "1.0.0",

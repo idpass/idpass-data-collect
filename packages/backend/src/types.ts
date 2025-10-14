@@ -91,6 +91,7 @@ export interface AuthConfig {
 
 export interface AppConfig {
   id: string;
+  artifactId?: string;
   name: string;
   description?: string;
   version?: string;
@@ -105,6 +106,7 @@ export interface AppConfigStore {
   initialize(): Promise<void>;
   getConfigs(): Promise<AppConfig[]>;
   getConfig(id: string): Promise<AppConfig>;
+  getConfigByArtifactId(artifactId: string): Promise<AppConfig>;
   saveConfig(config: AppConfig): Promise<void>;
   deleteConfig(id: string): Promise<void>;
   clearStore(): Promise<void>;

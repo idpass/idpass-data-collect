@@ -14,6 +14,7 @@ const router = useRouter()
 interface Props {
   app: {
     id: string
+    artifactId: string
     name: string
     version: string
     entitiesCount: number
@@ -87,7 +88,7 @@ const copyApp = async (id: string) => {
         </template>
         <v-list>
           <v-list-item
-            :href="getAppConfigJsonUrl(app.id)"
+            :href="getAppConfigJsonUrl(app.artifactId)"
             download
             prepend-icon="mdi-download"
             title="Download Config"
@@ -121,7 +122,7 @@ const copyApp = async (id: string) => {
       </v-list>
     </v-card-text>
     <v-card-text class="text-center">
-      <v-img :src="getAppQrCodeUrl(app.id)" alt="QR Code" max-width="100" class="mx-auto"></v-img>
+      <v-img :src="getAppQrCodeUrl(app.artifactId)" alt="QR Code" max-width="100" class="mx-auto"></v-img>
     </v-card-text>
   </v-card>
 
