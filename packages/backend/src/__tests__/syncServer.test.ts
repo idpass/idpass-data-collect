@@ -25,42 +25,95 @@ const mockConfig: AppConfig = {
   ],
 };
 
-describe("Sync Server", () => {
-  let app: SyncServerInstance;
+const getConnectionString = () => {
+  const url = process.env.POSTGRES_TEST;
+  if (!url) return "";
+  const parsed = new URL(url.replace(/ /g, "%20"));
+  const baseName = parsed.pathname.replace(/^\//, "");
+  const dbName = baseName ? `${baseName}_sync_server` : "datacollect_sync_server";
+  parsed.pathname = `/${dbName}`;
+  return parsed.toString();
+};
 
-  const internalUrl = "http://localhost:3000";
-  // const externalUrl = "http://localhost:3001";
+const postgresUrl = getConnectionString();
+const describeIfPostgres = process.env.POSTGRES_TEST ? describe : describe.skip;
+
+const ensureDatabaseExists = async (connectionString: string) => {
+  if (!connectionString) return;
+  const { Client } = require("pg");
+  const parsed = new URL(connectionString);
+  const dbName = parsed.pathname.replace(/^\//, "");
+  if (!dbName) return;
+
+  const adminUrl = new URL(connectionString);
+  adminUrl.pathname = "/postgres";
+
+  const client = new Client({ connectionString: adminUrl.toString() });
+  await client.connect();
+  const result = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
+  if (result.rowCount === 0) {
+    const escapedName = dbName.replace(/"/g, '""');
+    await client.query(`CREATE DATABASE "${escapedName}"`);
+  }
+  await client.end();
+};
+
+describeIfPostgres("Sync Server", () => {
+  let app: SyncServerInstance | null = null;
+  let baseUrl = "";
+
+  const requireApp = (): SyncServerInstance => {
+    if (!app) {
+      throw new Error("Sync server instance is not initialized");
+    }
+    return app;
+  };
+
+  const resolveBaseUrl = (instance: SyncServerInstance): string => {
+    const address = instance.httpServer.address();
+    if (typeof address === "object" && address && address.port) {
+      return `http://127.0.0.1:${address.port}`;
+    }
+    return "http://127.0.0.1";
+  };
 
   beforeAll(async () => {
-    process.env.POSTGRES_TEST = process.env.POSTGRES_TEST || "postgresql://admin:admin@localhost:5432/test";
-    app = await run({
-      port: 3000,
-      adminPassword: "admin1@",
-      adminEmail: "admin@example.com",
-      postgresUrl: process.env.POSTGRES_TEST || "",
-    });
+    if (!process.env.JWT_SECRET) {
+      process.env.JWT_SECRET = "test-secret";
+    }
+    await ensureDatabaseExists(postgresUrl);
   });
 
   beforeEach(async () => {
-    await app.clearStore();
+    if (app) {
+      await requireApp().closeConnection();
+    }
     app = await run({
-      port: 3000,
+      port: 0,
       adminPassword: "admin1@",
       adminEmail: "admin@example.com",
-      postgresUrl: process.env.POSTGRES_TEST || "",
+      postgresUrl: postgresUrl as string,
     });
-    await app.appConfigStore.saveConfig(mockConfig);
-    await app.appInstanceStore.createAppInstance(mockConfig.id);
+    const currentApp = requireApp();
+    baseUrl = resolveBaseUrl(currentApp);
+    await currentApp.appConfigStore.saveConfig(mockConfig);
+    await currentApp.appInstanceStore.createAppInstance(mockConfig.id);
   });
 
   afterEach(async () => {
-    await app.clearStore();
-    await app.closeConnection();
+    if (!app) {
+      return;
+    }
+    const currentApp = requireApp();
+    await currentApp.clearStore();
+    await currentApp.closeConnection();
+    app = null;
   });
 
   describe("GET /sync/pull", () => {
     it("should return events since the given timestamp", async () => {
-      const adminLoginResponse = await axios.post(internalUrl + "/api/users/login", {
+      const currentApp = requireApp();
+      const adminLoginResponse = await axios.post(baseUrl + "/api/users/login", {
         email: "admin@example.com",
         password: "admin1@",
       });
@@ -86,12 +139,12 @@ describe("Sync Server", () => {
         syncLevel: SyncLevel.LOCAL,
       };
 
-      const manager = (await app.appInstanceStore.getAppInstance(mockConfig.id))?.edm;
+      const manager = (await currentApp.appInstanceStore.getAppInstance(mockConfig.id))?.edm;
       await manager?.submitForm(formData1);
       await manager?.submitForm(formData2);
 
       const since = "2023-02-01T00:00:00.000Z";
-      const response = await request(app.httpServer)
+      const response = await request(currentApp.httpServer)
         .get(`/api/sync/pull?since=${since}&configId=${mockConfig.id}`)
         .set("Authorization", `Bearer ${adminToken}`);
 
@@ -113,7 +166,8 @@ describe("Sync Server", () => {
     });
 
     it("should return an empty array if duplicates exist", async () => {
-      const adminLoginResponse = await axios.post(internalUrl + "/api/users/login", {
+      const currentApp = requireApp();
+      const adminLoginResponse = await axios.post(baseUrl + "/api/users/login", {
         email: "admin@example.com",
         password: "admin1@",
       });
@@ -129,11 +183,11 @@ describe("Sync Server", () => {
         syncLevel: SyncLevel.LOCAL,
       };
 
-      const manager = (await app.appInstanceStore.getAppInstance(mockConfig.id))?.edm;
+      const manager = (await currentApp.appInstanceStore.getAppInstance(mockConfig.id))?.edm;
       await manager?.submitForm(formData1);
 
       const since = "2023-01-01T00:00:00.000Z";
-      const response = await request(app.httpServer)
+      const response = await request(currentApp.httpServer)
         .get(`/api/sync/pull?since=${since}&configId=${mockConfig.id}`)
         .set("Authorization", `Bearer ${adminToken}`);
 
@@ -165,7 +219,7 @@ describe("Sync Server", () => {
 
       await manager?.submitForm(formData2);
 
-      const response2 = await request(app.httpServer)
+      const response2 = await request(currentApp.httpServer)
         .get(`/api/sync/pull?since=${since}&configId=${mockConfig.id}`)
         .set("Authorization", `Bearer ${adminToken}`);
 
@@ -179,7 +233,8 @@ describe("Sync Server", () => {
 
   describe("POST /sync/push", () => {
     it("should push events to the event store", async () => {
-      const adminLoginResponse = await axios.post(internalUrl + "/api/users/login", {
+      const currentApp = requireApp();
+      const adminLoginResponse = await axios.post(baseUrl + "/api/users/login", {
         email: "admin@example.com",
         password: "admin1@",
       });
@@ -206,12 +261,12 @@ describe("Sync Server", () => {
         },
       ];
 
-      const response = await request(app.httpServer)
+      const response = await request(currentApp.httpServer)
         .post("/api/sync/push")
         .send({ events, configId: mockConfig.id })
         .set("Authorization", `Bearer ${adminToken}`);
 
-      const manager = (await app.appInstanceStore.getAppInstance(mockConfig.id))?.edm;
+      const manager = (await currentApp.appInstanceStore.getAppInstance(mockConfig.id))?.edm;
       const pushedEntities = await manager?.getAllEntities();
       const pushedEvents = await manager?.getAllEvents();
 
@@ -286,20 +341,23 @@ describe("Sync Server", () => {
 
   describe("Has admin user", () => {
     it("should return true if there is an admin user", async () => {
-      const hasAdmin = await app.userStore.hasAtLeastOneAdmin();
+      const currentApp = requireApp();
+      const hasAdmin = await currentApp.userStore.hasAtLeastOneAdmin();
       expect(hasAdmin).toBe(true);
     });
 
     it("should return false if there is no admin user", async () => {
-      await app.userStore.clearStore();
-      const hasAdmin = await app.userStore.hasAtLeastOneAdmin();
+      const currentApp = requireApp();
+      await currentApp.userStore.clearStore();
+      const hasAdmin = await currentApp.userStore.hasAtLeastOneAdmin();
       expect(hasAdmin).toBe(false);
     });
   });
 
   describe("POST /potential-duplicates/resolve", () => {
     it("should resolve potential duplicates and delete the new item", async () => {
-      const adminLoginResponse = await axios.post(internalUrl + "/api/users/login", {
+      const currentApp = requireApp();
+      const adminLoginResponse = await axios.post(baseUrl + "/api/users/login", {
         email: "admin@example.com",
         password: "admin1@",
       });
@@ -317,7 +375,7 @@ describe("Sync Server", () => {
         userId: "user-1",
         syncLevel: SyncLevel.LOCAL,
       };
-      const manager = (await app.appInstanceStore.getAppInstance(mockConfig.id))?.edm;
+      const manager = (await currentApp.appInstanceStore.getAppInstance(mockConfig.id))?.edm;
       await manager?.submitForm({ ...formData1, guid: uuidv4(), entityGuid: entityGuid1 });
       await manager?.submitForm({ ...formData1, guid: uuidv4(), entityGuid: entityGuid2 });
 
@@ -329,7 +387,7 @@ describe("Sync Server", () => {
         },
       ]);
 
-      const response = await request(app.httpServer)
+      const response = await request(currentApp.httpServer)
         .post("/api/potential-duplicates/resolve")
         .send({ newItem: entityGuid2, existingItem: entityGuid1, shouldDeleteNewItem: true, configId: mockConfig.id })
         .set("Authorization", `Bearer ${adminToken}`);

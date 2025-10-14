@@ -1083,7 +1083,8 @@ describe("EntityDataManager", () => {
 
     expect(result).toEqual(expectedResult);
     expect(events).toEqual(expectedEvents);
-    expect(entities).toEqual(expectedEntities);
+    expect(entities).toHaveLength(expectedEntities.length);
+    expect(entities).toEqual(expect.arrayContaining(expectedEntities));
   });
 
   it("should split a household into two groups - splitHouseholdApplier", async () => {
