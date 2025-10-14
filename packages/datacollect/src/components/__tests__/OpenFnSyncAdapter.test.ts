@@ -1,6 +1,9 @@
-import { OpenFnSyncAdapter } from '../openfn/OpenFnSyncAdapter';
-import { EventStore, EventApplierService, ExternalSyncConfig, FormSubmission, SyncLevel } from '../../interfaces/types';
 import axios from 'axios';
+
+import OpenFnSyncAdapter from '../openfn/OpenFnSyncAdapter';
+import type { EventStore, ExternalSyncConfig, FormSubmission } from '../../interfaces/types';
+import { SyncLevel } from '../../interfaces/types';
+import type { EventApplierService } from '../../services/EventApplierService';
 
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
@@ -8,7 +11,8 @@ const mockedAxios = axios as jest.Mocked<typeof axios>;
 describe('OpenFnSyncAdapter', () => {
   let adapter: OpenFnSyncAdapter;
   let eventStore: jest.Mocked<EventStore>;
-  let eventApplierService: jest.Mocked<EventApplierService>;
+  let eventApplierService: EventApplierService;
+  let submitFormMock: jest.MockedFunction<EventApplierService["submitForm"]>;
   let config: ExternalSyncConfig;
 
   beforeEach(() => {
@@ -20,11 +24,13 @@ describe('OpenFnSyncAdapter', () => {
       getEventsSince: jest.fn(),
     } as unknown as jest.Mocked<EventStore>;
 
+    submitFormMock = jest.fn();
     eventApplierService = {
-      submitForm: jest.fn(),
-    } as unknown as jest.Mocked<EventApplierService>;
+      submitForm: submitFormMock,
+    } as unknown as EventApplierService;
 
     config = {
+      type: 'openfn',
       url: 'http://openfn.org/inbox/123',
       extraFields: [{ name: 'apiKey', value: 'test-key' }],
     };
@@ -62,17 +68,17 @@ describe('OpenFnSyncAdapter', () => {
         params: { since: '2025-09-24T09:00:00.000Z' },
       });
 
-      expect(eventApplierService.submitForm).toHaveBeenCalledTimes(2);
+      expect(submitFormMock).toHaveBeenCalledTimes(2);
 
-      const firstCall = eventApplierService.submitForm.mock.calls[0][0] as FormSubmission;
+      const firstCall = submitFormMock.mock.calls[0][0] as FormSubmission;
       expect(firstCall.type).toBe('create-individual');
-      expect(firstCall.data.name).toBe('John Doe');
+      expect(firstCall.data).toMatchObject({ data: { name: 'John Doe' } });
       expect(firstCall.syncLevel).toBe(SyncLevel.REMOTE);
 
-      const secondCall = eventApplierService.submitForm.mock.calls[1][0] as FormSubmission;
+      const secondCall = submitFormMock.mock.calls[1][0] as FormSubmission;
       expect(secondCall.type).toBe('update-individual');
       expect(secondCall.entityGuid).toBe('person1');
-      expect(secondCall.data.age).toBe(30);
+      expect(secondCall.data).toMatchObject({ data: { age: 30 } });
       expect(secondCall.syncLevel).toBe(SyncLevel.REMOTE);
 
       expect(eventStore.setLastPullExternalSyncTimestamp).toHaveBeenCalledWith('2025-09-24T11:00:00.000Z');

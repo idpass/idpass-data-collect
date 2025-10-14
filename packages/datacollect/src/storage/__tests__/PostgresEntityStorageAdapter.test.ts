@@ -1,17 +1,58 @@
 import "dotenv/config";
 
+const shouldUseRealPostgres = Boolean(process.env.POSTGRES_TEST);
+
+if (!shouldUseRealPostgres) {
+  jest.mock("pg", () => {
+    const { newDb } = require("pg-mem");
+    const db = newDb();
+    const pg = db.adapters.createPg();
+    return { Pool: pg.Pool };
+  });
+}
+
+const getConnectionString = () => {
+  const url = process.env.POSTGRES_TEST;
+  return url ? url.replace(/ /g, "%20") : "";
+};
+
+const ensureDatabaseExists = async (connectionString: string) => {
+  if (!connectionString) return;
+  const { Client } = require("pg");
+  const parsed = new URL(connectionString);
+  const dbName = parsed.pathname.replace(/^\//, "");
+  if (!dbName) return;
+
+  const adminUrl = new URL(connectionString);
+  adminUrl.pathname = "/postgres";
+
+  const client = new Client({ connectionString: adminUrl.toString() });
+  await client.connect();
+  const result = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
+  if (result.rowCount === 0) {
+    const escapedName = dbName.replace(/"/g, '""');
+    await client.query(`CREATE DATABASE "${escapedName}"`);
+  }
+  await client.end();
+};
 import { EntityDoc, EntityType } from "../../interfaces/types";
 import { PostgresEntityStorageAdapter } from "../PostgresEntityStorageAdapter";
 
-describe("PostgresEntityStorageAdapter", () => {
+const describeIfPostgres = process.env.POSTGRES_TEST ? describe : describe.skip;
+
+describeIfPostgres("PostgresEntityStorageAdapter", () => {
   let adapter: PostgresEntityStorageAdapter;
 
-  beforeAll(async () => {});
+  beforeAll(async () => {
+    if (shouldUseRealPostgres) {
+      await ensureDatabaseExists(getConnectionString());
+    }
+  });
 
   afterAll(async () => {});
 
   beforeEach(async () => {
-    adapter = new PostgresEntityStorageAdapter(process.env.POSTGRES_TEST || "");
+    adapter = new PostgresEntityStorageAdapter(getConnectionString());
     await adapter.initialize();
     await adapter.clearStore();
   });
