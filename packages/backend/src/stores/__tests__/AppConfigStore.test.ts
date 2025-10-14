@@ -63,6 +63,7 @@ describeIfPostgres("AppConfigStore", () => {
 
   const mockConfig: AppConfig = {
     id: "test-config-1",
+    artifactId: "artifact-test-1",
     name: "Test Config",
     description: "Test configuration",
     version: "1.0.0",
@@ -172,6 +173,7 @@ describeIfPostgres("AppConfigStore", () => {
         ...mockConfig,
         name: "Test Config 2",
         id: "test-config-2",
+        artifactId: "artifact-test-2",
       };
 
       await adapter.saveConfig(mockConfig);

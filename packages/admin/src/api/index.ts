@@ -71,6 +71,7 @@ export interface AppListParams {
 
 export interface AppListItem {
   id: string
+  artifactId: string
   name: string
   version: string
   entitiesCount: number
@@ -134,18 +135,26 @@ export const deleteApp = async (id: string) => {
   return response.data
 }
 
-export const getAppConfigJsonUrl = (id: string) => {
+export const getAppConfigJsonUrl = (artifactId: string) => {
   if (!instance) {
     throw new Error('Instance not initialized')
   }
-  return `${API_URL}/${id}.json`
+  if (!artifactId) {
+    throw new Error('Artifact id is required')
+  }
+  const baseUrl = API_URL.replace(/\/+$/, '')
+  return `${baseUrl}/artifacts/${artifactId}.json`
 }
 
-export const getAppQrCodeUrl = (id: string) => {
+export const getAppQrCodeUrl = (artifactId: string) => {
   if (!instance) {
     throw new Error('Instance not initialized')
   }
-  return `${API_URL}/${id}.png`
+  if (!artifactId) {
+    throw new Error('Artifact id is required')
+  }
+  const baseUrl = API_URL.replace(/\/+$/, '')
+  return `${baseUrl}/artifacts/${artifactId}.png`
 }
 
 export const getEntitiesCount = async (configId: string) => {

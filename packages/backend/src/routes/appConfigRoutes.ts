@@ -17,18 +17,26 @@
  * under the License.
  */
 
-import { Request, Router } from "express";
+import { randomBytes } from "crypto";
+import { Router } from "express";
 import { authenticateJWT } from "../middlewares/authentication";
-import { asyncHandler } from "../middlewares/errorHandlers";
-import { AppConfig, AppConfigStore, AppInstanceStore } from "../types";
+import { AppError, asyncHandler } from "../middlewares/errorHandlers";
+import { AppConfigStore, AppInstanceStore } from "../types";
 import multer from "multer";
 import fs from "fs/promises";
-import qrcode from "qrcode";
-import path from "path";
-import { set } from "lodash";
+import { generatePublicArtifacts, getPublicArtifactPaths, resolvePublicBaseUrl } from "../utils/publicArtifacts";
 
 export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanceStore: AppInstanceStore): Router {
   const router = Router();
+  const CONFIG_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+
+  const ensureValidConfigId = (id: unknown) => {
+    if (typeof id !== "string" || !CONFIG_ID_PATTERN.test(id)) {
+      throw new AppError("Invalid config id. Use alphanumeric characters, hyphen or underscore.", 400);
+    }
+  };
+
+  const generateArtifactId = () => randomBytes(16).toString("hex");
 
   // Configure multer for JSON file uploads
   const upload = multer({
@@ -74,6 +82,7 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
 
           return {
             id: config.id,
+            artifactId: config.artifactId,
             name: config.name,
             version: config.version || "",
             externalSync: config.externalSync || {},
@@ -150,18 +159,24 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
         // Read the uploaded JSON file
         const fileContent = await fs.readFile(req.file.path, "utf-8");
         const appConfig = JSON.parse(fileContent);
+        ensureValidConfigId(appConfig.id);
+        const configToPersist = {
+          ...appConfig,
+          artifactId: generateArtifactId(),
+        };
 
-        await appConfigStore.saveConfig(appConfig);
-        await appInstanceStore.createAppInstance(appConfig.id);
-        await appInstanceStore.loadEntityData(appConfig.id);
+        await appConfigStore.saveConfig(configToPersist);
+        await appInstanceStore.createAppInstance(configToPersist.id);
+        await appInstanceStore.loadEntityData(configToPersist.id);
 
         // Clean up - delete the uploaded file
         await fs.unlink(req.file.path);
 
-        // generate public json and qr code
-        await generatePublicJsonAndQR(req, appConfig.id, appConfig);
+        const baseUrl = resolvePublicBaseUrl(req);
+        const persistedConfig = await appConfigStore.getConfig(configToPersist.id);
+        await generatePublicArtifacts(baseUrl, persistedConfig);
 
-        res.json({ status: "success" });
+        res.json({ status: "success", artifactId: persistedConfig.artifactId });
       } catch (error) {
         // Clean up on error
         if (req.file) {
@@ -186,16 +201,27 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
         // Read the uploaded JSON file
         const fileContent = await fs.readFile(req.file.path, "utf-8");
         const updatedAppConfig = JSON.parse(fileContent);
-        await appConfigStore.saveConfig(updatedAppConfig);
+        ensureValidConfigId(updatedAppConfig.id);
+        if (updatedAppConfig.id !== id) {
+          throw new AppError("Config id mismatch between payload and URL", 400);
+        }
+
+        const existingConfig = await appConfigStore.getConfig(id);
+        const configToPersist = {
+          ...updatedAppConfig,
+          artifactId: existingConfig.artifactId ?? generateArtifactId(),
+        };
+        await appConfigStore.saveConfig(configToPersist);
         await appInstanceStore.updateAppInstance(id);
 
         // Clean up - delete the uploaded file
         await fs.unlink(req.file.path);
 
-        // generate public json and qr code
-        await generatePublicJsonAndQR(req, id, updatedAppConfig);
+        const baseUrl = resolvePublicBaseUrl(req);
+        const persistedConfig = await appConfigStore.getConfig(id);
+        await generatePublicArtifacts(baseUrl, persistedConfig);
 
-        res.json({ status: "success" });
+        res.json({ status: "success", artifactId: persistedConfig.artifactId });
       } catch (error) {
         // Clean up on error
         if (req.file) {
@@ -212,48 +238,39 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
     asyncHandler(async (req, res) => {
       // get body
       const { id } = req.params;
+      let artifactId: string | undefined;
+      try {
+        const config = await appConfigStore.getConfig(id);
+        artifactId = config.artifactId;
+      } catch (error) {
+        if (!(error instanceof Error) || !error.message.includes("not found")) {
+          throw error;
+        }
+      }
+
       await appConfigStore.deleteConfig(id);
       await appInstanceStore.clearAppInstance(id);
-      await deletePublicJsonAndQR(id);
+      await deletePublicArtifacts(artifactId);
 
       res.json({ status: "success" });
     }),
   );
 
-  async function generatePublicJsonAndQR(
-    req: Request,
-    id: string,
-    appConfig: AppConfig,
-  ) {
-    // check if file exists then exit
-    const publicJsonPath = path.join(__dirname, "..", "public", `${id}.json`);
-    if (
-      await fs
-        .access(publicJsonPath)
-        .then(() => true)
-        .catch(() => false)
-    ) {
+  async function deletePublicArtifacts(artifactId?: string) {
+    if (!artifactId) {
       return;
     }
-    const fullUrl = req.protocol + "://" + req.get("host");
-    set(appConfig, "syncServerUrl", fullUrl);
-    const publicJson = JSON.stringify(appConfig, null, 2);
-
-    await fs.writeFile(publicJsonPath, publicJson);
-    // get public json url with current host and port
-    const publicJsonUrl = `${fullUrl}/${id}.json`;
-
-    // write publicJsonUrl to qr code
-    const qrPath = path.join(__dirname, "..", "public", `${id}.png`);
-    await qrcode.toFile(qrPath, publicJsonUrl);
-    return;
-  }
-
-  async function deletePublicJsonAndQR(id: string) {
-    const publicJsonPath = path.join(__dirname, "..", "public", `${id}.json`);
-    await fs.unlink(publicJsonPath);
-    const qrPath = path.join(__dirname, "..", "public", `${id}.png`);
-    await fs.unlink(qrPath);
+    const { jsonPath, qrPath } = getPublicArtifactPaths(artifactId);
+    await fs.unlink(jsonPath).catch((error) => {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw error;
+      }
+    });
+    await fs.unlink(qrPath).catch((error) => {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw error;
+      }
+    });
   }
 
   return router;

@@ -26,6 +26,7 @@ type AuthConfig = {
 }
 
 type ConfigSchema = {
+  artifactId?: string
   name: string
   description: string
   version: string
@@ -40,6 +41,7 @@ const route = useRoute()
 const isEdit = ref(false)
 const showBuilder = ref(false)
 const form = ref<ConfigSchema>({
+  artifactId: undefined,
   name: '',
   description: '',
   version: '1',
@@ -151,6 +153,7 @@ const createConfig = async () => {
     }
 
     const config = {
+      artifactId: form.value.artifactId || undefined,
       id: form.value.name.toLowerCase().replace(/ /g, '-'),
       name: form.value.name,
       description: form.value.description,
@@ -186,6 +189,7 @@ const updateConfig = async () => {
     }
 
     const config = {
+      artifactId: form.value.artifactId || undefined,
       id: route.params.id as string,
       name: form.value.name,
       description: form.value.description,
@@ -324,6 +328,7 @@ const saveFormio = (formio: object) => {
   if (index !== -1) {
     form.value.entityForms[index].formio = formio
   }
+  console.log('saveFormio', formio);
   selectedForFormBuilder.value = null
 }
 

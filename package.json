@@ -8,8 +8,8 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "install:all": "pnpm recursive install",
-    "clean": "pnpm -r --if-present run clean && rm -rf node_modules",
+    "reinstall": "pnpm run clean && pnpm recursive install",
+    "clean": "pnpm -r --if-present run clean && rm -rf **/*/node_modules",
     "test": "pnpm -r --if-present run test",
     "test:datacollect": "pnpm --filter @idpass/data-collect-core test",
     "test:backend": "pnpm --filter @idpass/data-collect-backend test",

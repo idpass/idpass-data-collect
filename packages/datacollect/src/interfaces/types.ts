@@ -661,6 +661,7 @@ export function getExternalField(
   config: ExternalSyncConfig,
   fieldName: string,
 ): string | undefined {
+  console.log("getExternalField", config, fieldName)
   return config.extraFields?.find((field) => field.name === fieldName)?.value;
 }
 

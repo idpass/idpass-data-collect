@@ -15,8 +15,8 @@ router.push = mockPush
 
 // Mock the API functions
 vi.mock('@/api', () => ({
-  getAppConfigJsonUrl: vi.fn((id) => `http://example.com/config/${id}`),
-  getAppQrCodeUrl: vi.fn((id) => `http://example.com/qr/${id}`),
+  getAppConfigJsonUrl: vi.fn((artifactId) => `http://example.com/config/${artifactId}`),
+  getAppQrCodeUrl: vi.fn((artifactId) => `http://example.com/qr/${artifactId}`),
   deleteApp: vi.fn(),
   externalSync: vi.fn(),
 }))
@@ -24,6 +24,7 @@ vi.mock('@/api', () => ({
 describe('AppCard', () => {
   const mockApp = {
     id: '123',
+    artifactId: 'artifact-123',
     name: 'Test App',
     version: '1.0.0',
     entitiesCount: 5,
