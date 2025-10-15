@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from "uuid";
 import { FormSubmission, SyncLevel } from "@idpass/data-collect-core";
 import { run } from "../syncServer";
 import { SyncServerInstance, AppConfig } from "../types";
+import { Client } from "pg";
 
 const mockConfig: AppConfig = {
   id: "mock-config",
@@ -43,7 +44,7 @@ const describeIfPostgres = process.env.POSTGRES_TEST ? describe : describe.skip;
 
 const ensureDatabaseExists = async (connectionString: string) => {
   if (!connectionString) return;
-  const { Client } = require("pg");
+
   const parsed = new URL(connectionString);
   const dbName = parsed.pathname.replace(/^\//, "");
   if (!dbName) return;

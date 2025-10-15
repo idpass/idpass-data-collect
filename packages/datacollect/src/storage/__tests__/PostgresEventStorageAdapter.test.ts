@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { Client } from "pg";
 
 import { v4 as uuidv4 } from "uuid";
 import { AuditLogEntry, FormSubmission, SyncLevel } from "../../interfaces/types";
@@ -11,7 +12,7 @@ const getConnectionString = () => {
 
 const ensureDatabaseExists = async (connectionString: string) => {
   if (!connectionString) return;
-  const { Client } = require("pg");
+  
   const parsed = new URL(connectionString);
   const dbName = parsed.pathname.replace(/^\//, "");
   if (!dbName) return;
