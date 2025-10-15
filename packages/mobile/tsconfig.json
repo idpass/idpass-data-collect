@@ -21,8 +21,8 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "@idpass/data-collect-core": ["../datacollect/dist/types/index.d.ts"],
-      "@idpass/data-collect-core/*": ["../datacollect/dist/types/*"],
+      "@idpass/data-collect-core": ["../datacollect/src/index.ts"],
+      "@idpass/data-collect-core/*": ["../datacollect/src/*"],
       "@/*": ["./src/*"]
     }
   },
