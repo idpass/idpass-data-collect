@@ -22,7 +22,7 @@ import {
   FormSubmission,
   EventStore,
   SyncLevel,
-  AuditLogEntry,
+  // AuditLogEntry,
   EntityStore,
   AuthStorageAdapter,
 } from "../interfaces/types";
@@ -201,9 +201,9 @@ export class InternalSyncManager {
    *
    * @private
    */
-  private async pushAuditLogsToRemote(auditLogs: AuditLogEntry[]): Promise<void> {
-    await this.axiosInstance.post("/api/sync/push/audit-logs", { auditLogs, configId: this.configId });
-  }
+  // private async pushAuditLogsToRemote(auditLogs: AuditLogEntry[]): Promise<void> {
+  //   await this.axiosInstance.post("/api/sync/push/audit-logs", { auditLogs, configId: this.configId });
+  // }
 
   /**
    * Splits an array into smaller chunks of specified size.

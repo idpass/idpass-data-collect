@@ -51,8 +51,12 @@ watch(
 watch(
   fieldArray,
   (newVal) => {
-    const payload = asArray.value ? cloneFields(newVal) : toRecord(newVal)
-    emit('update:modelValue', payload)
+    if (asArray.value) {
+      emit('update:modelValue', cloneFields(newVal))
+      return
+    }
+
+    emit('update:modelValue', toRecord(newVal))
   },
   { deep: true },
 )

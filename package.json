@@ -28,7 +28,8 @@
     "type-check": "pnpm -r --if-present run type-check",
     "ci:setup": "echo 'enable-pre-post-scripts=true' > .npmrc && echo 'auto-install-peers=true' >> .npmrc && echo 'strict-peer-dependencies=false' >> .npmrc",
     "ci:install": "pnpm run ci:setup && pnpm install",
-    "prepare": "[ \"$CI\" != \"true\" ] && husky install || echo 'Skipping husky in CI'"
+    "prepare": "[ \"$CI\" != \"true\" ] && husky install || echo 'Skipping husky in CI'",
+    "pr-check": "pnpm run type-check && pnpm run lint && pnpm run test"
   },
   "devDependencies": {
     "glob": "^10.4.5",

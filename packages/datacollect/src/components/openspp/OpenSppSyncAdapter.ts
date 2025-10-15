@@ -25,7 +25,7 @@ import {
   FormSubmission,
   getExternalField,
 } from "../../interfaces/types";
-import { EventApplierService } from "../../services/EventApplierService";
+// import { EventApplierService } from "../../services/EventApplierService";
 import OdooClient from "./OdooClient";
 import { OdooConfig } from "./odoo-types";
 
@@ -51,23 +51,15 @@ interface RegisteredIndividual {
 
 class OpenSppSyncAdapter implements ExternalSyncAdapter {
   private url: string;
-  private batchSize = 100;
   private odooClient: OdooClient | null = null;
   private lastCredentials: ExternalSyncCredentials | null = null;
 
   constructor(
     private eventStore: EventStore,
-    private eventApplierService: EventApplierService,
+    // private eventApplierService: EventApplierService,
     private config: ExternalSyncConfig,
   ) {
     this.url = (this.config?.url as string | undefined) ?? "";
-    const configuredBatchSize = getExternalField(this.config, "batchSize");
-    if (configuredBatchSize) {
-      const parsed = parseInt(configuredBatchSize, 10);
-      if (!Number.isNaN(parsed)) {
-        this.batchSize = parsed;
-      }
-    }
   }
 
   async authenticate(credentials?: ExternalSyncCredentials): Promise<boolean> {
