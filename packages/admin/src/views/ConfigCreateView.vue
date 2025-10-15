@@ -1,12 +1,13 @@
 <script setup lang="ts">
+import type { ExternalSyncField } from '@idpass/data-collect-core'
+import merge from 'lodash/merge'
+import set from 'lodash/set'
+import { onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { createApp as createAppApi, getApp, updateApp as updateAppApi } from '@/api'
 import FormBuilderDialog from '@/components/FormBuilderDialog.vue'
 import FieldsInput from '@/components/FieldsInput.vue'
 import { useSnackBarStore } from '@/stores/snackBar'
-import set from 'lodash/set'
-import { onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import merge from 'lodash/merge'
 
 type EntityForm = {
   name: string
@@ -17,7 +18,7 @@ type EntityForm = {
 type ExternalSync = {
   type?: string
   url: string
-  extraFields: Record<string, string>
+  extraFields: ExternalSyncField[]
 }
 
 type AuthConfig = {
@@ -49,7 +50,7 @@ const form = ref<ConfigSchema>({
   externalSync: {
     type: undefined,
     url: '',
-    extraFields: {},
+    extraFields: [],
   },
   authConfigs: [],
 })
@@ -456,7 +457,7 @@ const removeAuthConfig = (index: number) => {
               required
               :error-messages="urlError"
             ></v-text-field>
-            <FieldsInput v-model="form.externalSync.extraFields" />
+            <FieldsInput v-model="form.externalSync.extraFields" :as-array="true" />
 
             <!-- AUTH CONFIG -->
             <v-divider class="my-6"></v-divider>

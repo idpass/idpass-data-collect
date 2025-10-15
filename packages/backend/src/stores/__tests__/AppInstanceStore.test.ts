@@ -4,6 +4,7 @@ import { Pool } from "pg";
 import { AppConfigStoreImpl } from "../AppConfigStore";
 import { AppInstanceStoreImpl } from "../AppInstanceStore";
 import { AppConfig } from "../../types";
+import { Client } from "pg";
 
 const getConnectionString = () => {
   const url = process.env.POSTGRES_TEST;
@@ -17,7 +18,6 @@ const getConnectionString = () => {
 
 const ensureDatabaseExists = async (connectionString: string) => {
   if (!connectionString) return;
-  const { Client } = require("pg");
   const parsed = new URL(connectionString);
   const dbName = parsed.pathname.replace(/^\//, "");
   if (!dbName) return;

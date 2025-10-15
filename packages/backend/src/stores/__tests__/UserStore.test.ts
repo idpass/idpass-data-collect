@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { Role, UserWithPasswordHash } from "../../types";
 import { UserStoreImpl } from "../UserStore";
+import { Client } from "pg";
 
 const getConnectionString = () => {
   const url = process.env.POSTGRES_TEST;
@@ -14,7 +15,6 @@ const getConnectionString = () => {
 
 const ensureDatabaseExists = async (connectionString: string) => {
   if (!connectionString) return;
-  const { Client } = require("pg");
   const parsed = new URL(connectionString);
   const dbName = parsed.pathname.replace(/^\//, "");
   if (!dbName) return;

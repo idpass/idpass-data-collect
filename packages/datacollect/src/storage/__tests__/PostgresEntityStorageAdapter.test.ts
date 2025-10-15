@@ -1,10 +1,11 @@
 import "dotenv/config";
+import { newDb } from "pg-mem";
+import { Client } from "pg";
 
 const shouldUseRealPostgres = Boolean(process.env.POSTGRES_TEST);
 
 if (!shouldUseRealPostgres) {
   jest.mock("pg", () => {
-    const { newDb } = require("pg-mem");
     const db = newDb();
     const pg = db.adapters.createPg();
     return { Pool: pg.Pool };
@@ -18,7 +19,6 @@ const getConnectionString = () => {
 
 const ensureDatabaseExists = async (connectionString: string) => {
   if (!connectionString) return;
-  const { Client } = require("pg");
   const parsed = new URL(connectionString);
   const dbName = parsed.pathname.replace(/^\//, "");
   if (!dbName) return;
