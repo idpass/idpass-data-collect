@@ -1,17 +1,45 @@
 import "dotenv/config";
-import { Pool } from "pg";
 import { Role, UserWithPasswordHash } from "../../types";
 import { UserStoreImpl } from "../UserStore";
+import { Client } from "pg";
 
-describe("UserStore", () => {
+const getConnectionString = () => {
+  const url = process.env.POSTGRES_TEST;
+  if (!url) return "";
+  const parsed = new URL(url.replace(/ /g, "%20"));
+  const baseName = parsed.pathname.replace(/^\//, "");
+  const dbName = baseName ? `${baseName}_user_store` : "datacollect_user_store";
+  parsed.pathname = `/${dbName}`;
+  return parsed.toString();
+};
+
+const ensureDatabaseExists = async (connectionString: string) => {
+  if (!connectionString) return;
+  const parsed = new URL(connectionString);
+  const dbName = parsed.pathname.replace(/^\//, "");
+  if (!dbName) return;
+
+  const adminUrl = new URL(connectionString);
+  adminUrl.pathname = "/postgres";
+
+  const client = new Client({ connectionString: adminUrl.toString() });
+  await client.connect();
+  const result = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
+  if (result.rowCount === 0) {
+    const escapedName = dbName.replace(/"/g, '""');
+    await client.query(`CREATE DATABASE "${escapedName}"`);
+  }
+  await client.end();
+};
+
+const describeIfPostgres = process.env.POSTGRES_TEST ? describe : describe.skip;
+
+describeIfPostgres("UserStore", () => {
   let adapter: UserStoreImpl;
-  let pool: Pool;
 
   beforeAll(async () => {
-    pool = new Pool({
-      connectionString: process.env.POSTGRES_TEST || "",
-    });
-    adapter = new UserStoreImpl(process.env.POSTGRES_TEST || "");
+    await ensureDatabaseExists(getConnectionString());
+    adapter = new UserStoreImpl(getConnectionString());
     await adapter.initialize();
   });
 
@@ -22,7 +50,6 @@ describe("UserStore", () => {
   afterAll(async () => {
     await adapter.clearStore();
     await adapter.closeConnection();
-    await pool.end();
   });
 
   test("saveUser and getUser should work correctly", async () => {

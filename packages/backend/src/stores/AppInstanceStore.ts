@@ -27,9 +27,10 @@ import {
   ExternalSyncManager,
   SyncLevel,
   AuthManager,
-} from "idpass-data-collect";
+} from "@idpass/data-collect-core";
 import { v4 as uuidv4 } from "uuid";
 import { AppConfigStore, AppInstance, AppInstanceStore } from "../types";
+import { InMemoryAuthStorageAdapter } from "../auth/InMemoryAuthStorageAdapter";
 
 export class AppInstanceStoreImpl implements AppInstanceStore {
   private instances: Record<string, AppInstance> = {};
@@ -59,8 +60,12 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
     const entityStore = new EntityStoreImpl(new PostgresEntityStorageAdapter(this.postgresUrl, configId));
     await entityStore.initialize();
     let authManager: AuthManager | undefined;
-    if (config.authConfigs) {
-      authManager = new AuthManager(config.authConfigs, "");
+    if (config.authConfigs && config.authConfigs.length > 0) {
+      const syncServerUrl =
+        config.url || process.env.SYNC_SERVER_PUBLIC_URL || process.env.SYNC_SERVER_URL || "";
+      const authStorage = new InMemoryAuthStorageAdapter(configId);
+      await authStorage.initialize();
+      authManager = new AuthManager(config.authConfigs, syncServerUrl, authStorage);
       await authManager.initialize();
     }
 

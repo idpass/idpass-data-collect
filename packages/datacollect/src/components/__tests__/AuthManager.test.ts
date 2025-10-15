@@ -359,6 +359,7 @@ describe("AuthManager", () => {
   describe("edge cases", () => {
     it("should handle empty configs array", async () => {
       const authManagerEmpty = new AuthManager([], "http://localhost:8080", mockAuthStorage);
+      mockAuthStorage.getTokenByProvider.mockResolvedValueOnce("");
       await authManagerEmpty.initialize();
 
       const result = await authManagerEmpty.isAuthenticated();

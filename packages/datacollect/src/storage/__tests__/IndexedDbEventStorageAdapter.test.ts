@@ -132,6 +132,15 @@ describe("IndexedDbEventStorageAdapter", () => {
 
     const savedMerkleRoot = await adapter.getMerkleRoot();
     expect(savedMerkleRoot).toBe(merkleRoot);
+
+    const updatedRoot = "updated-root";
+    await adapter.saveMerkleRoot(updatedRoot);
+    const refreshedRoot = await adapter.getMerkleRoot();
+    expect(refreshedRoot).toBe(updatedRoot);
+
+    await adapter.saveMerkleRoot("");
+    const clearedRoot = await adapter.getMerkleRoot();
+    expect(clearedRoot).toBe("");
   });
 
   test("getEventsSince should return events after the given timestamp", async () => {

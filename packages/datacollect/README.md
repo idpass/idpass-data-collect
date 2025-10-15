@@ -19,7 +19,7 @@ ID PASS DataCollect is a TypeScript library that provides a comprehensive offlin
 - **Pluggable Storage**: IndexedDB for browsers, PostgreSQL for servers
 - **Cryptographic Integrity**: SHA256-based Merkle tree for data verification
 - **Duplicate Detection**: Automatic detection of potential duplicate entities
-- **External Integration**: Built-in adapters for OpenSPP, OpenFn and other systems
+- **External Integration**: Built-in adapters for OpenFn and OpenSPP (in beta)
 
 ## Installation
 

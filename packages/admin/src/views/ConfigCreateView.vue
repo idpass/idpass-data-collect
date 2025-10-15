@@ -1,12 +1,13 @@
 <script setup lang="ts">
+import type { ExternalSyncField } from '@idpass/data-collect-core'
+import merge from 'lodash/merge'
+import set from 'lodash/set'
+import { onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { createApp as createAppApi, getApp, updateApp as updateAppApi } from '@/api'
 import FormBuilderDialog from '@/components/FormBuilderDialog.vue'
 import FieldsInput from '@/components/FieldsInput.vue'
 import { useSnackBarStore } from '@/stores/snackBar'
-import set from 'lodash/set'
-import { onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import merge from 'lodash/merge'
 
 type EntityForm = {
   name: string
@@ -17,7 +18,7 @@ type EntityForm = {
 type ExternalSync = {
   type?: string
   url: string
-  extraFields: Record<string, string>
+  extraFields: ExternalSyncField[]
 }
 
 type AuthConfig = {
@@ -26,6 +27,7 @@ type AuthConfig = {
 }
 
 type ConfigSchema = {
+  artifactId?: string
   name: string
   description: string
   version: string
@@ -40,6 +42,7 @@ const route = useRoute()
 const isEdit = ref(false)
 const showBuilder = ref(false)
 const form = ref<ConfigSchema>({
+  artifactId: undefined,
   name: '',
   description: '',
   version: '1',
@@ -47,7 +50,7 @@ const form = ref<ConfigSchema>({
   externalSync: {
     type: undefined,
     url: '',
-    extraFields: {},
+    extraFields: [],
   },
   authConfigs: [],
 })
@@ -151,6 +154,7 @@ const createConfig = async () => {
     }
 
     const config = {
+      artifactId: form.value.artifactId || undefined,
       id: form.value.name.toLowerCase().replace(/ /g, '-'),
       name: form.value.name,
       description: form.value.description,
@@ -186,6 +190,7 @@ const updateConfig = async () => {
     }
 
     const config = {
+      artifactId: form.value.artifactId || undefined,
       id: route.params.id as string,
       name: form.value.name,
       description: form.value.description,
@@ -264,7 +269,7 @@ const validateForm = () => {
     isValid = false
   }
   // if at least one auth config is added, then at least one field is required
-  if (form.value.authConfigs.length > 0) {
+  if (form.value.authConfigs?.length > 0) {
     console.log(form.value.authConfigs)
     form.value.authConfigs.forEach((authConfig, index) => {
       if (authConfig.type === '') {
@@ -324,6 +329,7 @@ const saveFormio = (formio: object) => {
   if (index !== -1) {
     form.value.entityForms[index].formio = formio
   }
+  console.log('saveFormio', formio);
   selectedForFormBuilder.value = null
 }
 
@@ -451,7 +457,7 @@ const removeAuthConfig = (index: number) => {
               required
               :error-messages="urlError"
             ></v-text-field>
-            <FieldsInput v-model="form.externalSync.extraFields" />
+            <FieldsInput v-model="form.externalSync.extraFields" :as-array="true" />
 
             <!-- AUTH CONFIG -->
             <v-divider class="my-6"></v-divider>

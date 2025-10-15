@@ -13,6 +13,7 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "preserve",
+    "types": ["vitest/globals"],
 
     /* Linting */
     "strict": false,
@@ -20,6 +21,8 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
+      "@idpass/data-collect-core": ["../datacollect/src/index.ts"],
+      "@idpass/data-collect-core/*": ["../datacollect/src/*"],
       "@/*": ["./src/*"]
     }
   },

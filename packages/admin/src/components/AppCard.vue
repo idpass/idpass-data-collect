@@ -14,6 +14,7 @@ const router = useRouter()
 interface Props {
   app: {
     id: string
+    artifactId: string
     name: string
     version: string
     entitiesCount: number
@@ -74,8 +75,8 @@ const copyApp = async (id: string) => {
 
 <template>
   <v-card>
-    <v-card-title class="d-flex justify-space-between align-center">
-      {{ app.name }}
+    <v-card-title>
+      <span :title="app.name">{{ app.name }}</span>
       <v-menu
         v-model="menu"
         :position-x="menuPosition.x"
@@ -87,7 +88,7 @@ const copyApp = async (id: string) => {
         </template>
         <v-list>
           <v-list-item
-            :href="getAppConfigJsonUrl(app.id)"
+            :href="getAppConfigJsonUrl(app.artifactId)"
             download
             prepend-icon="mdi-download"
             title="Download Config"
@@ -121,7 +122,7 @@ const copyApp = async (id: string) => {
       </v-list>
     </v-card-text>
     <v-card-text class="text-center">
-      <v-img :src="getAppQrCodeUrl(app.id)" alt="QR Code" max-width="100" class="mx-auto"></v-img>
+      <v-img :src="getAppQrCodeUrl(app.artifactId)" alt="QR Code" max-width="100" class="mx-auto"></v-img>
     </v-card-text>
   </v-card>
 
@@ -132,3 +133,20 @@ const copyApp = async (id: string) => {
     @submit="onCredentialsSubmit"
   />
 </template>
+
+<style scoped>
+.v-card-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  column-gap: 0.5rem;
+}
+
+.v-card-title span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>

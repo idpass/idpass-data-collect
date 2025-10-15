@@ -31,7 +31,7 @@ We encourage responsible disclosure of security vulnerabilities. **Please do not
 
 ### How to Report
 
-1. **Email**: Send details to `security@newlogic.com`
+1. **Email**: Send details to `security@acn.fr`
 2. **Subject Line**: `[SECURITY] ID PASS DataCollect - [Brief Description]`
 3. **Include**:
    - Description of the vulnerability
@@ -109,9 +109,9 @@ We use the following severity classifications:
 
 ## Contact Information
 
-- **Security Team**: security@newlogic.com
+- **Security Team**: security@acn.fr
 - **General Issues**: https://github.com/idpass/idpass-data-collect/issues
-- **Website**: https://newlogic.com
+- **Website**: https://acn.fr
 
 ## Security Hall of Fame
 

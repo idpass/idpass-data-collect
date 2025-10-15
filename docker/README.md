@@ -15,7 +15,7 @@ or you will experience authentication issues between the services.
 ```bash
 # Copy the example environment files and update with your values.
 cp .env.example .env
-cp postgresql.env.example postgresql.env
+cp .env.example .env
 ```
 Then, you can start the services:
 
@@ -112,11 +112,11 @@ Copy the example environment files and update with your values:
 ```bash
 # For basic setup
 cp .env.example .env
-cp postgresql.env.example postgresql.env
+cp .env.example .env
 
 # For OpenSPP setup (optional)
 cp odoo.env.example odoo.env
-cp odoo_postgresql.env.example odoo_postgresql.env
+
 ```
 
 1. **.env** - Sync server configuration
@@ -175,7 +175,7 @@ docker run --rm -v postgres-data:/data -v $(pwd):/backup alpine tar xzf /backup/
 All services communicate through the `hdm-network` bridge network. Service names can be used as hostnames within the network.
 
 ### Service URLs (internal)
-- Sync Server: http://sync-server:3000
+- Sync Server: http://localhost:3000
 - Admin UI: http://admin-ui
 - PostgreSQL: postgres:5432
 - OpenSPP: http://openspp:8069 (when enabled)

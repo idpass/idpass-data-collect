@@ -19,7 +19,7 @@
 
 import { Router } from "express";
 import { v4 as uuidv4 } from "uuid";
-import { SyncLevel } from "idpass-data-collect";
+import { SyncLevel } from "@idpass/data-collect-core";
 import { AuthenticatedRequest, authenticateJWT } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { AppInstanceStore } from "../types";

@@ -17,7 +17,7 @@
  * under the License.
  */
 
-import { SyncAdapter, FormSubmission, EntityDoc, SyncStatus, EntityPair } from "../interfaces/types";
+import { SyncAdapter, FormSubmission, EntityDoc, SyncStatus } from "../interfaces/types";
 
 export class SyncAdapterImpl implements SyncAdapter {
   private syncStatus: SyncStatus = {
@@ -97,10 +97,9 @@ export class SyncAdapterImpl implements SyncAdapter {
   /**
    * Map the response from the server to the expected format
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private mapResponseToEntities(entities: any[]): EntityPair[] {
-    return entities;
-  }
+  // private mapResponseToEntities(entities: any[]): EntityPair[] {
+  //   return entities;
+  // }
 
   onSyncComplete(callback: (status: SyncStatus) => void): void {
     this.syncCallback = callback;

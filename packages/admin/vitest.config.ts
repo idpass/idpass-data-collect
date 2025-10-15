@@ -13,8 +13,10 @@ export default mergeConfig(
       exclude: [...configDefaults.exclude, 'e2e/**'],
       root: fileURLToPath(new URL('./', import.meta.url)),
       setupFiles: ['./src/test/setup.ts'],
-      deps: {
-        inline: ['vuetify'],
+      server: {
+        deps: {
+          inline: ['vuetify'],
+        },
       },
       coverage: {
         provider: 'v8',

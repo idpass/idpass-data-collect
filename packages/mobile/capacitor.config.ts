@@ -20,7 +20,7 @@
 import { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.openspp.selfreg",
+  appId: "org.idpass.datacollectapp",
   appName: "ID PASS DataCollect",
   webDir: "dist",
   server: {

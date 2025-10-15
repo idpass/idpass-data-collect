@@ -39,6 +39,11 @@ import { ExternalSyncManager } from "./ExternalSyncManager";
 import { InternalSyncManager } from "./InternalSyncManager";
 import { AuthManager } from "./AuthManager";
 
+export interface ReadAuditOptions {
+  actorId?: string;
+  metadata?: Record<string, unknown>;
+}
+
 // const MAX_GROUP_DEPTH = 5; // Maximum allowed depth for nested groups
 
 /**
@@ -138,11 +143,12 @@ export class EntityDataManager {
   /**
    * Creates a new EntityDataManager instance.
    *
-   * @param eventStore - Store for managing events/form submissions
-   * @param entityStore - Store for managing current entity state
-   * @param eventApplierService - Service for applying events to entities
-   * @param externalSyncManager - Optional manager for external system sync
-   * @param internalSyncManager - Optional manager for server sync
+   * @param eventStore Store for managing events/form submissions.
+   * @param entityStore Store for managing current entity state.
+   * @param eventApplierService Service for applying events to entities.
+   * @param externalSyncManager Optional manager for external system sync.
+   * @param internalSyncManager Optional manager for server sync.
+   * @param authManager Optional manager for authentication.
    */
   constructor(
     private eventStore: EventStore,
@@ -156,7 +162,7 @@ export class EntityDataManager {
   /**
    * Checks if a synchronization operation is currently in progress.
    *
-   * @returns True if sync is active, false otherwise
+   * @returns True if sync is active, false otherwise.
    */
   isSyncing(): boolean {
     if (this.internalSyncManager) {
@@ -168,11 +174,10 @@ export class EntityDataManager {
   /**
    * Submits a form to create or modify entities through the event sourcing system.
    *
-   * This is the primary method for making changes to entities. All modifications
-   * go through events (FormSubmissions) which are applied to create the new state.
+   * All modifications go through events (FormSubmissions) which are applied to create the new state.
    *
-   * @param formData - The form submission containing the event data
-   * @returns The resulting entity after applying the event, or null if creation failed
+   * @param formData The form submission containing the event data.
+   * @returns The resulting entity after applying the event, or null if creation failed.
    *
    * @example
    * ```typescript
@@ -209,7 +214,7 @@ export class EntityDataManager {
    * Provides access to the complete audit trail of all changes made to entities.
    * Events are returned in chronological order.
    *
-   * @returns Array of all form submissions/events
+   * @returns Array of all form submissions/events.
    *
    * @example
    * ```typescript
@@ -225,8 +230,10 @@ export class EntityDataManager {
    * const entityEvents = events.filter(e => e.entityGuid === 'entity-456');
    * ```
    */
-  async getAllEvents(): Promise<FormSubmission[]> {
-    return await this.eventStore.getAllEvents();
+  async getAllEvents(options: ReadAuditOptions = {}): Promise<FormSubmission[]> {
+    const events = await this.eventStore.getAllEvents();
+    await this.logReadAudit("read-events", "events", { count: events.length }, options);
+    return events;
   }
 
   /**
@@ -235,7 +242,7 @@ export class EntityDataManager {
    * Returns EntityPairs containing both the initial state (when first loaded/synced)
    * and the current modified state. This enables change tracking and conflict resolution.
    *
-   * @returns Array of entity pairs with initial and current state
+   * @returns Array of entity pairs with initial and current state.
    *
    * @example
    * ```typescript
@@ -257,19 +264,20 @@ export class EntityDataManager {
    * );
    * ```
    */
-  async getAllEntities(): Promise<{ initial: EntityDoc; modified: EntityDoc }[]> {
-    return await this.entityStore.getAllEntities();
+  async getAllEntities(
+    options: ReadAuditOptions = {},
+  ): Promise<{ initial: EntityDoc; modified: EntityDoc }[]> {
+    const entities = await this.entityStore.getAllEntities();
+    await this.logReadAudit("read-all-entities", "*", { count: entities.length }, options);
+    return entities;
   }
 
   /**
    * Retrieves a specific entity by its internal database ID.
    *
-   * For groups, this method automatically loads member details to provide
-   * a complete view of the group structure.
-   *
-   * @param id - Internal database ID of the entity
-   * @returns Entity pair with initial and current state
-   * @throws {AppError} When entity is not found
+   * @param id Internal database ID of the entity.
+   * @returns Entity pair with initial and current state.
+   * @throws {AppError} When entity is not found.
    *
    * @example
    * ```typescript
@@ -293,7 +301,10 @@ export class EntityDataManager {
    * }
    * ```
    */
-  async getEntity(id: string): Promise<{ initial: EntityDoc; modified: EntityDoc }> {
+  async getEntity(
+    id: string,
+    options: ReadAuditOptions = {},
+  ): Promise<{ initial: EntityDoc; modified: EntityDoc }> {
     try {
       const entityPair = await this.entityStore.getEntity(id);
       if (!entityPair) {
@@ -306,16 +317,21 @@ export class EntityDataManager {
 
       this.logger.debug(`Updated entity after applying events: ${JSON.stringify(updatedEntity)}`);
 
+      let result: { initial: EntityDoc; modified: EntityDoc };
       if (updatedEntity.type === "group") {
         const groupWithDetails = await this.loadGroupDetails(updatedEntity as GroupDoc);
         this.logger.debug(`Group with loaded details: ${JSON.stringify(groupWithDetails)}`);
-        return {
+        result = {
           initial: entityPair.initial,
           modified: groupWithDetails,
         };
+      } else {
+        result = { initial: entityPair.initial, modified: updatedEntity };
       }
 
-      return { initial: entityPair.initial, modified: updatedEntity };
+      await this.logReadAudit("read-entity", id, { entityType: result.modified.type }, options);
+
+      return result;
     } catch (error) {
       this.logger.error(`Error in getEntity: ${error}`);
       throw error;
@@ -329,11 +345,8 @@ export class EntityDataManager {
   /**
    * Loads detailed information for a group including member data.
    *
-   * Private helper method that recursively loads member information
-   * and handles missing members by automatically updating the group.
-   *
-   * @param group - The group document to load details for
-   * @returns Detailed group document with loaded member information
+   * @param group The group document to load details for.
+   * @returns Detailed group document with loaded member information.
    *
    * @private
    *
@@ -398,9 +411,9 @@ export class EntityDataManager {
   /**
    * Retrieves all members of a specific group.
    *
-   * @param groupId - Internal database ID of the group
-   * @returns Array of entity pairs for all group members
-   * @throws {AppError} When group is not found or entity is not a group
+   * @param groupId Internal database ID of the group.
+   * @returns Array of entity pairs for all group members.
+   * @throws {AppError} When group is not found or entity is not a group.
    *
    * @example
    * ```typescript
@@ -433,7 +446,7 @@ export class EntityDataManager {
    *
    * Only available when an InternalSyncManager is configured.
    *
-   * @returns True if there are unsynced events, false otherwise
+   * @returns True if there are unsynced events, false otherwise.
    *
    * @example
    * ```typescript
@@ -455,7 +468,7 @@ export class EntityDataManager {
    *
    * Only available when an InternalSyncManager is configured.
    *
-   * @returns Number of unsynced events
+   * @returns Number of unsynced events.
    *
    * @example
    * ```typescript
@@ -482,7 +495,7 @@ export class EntityDataManager {
    *
    * Only available when an InternalSyncManager is configured.
    *
-   * @throws {AppError} When sync fails or authentication is required
+   * @throws {AppError} When sync fails or authentication is required.
    *
    * @example
    * ```typescript
@@ -504,11 +517,8 @@ export class EntityDataManager {
   /**
    * Searches entities using specified criteria.
    *
-   * Provides flexible querying capabilities for finding entities based
-   * on their data properties, type, or other attributes.
-   *
-   * @param criteria - Search criteria array with query conditions
-   * @returns Array of entity pairs matching the criteria
+   * @param criteria Search criteria array with query conditions.
+   * @returns Array of entity pairs matching the criteria.
    *
    * @example
    * ```typescript
@@ -527,19 +537,21 @@ export class EntityDataManager {
    * // TODO: Document the exact query syntax supported
    * ```
    */
-  async searchEntities(criteria: SearchCriteria): Promise<{ initial: EntityDoc; modified: EntityDoc }[]> {
-    return await this.entityStore.searchEntities(criteria);
+  async searchEntities(
+    criteria: SearchCriteria,
+    options: ReadAuditOptions = {},
+  ): Promise<{ initial: EntityDoc; modified: EntityDoc }[]> {
+    const results = await this.entityStore.searchEntities(criteria);
+    await this.logReadAudit("search-entities", "*", { criteria, resultCount: results.length }, options);
+    return results;
   }
 
   /**
    * Retrieves the complete audit trail for a specific entity.
    *
-   * Returns all audit log entries related to an entity, providing
-   * a complete history of changes with timestamps and user information.
-   *
-   * @param entityGuid - Global unique identifier of the entity
-   * @returns Array of audit log entries in chronological order
-   * @throws {AppError} When audit trail retrieval fails
+   * @param entityGuid Global unique identifier of the entity.
+   * @returns Array of audit log entries in chronological order.
+   * @throws {AppError} When audit trail retrieval fails.
    *
    * @example
    * ```typescript
@@ -557,9 +569,14 @@ export class EntityDataManager {
    * }
    * ```
    */
-  async getAuditTrailByEntityGuid(entityGuid: string): Promise<AuditLogEntry[]> {
+  async getAuditTrailByEntityGuid(
+    entityGuid: string,
+    options: ReadAuditOptions = {},
+  ): Promise<AuditLogEntry[]> {
     try {
-      return await this.eventStore.getAuditTrailByEntityGuid(entityGuid);
+      const auditTrail = await this.eventStore.getAuditTrailByEntityGuid(entityGuid);
+      await this.logReadAudit("read-audit-trail", entityGuid, { count: auditTrail.length }, options);
+      return auditTrail;
     } catch (error) {
       throw new AppError("AUDIT_TRAIL_ERROR", `Failed to retrieve audit trail for entity ${entityGuid}`, {
         entityGuid,
@@ -595,8 +612,8 @@ export class EntityDataManager {
    *
    * Useful for incremental sync operations and change tracking.
    *
-   * @param timestamp - ISO timestamp to filter events from
-   * @returns Array of events created after the specified timestamp
+   * @param timestamp ISO timestamp to filter events from.
+   * @returns Array of events created after the specified timestamp.
    *
    * @example
    * ```typescript
@@ -616,12 +633,9 @@ export class EntityDataManager {
   /**
    * Retrieves events since a timestamp with pagination support.
    *
-   * More efficient than getEventsSince for large datasets as it supports
-   * pagination to avoid loading too many events at once.
-   *
-   * @param timestamp - ISO timestamp to filter events from
-   * @param limit - Maximum number of events to return (default: 10)
-   * @returns Object with events array and cursor for next page
+   * @param timestamp ISO timestamp to filter events from.
+   * @param limit Maximum number of events to return (default: 10).
+   * @returns Object with events array and cursor for next page.
    *
    * @example
    * ```typescript
@@ -685,10 +699,7 @@ export class EntityDataManager {
   /**
    * Saves multiple audit log entries to the event store.
    *
-   * Used for batch saving of audit logs, typically during sync operations
-   * when receiving audit logs from remote systems.
-   *
-   * @param auditLogs - Array of audit log entries to save
+   * @param auditLogs Array of audit log entries to save.
    *
    * @example
    * ```typescript
@@ -715,8 +726,8 @@ export class EntityDataManager {
   /**
    * Retrieves audit logs created since a specific timestamp.
    *
-   * @param since - ISO timestamp to filter audit logs from
-   * @returns Array of audit log entries created after the specified timestamp
+   * @param since ISO timestamp to filter audit logs from.
+   * @returns Array of audit log entries created after the specified timestamp.
    *
    * @example
    * ```typescript
@@ -731,42 +742,9 @@ export class EntityDataManager {
   }
 
   /**
-   * Authenticates with the sync server using email and password.
-   *
-   * Performs login and automatically sets the received authentication token.
-   * Only available when an InternalSyncManager is configured.
-   *
-   * @param email - User email address
-   * @param password - User password
-   * @throws {AppError} When login fails due to invalid credentials or network issues
-   *
-   * @example
-   * ```typescript
-   * try {
-   *   await manager.login('user@example.com', 'password123');
-   *   console.log('Login successful');
-   *
-   *   // Can now perform sync operations
-   *   await manager.syncWithSyncServer();
-   * } catch (error) {
-   *   console.error('Login failed:', error.message);
-   * }
-   * ```
-   */
-  // Deprecated
-  // async login(email: string, password: string): Promise<void> {
-  //   if (this.internalSyncManager) {
-  //     await this.internalSyncManager.login(email, password);
-  //   }
-  // }
-
-  /**
    * Retrieves all potential duplicate entity pairs detected by the system.
    *
-   * The system automatically detects potential duplicates during entity creation
-   * based on similarity in data fields. These pairs need manual review and resolution.
-   *
-   * @returns Array of entity GUID pairs that are potential duplicates
+   * @returns Array of entity GUID pairs that are potential duplicates.
    *
    * @example
    * ```typescript
@@ -795,11 +773,8 @@ export class EntityDataManager {
   /**
    * Synchronizes data with external systems (e.g., OpenSPP, custom APIs).
    *
-   * Performs bidirectional sync with third-party systems using configured
-   * sync adapters. Only available when an ExternalSyncManager is configured.
-   *
-   * @param credentials - Optional credentials for external system authentication
-   * @throws {AppError} When external sync fails or credentials are invalid
+   * @param credentials Optional credentials for external system authentication.
+   * @throws {AppError} When external sync fails or credentials are invalid.
    *
    * @example
    * ```typescript
@@ -824,24 +799,92 @@ export class EntityDataManager {
     }
   }
 
+  private async logReadAudit(
+    action: string,
+    entityGuid: string,
+    details: Record<string, unknown>,
+    options: ReadAuditOptions,
+  ): Promise<void> {
+    try {
+      const auditEntry: AuditLogEntry = {
+        guid: uuidv4(),
+        timestamp: new Date().toISOString(),
+        userId: this.getAuditActorId(options.actorId),
+        action,
+        eventGuid: "",
+        entityGuid,
+        changes: {
+          ...details,
+          ...(options.metadata ? { metadata: options.metadata } : {}),
+        },
+        signature: "",
+      };
+
+      await this.eventStore.logAuditEntry(auditEntry);
+    } catch (error) {
+      this.logger.error(`Failed to log read audit entry for action ${action}: ${error}`);
+    }
+  }
+
+  private getAuditActorId(explicitActorId?: string): string {
+    if (explicitActorId) {
+      return explicitActorId;
+    }
+
+    const currentUser = this.authManager?.getCurrentUser();
+    if (currentUser?.id) {
+      return currentUser.id;
+    }
+
+    return "system";
+  }
+
+  /**
+   * Logs in the user via the configured AuthManager.
+   *
+   * @param credentials The credentials for login.
+   * @param type Optional. The type of authentication provider to use.
+   * @returns A Promise that resolves when the login operation is complete.
+   * @throws {Error} If `AuthManager` is not configured or login fails.
+   */
   async login(credentials: PasswordCredentials | TokenCredentials | null, type?: string): Promise<void> {
     if (this.authManager) {
       await this.authManager.login(credentials, type);
     }
   }
 
+  /**
+   * Initializes the AuthManager.
+   *
+   * @returns A Promise that resolves when the AuthManager is initialized.
+   * @throws {Error} If `AuthManager` is not configured.
+   */
   async initializeAuthManager(): Promise<void> {
     if (this.authManager) {
       await this.authManager.initialize();
     }
   }
 
+  /**
+   * Logs out the user via the configured AuthManager.
+   *
+   * @returns A Promise that resolves when the logout operation is complete.
+   * @throws {Error} If `AuthManager` is not configured or logout fails.
+   */
   async logout(): Promise<void> {
     if (this.authManager) {
       await this.authManager.logout();
     }
   }
 
+  /**
+   * Validates an authentication token via the configured AuthManager.
+   *
+   * @param type The type of authentication provider.
+   * @param token The token string to validate.
+   * @returns A Promise that resolves to `true` if the token is valid, `false` otherwise.
+   * @throws {Error} If `AuthManager` is not configured.
+   */
   async validateToken(type: string, token: string): Promise<boolean> {
     if (this.authManager) {
       return this.authManager.validateToken(type, token);
@@ -849,12 +892,26 @@ export class EntityDataManager {
     return false;
   }
 
+  /**
+   * Checks if the user is authenticated via the configured AuthManager.
+   *
+   * @returns A Promise that resolves to `true` if authenticated, `false` otherwise.
+   * @throws {Error} If `AuthManager` is not configured.
+   */
   async isAuthenticated(): Promise<boolean> {
     if (this.authManager) {
       return this.authManager.isAuthenticated();
     }
     return false;
   }
+  
+  /**
+   * Handles the authentication callback via the configured AuthManager.
+   *
+   * @param type The type of authentication provider.
+   * @returns A Promise that resolves when the callback is handled.
+   * @throws {Error} If `AuthManager` is not configured.
+   */
   async handleCallback(type: string): Promise<void> {
     if (this.authManager) {
       await this.authManager.handleCallback(type);

@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "verbatimModuleSyntax": false,
+    "paths": {
+      "@idpass/data-collect-core": ["../datacollect/src/index.ts"],
+      "@idpass/data-collect-core/*": ["../datacollect/src/*"]
+    }
+  }
+}

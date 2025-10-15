@@ -17,6 +17,7 @@
  * under the License.
  */
 
+import { randomBytes } from "crypto";
 import { Pool } from "pg";
 import { AppConfig, AppConfigStore } from "../types";
 
@@ -33,6 +34,7 @@ export class AppConfigStoreImpl implements AppConfigStore {
     const createTableQuery = `
       CREATE TABLE IF NOT EXISTS app_configs (
         id TEXT PRIMARY KEY,
+        artifact_id TEXT,
         name TEXT NOT NULL,
         description TEXT,
         version TEXT,
@@ -46,6 +48,7 @@ export class AppConfigStoreImpl implements AppConfigStore {
 
     try {
       await this.pool.query(createTableQuery);
+      await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS artifact_id TEXT`);
     } catch (error) {
       throw new Error(`Failed to initialize database: ${error}`);
     }
@@ -56,17 +59,20 @@ export class AppConfigStoreImpl implements AppConfigStore {
 
     try {
       const result = await this.pool.query(query);
-      return result.rows.map((row) => ({
-        id: row.id,
-        name: row.name,
-        description: row.description,
-        version: row.version,
-        url: row.url,
-        entityForms: row.entity_forms,
-        entityData: row.entity_data,
-        externalSync: row.external_sync,
-        authConfigs: row.auth_configs,
-      }));
+      return Promise.all(
+        result.rows.map(async (row) => ({
+          id: row.id,
+          artifactId: await this.ensureArtifactId(row.id, row.artifact_id),
+          name: row.name,
+          description: row.description,
+          version: row.version,
+          url: row.url,
+          entityForms: row.entity_forms,
+          entityData: row.entity_data,
+          externalSync: row.external_sync,
+          authConfigs: row.auth_configs,
+        })),
+      );
     } catch (error) {
       throw new Error(`Failed to get configs: ${error}`);
     }
@@ -85,6 +91,38 @@ export class AppConfigStoreImpl implements AppConfigStore {
       const row = result.rows[0];
       return {
         id: row.id,
+        artifactId: await this.ensureArtifactId(row.id, row.artifact_id),
+        name: row.name,
+        description: row.description,
+        version: row.version,
+        url: row.url,
+        entityForms: row.entity_forms,
+        entityData: row.entity_data,
+        externalSync: row.external_sync,
+        authConfigs: row.auth_configs,
+      };
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("not found")) {
+        throw error;
+      }
+      throw new Error(`Failed to get config: ${error}`);
+    }
+  }
+
+  async getConfigByArtifactId(artifactId: string): Promise<AppConfig> {
+    const query = "SELECT * FROM app_configs WHERE artifact_id = $1";
+
+    try {
+      const result = await this.pool.query(query, [artifactId]);
+
+      if (result.rows.length === 0) {
+        throw new Error(`Config with artifact id ${artifactId} not found`);
+      }
+
+      const row = result.rows[0];
+      return {
+        id: row.id,
+        artifactId: await this.ensureArtifactId(row.id, row.artifact_id),
         name: row.name,
         description: row.description,
         version: row.version,
@@ -105,9 +143,10 @@ export class AppConfigStoreImpl implements AppConfigStore {
   async saveConfig(config: AppConfig): Promise<void> {
     const query = `
       INSERT INTO app_configs (
-        id, name, description, version, url, entity_forms, entity_data, external_sync, auth_configs
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        id, artifact_id, name, description, version, url, entity_forms, entity_data, external_sync, auth_configs
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       ON CONFLICT (id) DO UPDATE SET
+        artifact_id = EXCLUDED.artifact_id,
         name = EXCLUDED.name,
         description = EXCLUDED.description,
         version = EXCLUDED.version,
@@ -119,8 +158,10 @@ export class AppConfigStoreImpl implements AppConfigStore {
     `;
 
     try {
+      const artifactId = await this.ensureArtifactId(config.id, config.artifactId);
       await this.pool.query(query, [
         config.id || undefined,
+        artifactId,
         config.name,
         config.description,
         config.version,
@@ -161,5 +202,15 @@ export class AppConfigStoreImpl implements AppConfigStore {
     } catch (error) {
       throw new Error(`Failed to close connection: ${error}`);
     }
+  }
+
+  private async ensureArtifactId(id: string, artifactId?: string | null): Promise<string> {
+    if (artifactId && artifactId.trim() !== "") {
+      return artifactId;
+    }
+
+    const generated = randomBytes(16).toString("hex");
+    await this.pool.query("UPDATE app_configs SET artifact_id = $1 WHERE id = $2", [generated, id]);
+    return generated;
   }
 }

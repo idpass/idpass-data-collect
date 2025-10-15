@@ -13,7 +13,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
-      '~bootstrap': resolve(__dirname, 'node_modules/bootstrap')
+      '~bootstrap': resolve(__dirname, 'node_modules/bootstrap'),
+      '@idpass/data-collect-core': resolve(__dirname, '../datacollect/src')
     }
   },
   define: {

@@ -4,9 +4,9 @@
   "exclude": ["src/**/__tests__/*"],
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
-
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@idpass/data-collect-core": ["../datacollect/src/interfaces/types.ts"]
     }
   }
 }

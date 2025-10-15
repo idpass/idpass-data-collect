@@ -145,8 +145,8 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
   /**
    * Creates a new PostgresEntityStorageAdapter instance.
    *
-   * @param connectionString - PostgreSQL connection string with credentials and database info
-   * @param tenantId - Optional tenant identifier for multi-tenant isolation (defaults to "default")
+   * @param connectionString PostgreSQL connection string with credentials and database info.
+   * @param tenantId Optional tenant identifier for multi-tenant isolation (defaults to "default").
    *
    * @example
    * ```typescript
@@ -172,8 +172,9 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
   /**
    * Closes all connections in the PostgreSQL connection pool.
    *
-   * Should be called during application shutdown to ensure graceful
-   * cleanup of database connections.
+   * Should be called during application shutdown to ensure graceful cleanup of database connections.
+   *
+   * @returns A Promise that resolves when the connection is closed.
    *
    * @example
    * ```typescript
@@ -192,15 +193,13 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
   /**
    * Initializes the PostgreSQL database with required tables and schemas.
    *
-   * Creates:
-   * - `entities` table with JSONB storage for flexible entity data
-   * - `potential_duplicates` table for duplicate detection
-   * - Proper indexing and constraints for multi-tenant isolation
-   * - Primary keys and unique constraints for data integrity
+   * Creates `entities` table with JSONB storage, `potential_duplicates` table for duplicate detection,
+   * and sets up proper indexing and constraints for multi-tenant isolation.
    *
    * This method is idempotent and safe to call multiple times.
    *
-   * @throws {Error} When database connection fails or table creation fails
+   * @returns A Promise that resolves when the database is successfully initialized.
+   * @throws {Error} When database connection fails or table creation fails.
    *
    * @example
    * ```typescript
@@ -244,6 +243,12 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
     }
   }
 
+  /**
+   * Retrieves all entity pairs for the current tenant.
+   *
+   * @returns A Promise that resolves with an array of `EntityPair` objects.
+   * @throws {Error} If the database query fails.
+   */
   async getAllEntities(): Promise<EntityPair[]> {
     const client = await this.pool.connect();
     try {
@@ -274,8 +279,9 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    *
    * All searches examine both initial and modified entity states for comprehensive results.
    *
-   * @param criteria - Array of search criteria objects
-   * @returns Array of entity pairs matching all criteria
+   * @param criteria Array of search criteria objects.
+   * @returns A Promise that resolves with an array of entity pairs matching all criteria.
+   * @throws {Error} If the database query fails.
    *
    * @example
    * ```typescript
@@ -343,6 +349,15 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
     }
   }
 
+  /**
+   * Saves an `EntityPair` to the entity store.
+   *
+   * If an entity with the same GUID and tenant ID already exists, it will be updated.
+   *
+   * @param entity The `EntityPair` object to save.
+   * @returns A Promise that resolves when the entity is successfully saved.
+   * @throws {Error} If the database operation fails.
+   */
   async saveEntity(entity: EntityPair): Promise<void> {
     const client = await this.pool.connect();
     try {
@@ -357,6 +372,13 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
     }
   }
 
+  /**
+   * Retrieves an entity by its internal ID.
+   *
+   * @param id The internal ID of the entity.
+   * @returns A Promise that resolves with the `EntityPair` if found, or `null` otherwise.
+   * @throws {Error} If the database query fails.
+   */
   async getEntity(id: string): Promise<EntityPair | null> {
     const client = await this.pool.connect();
     try {
@@ -378,10 +400,23 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
     }
   }
 
+  /**
+   * Retrieves all entity data. This is an alias for `getAllEntities`.
+   *
+   * @returns A Promise that resolves with an array of all `EntityPair` objects.
+   * @throws {Error} If the database query fails.
+   */
   async getAllEntityData(): Promise<EntityPair[]> {
     return this.getAllEntities();
   }
 
+  /**
+   * Retrieves entities that have been modified since a specific timestamp.
+   *
+   * @param timestamp The ISO 8601 timestamp string from which to retrieve modified entities.
+   * @returns A Promise that resolves with an array of `EntityPair` objects modified after the timestamp.
+   * @throws {Error} If the database query fails.
+   */
   async getModifiedEntitiesSince(timestamp: string): Promise<EntityPair[]> {
     const client = await this.pool.connect();
     try {
@@ -399,6 +434,13 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
     }
   }
 
+  /**
+   * Marks an entity as synced by updating its `sync_level` to "SYNCED" and `last_updated` timestamp.
+   *
+   * @param id The internal ID of the entity to mark as synced.
+   * @returns A Promise that resolves when the entity's sync status is updated.
+   * @throws {Error} If the database update fails.
+   */
   async markEntityAsSynced(id: string): Promise<void> {
     const client = await this.pool.connect();
     try {
@@ -413,6 +455,15 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
     }
   }
 
+  /**
+   * Deletes an entity from the store by its internal ID.
+   *
+   * Also deletes any associated potential duplicate records.
+   *
+   * @param id The internal ID of the entity to delete.
+   * @returns A Promise that resolves when the entity and its duplicates are deleted.
+   * @throws {Error} If the database deletion fails.
+   */
   async deleteEntity(id: string): Promise<void> {
     const client = await this.pool.connect();
     try {
@@ -426,6 +477,15 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
     }
   }
 
+  /**
+   * Retrieves an entity by its external ID.
+   *
+   * Searches both `initial` and `modified` states for the `externalId` field.
+   *
+   * @param externalId The external ID of the entity to retrieve.
+   * @returns A Promise that resolves with the `EntityPair` if found, or `null` otherwise.
+   * @throws {Error} If the database query fails.
+   */
   async getEntityByExternalId(externalId: string): Promise<EntityPair | null> {
     const client = await this.pool.connect();
     try {
@@ -447,6 +507,16 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
     }
   }
 
+  /**
+   * Sets or updates the `externalId` for an entity.
+   *
+   * Updates the `externalId` within the `modified` JSONB data of the entity.
+   *
+   * @param guid The GUID of the entity to update.
+   * @param externalId The new external ID to set.
+   * @returns A Promise that resolves when the `externalId` is successfully set.
+   * @throws {Error} If the database update fails.
+   */
   async setExternalId(guid: string, externalId: string): Promise<void> {
     const client = await this.pool.connect();
     try {
@@ -463,6 +533,12 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
     }
   }
 
+  /**
+   * Retrieves all potential duplicate entity pairs for the current tenant.
+   *
+   * @returns A Promise that resolves with an array of objects containing `entityGuid` and `duplicateGuid`.
+   * @throws {Error} If the database query fails.
+   */
   async getPotentialDuplicates(): Promise<Array<{ entityGuid: string; duplicateGuid: string }>> {
     const client = await this.pool.connect();
     try {
@@ -479,6 +555,15 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
     }
   }
 
+  /**
+   * Saves an array of potential duplicate entity pairs.
+   *
+   * Uses `ON CONFLICT DO NOTHING` to prevent duplicate entries if a pair already exists.
+   *
+   * @param duplicates An array of objects, each containing `entityGuid` and `duplicateGuid`.
+   * @returns A Promise that resolves when the potential duplicates are saved.
+   * @throws {Error} If the database transaction fails.
+   */
   async savePotentialDuplicates(duplicates: Array<{ entityGuid: string; duplicateGuid: string }>): Promise<void> {
     const client = await this.pool.connect();
     try {
@@ -498,6 +583,13 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
     }
   }
 
+  /**
+   * Resolves (deletes) an array of potential duplicate entity pairs.
+   *
+   * @param duplicates An array of objects, each containing `entityGuid` and `duplicateGuid` of the duplicates to resolve.
+   * @returns A Promise that resolves when the potential duplicates are removed.
+   * @throws {Error} If the database deletion fails.
+   */
   async resolvePotentialDuplicates(duplicates: Array<{ entityGuid: string; duplicateGuid: string }>): Promise<void> {
     const client = await this.pool.connect();
     try {
@@ -510,6 +602,12 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
     }
   }
 
+  /**
+   * Clears all entities and potential duplicates for the current tenant from the store.
+   *
+   * @returns A Promise that resolves when all data is cleared.
+   * @throws {Error} If the database deletion fails.
+   */
   async clearStore(): Promise<void> {
     const client = await this.pool.connect();
     try {

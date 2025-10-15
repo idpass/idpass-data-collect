@@ -1,0 +1,114 @@
+name: idpass-data-collection-dev
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:15
+    restart: always
+    env_file: ../.env
+    volumes:
+      - postgres-data-dev:/var/lib/postgresql/data
+      - ./init-reset-dbs.sh:/docker-entrypoint-initdb.d/init-reset-dbs.sh
+    ports:
+      - "5432:5432"
+    networks:
+      - datacollect-network-dev
+    command: ["postgres"]
+
+  # pgAdmin for database management (optional)
+  pgadmin:
+    image: dpage/pgadmin4:9
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@example.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - datacollect-network-dev
+
+  # DataCollect Sync Server - Development mode
+  sync-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: backend
+    env_file: ../.env
+    ports:
+      - "${SYNC_SERVER_PORT:-3000}:3000"
+      - "9229:9229" # Node.js debugger port
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    networks:
+      - datacollect-network-dev
+
+  # Admin UI - Development mode
+  admin-ui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: admin-ui
+    restart: unless-stopped
+    environment:
+      - VITE_API_URL=http://localhost:${SYNC_SERVER_PORT:-3000}
+    ports:
+      - "5173:5173"
+    depends_on:
+      - sync-server
+    networks:
+      - datacollect-network-dev
+
+  # Mobile App - Browser Development mode
+  mobile-app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: mobile-app
+    environment:
+      - VITE_DB_ENCRYPTION_PASSWORD=password
+      - VITE_DEVELOP=true
+      - VITE_DEBUG=true
+      - VITE_FEATURE_DYNAMIC=true
+    ports:
+      - "8081:8081"
+    depends_on:
+      - sync-server
+    networks:
+      - datacollect-network-dev
+
+  dhis2:
+    image: dhis2/dhis2-core:3.1.0
+    ports:
+      - "8080:8080"
+    networks:
+      - datacollect-openfn-network-dev
+
+  openfn:
+    image: openfn/openfn:2.5.0
+    ports:
+      - "8082:8082"
+    networks:
+      - datacollect-openfn-network-dev
+
+  # keycloak:
+  #   image: quay.io/keycloak/keycloak:23.0.0
+  #   container_name: keycloak
+  #   environment:
+  #     - KEYCLOAK_ADMIN=admin
+  #     - KEYCLOAK_ADMIN_PASSWORD=admin
+  #   command:
+  #     - start-dev
+  #   ports:
+  #     - "9090:8080"
+  #   depends_on:
+  #     - postgres
+  #   networks:
+  #     - datacollect-network-dev
+
+volumes:
+  postgres-data-dev:
+
+networks:
+  datacollect-network-dev:
+    driver: bridge

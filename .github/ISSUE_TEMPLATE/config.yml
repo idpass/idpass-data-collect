@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
   - name: 🔒 Security Vulnerability Report
-    url: mailto:security@newlogic.com
+    url: mailto:security@acn.fr
     about: Please report security vulnerabilities privately via email, not through public issues.
   - name: 📚 Documentation Website
     url: https://idpass.github.io/idpass-data-collect/
