@@ -329,7 +329,6 @@ const saveFormio = (formio: object) => {
   if (index !== -1) {
     form.value.entityForms[index].formio = formio
   }
-  console.log('saveFormio', formio);
   selectedForFormBuilder.value = null
 }
 

@@ -50,8 +50,8 @@
       Formio.builder(document.getElementById('builder'), {}, {}).then((instance) => {
         builder = instance
 
-        // Setup event listeners
-        builder.on('saveComponent', () => {
+        // Helper function to send schema updates
+        const sendSchemaUpdate = () => {
           const schema = builder.schema
           window.parent.postMessage(
             {
@@ -60,7 +60,14 @@
             },
             window.location.origin,
           )
-        })
+        }
+
+        // Setup event listeners for all relevant builder changes
+        builder.on('saveComponent', sendSchemaUpdate)
+        builder.on('updateComponent', sendSchemaUpdate)
+        builder.on('deleteComponent', sendSchemaUpdate)
+        builder.on('removeComponent', sendSchemaUpdate)
+        builder.on('change', sendSchemaUpdate)
 
         window.parent.postMessage(
           {
@@ -75,6 +82,11 @@
             console.log('formio-initialize', event.data.schema)
             // Set the schema and rebuild the form
             builder.setForm(event.data.schema)
+          }
+
+          // Handle request for current schema
+          if (event.data.type === 'formio-request-schema') {
+            sendSchemaUpdate()
           }
         })
       })
