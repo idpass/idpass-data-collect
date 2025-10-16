@@ -51,6 +51,7 @@ const dialog = ref(false)
 const builderIframe = ref<HTMLIFrameElement | null>(null)
 const iframeSrc = ref('/formio-builder.html') // Path to builder HTML file
 const schema = ref(props.formio)
+let schemaUpdateResolver: ((value: object) => void) | null = null
 
 // Message handler for iframe communication
 const messageHandler = (event: MessageEvent) => {
@@ -85,6 +86,11 @@ const initializeBuilder = () => {
 // Handle schema updates from builder
 const handleSchemaUpdate = (value: object) => {
   schema.value = value
+  // If there's a pending promise waiting for schema update, resolve it
+  if (schemaUpdateResolver) {
+    schemaUpdateResolver(value)
+    schemaUpdateResolver = null
+  }
 }
 
 // Validate message origin
@@ -111,9 +117,33 @@ const closeDialog = () => {
   emit('update:modelValue', false)
 }
 
-const saveForm = () => {
-  console.log('saveForm', schema.value)
-  emit('submit', schema.value)
+const saveForm = async () => {
+  // Request the latest schema from the iframe before saving
+  if (builderIframe.value && builderIframe.value.contentWindow) {
+    // Create a promise that will be resolved when schema update is received
+    const schemaPromise = new Promise<object>((resolve) => {
+      schemaUpdateResolver = resolve
+    })
+
+    builderIframe.value.contentWindow.postMessage(
+      {
+        type: 'formio-request-schema',
+      },
+      window.location.origin,
+    )
+
+    // Wait for the schema update with a timeout fallback
+    const timeoutPromise = new Promise<object>((resolve) => {
+      setTimeout(() => resolve(schema.value), 200)
+    })
+
+    const latestSchema = await Promise.race([schemaPromise, timeoutPromise])
+    emit('submit', latestSchema)
+  } else {
+    // Fallback if iframe is not available
+    emit('submit', schema.value)
+  }
+
   closeDialog()
 }
 
