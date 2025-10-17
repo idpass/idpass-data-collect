@@ -7,6 +7,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { createApp as createAppApi, getApp, updateApp as updateAppApi } from '@/api'
 import FormBuilderDialog from '@/components/FormBuilderDialog.vue'
 import FieldsInput from '@/components/FieldsInput.vue'
+import { parseOpenSppProgramSpecification } from '@/utils/openSppImport'
 import { useSnackBarStore } from '@/stores/snackBar'
 
 type EntityForm = {
@@ -70,6 +71,8 @@ const authConfigsError = ref<{
 }>({})
 const isValid = ref(false)
 const isReady = ref(false)
+const specImportFiles = ref<File[] | null>(null)
+const isImportingSpec = ref(false)
 
 onMounted(async () => {
   const id = route.params.id
@@ -342,6 +345,65 @@ const addAuthConfig = () => {
 const removeAuthConfig = (index: number) => {
   form.value.authConfigs.splice(index, 1)
 }
+
+const clearEntityFormErrors = () => {
+  entityFormsError.value = ''
+  itemEntityFormsError.value = {}
+  circularDepError.value = false
+}
+
+const importSpecFromFile = async (file: File) => {
+  try {
+    isImportingSpec.value = true
+    const yamlText = await file.text()
+    const importResult = parseOpenSppProgramSpecification(yamlText)
+
+    if (importResult.name) {
+      form.value.name = importResult.name
+    }
+    if (importResult.description) {
+      form.value.description = importResult.description
+    }
+    if (importResult.artifactId) {
+      form.value.artifactId = importResult.artifactId
+    }
+
+    form.value.entityForms = importResult.entityForms.map((entityForm) => ({
+      name: entityForm.name,
+      title: entityForm.title,
+      dependsOn: entityForm.dependsOn ?? '',
+      formio: entityForm.formio,
+    }))
+
+    clearEntityFormErrors()
+    snackBarStore.showSnackbar(
+      `Imported ${importResult.entityForms.length} entity form${
+        importResult.entityForms.length === 1 ? '' : 's'
+      } from OpenSPP spec`,
+      'success',
+    )
+  } catch (error) {
+    console.error('Failed to import OpenSPP spec:', error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    snackBarStore.showSnackbar(`Failed to import OpenSPP spec: ${message}`, 'red')
+  } finally {
+    specImportFiles.value = null
+    isImportingSpec.value = false
+  }
+}
+
+const onSpecFileSelection = async (value: File[] | File | null) => {
+  if (!value || isImportingSpec.value) {
+    specImportFiles.value = null
+    return
+  }
+  const file = Array.isArray(value) ? value[0] : value
+  if (!file) {
+    specImportFiles.value = null
+    return
+  }
+  await importSpecFromFile(file)
+}
 </script>
 
 <template>
@@ -351,6 +413,17 @@ const removeAuthConfig = (index: number) => {
         <v-col cols="12">
           <h2 class="text-h4 mb-4">{{ isEdit ? 'Edit' : 'Create' }} Config</h2>
           <v-form>
+            <v-file-input
+              v-model="specImportFiles"
+              accept=".yaml,.yml"
+              label="Import OpenSPP YAML"
+              prepend-icon="mdi-file-upload-outline"
+              :loading="isImportingSpec"
+              clearable
+              @update:modelValue="onSpecFileSelection"
+              hint="Upload an OpenSPP program specification (YAML) to prefill entity forms"
+              persistent-hint
+            />
             <v-text-field
               v-model="form.name"
               label="Name"
