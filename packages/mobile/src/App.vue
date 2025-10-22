@@ -3,34 +3,29 @@ import { RouterView } from 'vue-router'
 </script>
 
 <template>
-  <div id="app" class="vh-100 h-100 overflow-scroll text-break">
-    <header>
-      <nav
-        class="safe-top navbar p-3 d-flex justify-content-center border-bottom align-items-center"
-      >
-        <h5 class="m-0 bold title text-black">ID PASS DataCollect</h5>
-      </nav>
-    </header>
-    <main class="mx-2">
-      <div class="user-select-none disable-scrollbars">
-        <RouterView />
-      </div>
+  <div id="app" class="app-shell safe-top safe-bottom">
+    <main class="app-content disable-scrollbars">
+      <RouterView />
     </main>
-    <footer class="pb-safe"></footer>
   </div>
 </template>
 
 <style scoped>
-main {
-  padding: 1em;
+.app-shell {
+  min-height: 100vh;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, #f2f4f8 100%);
+  color: var(--color-text);
 }
 
-/* header {
-  display: flex;
-  align-items: flex-end;
-  border-bottom: 2px solid var(--color-medium-dark-blue);
-  flex-direction: row;
-  justify-content: space-between;
-  padding: 1rem 0;
-} */
+.app-content {
+  padding: 1.5rem 1rem 3.5rem;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+@media (min-width: 768px) {
+  .app-content {
+    padding: 2rem 0 4rem;
+  }
+}
 </style>
