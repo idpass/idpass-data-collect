@@ -10,8 +10,10 @@ import AppCard from '@/components/AppCard.vue'
 import { useAuthStore } from '@/stores/auth'
 import { AxiosError } from 'axios'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
 const authStore = useAuthStore()
+const router = useRouter()
 
 const apps = ref<AppListItem[]>([])
 const meta = ref<AppListMeta>({
@@ -52,6 +54,22 @@ const pageSizeOptions = [6, 12, 24, 48].map((value) => ({
 
 const hasNoResults = computed(() => !isLoading.value && apps.value.length === 0)
 const totalApps = computed(() => meta.value.total)
+const totalEntities = computed(() =>
+  apps.value.reduce((sum, app) => sum + (app.entitiesCount || 0), 0),
+)
+const syncEnabledCount = computed(
+  () => apps.value.filter((app) => Object.keys(app.externalSync || {}).length > 0).length,
+)
+const basicAuthSyncCount = computed(
+  () =>
+    apps.value.filter((app) =>
+      app.externalSync && 'auth' in app.externalSync ? app.externalSync.auth === 'basic' : false,
+    ).length,
+)
+const averageEntities = computed(() =>
+  apps.value.length ? Math.round(totalEntities.value / apps.value.length) : 0,
+)
+const localOnlyCount = computed(() => Math.max(totalApps.value - syncEnabledCount.value, 0))
 
 let searchDebounce: ReturnType<typeof setTimeout> | undefined
 
@@ -165,6 +183,10 @@ const uploadAppConfig = async () => {
   }
 }
 
+const goToCreate = () => {
+  router.push({ name: 'create' })
+}
+
 onMounted(() => {
   fetchApps()
 })
@@ -177,91 +199,387 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <v-container>
-    <v-row>
-      <v-col cols="12">
-        <h2 class="text-h4 mb-4">Apps</h2>
+  <v-container class="app-dashboard" fluid>
+    <div class="dashboard-header">
+      <div class="dashboard-header__text">
+        <h1 class="dashboard-title">Collection Programs</h1>
+        <p class="dashboard-subtitle">Manage and monitor your form applications</p>
+      </div>
+      <div class="dashboard-header__actions">
+        <v-btn
+          class="dashboard-header__action"
+          variant="tonal"
+          color="primary"
+          prepend-icon="mdi-refresh"
+          @click="fetchApps"
+        >
+          Refresh
+        </v-btn>
+        <v-btn
+          class="dashboard-header__action"
+          color="primary"
+          prepend-icon="mdi-plus"
+          @click="goToCreate"
+        >
+          New Collection Program
+        </v-btn>
+      </div>
+    </div>
 
-        <!-- Upload Section -->
-        <v-card class="mb-4">
+    <v-row class="mt-6" dense>
+      <v-col cols="12" sm="6" md="4">
+        <v-card class="stat-card" border="md" elevation="0">
           <v-card-text>
-            <v-file-input
-              v-model="selectedFile"
-              accept=".json"
-              label="Upload JSON Config File"
-              prepend-icon="mdi-upload"
-              :error-messages="fileError"
-              @change="uploadAppConfig"
-            ></v-file-input>
+            <div class="stat-card__icon stat-card__icon--primary">
+              <v-icon icon="mdi-view-dashboard-outline" size="26" />
+            </div>
+            <div class="stat-card__content">
+              <p class="stat-card__label">Total Collection Programs</p>
+              <p class="stat-card__value">{{ totalApps }}</p>
+              <p class="stat-card__hint">Active records across all apps</p>
+            </div>
           </v-card-text>
         </v-card>
-
-        <!-- Filters -->
-        <v-card class="mb-4">
+      </v-col>
+      <v-col cols="12" sm="6" md="4">
+        <v-card class="stat-card" border="md" elevation="0">
           <v-card-text>
-            <v-row dense>
-              <v-col cols="12" md="4">
-                <v-text-field
-                  v-model="searchTerm"
-                  label="Search"
-                  prepend-inner-icon="mdi-magnify"
-                  clearable
-                  hint="Filter by name, or ID"
-                />
-              </v-col>
-              <v-col cols="12" sm="6" md="3">
-                <v-select
-                  v-model="sortBy"
-                  :items="sortByOptions"
-                  label="Sort By"
-                  item-title="title"
-                  item-value="value"
-                  density="comfortable"
-                />
-              </v-col>
-              <v-col cols="12" sm="6" md="3">
-                <v-select
-                  v-model="sortOrder"
-                  :items="sortOrderOptions"
-                  label="Order"
-                  item-title="title"
-                  item-value="value"
-                  density="comfortable"
-                />
-              </v-col>
-              <v-col cols="12" sm="6" md="2">
-                <v-select
-                  v-model="pageSize"
-                  :items="pageSizeOptions"
-                  label="Page Size"
-                  item-title="title"
-                  item-value="value"
-                  density="comfortable"
-                />
-              </v-col>
-              <v-col cols="12" class="text-end text-body-2">
-                <span>Total Apps: {{ totalApps }}</span>
-              </v-col>
-            </v-row>
+            <div class="stat-card__icon stat-card__icon--secondary">
+              <v-icon icon="mdi-database-outline" size="26" />
+            </div>
+            <div class="stat-card__content">
+              <p class="stat-card__label">Total Captured Entities</p>
+              <p class="stat-card__value">{{ totalEntities }}</p>
+              <p class="stat-card__hint">Summed across every program</p>
+            </div>
           </v-card-text>
         </v-card>
-
-        <v-progress-linear v-if="isLoading" class="mb-4" color="primary" indeterminate />
-
-        <!-- Apps List -->
-        <v-row v-if="apps.length">
-          <v-col v-for="app in apps" :key="app.id" cols="12" sm="6" md="4">
-            <AppCard :app="app" @app-deleted="fetchApps" />
-          </v-col>
-        </v-row>
-        <v-alert v-else-if="hasNoResults" border="start" variant="tonal" type="info">
-          No apps found. Try adjusting your filters.
-        </v-alert>
-
-        <div v-if="meta.totalPages > 1" class="d-flex justify-center mt-6">
-          <v-pagination v-model="page" :length="meta.totalPages" total-visible="7" />
-        </div>
+      </v-col>
+      <v-col cols="12" sm="6" md="4">
+        <v-card class="stat-card" border="md" elevation="0">
+          <v-card-text>
+            <div class="stat-card__icon stat-card__icon--accent">
+              <v-icon icon="mdi-sync-circle" size="26" />
+            </div>
+            <div class="stat-card__content">
+              <p class="stat-card__label">External Sync Enabled</p>
+              <p class="stat-card__value">{{ syncEnabledCount }}</p>
+              <p class="stat-card__hint">{{ localOnlyCount }} local-only configurations</p>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+      <v-col cols="12" sm="6" md="4">
+        <v-card class="stat-card" border="md" elevation="0">
+          <v-card-text>
+            <div class="stat-card__icon stat-card__icon--neutral">
+              <v-icon icon="mdi-account-key-outline" size="26" />
+            </div>
+            <div class="stat-card__content">
+              <p class="stat-card__label">Basic Auth Sync</p>
+              <p class="stat-card__value">{{ basicAuthSyncCount }}</p>
+              <p class="stat-card__hint">Require credentials at sync time</p>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+      <v-col cols="12" sm="6" md="4">
+        <v-card class="stat-card" border="md" elevation="0">
+          <v-card-text>
+            <div class="stat-card__icon stat-card__icon--informational">
+              <v-icon icon="mdi-account-group-outline" size="26" />
+            </div>
+            <div class="stat-card__content">
+              <p class="stat-card__label">Average Entities per Program</p>
+              <p class="stat-card__value">{{ averageEntities }}</p>
+              <p class="stat-card__hint">Based on currently listed apps</p>
+            </div>
+          </v-card-text>
+        </v-card>
       </v-col>
     </v-row>
+
+    <v-card class="filters-card" border="md" elevation="0">
+      <v-card-text>
+        <div class="filters-card__header">
+          <div>
+            <p class="filters-card__eyebrow">Filters</p>
+            <h2 class="filters-card__title">Refine collection programs</h2>
+          </div>
+          <p class="filters-card__meta">Showing {{ apps.length }} of {{ totalApps }} programs</p>
+        </div>
+
+        <v-row class="mt-4" dense>
+          <v-col cols="12" md="5">
+            <v-text-field
+              v-model="searchTerm"
+              label="Search collection programs"
+              prepend-inner-icon="mdi-magnify"
+              clearable
+              variant="outlined"
+              hint="Filter by name or ID"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="2">
+            <v-select
+              v-model="sortBy"
+              :items="sortByOptions"
+              label="Sort by"
+              item-title="title"
+              item-value="value"
+              variant="outlined"
+              density="comfortable"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="2">
+            <v-select
+              v-model="sortOrder"
+              :items="sortOrderOptions"
+              label="Order"
+              item-title="title"
+              item-value="value"
+              variant="outlined"
+              density="comfortable"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="2">
+            <v-select
+              v-model="pageSize"
+              :items="pageSizeOptions"
+              label="Page size"
+              item-title="title"
+              item-value="value"
+              variant="outlined"
+              density="comfortable"
+            />
+          </v-col>
+          <v-col cols="12" sm="6" md="1" class="d-flex align-end">
+            <v-btn variant="text" color="primary" prepend-icon="mdi-close-circle" @click="searchTerm = ''">
+              Clear
+            </v-btn>
+          </v-col>
+        </v-row>
+      </v-card-text>
+    </v-card>
+
+    <v-progress-linear v-if="isLoading" class="mt-6" color="primary" indeterminate />
+
+    <v-alert v-else-if="hasNoResults" class="mt-8" border="start" variant="tonal" type="info">
+      No collection programs match your filters. Try adjusting your search.
+    </v-alert>
+
+    <v-row v-else class="apps-grid" dense>
+      <v-col v-for="app in apps" :key="app.id" cols="12" md="6" xl="4">
+        <AppCard :app="app" @app-deleted="fetchApps" />
+      </v-col>
+    </v-row>
+
+    <div v-if="meta.totalPages > 1" class="pagination">
+      <v-pagination v-model="page" :length="meta.totalPages" total-visible="7" rounded="circle" />
+    </div>
+
+    <v-card class="upload-card" border="md" elevation="0">
+      <v-card-text>
+        <div class="upload-card__header">
+          <div>
+            <p class="upload-card__eyebrow">Add new configuration</p>
+            <h2 class="upload-card__title">Upload JSON configuration</h2>
+            <p class="upload-card__subtitle">
+              Import an exported JSON file to create a new collection program or update an existing one.
+            </p>
+          </div>
+        </div>
+        <v-file-input
+          v-model="selectedFile"
+          class="mt-4"
+          accept=".json"
+          label="Choose configuration file"
+          prepend-icon="mdi-upload"
+          variant="outlined"
+          :error-messages="fileError"
+          @change="uploadAppConfig"
+        />
+      </v-card-text>
+    </v-card>
   </v-container>
 </template>
+
+<style scoped>
+.app-dashboard {
+  padding-bottom: 64px;
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.dashboard-header__text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dashboard-title {
+  font-size: clamp(1.75rem, 1.6rem + 0.5vw, 2.25rem);
+  font-weight: 600;
+  margin: 0;
+}
+
+.dashboard-subtitle {
+  margin: 0;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.dashboard-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dashboard-header__action {
+  min-width: 0;
+}
+
+.stat-card {
+  height: 100%;
+  border-radius: 16px;
+  background: var(--v-theme-surface);
+}
+
+.stat-card__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.stat-card__icon--primary {
+  background: rgba(33, 150, 243, 0.12);
+  color: rgb(25, 118, 210);
+}
+
+.stat-card__icon--secondary {
+  background: rgba(103, 58, 183, 0.12);
+  color: rgb(81, 45, 168);
+}
+
+.stat-card__icon--accent {
+  background: rgba(0, 150, 136, 0.12);
+  color: rgb(0, 121, 107);
+}
+
+.stat-card__icon--neutral {
+  background: rgba(96, 125, 139, 0.12);
+  color: rgb(55, 71, 79);
+}
+
+.stat-card__icon--informational {
+  background: rgba(30, 136, 229, 0.12);
+  color: rgb(21, 101, 192);
+}
+
+.stat-card__label {
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(0, 0, 0, 0.45);
+  margin: 0 0 4px;
+}
+
+.stat-card__value {
+  font-size: 2.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.stat-card__hint {
+  font-size: 0.875rem;
+  color: rgba(0, 0, 0, 0.55);
+  margin: 4px 0 0;
+}
+
+.filters-card {
+  border-radius: 18px;
+  margin-top: 32px;
+}
+
+.filters-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.filters-card__eyebrow {
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.45);
+  margin: 0 0 4px;
+}
+
+.filters-card__title {
+  font-size: 1.25rem;
+  margin: 0;
+  font-weight: 600;
+}
+
+.filters-card__meta {
+  font-size: 0.875rem;
+  color: rgba(0, 0, 0, 0.6);
+  margin: 0;
+}
+
+.apps-grid {
+  margin-top: 24px;
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+}
+
+.upload-card {
+  margin-top: 40px;
+  border-radius: 18px;
+}
+
+.upload-card__eyebrow {
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.45);
+  margin: 0;
+}
+
+.upload-card__title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 6px 0 4px;
+}
+
+.upload-card__subtitle {
+  margin: 0;
+  color: rgba(0, 0, 0, 0.6);
+}
+
+@media (max-width: 960px) {
+  .dashboard-header {
+    align-items: flex-start;
+  }
+  .dashboard-header__actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+</style>
