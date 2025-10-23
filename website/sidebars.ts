@@ -168,303 +168,316 @@ const backendApiSidebar = [
   },
 ];
 
+const developerSidebarItems = [
+  {
+    type: "doc",
+    id: "developers/index",
+  },
+  {
+    type: "category",
+    label: "Setup & Onboarding",
+    collapsed: false,
+    items: [
+      {
+        type: "doc",
+        id: "getting-started/index",
+      },
+      {
+        type: "doc",
+        id: "getting-started/installation",
+      },
+      {
+        type: "doc",
+        id: "getting-started/configuration",
+      },
+      {
+        type: "doc",
+        id: "getting-started/tutorials",
+      },
+    ],
+  },
+  {
+    type: "category",
+    label: "Development Guides",
+    items: [
+      {
+        type: "doc",
+        id: "getting-started/basic-entitydatamanager-setup",
+      },
+      {
+        type: "doc",
+        id: "getting-started/authentication-workflows",
+      },
+      {
+        type: "doc",
+        id: "getting-started/forms-and-entities-authenticated",
+      },
+      {
+        type: "doc",
+        id: "getting-started/entity-retrieval-and-search",
+      },
+      {
+        type: "doc",
+        id: "getting-started/authenticated-synchronization",
+      },
+      {
+        type: "doc",
+        id: "getting-started/advanced-operations",
+      },
+      {
+        type: "doc",
+        id: "getting-started/error-handling-and-best-practices",
+      },
+    ],
+  },
+  {
+    type: "category",
+    label: "Architecture & Concepts",
+    items: [
+      {
+        type: "doc",
+        id: "architecture/index",
+      },
+      {
+        type: "doc",
+        id: "architecture/event-sourcing",
+      },
+      {
+        type: "doc",
+        id: "architecture/sync-architecture",
+      },
+      {
+        type: "doc",
+        id: "architecture/authentication",
+      },
+    ],
+  },
+  {
+    type: "category",
+    label: "Configuration & Deployment",
+    items: [
+      {
+        type: "doc",
+        id: "configuration/index",
+      },
+      {
+        type: "doc",
+        id: "configuration/entity-forms",
+      },
+      {
+        type: "doc",
+        id: "configuration/external-sync",
+      },
+      {
+        type: "category",
+        label: "Authentication Configs",
+        collapsed: true,
+        items: [
+          {
+            type: "doc",
+            id: "configuration/auth-configs/index",
+          },
+          {
+            type: "doc",
+            id: "configuration/auth-configs/default-auth",
+          },
+          {
+            type: "doc",
+            id: "configuration/auth-configs/auth-configs-auth0",
+          },
+          {
+            type: "doc",
+            id: "configuration/auth-configs/auth-configs-keycloak",
+          },
+        ],
+      },
+      {
+        type: "doc",
+        id: "deployment/index",
+      },
+      {
+        type: "category",
+        label: "Deployment with Docker",
+        link: {
+          type: "doc",
+          id: "deployment/docker-deployment",
+        },
+        items: [
+          {
+            type: "doc",
+            id: "deployment/docker-openfn-deployment",
+          },
+          {
+            type: "doc",
+            id: "deployment/docker-openspp-deployment",
+          },
+        ],
+      },
+      {
+        type: "category",
+        label: "Deployment without Docker",
+        link: {
+          type: "doc",
+          id: "deployment/without-docker-deployment",
+        },
+        items: [
+          {
+            type: "doc",
+            id: "deployment/without-docker-openfn-deployment",
+          },
+          {
+            type: "doc",
+            id: "deployment/without-docker-openspp-deployment",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    type: "category",
+    label: "Reference & Extensibility",
+    items: [
+      {
+        type: "doc",
+        id: "packages/packages",
+      },
+      {
+        type: "category",
+        label: "@idpass/data-collect-core",
+        collapsed: false,
+        items: [
+          {
+            type: "doc",
+            id: "packages/datacollect/datacollect-overview",
+          },
+          {
+            type: "doc",
+            id: "packages/datacollect/datacollect-api-reference",
+          },
+          {
+            type: "link",
+            label: "Complete API Reference",
+            href: "/packages/datacollect/api/",
+          },
+        ],
+      },
+      {
+        type: "category",
+        label: "@idpass/data-collect-backend",
+        collapsed: true,
+        items: [
+          {
+            type: "doc",
+            id: "packages/backend/backend-overview",
+          },
+          {
+            type: "category",
+            label: "REST API",
+            collapsed: true,
+            items: [
+              {
+                type: "doc",
+                id: "packages/backend/backend-api-overview",
+              },
+              ...backendApiSidebar,
+            ],
+          },
+        ],
+      },
+      {
+        type: "doc",
+        id: "packages/admin/index",
+      },
+      {
+        type: "doc",
+        id: "packages/mobile/index",
+      },
+      {
+        type: "category",
+        label: "How-To Guides",
+        items: [
+          {
+            type: "doc",
+            id: "how-to/create-custom-auth-adapter",
+          },
+        ],
+      },
+      {
+        type: "category",
+        label: "Adapters",
+        items: [
+          {
+            type: "doc",
+            id: "adapters/openfn-adapter",
+          },
+          {
+            type: "doc",
+            id: "adapters/auth0-adapter",
+          },
+          {
+            type: "doc",
+            id: "adapters/keycloak-adapter",
+          },
+        ],
+      },
+    ],
+  },
+];
+
+const userSidebarItems = [
+  {
+    type: "doc",
+    id: "users/index",
+  },
+  {
+    type: "category",
+    label: "Admin Console",
+    items: [
+      {
+        type: "doc",
+        id: "user-guide/index",
+      },
+      {
+        type: "doc",
+        id: "user-guide/admin-ui-dashboard",
+      },
+    ],
+  },
+  {
+    type: "category",
+    label: "Mobile App",
+    items: [
+      {
+        type: "doc",
+        id: "user-guide/mobile-app",
+      },
+    ],
+  },
+  {
+    type: "doc",
+    id: "glossary",
+  },
+];
+
 const sidebars = {
   docsSidebar: [
     {
       type: "doc",
-      id: "index"
+      id: "index",
     },
     {
       type: "category",
-      label: "Getting Started",
+      label: "For Developers",
       collapsed: false,
-      items: [
-        {
-          type: "doc",
-          id: "getting-started/index"
-        },
-        {
-          type: "doc",
-          id: "getting-started/installation"
-        },
-        {
-          type: "doc",
-          id: "getting-started/configuration"
-        },
-      ],
+      items: developerSidebarItems,
     },
     {
       type: "category",
-      label: "Tutorials",
-      items: [
-        {
-          type: "doc",
-          id: "getting-started/tutorials"
-        },
-        {
-          type: "doc",
-          id: "getting-started/basic-entitydatamanager-setup"
-        },
-        {
-          type: "doc",
-          id: "getting-started/authentication-workflows"
-        },
-        {
-          type: "doc",
-          id: "getting-started/forms-and-entities-authenticated"
-        },
-        {
-          type: "doc",
-          id: "getting-started/entity-retrieval-and-search"
-        },
-        {
-          type: "doc",
-          id: "getting-started/authenticated-synchronization"
-        },
-        {
-          type: "doc",
-          id: "getting-started/advanced-operations"
-        },
-        {
-          type: "doc",
-          id: "getting-started/error-handling-and-best-practices"
-        },
-      ],
-    },
-    {
-      type: "category",
-      label: "Packages",
+      label: "For Admins & Field Teams",
       collapsed: false,
-      items: [
-        {
-          type: "doc",
-          id: "packages/packages"
-        },
-        {
-          type: "category",
-          label: "@idpass/data-collect-core",
-          collapsed: false,
-          items: [
-            {
-              type: "doc",
-              id: "packages/datacollect/datacollect-overview"
-            },
-            {
-              type: "doc",
-              id: "packages/datacollect/datacollect-api-reference"
-            },
-            {
-              type: "link",
-              label: "Complete API Reference",
-              href: "/packages/datacollect/api/",
-            },
-          ],
-        },
-        {
-          type: "category",
-          label: "@idpass/data-collect-backend",
-          collapsed: true,
-          items: [
-            {
-              type: "doc",
-              id: "packages/backend/backend-overview"
-            },
-            {
-              type: "category",
-              label: "REST API",
-              collapsed: true,
-              items: [
-                // Overview of the auto-generated API documentation
-                {
-                  type: "doc",
-                  id: "packages/backend/backend-api-overview"
-                },
-                // Auto-generated API documentation from OpenAPI spec
-                ...backendApiSidebar,
-              ],
-            },
-            // TODO: Add when created
-            // 'packages/backend/configuration',
-            // 'packages/backend/deployment/index',
-          ],
-        },
-        {
-          type: "doc",
-          id: "packages/admin/index"
-        },
-        {
-          type: "doc",
-          id: "packages/mobile/index"
-        },
-      ],
+      items: userSidebarItems,
     },
-    {
-      type: "category",
-      label: "Architecture",
-      items: [
-        {
-          type: "doc",
-          id: "architecture/index"
-        },
-        {
-          type: "doc",
-          id: "architecture/event-sourcing"
-        },
-        {
-          type: "doc",
-          id: "architecture/sync-architecture"
-        },
-        {
-          type: "doc",
-          id: "architecture/authentication"
-        },
-        // TODO: Add when created
-        // 'architecture/storage-adapters',
-        // 'architecture/security-model',
-        // 'architecture/data-flow',
-      ],
-    },
-    {
-      type: "category",
-      label: "Configuration",
-      items: [
-        {
-          type: "doc",
-          id: "configuration/index"
-        },
-        {
-          type: "doc",
-          id: "configuration/entity-forms"
-        },
-        {
-          type: "doc",
-          id: "configuration/external-sync"
-        },
-        {
-          type: "category",
-          label: "Authentication Configs",
-          collapsed: true,
-          items: [
-            {
-              type: "doc",
-              id: "configuration/auth-configs/index"
-            },
-            {
-              type: "doc",
-              id: "configuration/auth-configs/default-auth"
-            },
-            {
-              type: "doc",
-              id: "configuration/auth-configs/auth-configs-auth0"
-            },
-            {
-              type: "doc",
-              id: "configuration/auth-configs/auth-configs-keycloak"
-            },
-          ],
-        },
-      ],
-    },
-    {
-      type: "category",
-      label: "Deployment",
-      items: [
-        {
-          type: "doc",
-          id: "deployment/index"
-        },
-        {
-          type: "category",
-          label: "Deployment with Docker",
-          link: {
-            type: "doc",
-            id: "deployment/docker-deployment",
-          },
-          items: [
-            {
-              type: "doc",
-              id: "deployment/docker-openfn-deployment"
-            },
-            {
-              type: "doc",
-              id: "deployment/docker-openspp-deployment"
-            },
-          ],
-        },
-        {
-          type: "category",
-          label: "Deployment without Docker",
-          link: {
-            type: "doc",
-            id: "deployment/without-docker-deployment",
-          },
-          items: [
-            {
-              type: "doc",
-              id: "deployment/without-docker-openfn-deployment"
-            },
-            {
-              type: "doc",
-              id: "deployment/without-docker-openspp-deployment"
-            },
-          ],
-        },
-        // "deployment/production",
-        // "deployment/scaling",
-        // "deployment/monitoring",
-      ],
-    },
-    {
-      type: "category",
-      label: "How-To Guides",
-      items: [
-        {
-          type: "doc",
-          id: "how-to/create-custom-auth-adapter"
-        }
-      ],
-    },
-    {
-      type: "category",
-      label: "Adapters",
-      items: [
-        {
-          type: "doc",
-          id: "adapters/openfn-adapter"
-        },
-        {
-          type: "doc",
-          id: "adapters/auth0-adapter"
-        },
-        {
-          type: "doc",
-          id: "adapters/keycloak-adapter"
-        }
-      ],
-    },
-    {
-      type: "doc",
-      id: "glossary"
-    },
-    {
-      type: 'category',
-      label: 'User Guide',
-      items: [
-        {
-          type: 'doc',
-          id: 'user-guide/index'
-        },
-        {
-          type: 'doc',
-          id: 'user-guide/admin-ui-dashboard'
-        },
-        {
-          type: 'doc',
-          id: 'user-guide/mobile-app'
-        },
-      ],
-    },
-  ]  
+  ],
 };
 
 export default sidebars;

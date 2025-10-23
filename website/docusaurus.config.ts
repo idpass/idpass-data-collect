@@ -115,13 +115,13 @@ const config: Config = {
           label: 'Documentation',
         },
         {
-          to: 'packages',
-          label: 'Packages',
+          to: 'developers',
+          label: 'Developers',
           position: 'left',
         },
         {
-          to: 'architecture',
-          label: 'Architecture',
+          to: 'users',
+          label: 'Admin & Mobile',
           position: 'left',
         },
         {
@@ -146,11 +146,15 @@ const config: Config = {
           title: 'Documentation',
           items: [
             {
-              label: 'Getting Started',
-              to: 'getting-started',
+              label: 'Developer Guide',
+              to: 'developers',
             },
             {
-              label: 'Packages',
+              label: 'Admin & Mobile Guide',
+              to: 'users',
+            },
+            {
+              label: 'Package Documentation',
               to: 'packages',
             },
             {

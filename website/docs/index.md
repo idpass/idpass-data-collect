@@ -22,60 +22,40 @@ ID PASS DataCollect is a comprehensive open-source solution that enables organiz
   <div className="card">
     <div className="card__header">
       <h3>
-        <span className="card__icon">🚀</span>
-        Getting Started
+        <span className="card__icon">💻</span>
+        Developer Guide
       </h3>
     </div>
     <div className="card__body">
-      <p>New to ID PASS DataCollect? Start here with installation and your first app. Follow our step-by-step guide to get up and running in minutes.</p>
+      <p>Set up your environment, understand the architecture, and deploy the stack with confidence.</p>
+      <ul>
+        <li>Installation & configuration walkthroughs</li>
+        <li>Architecture explanations and SDK references</li>
+        <li>Docker and bare-metal deployment guides</li>
+      </ul>
     </div>
     <div className="card__footer">
-      <a href="./getting-started" className="button button--primary">Get Started</a>
+      <a href="./developers" className="button button--primary">Explore Developer Docs</a>
     </div>
   </div>
-  
+
   <div className="card">
     <div className="card__header">
       <h3>
-        <span className="card__icon">📚</span>
-        Package Documentation
+        <span className="card__icon">🧑‍🤝‍🧑</span>
+        Admin & Mobile Guide
       </h3>
     </div>
     <div className="card__body">
-      <p>Complete documentation for all three packages: DataCollect client library, Backend API server, and Admin interface.</p>
+      <p>Learn how programme administrators and field agents use the platform every day.</p>
+      <ul>
+        <li>Admin dashboard orientation and workflows</li>
+        <li>Mobile app steps for offline collection</li>
+        <li>Shared glossary for cross-team clarity</li>
+      </ul>
     </div>
     <div className="card__footer">
-      <a href="./packages" className="button button--primary">View Packages</a>
-    </div>
-  </div>
-  
-  <div className="card">
-    <div className="card__header">
-      <h3>
-        <span className="card__icon">🏗️</span>
-        Architecture
-      </h3>
-    </div>
-    <div className="card__body">
-      <p>Learn about event sourcing, CQRS patterns, synchronization architecture, and technical design decisions.</p>
-    </div>
-    <div className="card__footer">
-      <a href="./architecture" className="button button--primary">Architecture Guide</a>
-    </div>
-  </div>
-  
-  <div className="card">
-    <div className="card__header">
-      <h3>
-        <span className="card__icon">⚙️</span>
-        Deployment
-      </h3>
-    </div>
-    <div className="card__body">
-      <p>Production deployment guides, Docker setup, environment configuration, and monitoring strategies.</p>
-    </div>
-    <div className="card__footer">
-      <a href="./deployment" className="button button--primary">Deployment Guide</a>
+      <a href="./users" className="button button--primary">Explore User Docs</a>
     </div>
   </div>
 </div>
@@ -112,20 +92,18 @@ ID PASS DataCollect is a comprehensive open-source solution that enables organiz
 
 ## Documentation Overview
 
-### For Developers
-- [Getting Started Guide](./getting-started) - Installation and setup
-- [DataCollect Package](./packages/datacollect) - Client library documentation
-- [Backend API](./packages/backend) - Server API reference
-- [Admin Interface](./packages/admin) - Management interface
-- [Architecture Guide](./architecture) - Technical deep dive
+### Developer resources
+- [Developer Guide](./developers) - Everything you need to build, integrate, and deploy.
+- [Package Documentation](./packages) - Deep dives into workspace packages and APIs.
+- [Architecture Reference](./architecture) - Event sourcing, synchronization, and security concepts.
 
-### For Users & Administrators
-- [Package Overview](./packages) - All three packages explained
-- [Deployment Guide](./deployment) - Production deployment
-- [Configuration](./getting-started/configuration) - System configuration
+### Admin & mobile resources
+- [Admin & Mobile Guide](./users) - Orientation for administrators and field agents.
+- [Admin UI Dashboard](./user-guide/admin-ui-dashboard) - Manage configurations, users, and sync.
+- [Mobile App Guide](./user-guide/mobile-app) - Collect data offline and keep records synchronized.
 
-### For Organizations
-- [Implementation Examples](./examples/basic-usage) - How others use ID PASS DataCollect
+### Examples & adoption
+- [Implementation Examples](./examples/basic-usage) - How others use ID PASS DataCollect in production.
 
 ## Support & Community
 
