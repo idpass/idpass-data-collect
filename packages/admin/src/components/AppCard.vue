@@ -66,6 +66,11 @@ const onCredentialsSubmit = async (credentials: { username: string; password: st
   }
 }
 
+const openDetails = (id: string) => {
+  menu.value = false
+  router.push({ name: 'app-details', params: { id } })
+}
+
 const editApp = async (id: string) => {
   menu.value = false
   router.push(`/edit/${id}`)
@@ -211,8 +216,8 @@ const qrUrl = computed(() => getAppQrCodeUrl(app.artifactId))
           Deployment URL
         </v-btn>
       </div>
-      <v-btn variant="text" color="primary" prepend-icon="mdi-pencil" @click="editApp(app.id)">
-        Manage
+      <v-btn variant="text" color="primary" prepend-icon="mdi-arrow-right" @click="openDetails(app.id)">
+        View details
       </v-btn>
     </v-card-actions>
   </v-card>
