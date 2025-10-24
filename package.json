@@ -18,6 +18,7 @@
     "build:datacollect": "pnpm --filter @idpass/data-collect-core build",
     "build:backend": "pnpm --filter @idpass/data-collect-backend build",
     "build:admin": "pnpm --filter @idpass/data-collect-admin build",
+    "build:docs": "pnpm --filter @idpass/data-collect-docs build",
     "dev:admin": "pnpm --filter @idpass/data-collect-admin dev",
     "dev:backend": "pnpm --filter @idpass/data-collect-backend dev",
     "dev:mobile": "pnpm --filter @idpass/data-collect-mobile dev",

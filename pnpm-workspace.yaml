@@ -3,6 +3,7 @@ packages:
   - packages/*
 
 onlyBuiltDependencies:
+  - '@swc/core'
   - bcrypt
   - core-js
   - core-js-pure
