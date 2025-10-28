@@ -54,20 +54,11 @@ const pageSizeOptions = [6, 12, 24, 48].map((value) => ({
 
 const hasNoResults = computed(() => !isLoading.value && apps.value.length === 0)
 const totalApps = computed(() => meta.value.total)
-const totalEntities = computed(() =>
-  apps.value.reduce((sum, app) => sum + (app.entitiesCount || 0), 0),
-)
 const syncEnabledCount = computed(
   () => apps.value.filter((app) => Object.keys(app.externalSync || {}).length > 0).length,
 )
-const basicAuthSyncCount = computed(
-  () =>
-    apps.value.filter((app) =>
-      app.externalSync && 'auth' in app.externalSync ? app.externalSync.auth === 'basic' : false,
-    ).length,
-)
-const averageEntities = computed(() =>
-  apps.value.length ? Math.round(totalEntities.value / apps.value.length) : 0,
+const totalEntities = computed(() =>
+  apps.value.reduce((sum, app) => sum + (app.entitiesCount || 0), 0),
 )
 const localOnlyCount = computed(() => Math.max(totalApps.value - syncEnabledCount.value, 0))
 
@@ -265,34 +256,6 @@ onBeforeUnmount(() => {
               <p class="stat-card__label">External Sync Enabled</p>
               <p class="stat-card__value">{{ syncEnabledCount }}</p>
               <p class="stat-card__hint">{{ localOnlyCount }} local-only configurations</p>
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" sm="6" md="4">
-        <v-card class="stat-card" border="md" elevation="0">
-          <v-card-text>
-            <div class="stat-card__icon stat-card__icon--neutral">
-              <v-icon icon="mdi-account-key-outline" size="26" />
-            </div>
-            <div class="stat-card__content">
-              <p class="stat-card__label">Basic Auth Sync</p>
-              <p class="stat-card__value">{{ basicAuthSyncCount }}</p>
-              <p class="stat-card__hint">Require credentials at sync time</p>
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" sm="6" md="4">
-        <v-card class="stat-card" border="md" elevation="0">
-          <v-card-text>
-            <div class="stat-card__icon stat-card__icon--informational">
-              <v-icon icon="mdi-account-group-outline" size="26" />
-            </div>
-            <div class="stat-card__content">
-              <p class="stat-card__label">Average Entities per Program</p>
-              <p class="stat-card__value">{{ averageEntities }}</p>
-              <p class="stat-card__hint">Based on currently listed apps</p>
             </div>
           </v-card-text>
         </v-card>

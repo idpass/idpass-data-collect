@@ -27,6 +27,7 @@ import swaggerUi from "swagger-ui-express";
 import YAML from "yamljs";
 import { errorHandler, notFoundHandler, setupUncaughtHandlers } from "./middlewares/errorHandlers";
 import { createAppConfigRoutes } from "./routes/appConfigRoutes";
+import { createEntitiesRouter } from "./routes/entitiesRoute";
 import { createPotentialDuplicatesRoute } from "./routes/potentialDuplicatesRoute";
 import { createSyncRouter } from "./routes/syncRoute";
 import { createUserRoutes } from "./routes/userRoutes";
@@ -82,6 +83,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   }
 
   app.use("/api/apps", createAppConfigRoutes(appConfigStore, appInstanceStore));
+  app.use("/api/entities", createEntitiesRouter(appInstanceStore));
   app.use("/api/sync", createSyncRouter(appInstanceStore));
   app.use("/api/users", createUserRoutes(userStore));
   app.use("/api/potential-duplicates", createPotentialDuplicatesRoute(appInstanceStore));

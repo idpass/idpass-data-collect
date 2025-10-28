@@ -200,7 +200,7 @@ const qrUrl = computed(() => getAppQrCodeUrl(app.artifactId))
         </div>
         <div class="app-card__metric-content">
           <p class="app-card__metric-label">{{ metric.label }}</p>
-          <p class="app-card__metric-value" :title="metric.value">{{ metric.value }}</p>
+          <p class="app-card__metric-value" :title="String(metric.value)">{{ metric.value }}</p>
         </div>
       </div>
     </v-card-text>

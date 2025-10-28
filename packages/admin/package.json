@@ -31,6 +31,7 @@
   "devDependencies": {
     "@mdi/font": "^7.4.47",
     "@tsconfig/node22": "^22.0.1",
+    "@types/js-yaml": "^4.0.9",
     "@types/jsdom": "^21.1.7",
     "@types/lodash": "^4.17.7",
     "@types/node": "^22.14.0",

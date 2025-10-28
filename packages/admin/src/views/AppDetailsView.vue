@@ -8,6 +8,8 @@ import {
   getApp,
   getAppConfigJsonUrl,
   getAppQrCodeUrl,
+  getEntitiesCountByForm,
+  getEntities,
 } from '@/api'
 import BasicAuthDialog from '@/components/BasicAuthDialog.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -73,6 +75,7 @@ const showQrDialog = ref(false)
 const showAuthDialog = ref(false)
 const isSyncing = ref(false)
 const isDeleting = ref(false)
+const entityRecords = ref<Record<string, unknown[]>>({})
 
 const routeId = computed(() => route.params.id as string)
 
@@ -107,11 +110,13 @@ const syncStatus = computed(() => {
 
 const forms = computed(() => app.value?.entityForms ?? [])
 
+const entityCounts = ref<Record<string, number>>({})
+
 const entityDataMap = computed(() => {
   const map = new Map<string, number>()
-  app.value?.entityData?.forEach((entity) => {
-    if (!entity || !entity.name) return
-    map.set(entity.name, entity.data?.length ?? 0)
+  forms.value.forEach((form) => {
+    if (!form || !form.name) return
+    map.set(form.name, entityCounts.value[form.name] ?? 0)
   })
   return map
 })
@@ -131,7 +136,7 @@ const countFormFields = (formio?: Record<string, unknown>): number => {
   }
 
   const traverse = (components: unknown[]): number => {
-    return components.reduce((sum, component) => {
+    return components.reduce((sum: number, component) => {
       if (!component || typeof component !== 'object') {
         return sum
       }
@@ -149,17 +154,17 @@ const countFormFields = (formio?: Record<string, unknown>): number => {
         nested += traverse(typedComponent.components)
       }
       if (Array.isArray(typedComponent.columns)) {
-        nested += typedComponent.columns.reduce((columnSum, column) => {
+        nested += typedComponent.columns.reduce((columnSum: number, column) => {
           if (!column?.components) return columnSum
           return columnSum + traverse(column.components)
         }, 0)
       }
       if (Array.isArray(typedComponent.rows)) {
-        nested += typedComponent.rows.reduce((rowSum, row) => {
+        nested += typedComponent.rows.reduce((rowSum: number, row) => {
           if (!Array.isArray(row)) return rowSum
           return (
             rowSum +
-            row.reduce((cellSum, cell) => {
+            row.reduce((cellSum: number, cell) => {
               if (!cell?.components) return cellSum
               return cellSum + traverse(cell.components)
             }, 0)
@@ -248,27 +253,6 @@ const overviewMetrics = computed(() => [
   },
 ])
 
-const entityTableRows = computed(() => {
-  if (!forms.value.length) {
-    return []
-  }
-
-  return forms.value.map((form, index) => {
-    const formId = form.name || `entity-${index}`
-    const records = entityDataMap.value.get(form.name) ?? 0
-
-    return {
-      id: formId,
-      title: form.title || 'Untitled entity',
-      version: form.version || app.value?.version || '—',
-      backend: form.dependsOn ? `Linked to ${form.dependsOn}` : 'Standalone',
-      externalSync: syncStatus.value.label,
-      lastSynced: hasExternalSync.value ? 'Not yet synced' : '—',
-      records,
-    }
-  })
-})
-
 const fetchApp = async () => {
   if (!routeId.value) {
     error.value = 'Missing collection program id.'
@@ -281,6 +265,23 @@ const fetchApp = async () => {
   try {
     const data = await getApp(routeId.value)
     app.value = data
+    
+    // Fetch entity counts grouped by form
+    const counts = await getEntitiesCountByForm(routeId.value)
+    entityCounts.value = counts
+    
+    // Fetch entity records
+    const records = await getEntities(routeId.value)
+    // Group records by entityName for easier display
+    const grouped: Record<string, unknown[]> = {}
+    records.forEach((record) => {
+      const key = record.entityName || 'Unknown'
+      if (!grouped[key]) {
+        grouped[key] = []
+      }
+      grouped[key].push(record)
+    })
+    entityRecords.value = grouped
   } catch (err) {
     if (err instanceof AxiosError && err.response?.status === 401) {
       authStore.logout()
@@ -480,54 +481,69 @@ watch(
               <v-window-item value="entities">
                 <div class="entities-panel">
                   <p class="entities-panel__subtitle">
-                    Track captured data across each entity and monitor sync readiness.
+                    View the latest captured entity records across each form.
                   </p>
 
-                  <v-table class="entities-table" density="comfortable">
-                    <thead>
-                      <tr>
-                        <th>Entity ID</th>
-                        <th>Title</th>
-                        <th>Version</th>
-                        <th>Backend</th>
-                        <th>External Sync</th>
-                        <th>Last Synced</th>
-                        <th class="text-end">Records</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-if="!entityTableRows.length">
-                        <td colspan="7" class="entities-table__empty">
-                          No entities have been configured for this collection program.
-                        </td>
-                      </tr>
-                      <tr v-for="row in entityTableRows" :key="row.id">
-                        <td>
-                          <span class="entities-table__id">{{ row.id }}</span>
-                        </td>
-                        <td>
-                          <span class="entities-table__title">{{ row.title }}</span>
-                        </td>
-                        <td>{{ row.version }}</td>
-                        <td>{{ row.backend }}</td>
-                        <td>
-                          <v-chip
-                            v-if="hasExternalSync"
-                            size="small"
-                            variant="outlined"
-                            color="primary"
-                          >
-                            {{ row.externalSync }}
-                          </v-chip>
-                          <span v-else class="text-medium-emphasis">{{ row.externalSync }}</span>
-                        </td>
-                        <td class="text-medium-emphasis">{{ row.lastSynced }}</td>
-                        <td class="text-end">
-                          <span class="entities-table__records">{{ row.records }}</span>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </v-table>
+                  <div v-if="Object.keys(entityRecords).length === 0" class="entities-table__empty mt-6">
+                    No entities have been captured for this collection program yet.
+                  </div>
+
+                  <div v-else class="entities-list">
+                    <div
+                      v-for="(records, formName) in entityRecords"
+                      :key="formName"
+                      class="entity-form-group"
+                    >
+                      <h3 class="entity-form-group__title">
+                        {{ formName }}
+                        <v-chip
+                          class="ml-2"
+                          size="small"
+                          variant="tonal"
+                          color="primary"
+                        >
+                          {{ records.length }} records
+                        </v-chip>
+                      </h3>
+
+                      <v-table density="comfortable" class="entity-records-table">
+                        <thead>
+                          <tr>
+                            <th>GUID</th>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Last Updated</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr v-for="(record, idx) in records" :key="`${formName}-${idx}`">
+                            <td>
+                              <span class="entity-guid" :title="String((record as any).guid)">
+                                {{ String((record as any).guid).substring(0, 8) }}...
+                              </span>
+                            </td>
+                            <td>{{ (record as any).name || '—' }}</td>
+                            <td>
+                              <v-chip size="small" variant="outlined">
+                                {{ (record as any).type }}
+                              </v-chip>
+                            </td>
+                            <td class="text-medium-emphasis">
+                              {{
+                                new Intl.DateTimeFormat(undefined, {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: '2-digit',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                }).format(new Date(String((record as any).lastUpdated)))
+                              }}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </v-table>
+                    </div>
+                  </div>
                 </div>
               </v-window-item>
 
@@ -824,6 +840,53 @@ watch(
   text-align: center;
   padding: 32px 16px;
   color: rgba(0, 0, 0, 0.6);
+}
+
+.entities-list {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.entity-form-group {
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 12px;
+}
+
+.entity-form-group__title {
+  margin: 0 0 16px;
+  font-size: 1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.entity-records-table {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.entity-records-table thead th {
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.5);
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.entity-records-table tbody td {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  vertical-align: middle;
+}
+
+.entity-guid {
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: rgba(0, 0, 0, 0.7);
 }
 
 .forms-panel {

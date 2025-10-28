@@ -27,17 +27,6 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
   const router = Router();
 
   router.get(
-    "/count-entities",
-    authenticateJWT,
-    asyncHandler(async (req, res) => {
-      const { configId = "default" } = req.query;
-      const appInstance = await appInstanceStore.getAppInstance(configId as string);
-      const entities = await appInstance?.edm.getAllEntities();
-      res.json({ count: entities?.length || 0 });
-    }),
-  );
-
-  router.get(
     "/pull",
     createDynamicAuthMiddleware(appInstanceStore),
     asyncHandler(async (req, res) => {

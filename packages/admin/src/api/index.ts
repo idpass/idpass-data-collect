@@ -22,8 +22,8 @@ import axios, { type AxiosInstance } from 'axios'
 
 const API_URL = import.meta.env.VITE_API_URL
 const APPS_URL = '/api/apps'
+const ENTITIES_URL = '/api/entities'
 const EXTERNAL_SYNC_URL = '/api/sync/external'
-const GET_ENTITIES_COUNT_URL = '/api/sync/count-entities'
 const USERS_URL = '/api/users'
 
 export let instance: AxiosInstance | null = null
@@ -161,7 +161,33 @@ export const getEntitiesCount = async (configId: string) => {
   if (!instance) {
     throw new Error('Instance not initialized')
   }
-  const response = await instance.get(`${GET_ENTITIES_COUNT_URL}?configId=${configId}`)
+  const response = await instance.get(`${ENTITIES_URL}/count?configId=${configId}`)
+  return response.data
+}
+
+export const getEntitiesCountByForm = async (configId: string): Promise<Record<string, number>> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const response = await instance.get(`${ENTITIES_URL}/count-by-form?configId=${configId}`)
+  return response.data
+}
+
+export interface EntityRecord {
+  guid: string
+  id: string
+  name?: string
+  entityName?: string
+  type: string
+  data: Record<string, unknown>
+  lastUpdated: string
+}
+
+export const getEntities = async (configId: string, limit = 100): Promise<EntityRecord[]> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const response = await instance.get(`${ENTITIES_URL}?configId=${configId}&limit=${limit}`)
   return response.data
 }
 
