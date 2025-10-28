@@ -264,7 +264,6 @@ const fetchApp = async () => {
   try {
     const data = await getApp(routeId.value)
     app.value = data
-    console.log('Fetched app data:', data)
     
     // Fetch entity counts grouped by form
     const counts = await getEntitiesCountByForm(routeId.value)
@@ -272,7 +271,6 @@ const fetchApp = async () => {
     
     // Fetch entity records
     const records = await getEntities(routeId.value)
-    console.log('Fetched entity records:', records, 'Record count:', records.length)
     // Group records by entityName for easier display
     const grouped: Record<string, unknown[]> = {}
     records.forEach((record) => {
@@ -282,7 +280,6 @@ const fetchApp = async () => {
       }
       grouped[key].push(record)
     })
-    console.log('Grouped records:', grouped)
     entityRecords.value = grouped
   } catch (err) {
     if (err instanceof AxiosError && err.response?.status === 401) {
