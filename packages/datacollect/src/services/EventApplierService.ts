@@ -841,7 +841,7 @@ export class EventApplierService {
     }
 
     const searchCriteria = Object.entries(searchableFields)
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+       
       .filter(([_, value]) => value !== null && value !== undefined && value !== "")
       .map(([key, value]) => ({ [key]: value }));
 

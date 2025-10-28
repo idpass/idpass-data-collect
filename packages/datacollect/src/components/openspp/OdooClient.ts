@@ -24,42 +24,55 @@ import {
   OpenSPPGroup,
   OpenSPPHousehold,
   OpenSPPIndividual,
+  OpenSPPIndividualExtended,
   GroupMembership,
 } from "./odoo-types";
 
 interface JsonRpcErrorPayload {
   message?: string;
+  data?: {
+    name?: string;
+    message?: string;
+    debug?: string;
+  };
 }
 
 interface JsonRpcResponse<T> {
-  result: T;
+  result?: T;
   error?: JsonRpcErrorPayload;
 }
 
+type CallOptions = {
+  fields?: string[];
+  limit?: number;
+  order?: string;
+  context?: Record<string, unknown>;
+};
+
 export default class OdooClient {
-  private host: string;
+  private baseUrl = "";
+  private uid = 0;
   private db: string;
-  private uid: number | null = null;
-  private password: string | null = null;
-  private username: string | null = null;
+  private username: string;
+  private password: string;
   private registrarGroup: string;
 
   constructor(config: OdooConfig) {
-    this.host = config.host;
     this.db = config.database;
     this.username = config.username;
     this.password = config.password;
     this.registrarGroup = config.registrarGroup || "";
+    this.baseUrl = config.host;
   }
 
   private generateRequestId(): number {
     return Math.floor(Math.random() * 1000000000);
   }
 
-  private async makeRequest<T>(data: Record<string, unknown>): Promise<T> {
+  private async makeRequest<T>(endpoint: string, data: Record<string, unknown>): Promise<T> {
     try {
       const response = await axios.post<JsonRpcResponse<T>>(
-        `${this.host}/jsonrpc`,
+        `${this.baseUrl}${endpoint}`,
         {
           jsonrpc: "2.0",
           id: this.generateRequestId(),
@@ -74,35 +87,43 @@ export default class OdooClient {
       );
 
       if (response.data.error) {
-        throw new Error(response.data.error.message || "JSON-RPC request failed");
+        const errorMsg = response.data.error.data?.message || response.data.error.message || "JSON-RPC request failed";
+        throw new Error(errorMsg);
+      }
+
+      if (typeof response.data.result === "undefined") {
+        throw new Error("No result in JSON-RPC response");
       }
 
       return response.data.result;
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        throw new Error(error.response?.data?.message || error.message || "Network request failed");
+        throw new Error(error.response?.data?.error?.data?.message || error.message || "Network request failed");
       }
       throw error;
     }
   }
 
   private async checkUserGroups(uid: number): Promise<boolean> {
+    if (!this.registrarGroup) {
+      return true;
+    }
+
     type ResUsersGroupInfo = { groups_id?: number[] };
     type ResGroupRecord = { res_id?: number };
 
     try {
-      const userInfo = await this.callKw<ResUsersGroupInfo[]>("res.users", "read", [[uid], ["groups_id"]]);
+      const userInfo = await this.call<ResUsersGroupInfo[]>("res.users", "read", [[uid], ["groups_id"]]);
       if (!Array.isArray(userInfo) || !userInfo[0]) {
         return false;
       }
 
-      const groups = await this.callKw<ResGroupRecord[]>("ir.model.data", "search_read", [
+      const groups = await this.call<ResGroupRecord[]>("ir.model.data", "search_read", [
         [
           ["model", "=", "res.groups"],
           ["name", "=", this.registrarGroup],
         ],
-        ["res_id", "name"],
-      ]);
+      ], { fields: ["res_id", "name"] });
 
       if (!Array.isArray(groups) || !groups[0]?.res_id) {
         return false;
@@ -116,9 +137,19 @@ export default class OdooClient {
     }
   }
 
-  // Update the login method
   async login(): Promise<number> {
-    const result = await this.makeRequest<number>({
+    await this.authenticate();
+
+    const hasRequiredRoles = await this.checkUserGroups(this.uid);
+    if (!hasRequiredRoles) {
+      throw new Error("Insufficient permissions");
+    }
+
+    return this.uid;
+  }
+
+  private async authenticate(): Promise<void> {
+    const result = await this.makeRequest<number>("/jsonrpc", {
       method: "call",
       params: {
         service: "common",
@@ -131,67 +162,60 @@ export default class OdooClient {
       throw new Error("Authentication failed");
     }
 
-    // Check if user is admin
     this.uid = result;
-    const hasRequiredRoles = await this.checkUserGroups(result);
-    if (!hasRequiredRoles) {
-      throw new Error("Insufficient permissions");
-    }
-
-    return this.uid;
   }
 
-  async callKw<T = unknown>(
-    model: string,
-    method: string,
-    args: unknown[] = [],
-    language: string | null = null, // Add language parameter
-  ): Promise<T> {
-    if (!this.uid || !this.password) {
-      throw new Error("Not authenticated");
-    }
-    let context: Record<string, unknown> = {};
-    // Add language to the context if provided
-    if (language) {
-      context = { ...context, lang: language };
+  private async call<T>(model: string, method: string, args: unknown[] = [], kwargs?: CallOptions): Promise<T> {
+    const executeArgs: unknown[] = [this.db, this.uid, this.password, model, method, args];
+    if (kwargs && Object.keys(kwargs).length > 0) {
+      executeArgs.push(kwargs);
     }
 
-    return this.makeRequest<T>({
+    return this.makeRequest<T>("/jsonrpc", {
       method: "call",
       params: {
         service: "object",
         method: "execute_kw",
-        args: [this.db, this.uid, this.password, model, method, [...args], { context: { ...context } }],
+        args: executeArgs,
       },
     });
-  }
-
-  // Keep all the existing methods but they'll now use the new callKw implementation
-  async createGroup(data: Partial<OpenSPPGroup>): Promise<number> {
-    return this.callKw<number>("res.partner", "create_from_xml_rpc", [[[], data]]);
   }
 
   async searchRead<T extends OdooBaseModel = OdooBaseModel>(
     model: string,
     domain: unknown[] = [],
     fields: string[] = [],
-    language: string | null = null,
+    _language: string | null = null,
     limit: number | null = null,
-    offset: number = 0,
+    _offset: number = 0,
   ): Promise<T[]> {
-    return this.callKw<T[]>(model, "search_read", [domain, fields, limit, offset], language);
+    const kwargs: CallOptions = { fields };
+    if (limit !== null) {
+      kwargs.limit = limit;
+    }
+    return this.call<T[]>(model, "search_read", [domain], kwargs);
   }
 
-  async createHousehold(apgId: number, data: Partial<OpenSPPHousehold>): Promise<number> {
-    return this.callKw<number>("res.partner", "create_from_xml_rpc", [[apgId], data]);
+  async createGroup(data: Partial<OpenSPPGroup>): Promise<number> {
+    return this.call<number>("res.partner", "create", [data]);
   }
 
-  async createIndividual(apgId: number, data: Partial<OpenSPPIndividual>): Promise<number> {
-    return this.callKw<number>("res.partner", "create_from_xml_rpc", [[apgId], data]);
+  async createHousehold(rootId: number, data: Partial<OpenSPPHousehold>): Promise<number> {
+    const householdId = await this.call<number>("res.partner", "create", [data]);
+    
+    if (householdId && rootId) {
+      await this.addMembersToGroup(rootId, [{ individual: householdId }]);
+    }
+    
+    return householdId;
+  }
+
+  async createIndividual(_rootId: number, data: Partial<OpenSPPIndividual>): Promise<number> {
+    return this.call<number>("res.partner", "create", [data]);
   }
 
   async addMembersToGroup(groupId: number, memberships: GroupMembership[]): Promise<boolean> {
-    return this.callKw<boolean>("res.partner", "write", [
+    return this.call<boolean>("res.partner", "write", [
       [groupId],
       {
         group_membership_ids: memberships.map((m) => [0, 0, m]),
@@ -204,19 +228,19 @@ export default class OdooClient {
     ids: number[],
     fields: string[] = [],
   ): Promise<T[]> {
-    return this.callKw<T[]>(model, "read", [ids, fields]);
+    return this.call<T[]>(model, "read", [ids], { fields });
   }
 
   async create<T = number>(model: string, data: Record<string, unknown>): Promise<T> {
-    return this.callKw<T>(model, "create", [data]);
+    return this.call<T>(model, "create", [data]);
   }
 
   async write<T = boolean>(model: string, ids: number[], data: Record<string, unknown>): Promise<T> {
-    return this.callKw<T>(model, "write", [ids, data]);
+    return this.call<T>(model, "write", [[ids[0]], data]);
   }
 
   async unlink<T = boolean>(model: string, ids: number[]): Promise<T> {
-    return this.callKw<T>(model, "unlink", [ids]);
+    return this.call<T>(model, "unlink", [ids]);
   }
 
   async callMethod<T = unknown>(
@@ -225,14 +249,85 @@ export default class OdooClient {
     args: unknown[] = [],
     kwargs: Record<string, unknown> = {},
   ): Promise<T> {
-    return this.callKw<T>(model, method, [...args, kwargs]);
+    return this.call<T>(model, method, args, kwargs as CallOptions);
   }
 
   async getSessionInfo(): Promise<unknown> {
-    return this.callKw("res.users", "get_session_info", []);
+    return this.call("res.users", "get_session_info", []);
   }
 
   isAuthenticated(): boolean {
-    return this.uid !== null && this.password !== null;
+    return this.uid > 0;
+  }
+
+  /**
+   * Search and read partner records filtered by modification date.
+   * Supports paging via offset and limit parameters.
+   *
+   * @param domain Search domain for filtering partners
+   * @param modifiedSince Only return records modified after this timestamp
+   * @param limit Maximum number of records to return (null for no limit)
+   * @param offset Number of records to skip for pagination
+   * @returns Array of partner records matching the criteria
+   */
+  async searchPartnersSince<T extends OdooBaseModel = OdooBaseModel>(
+    domain: unknown[] = [],
+    modifiedSince?: string,
+    limit: number | null = null,
+    _offset: number = 0,
+  ): Promise<T[]> {
+    const searchDomain = [...domain];
+
+    if (modifiedSince) {
+      searchDomain.push(["write_date", ">", modifiedSince]);
+    }
+
+    return this.searchRead<T>("res.partner", searchDomain, [], null, limit);
+  }
+
+  /**
+   * Fetch household records (groups with kind=1) modified since a given timestamp.
+   *
+   * @param modifiedSince Only return records modified after this timestamp
+   * @param limit Maximum number of records to return
+   * @param offset Number of records to skip for pagination
+   * @returns Array of household records
+   */
+  async fetchHouseholdsSince(
+    modifiedSince?: string,
+    limit: number | null = null,
+    _offset: number = 0,
+  ): Promise<OpenSPPHousehold[]> {
+    return this.searchPartnersSince<OpenSPPHousehold>(
+      [
+        ["is_group", "=", true],
+        ["kind", "=", 1],
+      ],
+      modifiedSince,
+      limit,
+    );
+  }
+
+  /**
+   * Fetch individual records modified since a given timestamp.
+   *
+   * @param modifiedSince Only return records modified after this timestamp
+   * @param limit Maximum number of records to return
+   * @param offset Number of records to skip for pagination
+   * @returns Array of individual records
+   */
+  async fetchIndividualsSince(
+    modifiedSince?: string,
+    limit: number | null = null,
+    _offset: number = 0,
+  ): Promise<OpenSPPIndividualExtended[]> {
+    return this.searchPartnersSince<OpenSPPIndividualExtended>(
+      [
+        ["is_group", "=", false],
+        ["is_registrant", "=", true],
+      ],
+      modifiedSince,
+      limit,
+    );
   }
 }

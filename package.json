@@ -30,7 +30,7 @@
     "ci:setup": "echo 'enable-pre-post-scripts=true' > .npmrc && echo 'auto-install-peers=true' >> .npmrc && echo 'strict-peer-dependencies=false' >> .npmrc",
     "ci:install": "pnpm run ci:setup && pnpm install",
     "prepare": "[ \"$CI\" != \"true\" ] && husky install || echo 'Skipping husky in CI'",
-    "pr-check": "pnpm run type-check && pnpm run lint && pnpm run test"
+    "pr-check": "pnpm run type-check && pnpm run lint && pnpm run test && pnpm run check-licenses"
   },
   "devDependencies": {
     "glob": "^10.4.5",

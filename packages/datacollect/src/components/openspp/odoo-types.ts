@@ -120,5 +120,32 @@ export interface OpenSPPIndividual extends OdooBaseModel {
 
 export interface GroupMembership {
   individual: number;
-  kind?: number[][];
+  // kind is a Many2many field that accepts Odoo commands
+  // Format: [[6, 0, [kindId]]] for "replace all with these IDs"
+  // Common kindId values: 1=Head of Household, 2=Spouse, 3=Child, 4=Other
+  // Note: Only ONE member per household can have kind=1 (Head)
+  // Omit this field to let OpenSPP assign a default kind
+  kind?: number[][] | [number, number, number[]][];
+}
+
+/**
+ * Extended OpenSPP Individual interface with additional fields for pull sync.
+ * Includes fields that may be populated from search_read operations.
+ */
+export interface OpenSPPIndividualExtended extends OpenSPPIndividual {
+  given_name?: string;
+  family_name?: string;
+  addl_name?: string;
+  birthdate?: string;
+  email?: string;
+  phone?: string;
+  profession?: string;
+  marital_status_id?: number;
+  highest_education_level_id?: number;
+  relationship?: number;
+  longitude?: number;
+  latitude?: number;
+  province_id?: number;
+  district_id?: number;
+  area_id?: number;
 }

@@ -21,6 +21,27 @@ ID PASS DataCollect is a TypeScript library that provides a comprehensive offlin
 - **Duplicate Detection**: Automatic detection of potential duplicate entities
 - **External Integration**: Built-in adapters for OpenFn and OpenSPP (in beta)
 
+### OpenSPP Adapter Configuration
+
+The OpenSPP sync adapter now accepts a configurable field mapping so deployments can align DataCollect payloads with project-specific OpenSPP data structures. Supply extra fields in the external sync config (for example through `ExternalSyncConfig.extraFields`) to override defaults:
+
+```json
+{
+  "type": "openspp",
+  "url": "https://openspp.example.com",
+  "extraFields": [
+    { "name": "database", "value": "openspp" },
+    { "name": "registrarGroup", "value": "g2p.group.registrar" },
+    {
+      "name": "opensppAdapterOptions",
+      "value": "{\"household\":{\"fieldMap\":{\"name\":\"custom_name_field\"}}}"
+    }
+  ]
+}
+```
+
+If `opensppAdapterOptions` is omitted, the adapter falls back to defaults aligned with the APG data model while remaining extensible for other OpenSPP projects. Refer to `packages/datacollect/src/components/openspp/OpenSppAdapterOptions.ts` for the available mapping keys.
+
 ## Installation
 
 ```bash

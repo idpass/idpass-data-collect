@@ -1,0 +1,452 @@
+{
+	"info": {
+		"_postman_id": "afc8a652-4b44-4bb3-96fc-6cd094d84afd",
+		"name": "OpenSPP JSON-RPC Integration",
+		"description": "Requests to exercise OpenSPP's JSON-RPC API for household/individual synchronization. Use the Authenticate request first to populate collection variables before invoking push/pull operations. Note: DataCollect uses XML-RPC protocol internally, but this collection demonstrates the equivalent JSON-RPC calls for testing purposes.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Authenticate Registrar",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const json = pm.response.json();",
+									"if (!json || typeof json.result === 'undefined' || json.result === false) {",
+									"  throw new Error('Authentication failed. Verify database, username, and password.');",
+									"}",
+									"pm.collectionVariables.set('uid', json.result);",
+									"pm.test('Received uid from OpenSPP', function () {",
+									"  pm.expect(json.result).to.be.a('number');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"common\",\n    \"method\": \"authenticate\",\n    \"args\": [\n      \"{{database}}\",\n      \"{{username}}\",\n      \"{{password}}\",\n      {}\n    ]\n  },\n  \"id\": 1\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/jsonrpc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"jsonrpc"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Obtain an authenticated session and store the user id (uid) for subsequent requests."
+		},
+		{
+			"name": "Push Data",
+			"item": [
+				{
+					"name": "Create Household (res.partner)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const json = pm.response.json();",
+									"if (!json || typeof json.result === 'undefined') {",
+									"  throw new Error('Household creation failed. Check response for details.');",
+									"}",
+									"pm.collectionVariables.set('householdId', json.result);",
+									"pm.test('Created household id captured', function () {",
+									"  pm.expect(json.result).to.be.a('number');",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"{{database}}\",\n      {{uid}},\n      \"{{password}}\",\n      \"res.partner\",\n      \"create\",\n      [\n        {\n          \"name\": \"Demo Household\",\n          \"is_group\": true,\n          \"is_registrant\": true,\n          \"kind\": 1\n        }\n      ]\n    ],\n    \"kwargs\": {}\n  },\n  \"id\": 2\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/jsonrpc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"jsonrpc"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Link Household to Root Group",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const json = pm.response.json();",
+									"if (!json || json.result !== true) {",
+									"  throw new Error('Linking household to root group failed.');",
+									"}",
+									"pm.test('Root group write succeeded', function () {",
+									"  pm.expect(json.result).to.eql(true);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"{{database}}\",\n      {{uid}},\n      \"{{password}}\",\n      \"res.partner\",\n      \"write\",\n      [\n        [{{rootPartnerId}}],\n        {\n          \"group_membership_ids\": [\n            [0, 0, {\n              \"individual\": {{householdId}}\n            }]\n          ]\n        }\n      ]\n    ],\n    \"kwargs\": {}\n  },\n  \"id\": 3\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/jsonrpc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"jsonrpc"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Individual (res.partner)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const json = pm.response.json();",
+									"if (!json || typeof json.result === 'undefined') {",
+									"  throw new Error('Individual creation failed. Check response for details.');",
+									"}",
+									"pm.collectionVariables.set('individualId', json.result);",
+									"pm.test('Created individual id captured', function () {",
+									"  pm.expect(json.result).to.be.a('number');",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"{{database}}\",\n      {{uid}},\n      \"{{password}}\",\n      \"res.partner\",\n      \"create\",\n      [\n        {\n          \"name\": \"Demo Individual\",\n          \"given_name\": \"Jane\",\n          \"family_name\": \"Doe\",\n          \"gender\": 2,\n          \"birthdate\": \"1999-01-01\",\n          \"is_registrant\": true\n        }\n      ]\n    ],\n    \"kwargs\": {}\n  },\n  \"id\": 4\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/jsonrpc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"jsonrpc"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Link Individual to Household",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const json = pm.response.json();",
+									"if (!json || json.result !== true) {",
+									"  throw new Error('Linking individual to household failed.');",
+									"}",
+									"pm.test('Household write succeeded', function () {",
+									"  pm.expect(json.result).to.eql(true);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"{{database}}\",\n      {{uid}},\n      \"{{password}}\",\n      \"res.partner\",\n      \"write\",\n      [\n        [{{householdId}}],\n        {\n          \"group_membership_ids\": [\n            [0, 0, {\n              \"individual\": {{individualId}}\n            }]\n          ]\n        }\n      ]\n    ],\n    \"kwargs\": {}\n  },\n  \"id\": 5\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/jsonrpc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"jsonrpc"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Create households and individuals in OpenSPP like DataCollect would during a push."
+		},
+		{
+			"name": "Pull Data",
+			"item": [
+				{
+					"name": "Search Registrants",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const json = pm.response.json();",
+									"if (!json || !Array.isArray(json.result)) {",
+									"  throw new Error('Search failed or returned unexpected payload.');",
+									"}",
+									"pm.test('Received registrant records', function () {",
+									"  pm.expect(json.result.length).to.be.at.most(Number(pm.collectionVariables.get('pullLimit')));",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"{{database}}\",\n      {{uid}},\n      \"{{password}}\",\n      \"res.partner\",\n      \"search_read\",\n      [\n        [\n          [\"is_registrant\", \"=\", true],\n          [\"is_group\", \"=\", false]\n        ]\n      ],\n      {\n        \"fields\": [\"id\", \"name\", \"given_name\", \"family_name\", \"gender\", \"birthdate\"],\n        \"limit\": {{pullLimit}}\n        }\n    ]\n  },\n  \"id\": 6\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/jsonrpc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"jsonrpc"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Search Households",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const json = pm.response.json();",
+									"if (!json || !Array.isArray(json.result)) {",
+									"  throw new Error('Household search failed or returned unexpected payload.');",
+									"}",
+									"pm.test('Received household records', function () {",
+									"  pm.expect(json.result.length).to.be.at.most(Number(pm.collectionVariables.get('pullLimit')));",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"{{database}}\",\n      {{uid}},\n      \"{{password}}\",\n      \"res.partner\",\n      \"search_read\",\n      [\n        [\n          [\"is_registrant\", \"=\", true],\n          [\"is_group\", \"=\", true]\n        ]\n      ],\n      {\n        \"limit\": {{pullLimit}}\n      }\n    ]\n  },\n  \"id\": 7\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/jsonrpc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"jsonrpc"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Read existing registrants and households from OpenSPP for validation or incremental sync."
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"requests": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"requests": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "https://openspp.example.org"
+		},
+		{
+			"key": "database",
+			"value": "openspp"
+		},
+		{
+			"key": "username",
+			"value": "registrar@example.org"
+		},
+		{
+			"key": "password",
+			"value": "changeme"
+		},
+		{
+			"key": "uid",
+			"value": "0"
+		},
+		{
+			"key": "rootPartnerId",
+			"value": "0",
+			"description": {
+				"content": "ID of the root registrar group (e.g. APG) that households and individuals should belong to.",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "provinceId",
+			"value": "0",
+			"description": {
+				"content": "Numeric ID for the province to assign during creation.",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "districtId",
+			"value": "0",
+			"description": {
+				"content": "Numeric ID for the district to assign during creation.",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "areaId",
+			"value": "0",
+			"description": {
+				"content": "Numeric ID for the area (village) to assign during creation.",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "householdId",
+			"value": "0",
+			"description": {
+				"content": "Set automatically after creating a household.",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "individualId",
+			"value": "0",
+			"description": {
+				"content": "Set automatically after creating an individual.",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "memberKindMatrix",
+			"value": "[[6, 0, [1]]]",
+			"description": {
+				"content": "Many2many command for membership kind. Format: [[6, 0, [kindId]]] where kindId is the membership type (e.g. 1 for head of household).",
+				"type": "text/plain"
+			}
+		},
+		{
+			"key": "pullLimit",
+			"value": "10",
+			"description": {
+				"content": "Maximum number of records returned by search operations.",
+				"type": "text/plain"
+			}
+		}
+	]
+}

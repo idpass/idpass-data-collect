@@ -23,19 +23,21 @@ import {
   ExternalSyncConfig,
   ExternalSyncCredentials,
   FormSubmission,
-  getExternalField,
 } from "../../interfaces/types";
-// import { EventApplierService } from "../../services/EventApplierService";
 import OdooClient from "./OdooClient";
-import { OdooConfig } from "./odoo-types";
+import { EventApplierService } from "../../services/EventApplierService";
+import { HouseholdTransformer } from "./pullTransformers/HouseholdTransformer";
+import { IndividualTransformer } from "./pullTransformers/IndividualTransformer";
+import type { OdooConfig } from "./odoo-types";
+import type { OpenSppAdapterOptions, OpenSppEntityOptions } from "./OpenSppAdapterOptions";
+import { parseOpenSppAdapterOptions, resolveParentField } from "./OpenSppAdapterOptions";
 
 interface GroupedData {
-  apg: FormSubmission;
+  root: FormSubmission;
   households: {
     household: FormSubmission;
     individuals: FormSubmission[];
   }[];
-  crops: FormSubmission[];
 }
 
 interface AdministrativeArea {
@@ -51,15 +53,17 @@ interface RegisteredIndividual {
 
 class OpenSppSyncAdapter implements ExternalSyncAdapter {
   private url: string;
-  private odooClient: OdooClient | null = null;
-  private lastCredentials: ExternalSyncCredentials | null = null;
+  private odooClient: InstanceType<typeof OdooClient> | null = null;
+  private _lastCredentials: ExternalSyncCredentials | null = null;
+  private options: OpenSppAdapterOptions;
 
   constructor(
     private eventStore: EventStore,
-    // private eventApplierService: EventApplierService,
+    private eventApplierService: EventApplierService,
     private config: ExternalSyncConfig,
   ) {
     this.url = (this.config?.url as string | undefined) ?? "";
+    this.options = parseOpenSppAdapterOptions(config);
   }
 
   async authenticate(credentials?: ExternalSyncCredentials): Promise<boolean> {
@@ -85,36 +89,33 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     // const eventsToPush = await this.eventStore.getEventsSince(lastPushExternalSyncTimestamp);
 
     const allEvents = await this.eventStore.getAllEvents();
-    const filteredEvents = allEvents.filter((event) => {
-      const isLatest = event.timestamp > lastPushExternalSyncTimestamp;
-      const isCreate = event.type === "create-individual";
-      return event.data.entityName === "apg" || (isLatest && isCreate);
-    });
-    const groupedEvents = this.groupEventByApgId(filteredEvents);
+    const filteredEvents = this.filterSyncEvents(allEvents, lastPushExternalSyncTimestamp);
+    const groupedEvents = this.groupEvents(filteredEvents);
     const updatedEvents: FormSubmission[] = [];
 
     for (const groupData of Object.values(groupedEvents)) {
       try {
-        const apgPayload = groupData.apg.data as Record<string, unknown>;
-        const apgId = this.parseInteger(apgPayload.id);
-        if (!apgId) {
-          console.error("Unable to determine APG identifier for event", groupData.apg);
+        const rootPayload = groupData.root.data as Record<string, unknown>;
+        const rootId = this.resolveExternalId(rootPayload, this.options.root);
+
+        if (!rootId) {
+          console.error("Unable to determine root partner identifier for event", groupData.root);
           continue;
         }
 
-        const administrativeArea: AdministrativeArea = {
-          province_id: this.parseInteger(apgPayload.province_id),
-          district_id: this.parseInteger(apgPayload.district_id),
-          area_id: this.parseInteger(apgPayload.village_id),
-        };
+        const _administrativeArea = this.resolveAdministrativeArea(rootPayload, this.options.root);
 
         for (const householdGroup of groupData.households) {
           try {
             const householdEvent = householdGroup.household;
             const householdData = householdEvent.data as Record<string, unknown>;
-            const householdId = await this.createHouseholdData(apgId, householdEvent, administrativeArea);
+            const householdArea = this.resolveAdministrativeArea(householdData, this.options.household);
+            const householdId = await this.createHouseholdData(rootId, householdEvent, householdArea);
 
-            const householdBankDetails = this.getRecordArray(householdData, "bank_details");
+            const householdBankDetails = this.extractCollection(
+              householdData,
+              this.options.household.collections?.bankDetails,
+            );
             if (householdBankDetails.length > 0 && householdId) {
               for (const bankDetail of householdBankDetails) {
                 try {
@@ -125,7 +126,10 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
               }
             }
 
-            const householdDocuments = this.getRecordArray(householdData, "document_ids");
+            const householdDocuments = this.extractCollection(
+              householdData,
+              this.options.household.collections?.documents,
+            );
             if (householdDocuments.length > 0 && householdId) {
               for (const document of householdDocuments) {
                 try {
@@ -145,13 +149,17 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
             for (const member of householdGroup.individuals) {
               try {
                 const memberData = member.data as Record<string, unknown>;
-                const individualId = await this.createIndividualData(apgId, member, administrativeArea);
+                const individualArea = this.resolveAdministrativeArea(memberData, this.options.individual);
+                const individualId = await this.createIndividualData(rootId, member, individualArea);
 
                 if (individualId) {
                   updatedEvents.push(member);
                 }
 
-                const memberBankDetails = this.getRecordArray(memberData, "bank_details");
+                const memberBankDetails = this.extractCollection(
+                  memberData,
+                  this.options.individual.collections?.bankDetails,
+                );
                 if (memberBankDetails.length > 0 && individualId) {
                   for (const bankDetail of memberBankDetails) {
                     try {
@@ -162,7 +170,10 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
                   }
                 }
 
-                const memberDocuments = this.getRecordArray(memberData, "document_ids");
+                const memberDocuments = this.extractCollection(
+                  memberData,
+                  this.options.individual.collections?.documents,
+                );
                 if (memberDocuments.length > 0 && individualId) {
                   for (const document of memberDocuments) {
                     try {
@@ -173,7 +184,10 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
                   }
                 }
 
-                const trainingRecords = this.getRecordArray(memberData, "training_records");
+                const trainingRecords = this.extractCollection(
+                  memberData,
+                  this.options.individual.collections?.trainings,
+                );
                 if (trainingRecords.length > 0 && individualId) {
                   for (const training of trainingRecords) {
                     try {
@@ -184,7 +198,9 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
                   }
                 }
 
-                const membershipKind = this.parseInteger(memberData.relationship);
+                const membershipKind = this.parseInteger(
+                  this.getMappedField(memberData, this.options.individual.fieldMap?.membershipKind),
+                );
                 individualIds.push({
                   id: individualId ?? null,
                   membershipKind,
@@ -200,14 +216,20 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
                   continue;
                 }
 
-                const membership =
-                  typeof registered.membershipKind === "number" ? [[registered.membershipKind]] : undefined;
+                // kind is a Many2many field, so it needs Odoo command format
+                // Command (6, 0, [ids]) means "replace all links with these IDs"
+                // Common values: 1=Head, 2=Spouse, 3=Child, 4=Other
+                // If no kind is specified, omit the field to let OpenSPP use its default
+                const kindCommand: [number, number, number[]][] | undefined =
+                  typeof registered.membershipKind === "number" && registered.membershipKind > 0
+                    ? [[6, 0, [registered.membershipKind]]]
+                    : undefined;
 
                 try {
                   await this.odooClient?.addMembersToGroup(householdId, [
                     {
                       individual: registered.id,
-                      ...(membership ? { kind: membership } : {}),
+                      ...(kindCommand ? { kind: kindCommand } : {}),
                     },
                   ]);
                 } catch (error) {
@@ -217,7 +239,7 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
             }
 
             if (householdId) {
-              await this.odooClient?.addMembersToGroup(apgId, [
+              await this.odooClient?.addMembersToGroup(rootId, [
                 {
                   individual: householdId,
                 },
@@ -227,21 +249,8 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
             console.error("Error processing household:", error);
           }
         }
-
-        // Process crops
-        for (const crop of groupData.crops) {
-          try {
-            const cropExternalId = await this.processCrop(crop, apgId);
-            if (cropExternalId) {
-              updatedEvents.push(crop);
-            }
-          } catch (error) {
-            console.error("Error processing crop:", error);
-            continue;
-          }
-        }
       } catch (error) {
-        console.error("Error processing APG group:", error);
+        console.error("Error processing root partner group:", error);
         continue;
       }
     }
@@ -252,8 +261,6 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       await this.eventStore.setLastPushExternalSyncTimestamp(latestEventTimestamp);
       lastPushExternalSyncTimestamp = latestEventTimestamp;
     }
-
-    return;
   }
 
   private getLatestTimestamp(events: FormSubmission[]): string | null {
@@ -264,57 +271,89 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
   }
 
   async pullData(): Promise<void> {
-    throw new Error("OpenSPP pull data is a work in progress.");
-  }
+    if (!this.url) {
+      throw new Error("URL is required");
+    }
 
-  /*
-  async pullData(credentials?: ExternalSyncCredentials): Promise<void> {
-    await this.ensureClient(credentials);
+    await this.ensureClient();
+
     const lastPullExternalSyncTimestamp = await this.eventStore.getLastPullExternalSyncTimestamp();
 
-    // save entities to entity store
-    const pulledData = await axios.get(this.url, {
-      params: {
-        since: lastPullExternalSyncTimestamp,
-      },
-    });
+    // Fetch households and individuals since last pull
+    const households = await this.odooClient!.fetchHouseholdsSince(lastPullExternalSyncTimestamp);
+    const individuals = await this.odooClient!.fetchIndividualsSince(lastPullExternalSyncTimestamp);
 
-    // convert pulled data to FormSubmission
-    const events = this.convertPulledDataToEvents(pulledData.data);
+    const events: FormSubmission[] = [];
+    const errors: string[] = [];
+    let latestTimestamp = lastPullExternalSyncTimestamp;
 
+    // Transform and apply household events
+    const householdTransformer = new HouseholdTransformer(this.options.household);
+    for (const household of households) {
+      try {
+        if (!household.id) {
+          console.warn("Skipping household without ID:", household);
+          continue;
+        }
+
+        const event = householdTransformer.transform(household);
+        events.push(event);
+
+        // Track latest timestamp
+        if (household.write_date && household.write_date > latestTimestamp) {
+          latestTimestamp = household.write_date;
+        }
+      } catch (error) {
+        const errorMsg = `Error transforming household ${household.id}: ${error instanceof Error ? error.message : String(error)}`;
+        console.error(errorMsg);
+        errors.push(errorMsg);
+      }
+    }
+
+    // Transform and apply individual events
+    const individualTransformer = new IndividualTransformer(this.options.individual);
+    for (const individual of individuals) {
+      try {
+        if (!individual.id) {
+          console.warn("Skipping individual without ID:", individual);
+          continue;
+        }
+
+        const event = individualTransformer.transform(individual);
+        events.push(event);
+
+        // Track latest timestamp
+        if (individual.write_date && individual.write_date > latestTimestamp) {
+          latestTimestamp = individual.write_date;
+        }
+      } catch (error) {
+        const errorMsg = `Error transforming individual ${individual.id}: ${error instanceof Error ? error.message : String(error)}`;
+        console.error(errorMsg);
+        errors.push(errorMsg);
+      }
+    }
+
+    // Apply all events to the system
     for (const event of events) {
-      await this.eventApplierService.submitForm(event);
+      try {
+        await this.eventApplierService.submitForm(event);
+      } catch (error) {
+        const errorMsg = `Error applying event for entity ${event.entityGuid}: ${error instanceof Error ? error.message : String(error)}`;
+        console.error(errorMsg);
+        errors.push(errorMsg);
+      }
     }
 
-    // use latest timestamp from events
-    const latestEventTimestamp = this.getLatestTimestamp(events);
-    if (latestEventTimestamp) {
-      await this.eventStore.setLastPullExternalSyncTimestamp(latestEventTimestamp);
+    // Log aggregated errors if any
+    if (errors.length > 0) {
+      console.warn(`OpenSPP pull sync completed with ${errors.length} errors:`, errors);
     }
 
-    return;
-  }
-  
-
-  private convertPulledDataToEvents(pulledData: unknown[]): FormSubmission[] {
-    if (Array.isArray(pulledData)) {
-      return pulledData.map((data) => this.convertPulledDataToEvent(data));
+    // Update pull timestamp after successful processing
+    if (latestTimestamp && latestTimestamp > lastPullExternalSyncTimestamp) {
+      await this.eventStore.setLastPullExternalSyncTimestamp(latestTimestamp);
     }
-    return [];
   }
-
-  private convertPulledDataToEvent(pulledData: unknown): FormSubmission {
-    return {
-      type: "external-pull",
-      guid: uuidv4(),
-      entityGuid: get(pulledData, "id", uuidv4()),
-      data: pulledData as Record<string, unknown>,
-      timestamp: get(pulledData, "timestamp", new Date().toISOString()),
-      userId: "system",
-      syncLevel: SyncLevel.REMOTE,
-    };
-  }
-  */
 
   async sync(credentials?: ExternalSyncCredentials): Promise<void> {
     const authenticated = await this.authenticate(credentials);
@@ -322,31 +361,28 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       throw new Error("Failed to authenticate with OpenSPP");
     }
     await this.pushData(credentials);
-    // await this.pullData(credentials);
+    await this.pullData();
   }
 
-  private async ensureClient(credentials?: ExternalSyncCredentials): Promise<void> {
-    if (credentials) {
-      this.lastCredentials = credentials;
-    }
-
+  private async ensureClient(_credentials?: ExternalSyncCredentials): Promise<void> {
     if (this.odooClient) {
       return;
     }
 
-    const auth = this.lastCredentials;
-    const database = getExternalField(this.config, "database");
-    const registrarGroup = getExternalField(this.config, "registrarGroup");
+    const database = this.getRequiredField("database");
+    const username = this.getRequiredField("username");
+    const password = this.getRequiredField("password");
+    const registrarGroup = this.getOptionalField("registrarGroup");
 
-    if (!this.url || !database || !auth) {
+    if (!this.url || !database || !username || !password) {
       throw new Error("URL, database and credentials are required");
     }
 
     const odooConfig: OdooConfig = {
       host: this.url,
       database,
-      username: auth.username,
-      password: auth.password,
+      username,
+      password,
       registrarGroup,
     };
 
@@ -355,61 +391,62 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
   }
 
   async createHouseholdData(
-    apgId: number,
-    apgMember: FormSubmission,
+    rootId: number,
+    householdSubmission: FormSubmission,
     administrativeArea: AdministrativeArea,
   ): Promise<number | undefined> {
-    const householdPayload = apgMember.data as Record<string, unknown>;
-    const gpsCoordinates = this.parseCoordinates(householdPayload.location_gps);
+    const householdPayload = householdSubmission.data as Record<string, unknown>;
+    const gpsCoordinates = this.parseCoordinates(this.getMappedField(householdPayload, this.options.household.fieldMap?.location));
 
     const householdData = {
       is_registrant: true,
       is_group: true,
-      name: this.getString(householdPayload, "name") ?? "",
+      name: this.getString(householdPayload, this.options.household.fieldMap?.name) ?? "",
       kind: 1,
-      hh_size: this.parseInteger(householdPayload.household_size) ?? 0,
+      hh_size: this.parseInteger(this.getMappedField(householdPayload, this.options.household.fieldMap?.householdSize)) ?? 0,
       hh_status: "active",
-      ethnic_group: this.isAffirmative(householdPayload.belongs_to_ethnic_group),
+      ethnic_group: this.isAffirmative(this.getMappedField(householdPayload, this.options.household.fieldMap?.belongsToEthnicGroup)),
       longitude: gpsCoordinates?.longitude,
       latitude: gpsCoordinates?.latitude,
       ...administrativeArea,
     };
 
-    return this.odooClient?.createHousehold(apgId, householdData);
+    return this.odooClient?.createHousehold(rootId, householdData);
   }
 
   async createIndividualData(
-    apgId: number,
+    rootId: number,
     member: FormSubmission,
     administrativeArea: AdministrativeArea,
   ): Promise<number | undefined> {
     const memberPayload = member.data as Record<string, unknown>;
-    const gpsCoordinates = this.parseCoordinates(memberPayload.location_gps);
-    const firstName = this.getString(memberPayload, "first_name") ?? "";
-    const lastName = this.getString(memberPayload, "last_name") ?? "";
-    const displayName = this.getString(memberPayload, "name") || `${firstName} ${lastName}`.trim();
-    const birthdate = this.getString(memberPayload, "date_of_birth");
+    const gpsCoordinates = this.parseCoordinates(this.getMappedField(memberPayload, this.options.individual.fieldMap?.location));
+    const firstName = this.getString(memberPayload, this.options.individual.fieldMap?.firstName) ?? "";
+    const lastName = this.getString(memberPayload, this.options.individual.fieldMap?.lastName) ?? "";
+    const displayName =
+      this.getString(memberPayload, this.options.individual.fieldMap?.displayName) || `${firstName} ${lastName}`.trim();
+    const birthdate = this.getString(memberPayload, this.options.individual.fieldMap?.dateOfBirth);
 
     const individualData = {
       is_registrant: true,
       given_name: firstName,
       family_name: lastName,
-      addl_name: this.getString(memberPayload, "middle_name"),
+      addl_name: this.getString(memberPayload, this.options.individual.fieldMap?.middleName),
       name: displayName,
-      gender: this.getString(memberPayload, "gender"),
+      gender: this.getString(memberPayload, this.options.individual.fieldMap?.gender),
       birthdate: birthdate ? this.formatDate(birthdate) : null,
-      ethnic_group: this.isAffirmative(memberPayload.belongs_to_ethnic_group),
-      email: this.getString(memberPayload, "email_address") ?? "",
-      marital_status_id: this.parseInteger(memberPayload.marital_status),
-      profession: this.getString(memberPayload, "profession") ?? "",
+      ethnic_group: this.isAffirmative(this.getMappedField(memberPayload, this.options.individual.fieldMap?.belongsToEthnicGroup)),
+      email: this.getString(memberPayload, this.options.individual.fieldMap?.email) ?? "",
+      marital_status_id: this.parseInteger(this.getMappedField(memberPayload, this.options.individual.fieldMap?.maritalStatus)),
+      profession: this.getString(memberPayload, this.options.individual.fieldMap?.profession) ?? "",
       longitude: gpsCoordinates?.longitude,
       latitude: gpsCoordinates?.latitude,
-      highest_education_level_id: this.parseInteger(memberPayload.education_level),
-      phone: this.getString(memberPayload, "phone_number") ?? "",
+      highest_education_level_id: this.parseInteger(this.getMappedField(memberPayload, this.options.individual.fieldMap?.educationLevel)),
+      phone: this.getString(memberPayload, this.options.individual.fieldMap?.phone) ?? "",
       ...administrativeArea,
     };
 
-    return this.odooClient?.createIndividual(apgId, individualData);
+    return this.odooClient?.createIndividual(rootId, individualData);
   }
 
   async createTrainingRecord(training: Record<string, unknown>, partnerId: number): Promise<number | undefined> {
@@ -453,116 +490,164 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     });
   }
 
-  async processCrop(apgCrop: FormSubmission, apgId: number): Promise<number | null | undefined> {
-    try {
-      const cropPayload = apgCrop.data as Record<string, unknown>;
-      const cropActivities = this.getRecordArray(cropPayload, "crop_activities");
-      let cropExternalId: number | null | undefined;
-
-      const landRecord = {
-        land_farm_id: apgId,
-        province_id: this.parseInteger(cropPayload.province_id),
-        district_id: this.parseInteger(cropPayload.district_id),
-        area_id: this.parseInteger(cropPayload.area_id),
-        land_size: this.parseNumber(cropPayload.land_size),
-        land_size_unit: this.getString(cropPayload, "land_size_unit"),
-        agricultural_land_size: this.parseNumber(cropPayload.agricultural_land_size),
-        agricultural_land_size_unit: this.getString(cropPayload, "agricultural_land_size_unit"),
-      };
-      const newLandRecord = await this.odooClient?.create("spp.land.record", landRecord);
-
-      for (const cropActivity of cropActivities) {
-        const activity = cropActivity as Record<string, unknown>;
-        const sowingDate = this.getString(activity, "sowing_date");
-        const harvestDate = this.getString(activity, "harvest_date");
-
-        const product = {
-          prod_farm_id: apgId,
-          activity_type: "crop",
-          species_id: this.parseInteger(activity.species_id),
-          seasonal_timeline_id: this.parseInteger(cropPayload.seasonal_timeline_id),
-        };
-
-        const cropActivityData = {
-          crop_land_id: newLandRecord,
-          activity_type: "crop",
-          species_id: this.parseInteger(activity.species_id),
-          crop_id: this.parseInteger(activity.crop_id),
-          crop_species: this.getString(activity, "species"),
-          seeds_origin: this.getString(activity, "seeds_origin"),
-          purpose: this.getString(activity, "purpose"),
-          season_id: this.parseInteger(activity.season_id),
-          sowing_date: sowingDate ? this.formatDate(sowingDate) : null,
-          harvest_date: harvestDate ? this.formatDate(harvestDate) : null,
-          expected_yield: this.parseNumber(activity.expected_yield),
-          expected_yield_unit: this.getString(activity, "expected_yield_unit"),
-          actual_yield: this.parseNumber(activity.actual_yield),
-          irrigation_type_ids: this.getNumberArray(activity, "irrigation_type_ids"),
-          chemical_usage_ids: this.getNumberArray(activity, "chemical_usage_ids"),
-          fertilizer_usage_ids: this.getNumberArray(activity, "fertilizer_usage_ids"),
-        };
-
-        try {
-          await this.odooClient?.create("spp.farm.activity", product);
-        } catch (error) {
-          console.error(`Error creating spp.farm.activity product : ${JSON.stringify(product)}`, error);
-          return null;
-        }
-
-        try {
-          cropExternalId = await this.odooClient?.create("spp.farm.activity", cropActivityData);
-        } catch (error) {
-          console.error(`Error creating spp.farm.activity cropActivityData : ${JSON.stringify(cropActivityData)}`, error);
-          return null;
-        }
+  private filterSyncEvents(events: FormSubmission[], since: string): FormSubmission[] {
+    return events.filter((event) => {
+      if (!event.data || typeof event.data !== "object") {
+        return false;
       }
 
-      return cropExternalId;
-    } catch (error) {
-      console.error("Error processing crop for member:", apgCrop.entityGuid, error);
-      return null;
-    }
+      const entityName = this.getString(event.data, "entityName");
+      const isRoot = entityName === this.options.root.entityName;
+      const isHousehold = entityName === this.options.household.entityName;
+      const isIndividual = entityName === this.options.individual.entityName;
+      const isCreate = event.type.startsWith("create-");
+      const isNewer = event.timestamp > since;
+
+      if (isRoot) {
+        return true;
+      }
+
+      if ((isHousehold || isIndividual) && isCreate && isNewer) {
+        return true;
+      }
+
+      return false;
+    });
   }
-  private groupEventByApgId(events: FormSubmission[]): Record<string, GroupedData> {
+
+  private groupEvents(events: FormSubmission[]): Record<string, GroupedData> {
     const grouped: Record<string, GroupedData> = {};
+    const householdIndex = new Map<string, { rootGuid: string; container: { household: FormSubmission; individuals: FormSubmission[] } }>();
+    const householdQueue: FormSubmission[] = [];
+    const individualQueue: FormSubmission[] = [];
 
     for (const event of events) {
-      // Check if event.data exists and has required properties
       if (!event.data || typeof event.data !== "object") {
         continue;
       }
 
-      if (event.data.entityName === "apg") {
+      const entityName = this.getString(event.data, "entityName");
+
+      if (entityName === this.options.root.entityName) {
         grouped[event.entityGuid] = {
-          apg: event,
+          root: event,
           households: [],
-          crops: [],
         };
-      } else if (event.data.entityName === "household") {
-        const apgGroup = grouped[event.data.parentGuid];
-        if (apgGroup) {
-          apgGroup.households.push({
-            household: event,
-            individuals: [],
-          });
-        }
-      } else if (event.data.entityName === "individual") {
-        for (const apgGroup of Object.values(grouped)) {
-          const household = apgGroup.households.find((h) => h.household.entityGuid === event.data.parentGuid);
-          if (household) {
-            household.individuals.push(event);
-            break;
-          }
-        }
-      } else if (event.data.entityName === "cropActivity") {
-        const apgGroup = grouped[event.data.parentGuid];
-        if (apgGroup) {
-          apgGroup.crops.push(event);
-        }
+        continue;
+      }
+
+      if (entityName === this.options.household.entityName) {
+        householdQueue.push(event);
+        continue;
+      }
+
+      if (entityName === this.options.individual.entityName) {
+        individualQueue.push(event);
       }
     }
 
+    for (const householdEvent of householdQueue) {
+      const parentGuid = this.getString(
+        householdEvent.data as Record<string, unknown>,
+        resolveParentField(this.options.household),
+      );
+
+      if (!parentGuid) {
+        continue;
+      }
+
+      const group = grouped[parentGuid];
+      if (!group) {
+        continue;
+      }
+
+      const container = {
+        household: householdEvent,
+        individuals: [],
+      };
+
+      group.households.push(container);
+      householdIndex.set(householdEvent.entityGuid, { rootGuid: parentGuid, container });
+    }
+
+    for (const individualEvent of individualQueue) {
+      const parentGuid = this.getString(
+        individualEvent.data as Record<string, unknown>,
+        resolveParentField(this.options.individual),
+      );
+
+      if (!parentGuid) {
+        continue;
+      }
+
+      const householdEntry = householdIndex.get(parentGuid);
+      if (!householdEntry) {
+        continue;
+      }
+
+      householdEntry.container.individuals.push(individualEvent);
+    }
+
     return grouped;
+  }
+
+  private resolveAdministrativeArea(data: Record<string, unknown>, option: OpenSppEntityOptions): AdministrativeArea {
+    const province = this.parseInteger(this.getMappedField(data, option.fieldMap?.province));
+    const district = this.parseInteger(this.getMappedField(data, option.fieldMap?.district));
+    const area = this.parseInteger(this.getMappedField(data, option.fieldMap?.area));
+
+    if (province === undefined && district === undefined && area === undefined) {
+      return {
+        province_id: undefined,
+        district_id: undefined,
+        area_id: undefined,
+      };
+    }
+
+    return {
+      province_id: province,
+      district_id: district,
+      area_id: area,
+    };
+  }
+
+  private resolveExternalId(data: Record<string, unknown>, option: OpenSppEntityOptions): number | undefined {
+    const idField = option.fieldMap?.id ?? "id";
+    return this.parseInteger(this.getMappedField(data, idField));
+  }
+
+  private extractCollection(payload: Record<string, unknown>, key?: string): Record<string, unknown>[] {
+    if (!key) {
+      return [];
+    }
+    return this.getRecordArray(payload, key);
+  }
+
+  private getMappedField(data: Record<string, unknown>, key?: string): unknown {
+    if (!key) {
+      return undefined;
+    }
+    return data[key];
+  }
+
+  private _getStringFromMapping(data: Record<string, unknown>, key?: string): string | undefined {
+    if (!key) {
+      return undefined;
+    }
+    return this.getString(data, key);
+  }
+
+  private getRequiredField(fieldName: string): string {
+    console.log("getRequiredField", fieldName, this.config);
+    const value = this.getOptionalField(fieldName);
+    if (!value) {
+      throw new Error(`Missing required OpenSPP configuration field: ${fieldName}`);
+    }
+    return value;
+  }
+
+  private getOptionalField(fieldName: string): string | undefined {
+    return this.config.extraFields?.find((field) => field.name === fieldName)?.value;
   }
 
   private formatDate(date: string): string {
@@ -605,7 +690,10 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     }
   }
 
-  private getString(data: Record<string, unknown>, key: string): string | undefined {
+  private getString(data: Record<string, unknown>, key?: string): string | undefined {
+    if (!key) {
+      return undefined;
+    }
     const value = data[key];
     return typeof value === "string" ? value : undefined;
   }
@@ -615,7 +703,7 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     return Array.isArray(value) ? (value as Record<string, unknown>[]) : [];
   }
 
-  private getNumberArray(data: Record<string, unknown>, key: string): number[] {
+  private _getNumberArray(data: Record<string, unknown>, key: string): number[] {
     return this.toNumberArray(data[key]);
   }
 
@@ -635,3 +723,4 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
 }
 
 export default OpenSppSyncAdapter;
+

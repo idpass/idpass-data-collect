@@ -68,7 +68,7 @@ export class OIDCCLientStore implements Storage {
    * @param {number} _index The index of the key to return
    * @returns {string | null} The key at the specified index, or null if not found
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   key(_index: number): string | null {
     // We'll implement this synchronously since Storage interface requires it
     // It will return null if the index is out of bounds or if DB isn't initialized
@@ -88,7 +88,7 @@ export class OIDCCLientStore implements Storage {
    * @param {string} _key The key of the item to get
    * @returns {string | null} The value of the item, or null if not found
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   getItem(_key: string): string | null {
     // We need a synchronous version for the Storage interface
     // Return null if not initialized or error occurs
@@ -100,7 +100,7 @@ export class OIDCCLientStore implements Storage {
    * @param {string} _key The key of the item to set
    * @param {string} _value The value to set
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   setItem(_key: string, _value: string): void {
     // We need a synchronous version for the Storage interface
     // No-op if not initialized
@@ -111,7 +111,7 @@ export class OIDCCLientStore implements Storage {
    * Removes an item synchronously (required by Storage interface)
    * @param {string} _key The key of the item to remove
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   removeItem(_key: string): void {
     // We need a synchronous version for the Storage interface
     // No-op if not initialized
