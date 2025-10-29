@@ -209,6 +209,15 @@ export class EventApplierService {
   }
 
   /**
+   * Retrieves the entity store instance.
+   *
+   * @returns The entity store instance.
+   */
+  getEntityStore(): EntityStore {
+    return this.entityStore;
+  }
+
+  /**
    * Processes a form submission to create or modify entities through the event sourcing system.
    *
    * This is the main entry point for all entity operations. The method:

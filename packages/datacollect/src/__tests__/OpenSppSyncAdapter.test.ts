@@ -58,8 +58,13 @@ describe("OpenSppSyncAdapter", () => {
       setLastPullExternalSyncTimestamp: jest.fn(),
     } as unknown as jest.Mocked<EventStore>;
 
+    const mockEntityStore = {
+      getEntityByExternalId: jest.fn().mockResolvedValue(null),
+    };
+
     eventApplierService = {
       submitForm: jest.fn(),
+      getEntityStore: jest.fn().mockReturnValue(mockEntityStore),
     } as unknown as jest.Mocked<EventApplierService>;
 
     credentials = {
@@ -323,6 +328,54 @@ describe("OpenSppSyncAdapter", () => {
 
       // Timestamp should still be updated
       expect(eventStore.setLastPullExternalSyncTimestamp).toHaveBeenCalledWith("2024-01-16T10:00:00.000Z");
+    });
+
+    it("updates existing entities instead of creating duplicates", async () => {
+      const mockHouseholds = [
+        {
+          id: 101,
+          name: "Updated Household",
+          is_group: true,
+          kind: 1,
+          hh_size: 5,
+          write_date: "2024-01-15T10:00:00.000Z",
+        },
+      ];
+
+      const existingEntityGuid = "existing-entity-guid";
+      const mockEntityStore = {
+        getEntityByExternalId: jest.fn().mockResolvedValue({
+          guid: existingEntityGuid,
+          initial: { guid: existingEntityGuid, externalId: "101" },
+          modified: { guid: existingEntityGuid, externalId: "101" },
+        }),
+      };
+
+      eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
+
+      Object.assign(mockOdooClientImplementation, {
+        fetchHouseholdsSince: jest.fn().mockResolvedValue(mockHouseholds),
+        fetchIndividualsSince: jest.fn().mockResolvedValue([]),
+      });
+
+      adapter = new OpenSppSyncAdapter(eventStore, eventApplierService, config);
+
+      await adapter.authenticate(credentials);
+      await adapter.pullData();
+
+      // Verify getEntityByExternalId was called with the household ID
+      expect(mockEntityStore.getEntityByExternalId).toHaveBeenCalledWith("101");
+
+      // Verify submitForm was called with update-group type and existing entity GUID
+      expect(eventApplierService.submitForm).toHaveBeenCalledWith(
+        expect.objectContaining({
+          entityGuid: existingEntityGuid,
+          type: "update-group",
+          data: expect.objectContaining({
+            externalId: 101,
+          }),
+        })
+      );
     });
   });
 });

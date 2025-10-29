@@ -31,14 +31,16 @@ export class HouseholdTransformer {
   constructor(private options: OpenSppEntityOptions) {}
 
   /**
-   * Transform an OpenSPP household record into a FormSubmission for creating a group.
+   * Transform an OpenSPP household record into a FormSubmission for creating or updating a group.
    *
    * @param household The OpenSPP household record from pull sync
    * @param parentEntityGuid The GUID of the parent household group
-   * @returns A FormSubmission representing the household creation event
+   * @param existingEntityGuid The GUID of an existing entity if one was found by externalId
+   * @returns A FormSubmission representing the household creation or update event
    */
-  transform(household: OpenSPPHousehold, parentEntityGuid?: string): FormSubmission {
-    const entityGuid = uuidv4();
+  transform(household: OpenSPPHousehold, parentEntityGuid?: string, existingEntityGuid?: string): FormSubmission {
+    const entityGuid = existingEntityGuid ?? uuidv4();
+    const isUpdate = !!existingEntityGuid;
 
     // Map OpenSPP fields to DataCollect using the adapter options field mapping
     const data: Record<string, unknown> = {
@@ -59,7 +61,7 @@ export class HouseholdTransformer {
     return {
       guid: uuidv4(),
       entityGuid,
-      type: "create-group",
+      type: isUpdate ? "update-group" : "create-group",
       data,
       timestamp: household.write_date || new Date().toISOString(),
       userId: "external-openspp",

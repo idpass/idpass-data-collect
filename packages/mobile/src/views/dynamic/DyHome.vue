@@ -167,7 +167,7 @@ const scan = async () => {
 
 const saveTenantApp = async (config: TenantAppData, sourceUrl = '') => {
   if (!config?.id || !config?.name || !config?.entityForms) {
-    throw new Error('Invalid FormApp configuration')
+    throw new Error('Invalid Collection Program configuration')
   }
 
   await database.tenantapps.upsert({
@@ -210,7 +210,7 @@ const handleFileChange = async (event: Event) => {
     await saveTenantApp(json)
   } catch (error) {
     console.error(error)
-    alert('Unable to import the selected file. Please verify it is a valid FormApp JSON.')
+    alert('Unable to import the selected file. Please verify it is a valid Collection Program JSON.')
   } finally {
     target.value = ''
   }
@@ -254,7 +254,7 @@ const toggleAddOptions = () => {
   <div class="home-screen">
     <header class="home-header">
       <div>
-        <h1>FormApps</h1>
+        <h1>Collection Programs</h1>
         <p>{{ availableCount }} forms available</p>
       </div>
       <div class="search-bar">
@@ -322,7 +322,7 @@ const toggleAddOptions = () => {
       </ul>
     </section>
 
-    <button class="fab" type="button" @click="toggleAddOptions" aria-label="Add FormApp">
+    <button class="fab" type="button" @click="toggleAddOptions" aria-label="Add Collection Program">
       <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
         <path d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z" fill="currentColor" />
       </svg>
@@ -332,7 +332,7 @@ const toggleAddOptions = () => {
       <div class="overlay__backdrop" @click="showAddOptions = false"></div>
       <div class="overlay__panel">
         <header>
-          <h3>Add FormApp</h3>
+          <h3>Add Collection Program</h3>
           <p>Choose how you'd like to add a new form to your collection</p>
         </header>
         <div class="overlay__options">
@@ -347,7 +347,7 @@ const toggleAddOptions = () => {
             </span>
             <div>
               <span class="option__title">Scan QR Code</span>
-              <span class="option__subtitle">Use your camera to scan a FormApp QR code</span>
+              <span class="option__subtitle">Use your camera to scan a Collection Program QR code</span>
             </div>
           </button>
           <button class="option" type="button" @click="handleEnterUrl">
@@ -361,7 +361,7 @@ const toggleAddOptions = () => {
             </span>
             <div>
               <span class="option__title">Enter URL</span>
-              <span class="option__subtitle">Manually enter a FormApp download URL</span>
+              <span class="option__subtitle">Manually enter a Collection Program download URL</span>
             </div>
           </button>
           <button class="option" type="button" @click="handleSelectFile">
@@ -375,7 +375,7 @@ const toggleAddOptions = () => {
             </span>
             <div>
               <span class="option__title">Select JSON File</span>
-              <span class="option__subtitle">Choose a FormApp JSON file from your device</span>
+              <span class="option__subtitle">Choose a Collection Program JSON file from your device</span>
             </div>
           </button>
         </div>
@@ -384,13 +384,13 @@ const toggleAddOptions = () => {
 
     <Dialog
       :open="openInputAppDialog"
-      :title="'Load FormApp'"
+      :title="'Load Collection Program'"
       @update:open="openInputAppDialog = $event"
       :onSave="handleLoadAppFromInput"
     >
       <template #form-content>
         <div class="form-field">
-          <label for="appUrl">FormApp URL</label>
+          <label for="appUrl">Collection Program URL</label>
           <input id="appUrl" type="url" v-model="appUrl" placeholder="https://example.com/app.json" />
         </div>
       </template>

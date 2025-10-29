@@ -102,9 +102,7 @@ const syncStatus = computed(() => {
     label: requiresAuth ? 'Sync secured' : 'Sync enabled',
     color: requiresAuth ? 'warning' : 'success',
     icon: requiresAuth ? 'mdi-shield-key-outline' : 'mdi-sync',
-    description: requiresAuth
-      ? 'Requires credentials before triggering an external sync.'
-      : 'Automatically syncs data with the configured external service.',
+    description: app.value?.description || '',
   }
 })
 
@@ -405,7 +403,7 @@ watch(
           </div>
           <h1 class="details-header__title">{{ app.name }}</h1>
           <p class="details-header__subtitle">
-            {{ app.description || 'This collection program does not have a description yet.' }}
+            {{ app.description }}
           </p>
         </div>
         <div class="details-header__actions">

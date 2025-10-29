@@ -126,7 +126,7 @@ const formattedVersion = computed(() => `v${tenantapp.value?.version ?? '—'}`)
 <template>
   <div class="app-view" v-if="tenantapp">
     <div class="top-bar">
-      <button class="icon-button" type="button" @click="onBack" aria-label="Back to FormApps">
+      <button class="icon-button" type="button" @click="onBack" aria-label="Back to Collection Programs">
         <svg viewBox="0 0 24 24" focusable="false">
           <path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z" fill="currentColor" />
         </svg>

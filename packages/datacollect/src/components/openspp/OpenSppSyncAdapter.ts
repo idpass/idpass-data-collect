@@ -296,7 +296,11 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
           continue;
         }
 
-        const event = householdTransformer.transform(household);
+        // Check if entity already exists by externalId
+        const existingEntity = await this.eventApplierService.getEntityStore().getEntityByExternalId(String(household.id));
+        const existingEntityGuid = existingEntity?.modified.guid;
+
+        const event = householdTransformer.transform(household, undefined, existingEntityGuid);
         events.push(event);
 
         // Track latest timestamp
@@ -319,7 +323,11 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
           continue;
         }
 
-        const event = individualTransformer.transform(individual);
+        // Check if entity already exists by externalId
+        const existingEntity = await this.eventApplierService.getEntityStore().getEntityByExternalId(String(individual.id));
+        const existingEntityGuid = existingEntity?.modified.guid;
+
+        const event = individualTransformer.transform(individual, undefined, existingEntityGuid);
         events.push(event);
 
         // Track latest timestamp

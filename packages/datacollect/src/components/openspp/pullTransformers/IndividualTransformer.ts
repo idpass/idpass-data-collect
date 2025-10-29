@@ -31,14 +31,16 @@ export class IndividualTransformer {
   constructor(private options: OpenSppEntityOptions) {}
 
   /**
-   * Transform an OpenSPP individual record into a FormSubmission for creating an individual.
+   * Transform an OpenSPP individual record into a FormSubmission for creating or updating an individual.
    *
    * @param individual The OpenSPP individual record from pull sync
    * @param parentEntityGuid The GUID of the parent household
-   * @returns A FormSubmission representing the individual creation event
+   * @param existingEntityGuid The GUID of an existing entity if one was found by externalId
+   * @returns A FormSubmission representing the individual creation or update event
    */
-  transform(individual: OpenSPPIndividual, parentEntityGuid?: string): FormSubmission {
-    const entityGuid = uuidv4();
+  transform(individual: OpenSPPIndividual, parentEntityGuid?: string, existingEntityGuid?: string): FormSubmission {
+    const entityGuid = existingEntityGuid ?? uuidv4();
+    const isUpdate = !!existingEntityGuid;
 
     // Map OpenSPP fields to DataCollect using the adapter options field mapping
     const data: Record<string, unknown> = {
@@ -59,7 +61,7 @@ export class IndividualTransformer {
     return {
       guid: uuidv4(),
       entityGuid,
-      type: "create-individual",
+      type: isUpdate ? "update-individual" : "create-individual",
       data,
       timestamp: individual.write_date || new Date().toISOString(),
       userId: "external-openspp",

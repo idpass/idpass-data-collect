@@ -19,6 +19,7 @@ interface Props {
     version: string
     entitiesCount: number
     externalSync: Record<string, string>
+    description: string
   }
 }
 
@@ -99,9 +100,7 @@ const syncDetails = computed(() => {
     label: 'Sync enabled',
     color: requiresAuth ? 'warning' : 'success',
     icon: requiresAuth ? 'mdi-shield-key-outline' : 'mdi-sync',
-    description: requiresAuth
-      ? 'Requires credentials before triggering an external sync.'
-      : 'Automatically syncs data with the configured external service.',
+    description: app.description || ''
   }
 })
 
