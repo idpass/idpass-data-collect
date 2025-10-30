@@ -87,6 +87,7 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
             version: config.version || "",
             externalSync: config.externalSync || {},
             entitiesCount: entities?.length || 0,
+            description: config.description || "",
           };
         }),
       );

@@ -76,6 +76,7 @@ export interface AppListItem {
   version: string
   entitiesCount: number
   externalSync: Record<string, string>
+  description: string
 }
 
 export interface AppListMeta {
