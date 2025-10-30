@@ -22,8 +22,8 @@ import axios, { type AxiosInstance } from 'axios'
 
 const API_URL = import.meta.env.VITE_API_URL
 const APPS_URL = '/api/apps'
+const ENTITIES_URL = '/api/entities'
 const EXTERNAL_SYNC_URL = '/api/sync/external'
-const GET_ENTITIES_COUNT_URL = '/api/sync/count-entities'
 const USERS_URL = '/api/users'
 
 export let instance: AxiosInstance | null = null
@@ -61,11 +61,46 @@ export const initializeInstance = () => {
   )
 }
 
-export const getApps = async () => {
+export interface AppListParams {
+  page?: number
+  pageSize?: number
+  sortBy?: 'name' | 'id' | 'entitiesCount'
+  sortOrder?: 'asc' | 'desc'
+  search?: string
+}
+
+export interface AppListItem {
+  id: string
+  artifactId: string
+  name: string
+  version: string
+  entitiesCount: number
+  externalSync: Record<string, string>
+  description: string
+}
+
+export interface AppListMeta {
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+  sortBy: string
+  sortOrder: string
+  search: string
+}
+
+export interface AppListResponse {
+  data: AppListItem[]
+  meta: AppListMeta
+}
+
+export const getApps = async (params: AppListParams = {}): Promise<AppListResponse> => {
   if (!instance) {
     throw new Error('Instance not initialized')
   }
-  const response = await instance.get(APPS_URL)
+  const response = await instance.get(APPS_URL, {
+    params,
+  })
   return response.data
 }
 
@@ -101,25 +136,77 @@ export const deleteApp = async (id: string) => {
   return response.data
 }
 
-export const getAppConfigJsonUrl = (id: string) => {
+export const getAppConfigJsonUrl = (artifactId: string) => {
   if (!instance) {
     throw new Error('Instance not initialized')
   }
-  return `${API_URL}/${id}.json`
+  if (!artifactId) {
+    throw new Error('Artifact id is required')
+  }
+  const baseUrl = API_URL.replace(/\/+$/, '')
+  return `${baseUrl}/artifacts/${artifactId}.json`
 }
 
-export const getAppQrCodeUrl = (id: string) => {
+export const getAppQrCodeUrl = (artifactId: string) => {
   if (!instance) {
     throw new Error('Instance not initialized')
   }
-  return `${API_URL}/${id}.png`
+  if (!artifactId) {
+    throw new Error('Artifact id is required')
+  }
+  const baseUrl = API_URL.replace(/\/+$/, '')
+  return `${baseUrl}/artifacts/${artifactId}.png`
 }
 
 export const getEntitiesCount = async (configId: string) => {
   if (!instance) {
     throw new Error('Instance not initialized')
   }
-  const response = await instance.get(`${GET_ENTITIES_COUNT_URL}?configId=${configId}`)
+  const response = await instance.get(`${ENTITIES_URL}/count?configId=${configId}`)
+  return response.data
+}
+
+export const getEntitiesCountByForm = async (configId: string): Promise<Record<string, number>> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const response = await instance.get(`${ENTITIES_URL}/count-by-form?configId=${configId}`)
+  return response.data
+}
+
+export interface EntityRecord {
+  guid: string
+  id: string
+  name?: string
+  entityName?: string
+  type: string
+  data: Record<string, unknown>
+  lastUpdated: string
+}
+
+export const getEntities = async (configId: string, limit = 100): Promise<EntityRecord[]> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const response = await instance.get(`${ENTITIES_URL}?configId=${configId}&limit=${limit}`)
+  return response.data
+}
+
+export interface EventRecord {
+  guid: string
+  entityGuid: string
+  type: string
+  data: Record<string, unknown>
+  timestamp: string
+  userId: string
+  syncLevel: number
+}
+
+export const getEntityEvents = async (entityGuid: string, configId: string): Promise<EventRecord[]> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const response = await instance.get(`${ENTITIES_URL}/${entityGuid}/events?configId=${configId}`)
   return response.data
 }
 

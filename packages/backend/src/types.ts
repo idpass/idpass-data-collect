@@ -17,13 +17,14 @@
  * under the License.
  */
 
-import { EntityDataManager, ExternalSyncConfig } from "idpass-data-collect";
+import { EntityDataManager, ExternalSyncConfig } from "@idpass/data-collect-core";
 import { Server } from "http";
 export interface SyncServerConfig {
   port: number;
-  initialPassword: string;
-  userId: string;
+  adminPassword: string;
+  adminEmail: string;
   postgresUrl: string;
+  userId?: string;
 }
 
 export interface SyncServerInstance {
@@ -90,6 +91,7 @@ export interface AuthConfig {
 
 export interface AppConfig {
   id: string;
+  artifactId?: string;
   name: string;
   description?: string;
   version?: string;
@@ -104,6 +106,7 @@ export interface AppConfigStore {
   initialize(): Promise<void>;
   getConfigs(): Promise<AppConfig[]>;
   getConfig(id: string): Promise<AppConfig>;
+  getConfigByArtifactId(artifactId: string): Promise<AppConfig>;
   saveConfig(config: AppConfig): Promise<void>;
   deleteConfig(id: string): Promise<void>;
   clearStore(): Promise<void>;

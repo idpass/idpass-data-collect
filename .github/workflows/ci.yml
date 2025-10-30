@@ -14,17 +14,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Use Node.js 20.x
+      - name: Use Node.js 22.x
         uses: actions/setup-node@v4
         with:
-          node-version: 20.x
-          cache: "npm"
+          node-version: 22.x
+      
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
-        run: HUSKY=0 npm ci
+        run: HUSKY=0 pnpm run ci:install
 
       - name: Check license headers
-        run: npm run check-licenses
+        run: pnpm run check-licenses
 
   test:
     runs-on: ubuntu-latest
@@ -34,7 +50,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [20.x]
+        node-version: [22.x]
 
     services:
       postgres:
@@ -54,41 +70,52 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Use Node.js ${{ matrix.node-version }}
+      - name: Use Node.js 22.x
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
-          cache: "npm"
+          node-version: 22.x
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
-        run: HUSKY=0 npm ci
-
-      - name: Install datacollect lib
-        run: |
-          cd packages/datacollect && npm run build
-          cd ../backend && npm install ../datacollect
-          cd ../mobile && npm install ../datacollect
+        run: HUSKY=0 pnpm run ci:install
 
       - name: Run linting
-        run: npm run lint
+        run: pnpm run lint
 
       - name: Run type checking
-        run: npm run type-check
+        run: pnpm run type-check
 
       - name: Validate OpenAPI specification
         working-directory: packages/backend
-        run: npm run validate-api
+        run: pnpm run validate-api
 
       - name: Run tests
         env:
           POSTGRES: postgresql://test:test@localhost:5432/test
           POSTGRES_TEST: postgresql://test:test@localhost:5432/test
           JWT_SECRET: test_secret
-          INITIAL_PASSWORD: test_password
-        run: npm test
+          ADMIN_EMAIL: admin@example.com
+          ADMIN_PASSWORD: test_password
+        run: pnpm test
 
       - name: Build projects
-        run: npm run build
+        run: pnpm run build
 
   security:
     runs-on: ubuntu-latest
@@ -102,11 +129,27 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20.x
-          cache: "npm"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
-        run: HUSKY=0 npm ci
+        run: HUSKY=0 pnpm run ci:install
 
       - name: Run security audit
         continue-on-error: true
-        run: npm audit --production
+        run: pnpm audit --prod

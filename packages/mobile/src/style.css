@@ -15,7 +15,7 @@ body {
     color 0.5s,
     background-color 0.5s;
   line-height: 1.6;
-  background: var(--color-very-light-blue);
+  background: transparent;
   font-family: Manrope, sans-serif;
   font-size: 16px;
   text-rendering: optimizeLegibility;
@@ -33,16 +33,16 @@ body.barcode-scanner-active {
 }
 
 .btn {
-  border-radius: 2rem;
+  border-radius: 999px;
   border: none;
   cursor: pointer;
   font-family: Manrope, sans-serif;
   outline: 0;
-  transition: opacity 0.2s;
+  transition: opacity 0.2s ease;
 }
 
 .btn:hover {
-  opacity: 0.6;
+  opacity: 0.85;
 }
 
 .btn.btn-primary {
@@ -57,18 +57,11 @@ button[type='submit'] {
 button[disabled] {
   pointer-events: none;
   user-select: none;
+  opacity: 0.5;
 }
 
 a[class] {
   cursor: pointer;
-}
-
-div[class$='actions'] {
-  display: flex;
-  flex-direction: row;
-  gap: 2rem;
-  justify-content: center;
-  margin-block-start: 4rem;
 }
 
 .disable-scrollbars {
@@ -97,27 +90,34 @@ div[class$='actions'] {
   background: transparent;
   font-weight: normal;
 }
+
 .banner {
   background-color: var(--color-btn-primary-bg);
   color: var(--color-btn-primary);
 }
+
 .title {
   color: #343434;
 }
+
 .title p {
   font-weight: 600;
   font-size: 1rem;
 }
+
 .title small {
   font-size: 0.75rem;
 }
+
 .search-form {
   height: 50px;
   border-radius: 10px;
 }
+
 .capitalize {
   text-transform: capitalize;
 }
+
 .back-link {
   color: var(--color-blue);
 }

@@ -92,7 +92,7 @@ export class OIDCClient {
           // Implement remaining AsyncStorage interface methods
           get length() { return Promise.resolve(0) },
           clear: () => Promise.resolve(),
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+           
           key: (_index: number) => Promise.resolve(null)
         }
       : new MockStorage()

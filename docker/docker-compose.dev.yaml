@@ -1,133 +1,98 @@
 name: idpass-data-collection-dev
 services:
-  # HDM Sync Server - Development mode
-  sync-server:
-    image: node:20-bookworm-slim
-    working_dir: /packages
-    env_file: ./.env
-    environment:
-      - NODE_ENV=development
-      - NODE_OPTIONS=--max-old-space-size=4096
-      - CHOKIDAR_USEPOLLING=true
-    ports:
-      - "3000:3000"
-      - "9229:9229" # Node.js debugger port
-    volumes:
-      - ../packages/backend:/packages/backend
-      - ../packages/datacollect:/packages/datacollect
-      - /packages/datacollect/node_modules
-      - /packages/backend/node_modules
-    command: |
-      sh -c "
-        mkdir -p /packages/datacollect/node_modules &&
-        mkdir -p /packages/backend/node_modules &&
-        chown -R node:node /packages/datacollect/node_modules &&
-        chown -R node:node /packages/backend/node_modules &&
-        su node -c '
-          cd datacollect &&
-          npm install &&
-          npm run build &&
-          cd ../backend &&
-          npm install ../datacollect &&
-          npm install &&
-          npm run dev -- --inspect=0.0.0.0:9229
-        '
-      "
-    restart: unless-stopped
-    depends_on:
-      - postgres
-    networks:
-      - hdm-network
-
   # PostgreSQL database
   postgres:
     image: postgres:15
     restart: always
-    env_file: ./postgresql.env
+    env_file: ./.env
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres-data-dev:/var/lib/postgresql/data
       - ./init-reset-dbs.sh:/docker-entrypoint-initdb.d/init-reset-dbs.sh
     ports:
       - "5432:5432"
     networks:
-      - hdm-network
+      - datacollect-network-dev
     command: ["postgres"]
-
-  # Admin UI - Development mode
-  admin-ui:
-    image: node:20-bookworm-slim
-    working_dir: /app
-    environment:
-      - VITE_API_URL=http://localhost:3000
-      - CHOKIDAR_USEPOLLING=true
-    ports:
-      - "5173:5173"
-    volumes:
-      - ../packages/admin:/app
-      - /app/node_modules
-    command: |
-      sh -c "
-        mkdir -p /app/node_modules &&
-        chown -R node:node /app/node_modules &&
-        su node -c '
-          npm install &&
-          npm run dev -- --host 0.0.0.0
-        '
-      "
-    depends_on:
-      - sync-server
-    networks:
-      - hdm-network
-
-  # Mobile App - Browser Development mode
-  mobile-app:
-    image: node:20-bookworm-slim
-    working_dir: /app
-    environment:
-      - VITE_DB_ENCRYPTION_PASSWORD=password
-      - VITE_DEVELOP=true
-      - VITE_DEBUG=true
-      - VITE_FEATURE_DYNAMIC=true
-      - CHOKIDAR_USEPOLLING=true
-    ports:
-      - "8081:8081"
-    volumes:
-      - ../packages/mobile:/app/mobile
-      - ../packages/datacollect:/app/datacollect
-      - /app/datacollect/node_modules
-      - /app/mobile/node_modules
-    command: |
-      sh -c "
-        mkdir -p /app/mobile/node_modules &&
-        mkdir -p /app/datacollect/node_modules &&
-        chown -R node:node /app/mobile/node_modules &&
-        chown -R node:node /app/datacollect/node_modules &&
-        su node -c '
-          cd datacollect &&
-          npm install &&
-          cd ../mobile &&
-          npm install ../datacollect &&
-          npm install &&
-          npm run dev -- --host 0.0.0.0
-        '
-      "
 
   # pgAdmin for database management (optional)
   pgadmin:
-    image: dpage/pgadmin4:latest
-    environment:
-      - PGADMIN_DEFAULT_EMAIL=admin@example.com
-      - PGADMIN_DEFAULT_PASSWORD=admin
+    image: dpage/pgadmin4:9
+    env_file: ./.env
     ports:
       - "5050:80"
     depends_on:
       - postgres
     networks:
-      - hdm-network
+      - datacollect-network-dev
+
+  # DataCollect Sync Server - Development mode
+  sync-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: backend
+    env_file: ./.env
+    ports:
+      - "${SYNC_SERVER_PORT:-3000}:3000"
+      - "9229:9229" # Node.js debugger port
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    networks:
+      - datacollect-network-dev
+
+  # Admin UI - Development mode
+  admin-ui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: admin-ui
+    restart: unless-stopped
+    environment:
+      - VITE_API_URL=http://localhost:3000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - sync-server
+    networks:
+      - datacollect-network-dev
+
+  # Mobile App - Browser Development mode
+  mobile-app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: mobile-app
+    environment:
+      - VITE_DB_ENCRYPTION_PASSWORD=password
+      - VITE_DEVELOP=true
+      - VITE_DEBUG=true
+      - VITE_FEATURE_DYNAMIC=true
+    ports:
+      - "8081:8081"
+    depends_on:
+      - sync-server
+    networks:
+      - datacollect-network-dev
+
+  # keycloak:
+  #   image: quay.io/keycloak/keycloak:23.0.0
+  #   container_name: keycloak
+  #   environment:
+  #     - KEYCLOAK_ADMIN=admin
+  #     - KEYCLOAK_ADMIN_PASSWORD=admin
+  #   command:
+  #     - start-dev
+  #   ports:
+  #     - "9090:8080"
+  #   depends_on:
+  #     - postgres
+  #   networks:
+  #     - datacollect-network-dev
 
 volumes:
-  postgres-data:
+  postgres-data-dev:
 
 networks:
-  hdm-network:
+  datacollect-network-dev:
     driver: bridge

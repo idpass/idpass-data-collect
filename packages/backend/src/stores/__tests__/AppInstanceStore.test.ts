@@ -4,14 +4,47 @@ import { Pool } from "pg";
 import { AppConfigStoreImpl } from "../AppConfigStore";
 import { AppInstanceStoreImpl } from "../AppInstanceStore";
 import { AppConfig } from "../../types";
+import { Client } from "pg";
 
-describe("AppInstanceStore", () => {
+const getConnectionString = () => {
+  const url = process.env.POSTGRES_TEST;
+  if (!url) return "";
+  const parsed = new URL(url.replace(/ /g, "%20"));
+  const baseName = parsed.pathname.replace(/^\//, "");
+  const dbName = baseName ? `${baseName}_app_instance_store` : "datacollect_app_instance_store";
+  parsed.pathname = `/${dbName}`;
+  return parsed.toString();
+};
+
+const ensureDatabaseExists = async (connectionString: string) => {
+  if (!connectionString) return;
+  const parsed = new URL(connectionString);
+  const dbName = parsed.pathname.replace(/^\//, "");
+  if (!dbName) return;
+
+  const adminUrl = new URL(connectionString);
+  adminUrl.pathname = "/postgres";
+
+  const client = new Client({ connectionString: adminUrl.toString() });
+  await client.connect();
+  const result = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
+  if (result.rowCount === 0) {
+    const escapedName = dbName.replace(/"/g, '""');
+    await client.query(`CREATE DATABASE "${escapedName}"`);
+  }
+  await client.end();
+};
+
+const describeIfPostgres = process.env.POSTGRES_TEST ? describe : describe.skip;
+
+describeIfPostgres("AppInstanceStore", () => {
   let appInstanceStore: AppInstanceStoreImpl;
   let appConfigStore: AppConfigStoreImpl;
   let pool: Pool;
 
   const mockConfig: AppConfig = {
     id: "test-config-1",
+    artifactId: "artifact-instance-1",
     name: "Test Config",
     description: "Test configuration",
     version: "1.0.0",
@@ -55,14 +88,15 @@ describe("AppInstanceStore", () => {
   };
 
   beforeAll(async () => {
+    await ensureDatabaseExists(getConnectionString());
     pool = new Pool({
-      connectionString: process.env.POSTGRES_TEST || "",
+      connectionString: getConnectionString(),
     });
-    appConfigStore = new AppConfigStoreImpl(process.env.POSTGRES_TEST || "");
+    appConfigStore = new AppConfigStoreImpl(getConnectionString());
     await appConfigStore.initialize();
     await appConfigStore.saveConfig(mockConfig);
 
-    appInstanceStore = new AppInstanceStoreImpl(appConfigStore, process.env.POSTGRES_TEST || "");
+    appInstanceStore = new AppInstanceStoreImpl(appConfigStore, getConnectionString());
   });
 
   afterEach(async () => {
@@ -107,7 +141,6 @@ describe("AppInstanceStore", () => {
       const instance = await appInstanceStore.getAppInstance(mockConfig.id);
       expect(instance).not.toBeNull();
       const data = await instance?.edm.getAllEntities();
-      console.log(data);
       expect(data?.length).toBe(2);
     });
   });

@@ -19,6 +19,51 @@
 
 import { AuditLogEntry, EventStorageAdapter, FormSubmission, SyncLevel } from "../interfaces/types";
 
+/**
+ * IndexedDB implementation of the EventStorageAdapter for browser-based event persistence.
+ *
+ * This adapter provides tamper-evident event storage using the browser's IndexedDB API.
+ * It ensures the integrity of the event log through cryptographic methods (e.g., Merkle trees)
+ * and supports various event sourcing operations like audit trails, sync timestamp management,
+ * and efficient event retrieval.
+ *
+ * Key features:
+ * - **Immutable Event Storage**: All events are stored as immutable records.
+ * - **Merkle Tree Integrity**: Cryptographic verification of event integrity using SHA256.
+ * - **Audit Trail Management**: Complete audit logging for compliance and debugging.
+ * - **Sync Coordination**: Timestamp tracking for multiple sync operations (local, remote, external).
+ * - **Event Verification**: Merkle proof generation and verification (though Merkle proof generation/verification logic is handled by EventStore, this adapter provides the storage for Merkle roots).
+ * - **Pagination Support**: Efficient handling of large event datasets.
+ * - **Tamper Detection**: Cryptographic detection of unauthorized modifications.
+ *
+ * Architecture:
+ * - Uses IndexedDB object stores for events, audit logs, Merkle roots, and sync timestamps.
+ * - Employs multiple indexes for efficient querying of events and audit logs by GUID, entity GUID, and timestamp.
+ * - Provides ACID transaction support for data consistency.
+ * - Supports both single and multi-tenant deployments by prefixing database names with the tenant ID.
+ *
+ * @example
+ * Basic usage:
+ * ```typescript
+ * import { IndexedDbEventStorageAdapter } from '@idpass/idpass-data-collect';
+ *
+ * const adapter = new IndexedDbEventStorageAdapter('tenant-123');
+ * await adapter.initialize();
+ *
+ * // Save events
+ * const eventsToSave = [{ guid: 'event-1', entityGuid: 'entity-1', timestamp: new Date().toISOString(), type: 'create-entity', data: {} }];
+ * await adapter.saveEvents(eventsToSave);
+ *
+ * // Retrieve events
+ * const allEvents = await adapter.getEvents();
+ * console.log('All events:', allEvents);
+ *
+ * // Set and get sync timestamp
+ * await adapter.setLastRemoteSyncTimestamp(new Date().toISOString());
+ * const lastSync = await adapter.getLastRemoteSyncTimestamp();
+ * console.log('Last remote sync:', lastSync);
+ * ```
+ */
 export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
   private dbName = "eventStore";
   private db: IDBDatabase | null = null;
@@ -29,10 +74,21 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     }
   }
 
+  /**
+   * Closes the connection to the IndexedDB database.
+   *
+   * @returns A Promise that resolves when the connection is closed.
+   */
   async closeConnection(): Promise<void> {
     return Promise.resolve();
   }
 
+  /**
+   * Initializes the IndexedDB database, creating object stores and indexes if they don't exist.
+   *
+   * @returns A Promise that resolves when the database is successfully initialized.
+   * @throws {Error} If there is an error opening or upgrading the IndexedDB.
+   */
   async initialize(): Promise<void> {
     this.db = await new Promise<IDBDatabase>((resolve, reject) => {
       const request = window.indexedDB.open(this.dbName, 1);
@@ -68,6 +124,13 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     });
   }
 
+  /**
+   * Saves an array of `FormSubmission` events to the event store.
+   *
+   * @param events An array of `FormSubmission` objects to save.
+   * @returns A Promise that resolves with an array of GUIDs of the saved events.
+   * @throws {Error} If IndexedDB is not initialized or the save operation fails.
+   */
   async saveEvents(events: FormSubmission[]): Promise<string[]> {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized");
@@ -90,6 +153,12 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     return guids;
   }
 
+  /**
+   * Retrieves all `FormSubmission` events from the event store.
+   *
+   * @returns A Promise that resolves with an array of all `FormSubmission` events.
+   * @throws {Error} If IndexedDB is not initialized or the retrieval operation fails.
+   */
   async getEvents(): Promise<FormSubmission[]> {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized");
@@ -116,6 +185,13 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     return events;
   }
 
+  /**
+   * Saves an array of `AuditLogEntry` entries to the audit log store.
+   *
+   * @param entries An array of `AuditLogEntry` objects to save.
+   * @returns A Promise that resolves when the audit log entries are successfully saved.
+   * @throws {Error} If IndexedDB is not initialized or the save operation fails.
+   */
   async saveAuditLog(entries: AuditLogEntry[]): Promise<void> {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized");
@@ -133,6 +209,12 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     }
   }
 
+  /**
+   * Retrieves all `AuditLogEntry` entries from the audit log store.
+   *
+   * @returns A Promise that resolves with an array of all `AuditLogEntry` entries.
+   * @throws {Error} If IndexedDB is not initialized or the retrieval operation fails.
+   */
   async getAuditLog(): Promise<AuditLogEntry[]> {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized");
@@ -159,6 +241,13 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     return auditLog;
   }
 
+  /**
+   * Saves the Merkle root to the Merkle root store.
+   *
+   * @param root The Merkle root string to save.
+   * @returns A Promise that resolves when the Merkle root is successfully saved.
+   * @throws {Error} If IndexedDB is not initialized or the save operation fails.
+   */
   async saveMerkleRoot(root: string): Promise<void> {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized");
@@ -166,14 +255,29 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
 
     const transaction = this.db.transaction(["merkleRoot"], "readwrite");
     const objectStore = transaction.objectStore("merkleRoot");
-    const request = objectStore.put({ id: 1, root });
+
+    if (!root) {
+      await new Promise<void>((resolve, reject) => {
+        const request = objectStore.delete(1);
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+      });
+      return;
+    }
 
     await new Promise<void>((resolve, reject) => {
+      const request = objectStore.put({ id: 1, root });
       request.onsuccess = () => resolve();
       request.onerror = () => reject(request.error);
     });
   }
 
+  /**
+   * Retrieves the stored Merkle root.
+   *
+   * @returns A Promise that resolves with the Merkle root string, or an empty string if no root exists.
+   * @throws {Error} If IndexedDB is not initialized or the retrieval operation fails.
+   */
   async getMerkleRoot(): Promise<string> {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized");
@@ -192,6 +296,12 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     });
   }
 
+  /**
+   * Clears all data from the events, audit log, and Merkle root stores.
+   *
+   * @returns A Promise that resolves when all stores are cleared.
+   * @throws {Error} If IndexedDB is not initialized or the clear operation fails.
+   */
   async clearStore(): Promise<void> {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized");
@@ -216,6 +326,14 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     });
   }
 
+  /**
+   * Updates the `syncLevel` for events associated with a given `entityGuid`.
+   *
+   * @param id The GUID of the event whose sync level needs to be updated.
+   * @param syncLevel The new `SyncLevel` to set for the events.
+   * @returns A Promise that resolves when the update is complete.
+   * @throws {Error} If IndexedDB is not initialized or the update operation fails.
+   */
   async updateEventSyncLevel(id: string, syncLevel: SyncLevel): Promise<void> {
     return new Promise((resolve, reject) => {
       if (!this.db) {
@@ -244,6 +362,14 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     });
   }
 
+  /**
+   * Updates the `syncLevel` for audit log entries associated with a given `entityGuid`.
+   *
+   * @param entityGuId The GUID of the entity whose associated audit log entries' sync levels need to be updated.
+   * @param syncLevel The new `SyncLevel` to set for the audit log entries.
+   * @returns A Promise that resolves when the update is complete.
+   * @throws {Error} If IndexedDB is not initialized or the update operation fails.
+   */
   async updateAuditLogSyncLevel(entityGuId: string, syncLevel: SyncLevel): Promise<void> {
     return new Promise((resolve, reject) => {
       if (!this.db) {
@@ -272,6 +398,13 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     });
   }
 
+  /**
+   * Retrieves events that have occurred since a specified timestamp.
+   *
+   * @param timestamp The timestamp (ISO 8601 string or Date object) from which to retrieve events (exclusive).
+   * @returns A Promise that resolves with an array of `FormSubmission` events, sorted by timestamp in ascending order.
+   * @throws {Error} If IndexedDB is not initialized or the retrieval operation fails.
+   */
   async getEventsSince(timestamp: string | Date): Promise<FormSubmission[]> {
     return new Promise((resolve, reject) => {
       if (!this.db) {
@@ -301,6 +434,14 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     });
   }
 
+  /**
+   * Retrieves events that have occurred since a specified timestamp with pagination.
+   *
+   * @param timestamp The timestamp (ISO 8601 string or Date object) from which to retrieve events (exclusive).
+   * @param pageSize The maximum number of events to retrieve in a single page. Defaults to 10.
+   * @returns A Promise that resolves with an object containing an array of `FormSubmission` events and the `nextCursor` for pagination.
+   * @throws {Error} If IndexedDB is not initialized or the retrieval operation fails.
+   */
   async getEventsSincePagination(
     timestamp: string | Date,
     pageSize: number = 10,
@@ -343,6 +484,13 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     });
   }
 
+  /**
+   * Retrieves audit log entries that have occurred since a specified timestamp.
+   *
+   * @param timestamp The timestamp (ISO 8601 string) from which to retrieve audit logs (exclusive).
+   * @returns A Promise that resolves with an array of `AuditLogEntry` entries, sorted by timestamp in descending order.
+   * @throws {Error} If IndexedDB is not initialized or the retrieval operation fails.
+   */
   async getAuditLogsSince(timestamp: string): Promise<AuditLogEntry[]> {
     return new Promise((resolve, reject) => {
       if (!this.db) {
@@ -370,6 +518,13 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     });
   }
 
+  /**
+   * Updates the sync level for a batch of events based on their GUIDs.
+   *
+   * @param events An array of `FormSubmission` objects, each containing the GUID and the new `syncLevel`.
+   * @returns A Promise that resolves when all specified events' sync levels are updated.
+   * @throws {Error} If IndexedDB is not initialized or the update operation fails.
+   */
   async updateSyncLevelFromEvents(events: FormSubmission[]): Promise<void> {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized");
@@ -404,6 +559,12 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     }
   }
 
+  /**
+   * Retrieves the timestamp of the last successful remote synchronization.
+   *
+   * @returns A Promise that resolves with the timestamp string, or an empty string if no timestamp exists.
+   * @throws {Error} If IndexedDB is not initialized or the retrieval operation fails.
+   */
   async getLastRemoteSyncTimestamp(): Promise<string> {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized");
@@ -421,6 +582,13 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     });
   }
 
+  /**
+   * Sets the timestamp of the last successful remote synchronization.
+   *
+   * @param timestamp The timestamp string to save.
+   * @returns A Promise that resolves when the timestamp is successfully saved.
+   * @throws {Error} If IndexedDB is not initialized or the save operation fails.
+   */
   async setLastRemoteSyncTimestamp(timestamp: string): Promise<void> {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized");
@@ -436,6 +604,12 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     });
   }
 
+  /**
+   * Retrieves the timestamp of the last successful local synchronization.
+   *
+   * @returns A Promise that resolves with the timestamp string, or an empty string if no timestamp exists.
+   * @throws {Error} If IndexedDB is not initialized or the retrieval operation fails.
+   */
   async getLastLocalSyncTimestamp(): Promise<string> {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized");
@@ -453,6 +627,13 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     });
   }
 
+  /**
+   * Sets the timestamp of the last successful local synchronization.
+   *
+   * @param timestamp The timestamp string to save.
+   * @returns A Promise that resolves when the timestamp is successfully saved.
+   * @throws {Error} If IndexedDB is not initialized or the save operation fails.
+   */
   async setLastLocalSyncTimestamp(timestamp: string): Promise<void> {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized");
@@ -468,6 +649,12 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     });
   }
 
+  /**
+   * Retrieves the timestamp of the last successful external pull synchronization.
+   *
+   * @returns A Promise that resolves with the timestamp string, or an empty string if no timestamp exists.
+   * @throws {Error} If IndexedDB is not initialized or the retrieval operation fails.
+   */
   getLastPullExternalSyncTimestamp(): Promise<string> {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized");
@@ -485,6 +672,13 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     });
   }
 
+  /**
+   * Sets the timestamp of the last successful external pull synchronization.
+   *
+   * @param timestamp The timestamp string to save.
+   * @returns A Promise that resolves when the timestamp is successfully saved.
+   * @throws {Error} If IndexedDB is not initialized or the save operation fails.
+   */
   setLastPullExternalSyncTimestamp(timestamp: string): Promise<void> {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized");
@@ -500,6 +694,12 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     });
   }
 
+  /**
+   * Retrieves the timestamp of the last successful external push synchronization.
+   *
+   * @returns A Promise that resolves with the timestamp string, or an empty string if no timestamp exists.
+   * @throws {Error} If IndexedDB is not initialized or the retrieval operation fails.
+   */
   getLastPushExternalSyncTimestamp(): Promise<string> {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized");
@@ -517,6 +717,13 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     });
   }
 
+  /**
+   * Sets the timestamp of the last successful external push synchronization.
+   *
+   * @param timestamp The timestamp string to save.
+   * @returns A Promise that resolves when the timestamp is successfully saved.
+   * @throws {Error} If IndexedDB is not initialized or the save operation fails.
+   */
   setLastPushExternalSyncTimestamp(timestamp: string): Promise<void> {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized");
@@ -532,6 +739,13 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     });
   }
 
+  /**
+   * Checks if an event with the given GUID exists in the event store.
+   *
+   * @param guid The GUID of the event to check.
+   * @returns A Promise that resolves to `true` if the event exists, `false` otherwise.
+   * @throws {Error} If IndexedDB is not initialized or the operation fails.
+   */
   async isEventExisted(guid: string): Promise<boolean> {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized");
@@ -552,6 +766,13 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     });
   }
 
+  /**
+   * Retrieves the audit trail for a specific entity, identified by its `entityGuid`.
+   *
+   * @param entityGuid The GUID of the entity to retrieve the audit trail for.
+   * @returns A Promise that resolves with an array of `AuditLogEntry` entries, sorted by timestamp in descending order.
+   * @throws {Error} If IndexedDB is not initialized or the retrieval operation fails.
+   */
   async getAuditTrailByEntityGuid(entityGuid: string): Promise<AuditLogEntry[]> {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized");

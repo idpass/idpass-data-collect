@@ -3,24 +3,60 @@ import "dotenv/config";
 import { Pool } from "pg";
 import { AppConfigStoreImpl } from "../AppConfigStore";
 import { AppConfig } from "../../types";
+import { Client } from "pg";
 
-describe("AppConfigStore", () => {
+const getConnectionString = () => {
+  const url = process.env.POSTGRES_TEST;
+  if (!url) return "";
+  const parsed = new URL(url.replace(/ /g, "%20"));
+  const baseName = parsed.pathname.replace(/^\//, "");
+  const dbName = baseName ? `${baseName}_app_config_store` : "datacollect_app_config_store";
+  parsed.pathname = `/${dbName}`;
+  return parsed.toString();
+};
+
+const ensureDatabaseExists = async (connectionString: string) => {
+  if (!connectionString) return;
+  
+  const parsed = new URL(connectionString);
+  const dbName = parsed.pathname.replace(/^\//, "");
+  if (!dbName) return;
+
+  const adminUrl = new URL(connectionString);
+  adminUrl.pathname = "/postgres";
+
+  const client = new Client({ connectionString: adminUrl.toString() });
+  await client.connect();
+  const result = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
+  if (result.rowCount === 0) {
+    const escapedName = dbName.replace(/"/g, '""');
+    await client.query(`CREATE DATABASE "${escapedName}"`);
+  }
+  await client.end();
+};
+
+const describeIfPostgres = process.env.POSTGRES_TEST ? describe : describe.skip;
+
+describeIfPostgres("AppConfigStore", () => {
   let adapter: AppConfigStoreImpl;
   let pool: Pool;
 
   beforeAll(async () => {
+    await ensureDatabaseExists(getConnectionString());
     pool = new Pool({
-      connectionString: process.env.POSTGRES_TEST || "",
+      connectionString: getConnectionString(),
     });
-    adapter = new AppConfigStoreImpl(process.env.POSTGRES_TEST || "");
+    adapter = new AppConfigStoreImpl(getConnectionString());
     await adapter.initialize();
   });
 
   afterEach(async () => {
+    await adapter.initialize();
     await adapter.clearStore();
   });
 
   afterAll(async () => {
+    await adapter.initialize();
     await adapter.clearStore();
     await adapter.closeConnection();
     await pool.end();
@@ -28,6 +64,7 @@ describe("AppConfigStore", () => {
 
   const mockConfig: AppConfig = {
     id: "test-config-1",
+    artifactId: "artifact-test-1",
     name: "Test Config",
     description: "Test configuration",
     version: "1.0.0",
@@ -137,6 +174,7 @@ describe("AppConfigStore", () => {
         ...mockConfig,
         name: "Test Config 2",
         id: "test-config-2",
+        artifactId: "artifact-test-2",
       };
 
       await adapter.saveConfig(mockConfig);

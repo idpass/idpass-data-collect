@@ -18,24 +18,13 @@
  */
 
 import { Router } from "express";
-import { AuditLogEntry, ExternalSyncCredentials, FormSubmission } from "idpass-data-collect";
+import { AuditLogEntry, ExternalSyncCredentials, FormSubmission } from "@idpass/data-collect-core";
 import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { AppInstanceStore } from "../types";
 
 export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
   const router = Router();
-
-  router.get(
-    "/count-entities",
-    authenticateJWT,
-    asyncHandler(async (req, res) => {
-      const { configId = "default" } = req.query;
-      const appInstance = await appInstanceStore.getAppInstance(configId as string);
-      const entities = await appInstance?.edm.getAllEntities();
-      res.json({ count: entities?.length || 0 });
-    }),
-  );
 
   router.get(
     "/pull",

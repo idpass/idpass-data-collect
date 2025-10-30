@@ -27,6 +27,7 @@ import swaggerUi from "swagger-ui-express";
 import YAML from "yamljs";
 import { errorHandler, notFoundHandler, setupUncaughtHandlers } from "./middlewares/errorHandlers";
 import { createAppConfigRoutes } from "./routes/appConfigRoutes";
+import { createEntitiesRouter } from "./routes/entitiesRoute";
 import { createPotentialDuplicatesRoute } from "./routes/potentialDuplicatesRoute";
 import { createSyncRouter } from "./routes/syncRoute";
 import { createUserRoutes } from "./routes/userRoutes";
@@ -34,6 +35,7 @@ import { AppConfigStoreImpl } from "./stores/AppConfigStore";
 import { AppInstanceStoreImpl } from "./stores/AppInstanceStore";
 import { UserStoreImpl } from "./stores/UserStore";
 import { Role, SyncServerConfig, SyncServerInstance } from "./types";
+import { generatePublicArtifacts, resolvePublicBaseUrl } from "./utils/publicArtifacts";
 
 export async function run(config: SyncServerConfig): Promise<SyncServerInstance> {
   const userStore = new UserStoreImpl(config.postgresUrl);
@@ -81,9 +83,45 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   }
 
   app.use("/api/apps", createAppConfigRoutes(appConfigStore, appInstanceStore));
+  app.use("/api/entities", createEntitiesRouter(appInstanceStore));
   app.use("/api/sync", createSyncRouter(appInstanceStore));
   app.use("/api/users", createUserRoutes(userStore));
   app.use("/api/potential-duplicates", createPotentialDuplicatesRoute(appInstanceStore));
+
+  app.get("/artifacts/:artifactId.json", async (req, res, next) => {
+    try {
+      const { artifactId } = req.params;
+      const appConfig = await appConfigStore.getConfigByArtifactId(artifactId);
+      const baseUrl = resolvePublicBaseUrl(req);
+      const { jsonPath } = await generatePublicArtifacts(baseUrl, appConfig);
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Content-Disposition", "attachment");
+      return res.sendFile(jsonPath);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("artifact id")) {
+        res.status(404).send("Config not found");
+        return;
+      }
+      next(error);
+    }
+  });
+
+  app.get("/artifacts/:artifactId.png", async (req, res, next) => {
+    try {
+      const { artifactId } = req.params;
+      const appConfig = await appConfigStore.getConfigByArtifactId(artifactId);
+      const baseUrl = resolvePublicBaseUrl(req);
+      const { qrPath } = await generatePublicArtifacts(baseUrl, appConfig);
+      res.type("png");
+      return res.sendFile(qrPath);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("artifact id")) {
+        res.status(404).send("Config not found");
+        return;
+      }
+      next(error);
+    }
+  });
 
   // const router = Router();
   // const externalSync = router.get(
@@ -110,9 +148,9 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   const hasAdmin = await userStore.hasAtLeastOneAdmin();
   if (!hasAdmin) {
     const SALT_ROUNDS = 10;
-    const hashedPassword = await bcrypt.hash(config.initialPassword, SALT_ROUNDS);
+    const hashedPassword = await bcrypt.hash(config.adminPassword, SALT_ROUNDS);
     const initialAdmin = {
-      email: "admin@hdm.example",
+      email: config.adminEmail,
       passwordHash: hashedPassword,
       role: Role.ADMIN,
     };
@@ -137,12 +175,19 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
 
     //delete all json and png files in public folder
     const publicFolder = path.join(__dirname, "public");
-    const files = await fs.readdir(publicFolder);
-    files.forEach(async (file) => {
-      if (file.endsWith(".json") || file.endsWith(".png")) {
-        await fs.unlink(path.join(publicFolder, file));
-      }
-    });
+    const artifactFolder = path.join(publicFolder, "artifacts");
+    await fs.mkdir(artifactFolder, { recursive: true });
+    const files = await fs.readdir(artifactFolder);
+    await Promise.all(
+      files.map(async (file) => {
+        const target = path.join(artifactFolder, file);
+        await fs.unlink(target).catch((error: NodeJS.ErrnoException) => {
+          if (error.code !== "ENOENT") {
+            throw error;
+          }
+        });
+      }),
+    );
   }
 
   async function closeConnection() {

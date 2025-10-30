@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { createApp as createAppApi, getApp, updateApp as updateAppApi } from '@/api'
-import FormBuilderDialog from '@/components/FormBuilderDialog.vue'
-import FieldsInput from '@/components/FieldsInput.vue'
-import { useSnackBarStore } from '@/stores/snackBar'
+import type { ExternalSyncField } from '@idpass/data-collect-core'
+import merge from 'lodash/merge'
 import set from 'lodash/set'
 import { onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import merge from 'lodash/merge'
+import { createApp as createAppApi, getApp, updateApp as updateAppApi } from '@/api'
+import FormBuilderDialog from '@/components/FormBuilderDialog.vue'
+import FieldsInput from '@/components/FieldsInput.vue'
+import { parseOpenSppProgramSpecification } from '@/utils/openSppImport'
+import { useSnackBarStore } from '@/stores/snackBar'
 
 type EntityForm = {
   name: string
@@ -17,7 +19,7 @@ type EntityForm = {
 type ExternalSync = {
   type?: string
   url: string
-  extraFields: Record<string, string>
+  extraFields: ExternalSyncField[]
 }
 
 type AuthConfig = {
@@ -26,6 +28,7 @@ type AuthConfig = {
 }
 
 type ConfigSchema = {
+  artifactId?: string
   name: string
   description: string
   version: string
@@ -40,6 +43,7 @@ const route = useRoute()
 const isEdit = ref(false)
 const showBuilder = ref(false)
 const form = ref<ConfigSchema>({
+  artifactId: undefined,
   name: '',
   description: '',
   version: '1',
@@ -47,7 +51,7 @@ const form = ref<ConfigSchema>({
   externalSync: {
     type: undefined,
     url: '',
-    extraFields: {},
+    extraFields: [],
   },
   authConfigs: [],
 })
@@ -67,6 +71,8 @@ const authConfigsError = ref<{
 }>({})
 const isValid = ref(false)
 const isReady = ref(false)
+const specImportFiles = ref<File[] | null>(null)
+const isImportingSpec = ref(false)
 
 onMounted(async () => {
   const id = route.params.id
@@ -151,6 +157,7 @@ const createConfig = async () => {
     }
 
     const config = {
+      artifactId: form.value.artifactId || undefined,
       id: form.value.name.toLowerCase().replace(/ /g, '-'),
       name: form.value.name,
       description: form.value.description,
@@ -186,6 +193,7 @@ const updateConfig = async () => {
     }
 
     const config = {
+      artifactId: form.value.artifactId || undefined,
       id: route.params.id as string,
       name: form.value.name,
       description: form.value.description,
@@ -264,7 +272,7 @@ const validateForm = () => {
     isValid = false
   }
   // if at least one auth config is added, then at least one field is required
-  if (form.value.authConfigs.length > 0) {
+  if (form.value.authConfigs?.length > 0) {
     console.log(form.value.authConfigs)
     form.value.authConfigs.forEach((authConfig, index) => {
       if (authConfig.type === '') {
@@ -337,6 +345,65 @@ const addAuthConfig = () => {
 const removeAuthConfig = (index: number) => {
   form.value.authConfigs.splice(index, 1)
 }
+
+const clearEntityFormErrors = () => {
+  entityFormsError.value = ''
+  itemEntityFormsError.value = {}
+  circularDepError.value = false
+}
+
+const importSpecFromFile = async (file: File) => {
+  try {
+    isImportingSpec.value = true
+    const yamlText = await file.text()
+    const importResult = parseOpenSppProgramSpecification(yamlText)
+
+    if (importResult.name) {
+      form.value.name = importResult.name
+    }
+    if (importResult.description) {
+      form.value.description = importResult.description
+    }
+    if (importResult.artifactId) {
+      form.value.artifactId = importResult.artifactId
+    }
+
+    form.value.entityForms = importResult.entityForms.map((entityForm) => ({
+      name: entityForm.name,
+      title: entityForm.title,
+      dependsOn: entityForm.dependsOn ?? '',
+      formio: entityForm.formio,
+    }))
+
+    clearEntityFormErrors()
+    snackBarStore.showSnackbar(
+      `Imported ${importResult.entityForms.length} entity form${
+        importResult.entityForms.length === 1 ? '' : 's'
+      } from OpenSPP spec`,
+      'success',
+    )
+  } catch (error) {
+    console.error('Failed to import OpenSPP spec:', error)
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    snackBarStore.showSnackbar(`Failed to import OpenSPP spec: ${message}`, 'red')
+  } finally {
+    specImportFiles.value = null
+    isImportingSpec.value = false
+  }
+}
+
+const onSpecFileSelection = async (value: File[] | File | null) => {
+  if (!value || isImportingSpec.value) {
+    specImportFiles.value = null
+    return
+  }
+  const file = Array.isArray(value) ? value[0] : value
+  if (!file) {
+    specImportFiles.value = null
+    return
+  }
+  await importSpecFromFile(file)
+}
 </script>
 
 <template>
@@ -346,6 +413,17 @@ const removeAuthConfig = (index: number) => {
         <v-col cols="12">
           <h2 class="text-h4 mb-4">{{ isEdit ? 'Edit' : 'Create' }} Config</h2>
           <v-form>
+            <v-file-input
+              v-model="specImportFiles"
+              accept=".yaml,.yml"
+              label="Import OpenSPP YAML"
+              prepend-icon="mdi-file-upload-outline"
+              :loading="isImportingSpec"
+              clearable
+              @update:modelValue="onSpecFileSelection"
+              hint="Upload an OpenSPP program specification (YAML) to prefill entity forms"
+              persistent-hint
+            />
             <v-text-field
               v-model="form.name"
               label="Name"
@@ -451,7 +529,7 @@ const removeAuthConfig = (index: number) => {
               required
               :error-messages="urlError"
             ></v-text-field>
-            <FieldsInput v-model="form.externalSync.extraFields" />
+            <FieldsInput v-model="form.externalSync.extraFields" :as-array="true" />
 
             <!-- AUTH CONFIG -->
             <v-divider class="my-6"></v-divider>

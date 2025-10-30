@@ -23,7 +23,6 @@ import {
   EventStore,
   ExternalSyncAdapter,
   ExternalSyncConfig,
-  ExternalSyncCredentials,
   FormSubmission,
   SyncLevel,
 } from "../interfaces/types";
@@ -40,6 +39,10 @@ class MockSyncServerAdapter implements ExternalSyncAdapter {
     private config: ExternalSyncConfig,
   ) {
     this.url = this.config?.url;
+  }
+
+  async authenticate(): Promise<boolean> {
+    return true;
   }
 
   async pushData(): Promise<void> {
@@ -128,8 +131,8 @@ class MockSyncServerAdapter implements ExternalSyncAdapter {
     };
   }
 
-  async sync(credentials?: ExternalSyncCredentials): Promise<void> {
-    console.log("sync", credentials);
+  async sync(): Promise<void> {
+    await this.authenticate();
     await this.pushData();
     await this.pullData();
   }

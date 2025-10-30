@@ -36,27 +36,10 @@ jobs:
       - name: Build website
         run: pnpm run build:docs
 
-      - name: Determine Cloudflare target
-        id: cf-branch
-        run: |
-          if [ "${GITHUB_REF_NAME}" = "develop" ]; then
-            echo "branch=preview" >> "$GITHUB_OUTPUT"
-            echo "domain=preview.idpass-data-collect.pages.dev" >> "$GITHUB_OUTPUT"
-          elif [ "${GITHUB_REF_NAME}" = "main" ]; then
-            echo "branch=main" >> "$GITHUB_OUTPUT"
-            echo "domain=idpass-data-collect.pages.dev" >> "$GITHUB_OUTPUT"
-          else
-            echo "Unsupported branch ${GITHUB_REF_NAME}" >&2
-            exit 1
-          fi
-
-      - name: Announce deployment target
-        run: |
-          echo "Deploying branch ${GITHUB_REF_NAME} to ${{ steps.cf-branch.outputs.domain }}"
-
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
+          workingDirectory: ./website
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy website/build --project-name=data-collect --branch=${{ steps.cf-branch.outputs.branch }}
+          command: pages deploy ./build --project-name=data-collect --branch=${{ steps.cf-branch.outputs.branch }}

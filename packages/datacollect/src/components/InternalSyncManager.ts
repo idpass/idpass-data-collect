@@ -22,7 +22,7 @@ import {
   FormSubmission,
   EventStore,
   SyncLevel,
-  AuditLogEntry,
+  // AuditLogEntry,
   EntityStore,
   AuthStorageAdapter,
 } from "../interfaces/types";
@@ -90,7 +90,7 @@ export class InternalSyncManager {
    * @param entityStore - Store for managing current entity state
    * @param eventApplierService - Service for applying events to entities
    * @param syncServerUrl - Base URL of the remote sync server
-   * @param authToken - JWT authentication token for server requests
+   * @param authStorage - Adapter for managing authentication token persistence
    * @param configId - Configuration ID for multi-tenant setups (defaults to "default")
    */
   constructor(
@@ -201,9 +201,9 @@ export class InternalSyncManager {
    *
    * @private
    */
-  private async pushAuditLogsToRemote(auditLogs: AuditLogEntry[]): Promise<void> {
-    await this.axiosInstance.post("/api/sync/push/audit-logs", { auditLogs, configId: this.configId });
-  }
+  // private async pushAuditLogsToRemote(auditLogs: AuditLogEntry[]): Promise<void> {
+  //   await this.axiosInstance.post("/api/sync/push/audit-logs", { auditLogs, configId: this.configId });
+  // }
 
   /**
    * Splits an array into smaller chunks of specified size.

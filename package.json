@@ -1,30 +1,41 @@
 {
-  "name": "idpass-datacollect-monorepo",
+  "name": "@idpass/data-collect",
   "version": "1.0.0",
   "description": "ID PASS DataCollect - Offline-first data management system",
   "private": true,
-  "workspaces": [
-    "packages/*"
-  ],
+  "packageManager": "pnpm@10.14.0+sha256.297534e65d5842450539c1e8022c8831ab5e1fe2eb74664787a815519542d620",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
-    "test": "npm run test:datacollect && npm run test:backend && npm run test:admin",
-    "test:datacollect": "cd packages/datacollect && npm test",
-    "test:backend": "cd packages/backend && npm test",
-    "test:admin": "cd packages/admin && npm run test:unit",
-    "build": "npm run build:datacollect && npm run build:backend && npm run build:admin",
-    "build:datacollect": "cd packages/datacollect && npm run build",
-    "build:backend": "cd packages/backend && npm run build",
-    "build:admin": "cd packages/admin && npm run build",
+    "reinstall": "pnpm run clean && pnpm recursive install",
+    "clean": "pnpm -r --if-present run clean && rm -rf **/*/node_modules",
+    "test": "pnpm -r --if-present run test",
+    "test:datacollect": "pnpm --filter @idpass/data-collect-core test",
+    "test:backend": "pnpm --filter @idpass/data-collect-backend test",
+    "test:admin": "pnpm --filter @idpass/data-collect-admin test:unit",
+    "build": "pnpm -r --if-present run build",
+    "build:datacollect": "pnpm --filter @idpass/data-collect-core build",
+    "build:backend": "pnpm --filter @idpass/data-collect-backend build",
+    "build:admin": "pnpm --filter @idpass/data-collect-admin build",
+    "build:docs": "pnpm --filter @idpass/data-collect-docs build",
+    "dev:admin": "pnpm --filter @idpass/data-collect-admin dev",
+    "dev:backend": "pnpm --filter @idpass/data-collect-backend dev",
+    "dev:mobile": "pnpm --filter @idpass/data-collect-mobile dev",
+    "dev:docs": "pnpm --filter @idpass/data-collect-docs dev",
     "check-licenses": "node scripts/check-license-headers.js",
     "check-licenses:fix": "node scripts/check-license-headers.js --fix",
-    "lint": "npm run lint --workspaces",
-    "type-check": "npm run type-check --workspaces",
-    "prepare": "[ \"$CI\" != \"true\" ] && husky install || echo 'Skipping husky in CI'"
+    "lint": "pnpm -r --if-present run lint",
+    "type-check": "pnpm -r --if-present run type-check",
+    "ci:setup": "echo 'enable-pre-post-scripts=true' > .npmrc && echo 'auto-install-peers=true' >> .npmrc && echo 'strict-peer-dependencies=false' >> .npmrc",
+    "ci:install": "pnpm run ci:setup && pnpm install",
+    "prepare": "[ \"$CI\" != \"true\" ] && husky install || echo 'Skipping husky in CI'",
+    "pr-check": "pnpm run type-check && pnpm run lint && pnpm run test && pnpm run check-licenses"
   },
   "devDependencies": {
-    "glob": "^10.3.10",
+    "glob": "^10.4.5",
     "husky": "^8.0.3",
-    "lint-staged": "^15.2.0"
+    "lint-staged": "^15.5.2"
   },
   "lint-staged": {
     "packages/**/*.{ts,tsx,js,jsx}": [
@@ -41,7 +52,7 @@
     "event-sourcing",
     "synchronization"
   ],
-  "author": "Newlogic",
+  "author": "Association pour la Coopération Numérique",
   "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/idpass/idpass-data-collect/issues"

@@ -18,10 +18,18 @@
  */
 
 import axios from "axios";
+import { v4 as uuidv4 } from "uuid";
 
-import { EventStore, ExternalSyncAdapter, FormSubmission } from "../../interfaces/types";
+import {
+  EventStore,
+  ExternalSyncAdapter,
+  ExternalSyncConfig,
+  ExternalSyncCredentials,
+  FormSubmission,
+  SyncLevel,
+  getExternalField,
+} from "../../interfaces/types";
 import { EventApplierService } from "../../services/EventApplierService";
-import { OpenFnSyncConfig } from "./OpenFnSyncConfig";
 
 class OpenFnSyncAdapter implements ExternalSyncAdapter {
   private readonly url: string = "";
@@ -30,15 +38,28 @@ class OpenFnSyncAdapter implements ExternalSyncAdapter {
   constructor(
     private readonly eventStore: EventStore,
     private readonly eventApplierService: EventApplierService,
-    private readonly config: OpenFnSyncConfig,
+    private readonly config: ExternalSyncConfig,
   ) {
     this.url = this.config?.url;
+    const configuredBatchSize = this.getFieldValue("batchSize");
+    if (configuredBatchSize) {
+      const parsed = parseInt(configuredBatchSize, 10);
+      if (!Number.isNaN(parsed)) {
+        this.batchSize = parsed;
+      }
+    }
+  }
+
+  async authenticate(credentials?: ExternalSyncCredentials): Promise<boolean> {
+    if (credentials) {
+      // Store credentials for future use if adapters evolve to require them.
+    }
+    const apiKey = this.getFieldValue("apiKey");
+    return Boolean(apiKey);
   }
 
   private async _apiPushData(data: FormSubmission[]) {
-    const apiKey = this.config.extraFields?.find(
-      (field: { name: string; value: string }) => field.name === "apiKey",
-    )?.value;
+    const apiKey = this.getFieldValue("apiKey");
     return axios.post(
       this.url,
       { entities: data },
@@ -75,16 +96,94 @@ class OpenFnSyncAdapter implements ExternalSyncAdapter {
   }
 
   async pullData(): Promise<void> {
-    // TODO: Implement this
-    // POST to OpenFn webhook trigger to initiate pulling of data
-    // a callback endpoint will be available for OpenFn to call to push data back to our system
-    // this endpoint will require a `callbackToken` set in the config
-    throw new Error("Pull data not implemented yet for OpenFn adapter");
+    if (!this.url) {
+      throw new Error("URL is required");
+    }
+
+    const lastPullExternalSyncTimestamp = await this.eventStore.getLastPullExternalSyncTimestamp();
+    const payload = await this._apiPullData(lastPullExternalSyncTimestamp);
+    const events = this.convertPulledDataToEvents(payload);
+
+    if (!events.length) {
+      return;
+    }
+
+    const sortedEvents = events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    for (const event of sortedEvents) {
+      event.syncLevel = SyncLevel.REMOTE;
+      await this.eventApplierService.submitForm(event);
+    }
+
+    const latestEventTimestamp = sortedEvents[sortedEvents.length - 1].timestamp;
+    if (latestEventTimestamp) {
+      await this.eventStore.setLastPullExternalSyncTimestamp(latestEventTimestamp);
+    }
   }
 
-  async sync(): Promise<void> {
+  async sync(credentials?: ExternalSyncCredentials): Promise<void> {
+    await this.authenticate(credentials);
     await this.pushData();
-    // await this.pullData();
+    await this.pullData();
+  }
+
+  private getFieldValue(name: string): string | undefined {
+    return getExternalField(this.config, name);
+  }
+
+  private async _apiPullData(since?: string) {
+    const apiKey = this.getFieldValue("apiKey");
+    const callbackToken = this.getFieldValue("callbackToken");
+
+    const headers: Record<string, string> = {};
+    if (apiKey) {
+      headers["X-Api-Key"] = apiKey;
+    }
+    if (callbackToken) {
+      headers["X-Callback-Token"] = callbackToken;
+    }
+
+    const params: Record<string, string> = {};
+    if (since) {
+      params.since = since;
+    }
+
+    const response = await axios.get(this.url, {
+      params,
+      headers,
+    });
+
+    return response.data;
+  }
+
+  private convertPulledDataToEvents(payload: unknown): FormSubmission[] {
+    if (!payload) {
+      return [];
+    }
+
+    const events = Array.isArray(payload)
+      ? payload
+      : Array.isArray((payload as { events?: unknown[] }).events)
+      ? (payload as { events: unknown[] }).events
+      : [];
+
+    return events.map((event) => this.toFormSubmission(event));
+  }
+
+  private toFormSubmission(event: unknown): FormSubmission {
+    const record = (event as Record<string, unknown>) || {};
+    const timestamp = typeof record.timestamp === "string" ? record.timestamp : new Date().toISOString();
+    const entityGuid = typeof record.entityGuid === "string" ? record.entityGuid : undefined;
+
+    return {
+      type: (record.type as string) || "external-pull",
+      guid: (record.guid as string) || uuidv4(),
+      entityGuid: entityGuid || ((record.id as string) ?? uuidv4()),
+      data: record,
+      timestamp,
+      userId: (record.userId as string) || "external-system",
+      syncLevel: SyncLevel.REMOTE,
+    };
   }
 }
 

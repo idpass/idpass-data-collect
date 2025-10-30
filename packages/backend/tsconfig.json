@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "isolatedModules": true,
     "target": "ES2022",
     "strict": true,
     "esModuleInterop": true,
@@ -13,8 +14,13 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "sourceMap": true,
-    "rootDir": "src"
+    "rootDir": "src",
+    "baseUrl": "./",
+    "paths": {
+      "@idpass/data-collect-core": ["../datacollect/dist/types/index.d.ts"],
+      "@idpass/data-collect-core/*": ["../datacollect/dist/types/*"]
+    }
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "**/*.spec.ts", "**/*.test.ts", "dist"]
+  "exclude": ["node_modules", "**/*.spec.ts", "**/*.test.ts", "dist"],
 }

@@ -2,10 +2,21 @@ import { defineConfig } from 'vite'
 import { resolve } from 'path'
 import { execSync } from 'child_process'
 import vue from '@vitejs/plugin-vue'
+import fs from 'fs'
 
 // Get git info
 const getGitInfo = () => {
   try {
+    // Check if .git directory exists
+    const isGitRepo = fs.existsSync(resolve(__dirname, '.git'))
+    if (!isGitRepo) {
+      console.warn('Not a git repository. Returning default git info.')
+      return { commitTitle: 'unknown', commitHash: 'unknown' }
+    }
+
+    // Check if git command is available
+    execSync('git --version', { stdio: 'ignore' })
+
     const commitTitle = execSync('git log -1 --pretty=%s').toString().trim()
     const commitHash = execSync('git rev-parse --short HEAD').toString().trim()
     return { commitTitle, commitHash }
@@ -21,7 +32,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
-      '~bootstrap': resolve(__dirname, 'node_modules/bootstrap')
+      '~bootstrap': resolve(__dirname, 'node_modules/bootstrap'),
     }
   },
 

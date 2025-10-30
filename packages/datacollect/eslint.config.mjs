@@ -9,4 +9,15 @@ export default [
   ...tseslint.configs.recommended,
   // exclude node_modules
   { ignores: ["node_modules/**", "dist/**"] },
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+        },
+      ],
+    },
+  },
 ];

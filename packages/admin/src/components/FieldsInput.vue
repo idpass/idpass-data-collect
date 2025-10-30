@@ -1,39 +1,62 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, ref, toRef, watch } from 'vue'
+
+type ExternalField = { name: string; value: string }
 
 interface Props {
-  modelValue: Record<string, string>
+  modelValue: ExternalField[] | Record<string, string>
   error?: string
+  asArray?: boolean
 }
 
-const { modelValue, error } = defineProps<Props>()
+const props = defineProps<Props>()
+const error = toRef(props, 'error')
+const asArray = computed(() => props.asArray === true)
 
-const fieldArray = ref<{ name: string; value: string }[]>([])
+const cloneFields = (fields: ExternalField[]): ExternalField[] =>
+  fields.map((field) => ({ ...field }))
 
-onMounted(() => {
-  fieldArray.value = Object.keys(modelValue).map((key) => ({
-    name: key,
-    value: modelValue[key],
+const toFieldArray = (value: Props['modelValue']): ExternalField[] => {
+  if (Array.isArray(value)) {
+    return cloneFields(value)
+  }
+
+  return Object.entries(value ?? {}).map(([name, val]) => ({
+    name,
+    value: val,
   }))
-})
+}
+
+const toRecord = (fields: ExternalField[]): Record<string, string> =>
+  fields.reduce<Record<string, string>>((acc, field) => {
+    acc[field.name] = field.value
+    return acc
+  }, {})
+
+const fieldArray = ref<ExternalField[]>(toFieldArray(props.modelValue))
 
 const emit = defineEmits<{
+  (e: 'update:modelValue', value: ExternalField[]): void
   (e: 'update:modelValue', value: Record<string, string>): void
 }>()
 
 watch(
+  () => props.modelValue,
+  (newVal) => {
+    fieldArray.value = toFieldArray(newVal)
+  },
+  { deep: true },
+)
+
+watch(
   fieldArray,
   (newVal) => {
-    emit(
-      'update:modelValue',
-      newVal.reduce(
-        (acc, item) => {
-          acc[item.name] = item.value
-          return acc
-        },
-        {} as Record<string, string>,
-      ),
-    )
+    if (asArray.value) {
+      emit('update:modelValue', cloneFields(newVal))
+      return
+    }
+
+    emit('update:modelValue', toRecord(newVal))
   },
   { deep: true },
 )

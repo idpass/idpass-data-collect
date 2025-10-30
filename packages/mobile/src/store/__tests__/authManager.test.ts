@@ -26,7 +26,7 @@ vi.mock('@/utils/getSyncServerByAppId')
 vi.mock('@capacitor/app')
 
 // Mock IndexedDB-related modules from idpass-data-collect with proper implementations
-vi.mock('idpass-data-collect', () => ({
+vi.mock('@idpass/data-collect-core', () => ({
   AuthConfig: vi.fn().mockImplementation(() => ({})),
   AuthManager: vi.fn().mockImplementation(() => ({
     login: vi.fn(),

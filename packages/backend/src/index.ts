@@ -20,9 +20,26 @@
 import "dotenv/config";
 import { run } from "./syncServer";
 
+const {
+  SYNC_SERVER_PORT: port = "3000",
+  USER_ID: userId = "SYNC_SERVER",
+  ADMIN_PASSWORD: adminPassword,
+  ADMIN_EMAIL: adminEmail,
+  POSTGRES: postgresUrl,
+} = process.env;
+
+if (!adminPassword || !adminEmail) {
+  throw new Error("Initial admin credentials must be set");
+}
+
+if (!postgresUrl) {
+  throw new Error("PostgreSQL connection string must be set");
+}
+
 run({
-  port: parseInt(process.env.PORT || "3000"),
-  initialPassword: process.env.INITIAL_PASSWORD || "admin1@",
-  userId: process.env.USER_ID || "SYNC_SERVER",
-  postgresUrl: process.env.POSTGRES || "",
+  port: parseInt(port),
+  adminPassword,
+  adminEmail,
+  userId,
+  postgresUrl,
 });

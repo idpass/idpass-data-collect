@@ -33,7 +33,7 @@ services:
   postgres:
     image: postgres:15
     restart: always
-    env_file: ./postgresql.env
+    env_file: ./.env
     volumes:
       - postgres-data:/var/lib/postgresql/data
     ports:

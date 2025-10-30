@@ -1,19 +1,42 @@
 import "dotenv/config";
+import { Client } from "pg";
 
 import { v4 as uuidv4 } from "uuid";
-import { Pool } from "pg";
 import { AuditLogEntry, FormSubmission, SyncLevel } from "../../interfaces/types";
 import { PostgresEventStorageAdapter } from "../PostgresEventStorageAdapter";
 
-describe("PostgresEventStorageAdapter", () => {
+const getConnectionString = () => {
+  const url = process.env.POSTGRES_TEST;
+  return url ? url.replace(/ /g, "%20") : "";
+};
+
+const ensureDatabaseExists = async (connectionString: string) => {
+  if (!connectionString) return;
+  
+  const parsed = new URL(connectionString);
+  const dbName = parsed.pathname.replace(/^\//, "");
+  if (!dbName) return;
+
+  const adminUrl = new URL(connectionString);
+  adminUrl.pathname = "/postgres";
+
+  const client = new Client({ connectionString: adminUrl.toString() });
+  await client.connect();
+  const result = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
+  if (result.rowCount === 0) {
+    const escapedName = dbName.replace(/"/g, '""');
+    await client.query(`CREATE DATABASE "${escapedName}"`);
+  }
+  await client.end();
+};
+const describeIfPostgres = process.env.POSTGRES_TEST ? describe : describe.skip;
+
+describeIfPostgres("PostgresEventStorageAdapter", () => {
   let adapter: PostgresEventStorageAdapter;
-  let pool: Pool;
 
   beforeAll(async () => {
-    pool = new Pool({
-      connectionString: "postgresql://postgres:postgres@localhost:5432/test",
-    });
-    adapter = new PostgresEventStorageAdapter(process.env.POSTGRES_TEST || "");
+    await ensureDatabaseExists(getConnectionString());
+    adapter = new PostgresEventStorageAdapter(getConnectionString());
     await adapter.initialize();
   });
 
@@ -24,7 +47,6 @@ describe("PostgresEventStorageAdapter", () => {
   afterAll(async () => {
     await adapter.clearStore();
     await adapter.closeConnection();
-    await pool.end();
   });
 
   test("saveEvents and getEvents should work correctly", async () => {
@@ -74,7 +96,6 @@ describe("PostgresEventStorageAdapter", () => {
     await adapter.saveEvents(events);
 
     const savedEvents = await adapter.getEvents();
-    console.log("Saved events: ", savedEvents);
     expect(savedEvents).toEqual(expectedEvents);
   });
 
@@ -142,6 +163,16 @@ describe("PostgresEventStorageAdapter", () => {
 
     const savedMerkleRoot = await adapter.getMerkleRoot();
     expect(savedMerkleRoot).toBe(merkleRoot);
+
+    const updatedRoot = "updated-root";
+    await adapter.saveMerkleRoot(updatedRoot);
+
+    const refreshedRoot = await adapter.getMerkleRoot();
+    expect(refreshedRoot).toBe(updatedRoot);
+
+    await adapter.saveMerkleRoot("");
+    const clearedRoot = await adapter.getMerkleRoot();
+    expect(clearedRoot).toBe("");
   });
 
   test("getLastRemoteSyncTimestamp and setLastRemoteSyncTimestamp should work correctly", async () => {
@@ -394,15 +425,13 @@ describe("PostgresEventStorageAdapter", () => {
   });
 });
 
-describe("PostgresEventStorageAdapter - Tenant Tests", () => {
+const describeTenantTests = process.env.POSTGRES_TEST ? describe : describe.skip;
+
+describeTenantTests("PostgresEventStorageAdapter - Tenant Tests", () => {
   let tenant1Adapter: PostgresEventStorageAdapter;
   let tenant2Adapter: PostgresEventStorageAdapter;
-  let pool: Pool;
 
   beforeAll(async () => {
-    pool = new Pool({
-      connectionString: "postgresql://postgres:postgres@localhost:5432/test",
-    });
     tenant1Adapter = new PostgresEventStorageAdapter(process.env.POSTGRES_TEST || "", "tenant1");
     tenant2Adapter = new PostgresEventStorageAdapter(process.env.POSTGRES_TEST || "", "tenant2");
     await tenant1Adapter.initialize();
@@ -419,7 +448,6 @@ describe("PostgresEventStorageAdapter - Tenant Tests", () => {
     await tenant2Adapter.clearStore();
     await tenant1Adapter.closeConnection();
     await tenant2Adapter.closeConnection();
-    await pool.end();
   });
 
   test("events should be isolated between tenants", async () => {

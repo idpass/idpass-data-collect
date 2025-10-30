@@ -101,7 +101,7 @@ vi.mock('@capacitor/app', () => ({
 }))
 
 // Mock idpass-data-collect with comprehensive implementations
-vi.mock('idpass-data-collect', () => ({
+vi.mock('@idpass/data-collect-core', () => ({
   EntityDataManager: vi.fn().mockImplementation(() => ({
     login: vi.fn(),
     logout: vi.fn(),

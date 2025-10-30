@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ID PASS DataCollect is a TypeScript-based offline-first data management system for household and individual beneficiary data. The project consists of three main modules:
 
-1. **DataCollect** (`/packages/datacollect`) - Main client library for offline data management using IndexedDB
-2. **Backend** (`/packages/backend`) - Central sync server using Express.js and PostgreSQL  
-3. **Admin** (`/packages/admin`) - Vue.js admin interface for the sync server
+1. **DataCollect** (`packages/datacollect`) - Main client library for offline data management using IndexedDB
+2. **Backend** (`packages/backend`) - Central sync server using Express.js and PostgreSQL  
+3. **Admin** (`packages/admin`) - Vue.js admin interface for the sync server
 
 ## Architecture
 
@@ -95,7 +95,8 @@ Copy `.env.example` to `.env` and update with your values.
 ```env
 POSTGRES=postgresql://admin:admin@localhost:5432/postgres
 POSTGRES_TEST=postgresql://admin:admin@localhost:5432/test
-INITIAL_PASSWORD=123
+ADMIN_EMAIL=admin@hdm.example
+ADMIN_PASSWORD=123
 JWT_SECRET=123
 PORT=3000
 ```
@@ -144,7 +145,6 @@ Docker Compose setup available for full stack deployment including OpenSPP integ
 ```bash
 cd docker
 cp .env.example .env
-cp postgresql.env.example postgresql.env
 # For OpenSPP integration (optional):
 cp odoo.env.example odoo.env
 cp odoo_postgresql.env.example odoo_postgresql.env

@@ -212,60 +212,87 @@
         fileReader.readAsText(file);
       }
 
-      function getApps() {
-        fetch("/api/apps", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-          .then((response) => response.json())
-          .then((data) => {
-            const appsList = document.getElementById("appsList");
-            appsList.innerHTML = "";
-            data.forEach((app) => {
-              // count all entities in the app
-              fetch(`/api/sync/count-entities?configId=${app.id}`, {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
-              })
-                .then((response) => response.json())
-                .then((data2) => {
-                  const appItem = document.createElement("div");
-                  appItem.innerHTML = `
-                  <div class="info-card">
-                    <div class="info-card-title">${app.name}</div>
-                    <div class="info-row">
-                      <span class="info-row-label">App ID:</span>
-                      <span class="info-row-value">${app.id}</span>
-                    </div>
-                    <div class="info-row">
-                      <span class="info-row-label">Entities:</span>
-                      <span class="info-row-value">${data2.count}</span>
-                    </div>
-                    <div class="info-row">
-                      <!-- force download link -->
-                      <a href="/${app.id}.json" class="nav-link" style="width: 100%; text-align: center;" download>Download Config</a>
-                    </div>
-                    <div class="info-row">
-                      <img src="/${app.id}.png" alt="QR Code" style="width: 50%; height: 50%;">
-                    </div>
-                    <div class="info-row">
-                      <button onclick="deleteApp('${app.id}')">Delete</button>
-                    </div>
-                    <div class="info-row">
-                      <button onclick="testPush('${app.id}')">Test Push</button>
-                    </div>
-                  </div>
-                `;
-                  appsList.appendChild(appItem);
-                });
+      async function getApps() {
+        try {
+          const appsList = document.getElementById("appsList");
+          appsList.innerHTML = "<p>Loading...</p>";
+
+          let page = 1;
+          const pageSize = 100;
+          let totalPages = 1;
+          let apps = [];
+
+          do {
+            const response = await fetch(`/api/apps?page=${page}&pageSize=${pageSize}`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
             });
-          })
-          .catch((error) => {
-            console.error("Error:", error);
-            alert("Error uploading app config");
-          });
+
+            if (response.status === 401) {
+              alert("Session expired. Please login again.");
+              localStorage.removeItem("token");
+              location.reload();
+              return;
+            }
+
+            if (!response.ok) {
+              throw new Error(`Server error: ${response.status}`);
+            }
+
+            const payload = await response.json();
+            const data = Array.isArray(payload.data) ? payload.data : [];
+            apps = apps.concat(data);
+            totalPages = payload.meta?.totalPages || 0;
+            page += 1;
+          } while (page <= totalPages && totalPages > 0);
+
+          renderApps(apps);
+        } catch (error) {
+          console.error("Error fetching apps:", error);
+          alert("Error fetching apps");
+        }
+      }
+
+      function renderApps(apps) {
+        const appsList = document.getElementById("appsList");
+        appsList.innerHTML = "";
+
+        if (!apps.length) {
+          appsList.innerHTML = "<p>No apps found.</p>";
+          return;
+        }
+
+        apps.forEach((app) => {
+          const appItem = document.createElement("div");
+          appItem.innerHTML = `
+          <div class="info-card">
+            <div class="info-card-title">${app.name}</div>
+            <div class="info-row">
+              <span class="info-row-label">App ID:</span>
+              <span class="info-row-value">${app.id}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-row-label">Entities:</span>
+              <span class="info-row-value">${app.entitiesCount || 0}</span>
+            </div>
+            <div class="info-row">
+              <!-- force download link -->
+              <a href="/${app.id}.json" class="nav-link" style="width: 100%; text-align: center;" download>Download Config</a>
+            </div>
+            <div class="info-row">
+              <img src="/${app.id}.png" alt="QR Code" style="width: 50%; height: 50%;">
+            </div>
+            <div class="info-row">
+              <button onclick="deleteApp('${app.id}')">Delete</button>
+            </div>
+            <div class="info-row">
+              <button onclick="testPush('${app.id}')">Test Push</button>
+            </div>
+          </div>
+        `;
+          appsList.appendChild(appItem);
+        });
       }
 
       function deleteApp(id) {

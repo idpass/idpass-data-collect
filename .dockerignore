@@ -1,5 +1,62 @@
-# .dockerignore
-Dockerfile
+# Git and version control
 .git
-*.env
-**/*/node_modules
+.gitignore
+.github
+
+# Node modules (will be installed in container)
+node_modules
+*/node_modules
+
+# Development files
+.env
+.env.local
+.env.*.local
+
+# CI specific files that might conflict
+.pnpmfile.cjs
+.pnpm-approve-builds.json
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Coverage and test files
+coverage
+.nyc_output
+.jest
+*.lcov
+
+# Build outputs (will be generated in container)
+dist
+build
+.next
+.nuxt
+
+# Temporary files
+tmp
+temp
+.tmp
+
+# Documentation that's not needed for builds
+docs
+*.md
+!README.md
