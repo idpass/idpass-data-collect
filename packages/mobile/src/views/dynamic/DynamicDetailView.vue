@@ -7,6 +7,8 @@ import ViewDialog from '@/components/ViewDialog.vue'
 import ChevronRight from '@/components/icons/ChevronRight.vue'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import type { FormSubmission } from '@idpass/data-collect-core'
+import { SyncLevel } from '@idpass/data-collect-core'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,6 +18,8 @@ const entityForm = ref<EntityForm>()
 const storedEntityData = ref<unknown>()
 const dependentForms = ref<EntityForm[]>([])
 const openViewAppDialog = ref(false)
+const events = ref<FormSubmission[]>([])
+const expandedEvents = ref<Set<string>>(new Set())
 
 onMounted(async () => {
   const foundDocuments = await database.tenantapps
@@ -35,6 +39,12 @@ onMounted(async () => {
   dependentForms.value = tenantapp.value.entityForms.filter(
     (entity) => entity.dependsOn === entityForm.value.name
   )
+
+  // Load events for this entity
+  const allEvents = await store.getAllEvents()
+  events.value = allEvents
+    .filter((event) => event.entityGuid === route.params.guid)
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 })
 
 const onBack = () => {
@@ -43,6 +53,52 @@ const onBack = () => {
 
 const onView = () => {
   openViewAppDialog.value = true
+}
+
+const formatEventType = (type: string) => {
+  return type
+    .split('-')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
+}
+
+const formatTimestamp = (timestamp: string) => {
+  return new Date(timestamp).toLocaleString()
+}
+
+const getSyncLabel = (syncLevel: SyncLevel) => {
+  if (syncLevel === SyncLevel.REMOTE || syncLevel === SyncLevel.EXTERNAL) {
+    return 'Synced'
+  }
+  return 'Local'
+}
+
+const getSyncClass = (syncLevel: SyncLevel) => {
+  if (syncLevel === SyncLevel.REMOTE || syncLevel === SyncLevel.EXTERNAL) {
+    return 'synced'
+  }
+  return 'local'
+}
+
+const toggleEvent = (eventGuid: string) => {
+  if (expandedEvents.value.has(eventGuid)) {
+    expandedEvents.value.delete(eventGuid)
+  } else {
+    expandedEvents.value.add(eventGuid)
+  }
+}
+
+const isExpanded = (eventGuid: string) => {
+  return expandedEvents.value.has(eventGuid)
+}
+
+const getEntityName = () => {
+  if (!storedEntityData.value || !Array.isArray(storedEntityData.value) || storedEntityData.value.length === 0) {
+    return entityForm.value?.title || 'Entity'
+  }
+  const entity = (storedEntityData.value as any)[0]
+  const name = entity?.modified?.data?.name || entity?.modified?.name
+  return name || entityForm.value?.title || 'Entity'
 }
 </script>
 
@@ -59,36 +115,75 @@ const onView = () => {
 
     <section class="detail-hero">
       <header class="detail-hero__header">
-        <div>
-          <h1>{{ entityForm?.title }}</h1>
-          <p>Review and manage this submission.</p>
+        <div class="header-content">
+          <h1>{{ getEntityName() }}</h1>
+          <div class="header-meta">
+            <span class="meta-inline">
+              Updated {{ new Date((storedEntityData as any)[0].modified.lastUpdated).toLocaleString() }}
+            </span>
+            <span class="meta-separator">•</span>
+            <span class="meta-inline">Version {{ (storedEntityData as any)[0].modified.version }}</span>
+          </div>
         </div>
         <div class="action-group">
-          <button class="pill-button" type="button" @click="router.push('edit')">
+          <button class="action-button" type="button" @click="router.push('edit')" aria-label="Edit">
             <svg viewBox="0 0 24 24" focusable="false">
               <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor" />
             </svg>
-            Edit
           </button>
-          <button class="pill-button pill-button--muted" type="button" @click="onView">
+          <button class="action-button" type="button" @click="onView" aria-label="View JSON">
             <svg viewBox="0 0 24 24" focusable="false">
               <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z" fill="currentColor" />
             </svg>
-            View JSON
           </button>
         </div>
       </header>
+    </section>
 
-      <div class="detail-meta">
-        <div class="meta-card">
-          <span class="meta-label">Last Updated</span>
-          <span class="meta-value">{{ new Date((storedEntityData as any)[0].modified.lastUpdated).toLocaleString() }}</span>
-        </div>
-        <div class="meta-card">
-          <span class="meta-label">Version</span>
-          <span class="meta-value">{{ (storedEntityData as any)[0].modified.version }}</span>
-        </div>
-      </div>
+    <section v-if="events.length > 0" class="events-section" aria-labelledby="events-heading">
+      <h2 id="events-heading">Events</h2>
+      <ul role="list" class="events-list">
+        <li v-for="event in events" :key="event.guid" class="event-card">
+          <div class="event-content" @click="toggleEvent(event.guid)">
+            <div class="event-header">
+              <div class="event-title-group">
+                <span class="event-type">{{ formatEventType(event.type) }}</span>
+                <span class="event-time">{{ formatTimestamp(event.timestamp) }}</span>
+              </div>
+              <button class="expand-button" type="button" :aria-expanded="isExpanded(event.guid)" aria-label="Toggle event details" @click.stop="toggleEvent(event.guid)">
+                <svg 
+                  class="expand-icon" 
+                  :class="{ 'expanded': isExpanded(event.guid) }"
+                  viewBox="0 0 24 24" 
+                  focusable="false"
+                >
+                  <path d="M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z" fill="currentColor" />
+                </svg>
+              </button>
+            </div>
+            <div class="event-meta">
+              <span class="event-user">by {{ event.userId }}</span>
+              <span class="event-sync" :class="`event-sync--${getSyncClass(event.syncLevel)}`">
+                {{ getSyncLabel(event.syncLevel) }}
+              </span>
+            </div>
+          </div>
+          <div v-if="isExpanded(event.guid)" class="event-details">
+            <div class="event-details-section">
+              <h4>Event Data</h4>
+              <div class="json-viewer-compact">
+                <pre class="json-block-compact">{{ JSON.stringify(event.data, null, 2) }}</pre>
+              </div>
+            </div>
+            <div class="event-details-section">
+              <h4>Full Event</h4>
+              <div class="json-viewer-compact">
+                <pre class="json-block-compact">{{ JSON.stringify(event, null, 2) }}</pre>
+              </div>
+            </div>
+          </div>
+        </li>
+      </ul>
     </section>
 
     <section v-if="dependentForms.length > 0" class="dependent-section" aria-labelledby="dependent-heading">
@@ -122,19 +217,20 @@ const onView = () => {
 .detail-view {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .top-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 0.25rem;
 }
 
 .icon-button {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   border: none;
   background: rgba(15, 23, 42, 0.08);
   display: grid;
@@ -149,102 +245,257 @@ const onView = () => {
 
 .detail-hero {
   background: #ffffff;
-  border-radius: 20px;
-  padding: 1.5rem;
+  border-radius: 16px;
+  padding: 1rem;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
 }
 
 .detail-hero__header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 1rem;
+  gap: 0.75rem;
+}
+
+.header-content {
+  flex: 1;
 }
 
 .detail-hero__header h1 {
-  font-size: 1.4rem;
+  font-size: 1.25rem;
   font-weight: 700;
   color: #111827;
+  margin: 0 0 0.5rem 0;
 }
 
-.detail-hero__header p {
-  margin-top: 0.35rem;
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.meta-inline {
+  font-size: 0.85rem;
   color: #6b7280;
-  font-size: 0.95rem;
+}
+
+.meta-separator {
+  color: #d1d5db;
+  font-size: 0.85rem;
 }
 
 .action-group {
   display: flex;
-  gap: 0.75rem;
+  gap: 0.5rem;
+  flex-shrink: 0;
 }
 
-.pill-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
+.action-button {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   border: none;
-  border-radius: 999px;
-  padding: 0.55rem 1.2rem;
+  background: rgba(15, 23, 42, 0.08);
+  display: grid;
+  place-items: center;
+  color: #1f2937;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.action-button:first-child {
   background: linear-gradient(135deg, #2563eb 0%, #9333ea 100%);
   color: white;
-  font-weight: 600;
 }
 
-.pill-button svg {
+.action-button:hover {
+  background: rgba(15, 23, 42, 0.12);
+}
+
+.action-button:first-child:hover {
+  opacity: 0.9;
+}
+
+.action-button svg {
   width: 18px;
   height: 18px;
 }
 
-.pill-button--muted {
-  background: rgba(15, 23, 42, 0.08);
+.events-section {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 1rem;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+}
+
+.events-section h2 {
+  font-size: 1rem;
+  font-weight: 700;
   color: #1f2937;
+  margin: 0 0 0.75rem 0;
 }
 
-.detail-meta {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
+.events-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
-.meta-card {
+.event-card {
   background: #f9fafb;
-  border-radius: 14px;
-  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  padding: 0;
+  border-left: 3px solid #2563eb;
+  overflow: hidden;
+}
+
+.event-content {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  padding: 0.75rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
 }
 
-.meta-label {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+.event-content:active {
+  background: rgba(15, 23, 42, 0.05);
+}
+
+.event-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.event-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.expand-button {
+  background: none;
+  border: none;
+  padding: 0.25rem;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
   color: #6b7280;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
 }
 
-.meta-value {
-  font-size: 1rem;
+.expand-icon {
+  width: 20px;
+  height: 20px;
+  transition: transform 0.2s ease;
+}
+
+.expand-icon.expanded {
+  transform: rotate(180deg);
+}
+
+.event-type {
+  font-size: 0.9rem;
   font-weight: 600;
   color: #111827;
 }
 
-.dependent-section {
+.event-time {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.event-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.event-user {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.event-sync {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.event-sync--synced {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.event-sync--local {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.event-details {
+  border-top: 1px solid #e5e7eb;
+  padding: 0.75rem;
   background: #ffffff;
-  border-radius: 20px;
-  padding: 1.5rem;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
+}
+
+.event-details-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.event-details-section h4 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.json-viewer-compact {
+  background: #0f172a;
+  border-radius: 8px;
+  padding: 0.75rem;
+  color: #f8fafc;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.json-block-compact {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.dependent-section {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 1rem;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
 }
 
 .dependent-section h2 {
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 700;
   color: #1f2937;
+  margin: 0 0 0.75rem 0;
 }
 
 .dependent-list {
@@ -253,7 +504,7 @@ const onView = () => {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .dependent-card {
@@ -262,8 +513,8 @@ const onView = () => {
   align-items: center;
   gap: 1rem;
   background: #f9fafb;
-  border-radius: 18px;
-  padding: 1rem 1.25rem;
+  border-radius: 12px;
+  padding: 0.75rem;
   cursor: pointer;
   transition: transform 0.2s ease;
 }
@@ -273,15 +524,15 @@ const onView = () => {
 }
 
 .dependent-card h3 {
-  font-size: 1.05rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: #111827;
 }
 
 .dependent-card p {
-  margin-top: 0.35rem;
+  margin-top: 0.25rem;
   color: #6b7280;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .json-viewer {
