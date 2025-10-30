@@ -1,0 +1,62 @@
+name: Deploy Website to Cloudflare Pages
+
+on:
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - 'website/**'
+  workflow_dispatch:
+      
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    name: Deploy to Cloudflare Pages
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm recursive install
+
+      - name: Build website
+        run: pnpm run build:docs
+
+      - name: Determine Cloudflare target
+        id: cf-branch
+        run: |
+          if [ "${GITHUB_REF_NAME}" = "develop" ]; then
+            echo "branch=preview" >> "$GITHUB_OUTPUT"
+            echo "domain=preview.idpass-data-collect.pages.dev" >> "$GITHUB_OUTPUT"
+          elif [ "${GITHUB_REF_NAME}" = "main" ]; then
+            echo "branch=main" >> "$GITHUB_OUTPUT"
+            echo "domain=idpass-data-collect.pages.dev" >> "$GITHUB_OUTPUT"
+          else
+            echo "Unsupported branch ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+
+      - name: Announce deployment target
+        run: |
+          echo "Deploying branch ${GITHUB_REF_NAME} to ${{ steps.cf-branch.outputs.domain }}"
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy website/build --project-name=data-collect --branch=${{ steps.cf-branch.outputs.branch }}
