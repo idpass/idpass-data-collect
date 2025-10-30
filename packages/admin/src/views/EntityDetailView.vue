@@ -24,10 +24,8 @@ import { AxiosError } from 'axios'
 import { getEntities, getEntityEvents } from '@/api'
 import type { EntityRecord, EventRecord } from '@/api'
 import { useAuthStore } from '@/stores/auth'
-import { useSnackBarStore } from '@/stores/snackBar'
 
 const authStore = useAuthStore()
-const snackBarStore = useSnackBarStore()
 const route = useRoute()
 const router = useRouter()
 
