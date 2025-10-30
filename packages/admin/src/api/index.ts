@@ -192,6 +192,24 @@ export const getEntities = async (configId: string, limit = 100): Promise<Entity
   return response.data
 }
 
+export interface EventRecord {
+  guid: string
+  entityGuid: string
+  type: string
+  data: Record<string, unknown>
+  timestamp: string
+  userId: string
+  syncLevel: number
+}
+
+export const getEntityEvents = async (entityGuid: string, configId: string): Promise<EventRecord[]> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const response = await instance.get(`${ENTITIES_URL}/${entityGuid}/events?configId=${configId}`)
+  return response.data
+}
+
 export const externalSync = async (configId: string, credentials?: unknown) => {
   if (!instance) {
     throw new Error('Instance not initialized')

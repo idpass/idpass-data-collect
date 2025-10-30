@@ -29,6 +29,7 @@ describe('AppCard', () => {
     version: '1.0.0',
     entitiesCount: 5,
     externalSync: {},
+    description: 'Test Description',
   }
 
   beforeEach(() => {

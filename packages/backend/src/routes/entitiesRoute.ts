@@ -90,5 +90,31 @@ export function createEntitiesRouter(appInstanceStore: AppInstanceStore): Router
     }),
   );
 
+  router.get(
+    "/:guid/events",
+    authenticateJWT,
+    asyncHandler(async (req, res) => {
+      const { configId = "default" } = req.query;
+      const { guid } = req.params;
+      
+      const appInstance = await appInstanceStore.getAppInstance(configId as string);
+      if (!appInstance) {
+        return res.json([]);
+      }
+      
+      const allEvents = await appInstance.edm.getAllEvents();
+      
+      // Filter events by entity GUID
+      const entityEvents = allEvents.filter((event) => event.entityGuid === guid);
+      
+      // Sort by timestamp ascending (oldest first)
+      const sortedEvents = entityEvents.sort(
+        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+      
+      res.json(sortedEvents);
+    }),
+  );
+
   return router;
 }

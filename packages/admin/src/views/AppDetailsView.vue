@@ -14,6 +14,7 @@ import {
 import BasicAuthDialog from '@/components/BasicAuthDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSnackBarStore } from '@/stores/snackBar'
+import DataDiagnostics from '@/components/DataDiagnostics.vue'
 
 interface EntityForm {
   name: string
@@ -263,6 +264,7 @@ const fetchApp = async () => {
   try {
     const data = await getApp(routeId.value)
     app.value = data
+    console.log('Fetched app data:', data)
     
     // Fetch entity counts grouped by form
     const counts = await getEntitiesCountByForm(routeId.value)
@@ -270,6 +272,7 @@ const fetchApp = async () => {
     
     // Fetch entity records
     const records = await getEntities(routeId.value)
+    console.log('Fetched entity records:', records, 'Record count:', records.length)
     // Group records by entityName for easier display
     const grouped: Record<string, unknown[]> = {}
     records.forEach((record) => {
@@ -279,6 +282,7 @@ const fetchApp = async () => {
       }
       grouped[key].push(record)
     })
+    console.log('Grouped records:', grouped)
     entityRecords.value = grouped
   } catch (err) {
     if (err instanceof AxiosError && err.response?.status === 401) {
@@ -365,6 +369,14 @@ const handleDelete = async () => {
 
 const goBack = () => {
   router.push({ name: 'home' })
+}
+
+const navigateToEntityDetail = (record: unknown) => {
+  const typedRecord = record as Record<string, unknown>
+  const guid = typedRecord.guid as string
+  if (guid) {
+    router.push({ name: 'entity-details', params: { id: routeId.value, guid } })
+  }
 }
 
 onMounted(() => {
@@ -514,7 +526,7 @@ watch(
                           </tr>
                         </thead>
                         <tbody>
-                          <tr v-for="(record, idx) in records" :key="`${formName}-${idx}`">
+                          <tr v-for="(record, idx) in records" :key="`${formName}-${idx}`" @click="navigateToEntityDetail(record)">
                             <td>
                               <span class="entity-guid" :title="String((record as any).guid)">
                                 {{ String((record as any).guid).substring(0, 8) }}...
@@ -687,6 +699,10 @@ watch(
       </v-row>
     </template>
   </v-container>
+
+  <div v-if="app" class="diagnostic-container">
+    <DataDiagnostics :config-id="routeId" />
+  </div>
 
   <v-dialog v-model="showQrDialog" max-width="360">
     <v-card>
@@ -881,6 +897,15 @@ watch(
   vertical-align: middle;
 }
 
+.entity-records-table tbody tr {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.entity-records-table tbody tr:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
 .entity-guid {
   font-family: monospace;
   font-size: 0.85rem;
@@ -1062,5 +1087,13 @@ watch(
   .details-back {
     padding-left: 12px;
   }
+}
+
+.diagnostic-container {
+  margin-top: 24px;
+  padding: 24px;
+  background-color: #f5f5f5;
+  border-radius: 16px;
+  border: 1px solid #e0e0e0;
 }
 </style>
