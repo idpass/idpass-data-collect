@@ -38,7 +38,17 @@ const props = defineProps<{
   entity: string
 }>()
 
-const resolveStatus = (snapshot: { initial: SubmissionSnapshot; modified: SubmissionSnapshot }): SubmissionStatus => {
+const resolveStatusSync = (
+  snapshot: { initial: SubmissionSnapshot; modified: SubmissionSnapshot },
+  entityGuid: string,
+  latestEvent?: { syncLevel: SyncLevel } | undefined
+): SubmissionStatus => {
+  // Check if entity has externalId (indicates synced from backend/OpenSPP)
+  if (snapshot.modified.data.externalId) {
+    return 'synced'
+  }
+
+  // Check syncLevel in data (some entities may have this stored)
   const syncLevel =
     (snapshot.modified.data.syncLevel as SyncLevel | undefined) ??
     (snapshot.modified.data.sync_status as SyncLevel | undefined)
@@ -51,14 +61,27 @@ const resolveStatus = (snapshot: { initial: SubmissionSnapshot; modified: Submis
     return 'pending'
   }
 
+  // Check latest event syncLevel if available
+  if (latestEvent) {
+    if (latestEvent.syncLevel === SyncLevel.REMOTE || latestEvent.syncLevel === SyncLevel.EXTERNAL) {
+      return 'synced'
+    }
+    if (latestEvent.syncLevel === SyncLevel.LOCAL) {
+      return 'pending'
+    }
+  }
+
+  // Check draft status
   if ((snapshot.modified.data.status as string | undefined)?.toLowerCase() === 'draft') {
     return 'draft'
   }
 
+  // Check if entity has pending changes (version mismatch)
   if (snapshot.modified.version !== snapshot.initial.version) {
     return 'pending'
   }
 
+  // Default to synced if no version changes and no LOCAL syncLevel found
   return 'synced'
 }
 
@@ -76,14 +99,46 @@ onMounted(async () => {
     (entity) => entity.name === route.params.entity
   )
 
-  const entityData = await store.searchEntities([{ entityName: entityForm.value?.name }])
-  const entityList = entityData.filter((entity) => {
-    if (!entity.modified.data.parentGuid) {
-      return true
-    }
-    return entity.modified.data.parentGuid === props.parentGuid
+  // Get all entities and filter client-side to handle entityName mismatches
+  // Backend/OpenSPP entities may have different entityName values than form names
+  const [allEntities, allEvents] = await Promise.all([
+    store.getAllEntities(),
+    store.getAllEvents()
+  ])
+  
+  const entityList = allEntities.filter((entity) => {
+    const entityName = entity.modified.data.entityName as string | undefined
+    const formName = entityForm.value?.name
+    
+    // Match entities that either:
+    // 1. Have matching entityName (exact match)
+    // 2. Have entityName that matches form name (case-insensitive)
+    // 3. Have no entityName but match parentGuid (for backward compatibility)
+    const matchesEntityName = entityName && (
+      entityName === formName ||
+      entityName.toLowerCase() === formName?.toLowerCase() ||
+      // Check if entityName is a substring of form name or vice versa
+      (formName && (entityName.includes(formName) || formName.includes(entityName)))
+    )
+    
+    // Check parentGuid filter
+    const matchesParent = !entity.modified.data.parentGuid || 
+      entity.modified.data.parentGuid === props.parentGuid
+    
+    // Include if matches entityName OR (no entityName filter but matches parent)
+    return (matchesEntityName || (!entityName && matchesParent)) && matchesParent
   })
 
+  // Create a map of entityGuid -> latest event for efficient lookup
+  const entityEventsMap = new Map<string, typeof allEvents[0]>()
+  for (const event of allEvents) {
+    const existing = entityEventsMap.get(event.entityGuid)
+    if (!existing || new Date(event.timestamp) > new Date(existing.timestamp)) {
+      entityEventsMap.set(event.entityGuid, event)
+    }
+  }
+
+  // Resolve status for each entity
   submissions.value = entityList.map((entity) => {
     const base = {
       guid: entity.modified.guid,
@@ -103,7 +158,7 @@ onMounted(async () => {
 
     return {
       ...base,
-      status: resolveStatus(base)
+      status: resolveStatusSync(base, entity.modified.guid, entityEventsMap.get(entity.modified.guid))
     }
   })
 })
@@ -189,14 +244,13 @@ const formatTimestamp = (timestamp: string) => {
         <svg viewBox="0 0 24 24" focusable="false">
           <path d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z" fill="currentColor" />
         </svg>
-        New Entry
       </button>
     </header>
 
     <section class="submissions-panel" aria-labelledby="submissions-heading">
       <div class="submissions-header">
         <div>
-          <h2 id="submissions-heading">{{ entityForm?.title }} Submissions</h2>
+          <h2 id="submissions-heading">Entities</h2>
           <p>{{ filteredSubmissions.length }} total submissions</p>
         </div>
         <div class="search-bar">
@@ -217,35 +271,36 @@ const formatTimestamp = (timestamp: string) => {
           class="submission-card"
           @click="router.push(route.path + '/' + submission.guid + '/detail')"
         >
-          <div class="submission-status" :class="`status-${submission.status}`">
-            <span class="status-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" focusable="false">
-                <path
-                  v-if="statusIcon(submission.status) === 'check-circle'"
-                  d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1 14-4-4 1.41-1.41L11 13.17l4.59-4.58L17 10z"
-                  fill="currentColor"
-                />
-                <path
-                  v-else-if="statusIcon(submission.status) === 'cloud-upload'"
-                  d="M19.35 10.04A7 7 0 0 0 5 9a5 5 0 0 0 .65 9.95H19a4 4 0 0 0 .35-7.91zM13 13v4h-2v-4H8l4-4 4 4h-3z"
-                  fill="currentColor"
-                />
-                <path
-                  v-else-if="statusIcon(submission.status) === 'note'"
-                  d="M18 2H6a2 2 0 0 0-2 2v16l4-4h10a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"
-                  fill="currentColor"
-                />
-                <path
-                  v-else
-                  d="M11 17h2v2h-2zm0-12h2v10h-2zm1-5C6.48 0 2 4.48 2 10s4.48 10 10 10 10-4.48 10-10S17.52 0 12 0z"
-                  fill="currentColor"
-                />
-              </svg>
-            </span>
-            <span class="status-label">{{ statusLabel(submission.status) }}</span>
-          </div>
           <div class="submission-body">
-            <h3>{{ submission.modified.data.name || submission.modified.name || 'Untitled submission' }}</h3>
+            <div class="submission-header">
+              <h3>{{ submission.modified.data.name || submission.modified.name || 'Untitled submission' }}</h3>
+              <div class="submission-status" :class="`status-${submission.status}`">
+                <span class="status-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path
+                      v-if="statusIcon(submission.status) === 'check-circle'"
+                      d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1 14-4-4 1.41-1.41L11 13.17l4.59-4.58L17 10z"
+                      fill="currentColor"
+                    />
+                    <path
+                      v-else-if="statusIcon(submission.status) === 'cloud-upload'"
+                      d="M19.35 10.04A7 7 0 0 0 5 9a5 5 0 0 0 .65 9.95H19a4 4 0 0 0 .35-7.91zM13 13v4h-2v-4H8l4-4 4 4h-3z"
+                      fill="currentColor"
+                    />
+                    <path
+                      v-else-if="statusIcon(submission.status) === 'note'"
+                      d="M18 2H6a2 2 0 0 0-2 2v16l4-4h10a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"
+                      fill="currentColor"
+                    />
+                    <path
+                      v-else
+                      d="M11 17h2v2h-2zm0-12h2v10h-2zm1-5C6.48 0 2 4.48 2 10s4.48 10 10 10 10-4.48 10-10S17.52 0 12 0z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </span>
+              </div>
+            </div>
             <p class="submission-meta">Last updated • {{ formatTimestamp(submission.modified.lastUpdated) }}</p>
             <p class="submission-details">Created • {{ formatTimestamp(submission.initial.lastUpdated) }}</p>
           </div>
@@ -265,7 +320,7 @@ const formatTimestamp = (timestamp: string) => {
 .entity-view {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .top-bar {
@@ -299,8 +354,8 @@ const formatTimestamp = (timestamp: string) => {
 
 .entity-header {
   background: #ffffff;
-  border-radius: 20px;
-  padding: 1.5rem;
+  border-radius: 16px;
+  padding: 1rem 1.25rem;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
   display: flex;
   align-items: flex-start;
@@ -339,18 +394,18 @@ const formatTimestamp = (timestamp: string) => {
 
 .submissions-panel {
   background: #ffffff;
-  border-radius: 20px;
-  padding: 1.5rem;
+  border-radius: 16px;
+  padding: 1rem 1.25rem;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1rem;
 }
 
 .submissions-header {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .submissions-header h2 {
@@ -392,19 +447,19 @@ const formatTimestamp = (timestamp: string) => {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
   padding: 0;
   margin: 0;
 }
 
 .submission-card {
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 1rem;
+  grid-template-columns: 1fr auto;
+  gap: 0.75rem;
   align-items: center;
-  padding: 1rem 1.25rem;
+  padding: 0.875rem 1rem;
   background: #f9fafb;
-  border-radius: 18px;
+  border-radius: 14px;
   cursor: pointer;
   transition: transform 0.2s ease;
 }
@@ -413,30 +468,28 @@ const formatTimestamp = (timestamp: string) => {
   transform: scale(0.99);
 }
 
+.submission-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+}
+
 .submission-status {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 0.4rem;
-  min-width: 70px;
+  flex-shrink: 0;
 }
 
 .status-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
   display: grid;
   place-items: center;
   background: rgba(59, 130, 246, 0.1);
   color: #2563eb;
-}
-
-.status-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #1f2937;
 }
 
 .status-synced .status-icon {
@@ -462,23 +515,31 @@ const formatTimestamp = (timestamp: string) => {
 .submission-body {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
 }
 
 .submission-body h3 {
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: 700;
   color: #111827;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .submission-meta {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: #6b7280;
+  margin: 0;
 }
 
 .submission-details {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: #9ca3af;
+  margin: 0;
 }
 
 .chevron {
