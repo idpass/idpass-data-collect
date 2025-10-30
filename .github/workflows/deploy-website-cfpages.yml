@@ -41,10 +41,10 @@ jobs:
         run: |
           if [ "${GITHUB_REF_NAME}" = "develop" ]; then
             echo "branch=preview" >> "$GITHUB_OUTPUT"
-            echo "domain=preview.idpass-data-collect.pages.dev" >> "$GITHUB_OUTPUT"
+            echo "domain=preview.data-collect.idpass.org" >> "$GITHUB_OUTPUT"
           elif [ "${GITHUB_REF_NAME}" = "main" ]; then
             echo "branch=main" >> "$GITHUB_OUTPUT"
-            echo "domain=idpass-data-collect.pages.dev" >> "$GITHUB_OUTPUT"
+            echo "domain=data-collect.idpass.org" >> "$GITHUB_OUTPUT"
           else
             echo "Unsupported branch ${GITHUB_REF_NAME}" >&2
             exit 1

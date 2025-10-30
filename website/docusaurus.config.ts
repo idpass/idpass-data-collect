@@ -14,7 +14,7 @@ const config: Config = {
   },
 
   // Set the production url of your site here
-  url: 'https://idpass-data-collect.pages.dev',
+  url: 'https://data-collect.idpass.org',
   baseUrl: '/',
   trailingSlash: false,
 
