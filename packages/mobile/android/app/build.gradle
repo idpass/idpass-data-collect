@@ -1,5 +1,48 @@
 apply plugin: 'com.android.application'
 def propertiesFile = rootProject.file('keys.properties')
+
+// Helper functions to get version and git info
+def getPackageVersion() {
+    def packageJsonFile = file('../../package.json')
+    if (packageJsonFile.exists()) {
+        def packageJson = new groovy.json.JsonSlurper().parseText(packageJsonFile.text)
+        return packageJson.version ?: "1.0.0"
+    }
+    return "1.0.0"
+}
+
+def getGitCommitHash() {
+    try {
+        // Navigate from android/app/build.gradle to repository root
+        // android/app -> android -> packages/mobile -> packages -> root
+        def repoRoot = file('../../../../')
+        def gitDir = new File(repoRoot, '.git')
+        if (gitDir.exists()) {
+            def proc = "git rev-parse --short HEAD".execute(null, repoRoot)
+            proc.waitFor()
+            if (proc.exitValue() == 0) {
+                return proc.text.trim()
+            }
+        }
+        // Fallback: try from mobile directory
+        def mobileRoot = file('../../')
+        def gitDirMobile = new File(mobileRoot, '.git')
+        if (gitDirMobile.exists()) {
+            def proc = "git rev-parse --short HEAD".execute(null, mobileRoot)
+            proc.waitFor()
+            if (proc.exitValue() == 0) {
+                return proc.text.trim()
+            }
+        }
+    } catch (Exception e) {
+        logger.warn("Could not get git commit hash: ${e.message}")
+    }
+    return "unknown"
+}
+
+def appVersion = getPackageVersion()
+def gitHash = getGitCommitHash()
+
 android {
     namespace "org.idpass.datacollectapp"
     compileSdkVersion rootProject.ext.compileSdkVersion
@@ -35,6 +78,18 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
+        }
+    }
+
+    // Customize APK output filename
+    // Format: idpass-data-collect-mobile-v1.0.0-debug-76dbce0.apk
+    applicationVariants.all { variant ->
+        variant.outputs.all {
+            def buildType = variant.buildType.name
+            def normalizedHash = gitHash.replace("unknown", "local")
+            def fileName = "idpass-data-collect-mobile-v${appVersion}-${buildType}-${normalizedHash}.apk"
+            fileName = fileName.replaceAll(/[^a-zA-Z0-9.-]/, "-")
+            outputFileName = fileName
         }
     }
 }

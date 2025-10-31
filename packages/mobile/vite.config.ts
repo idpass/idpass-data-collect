@@ -33,6 +33,7 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, './src'),
       '~bootstrap': resolve(__dirname, 'node_modules/bootstrap'),
+      '@idpass/data-collect-core': resolve(__dirname, '../datacollect/src/browser.ts'),
     }
   },
 
