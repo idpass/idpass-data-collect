@@ -32,6 +32,8 @@ const openInputAppDialog = ref(false)
 const showAddOptions = ref(false)
 const appUrl = ref('')
 const filePickerRef = ref<HTMLInputElement | null>(null)
+const errorMessage = ref('')
+const showError = ref(false)
 
 const tenantappsDb = database.tenantapps.find()
 const tenantappsSub = tenantappsDb.$.subscribe((results) => {
@@ -170,10 +172,41 @@ const saveTenantApp = async (config: TenantAppData, sourceUrl = '') => {
     throw new Error('Invalid Collection Program configuration')
   }
 
+  // Check if a collection program with the same id or name already exists
+  const existingById = await database.tenantapps
+    .find({
+      selector: {
+        id: config.id
+      }
+    })
+    .exec()
+
+  const existingByName = await database.tenantapps
+    .find({
+      selector: {
+        name: config.name
+      }
+    })
+    .exec()
+
+  if (existingById.length > 0 || existingByName.length > 0) {
+    const existingName = existingById.length > 0 ? existingById[0].name : existingByName[0].name
+    throw new Error(`A Collection Program with the name "${existingName}" already exists. Please use a different program.`)
+  }
+
   await database.tenantapps.upsert({
     ...config,
     url: config.url || sourceUrl
   })
+}
+
+const displayError = (message: string, duration = 5000) => {
+  errorMessage.value = message
+  showError.value = true
+  setTimeout(() => {
+    showError.value = false
+    errorMessage.value = ''
+  }, duration)
 }
 
 const loadAppFromUrl = async (url: string) => {
@@ -183,13 +216,22 @@ const loadAppFromUrl = async (url: string) => {
     await saveTenantApp(json, url)
   } catch (error) {
     console.error(error)
-    alert('Error loading app configuration. Please try again.')
+    const message = error instanceof Error ? error.message : 'Error loading app configuration. Please try again.'
+    displayError(message)
+    throw error // Re-throw so caller can handle it
   }
 }
 
 const handleLoadAppFromInput = async () => {
-  await loadAppFromUrl(appUrl.value)
-  openInputAppDialog.value = false
+  try {
+    await loadAppFromUrl(appUrl.value)
+    // Only close dialog if successful (no error thrown)
+    openInputAppDialog.value = false
+    appUrl.value = '' // Clear the input on success
+  } catch {
+    // Error already handled by loadAppFromUrl via displayError
+    // Keep dialog open so user can fix the URL
+  }
 }
 
 const handleSelectFile = () => {
@@ -210,7 +252,8 @@ const handleFileChange = async (event: Event) => {
     await saveTenantApp(json)
   } catch (error) {
     console.error(error)
-    alert('Unable to import the selected file. Please verify it is a valid Collection Program JSON.')
+    const message = error instanceof Error ? error.message : 'Unable to import the selected file. Please verify it is a valid Collection Program JSON.'
+    displayError(message)
   } finally {
     target.value = ''
   }
@@ -230,7 +273,8 @@ const handleScanApp = async () => {
     }
   } catch (error) {
     console.error(error)
-    alert('Unable to scan QR code. Please try again.')
+    const message = error instanceof Error ? error.message : 'Unable to scan QR code. Please try again.'
+    displayError(message)
   } finally {
     showAddOptions.value = false
   }
@@ -252,10 +296,25 @@ const toggleAddOptions = () => {
 
 <template>
   <div class="home-screen">
+    <div v-if="showError" class="error-message">
+      <svg class="error-icon" viewBox="0 0 24 24" focusable="false">
+        <path
+          d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
+          fill="currentColor"
+        />
+      </svg>
+      <span>{{ errorMessage }}</span>
+      <button class="error-close" type="button" @click="showError = false" aria-label="Close error">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor" />
+        </svg>
+      </button>
+    </div>
+
     <header class="home-header">
       <div>
         <h1>Collection Programs</h1>
-        <p>{{ availableCount }} forms available</p>
+        <p>{{ availableCount }} programs available</p>
       </div>
       <div class="search-bar">
         <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
@@ -264,13 +323,13 @@ const toggleAddOptions = () => {
               fill="currentColor"
             />
           </svg>
-        <input v-model="searchTerm" type="search" placeholder="Search forms..." />
+        <input v-model="searchTerm" type="search" placeholder="Search programs..." />
       </div>
     </header>
 
     <section class="forms-section" aria-labelledby="your-forms">
       <div class="section-heading">
-        <h2 id="your-forms">Your Forms</h2>
+        <h2 id="your-forms">Your Programs</h2>
         <span v-if="isLoadingStats" class="section-hint">Refreshing stats…</span>
       </div>
 
@@ -749,5 +808,51 @@ const toggleAddOptions = () => {
   color: #dc2626;
   font-weight: 600;
   text-decoration: underline;
+}
+
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  border-radius: 14px;
+  color: #991b1b;
+  font-size: 0.95rem;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.1);
+}
+
+.error-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: #dc2626;
+}
+
+.error-message span {
+  flex: 1;
+}
+
+.error-close {
+  background: transparent;
+  border: none;
+  padding: 0.25rem;
+  cursor: pointer;
+  color: #991b1b;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 6px;
+  transition: background 0.2s ease;
+}
+
+.error-close:hover {
+  background: rgba(153, 27, 27, 0.1);
+}
+
+.error-close svg {
+  width: 18px;
+  height: 18px;
 }
 </style>
