@@ -31,6 +31,24 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
       target: backend
+    develop:
+      watch:
+        - action: sync
+          path: ../packages/backend
+          target: /app/packages/backend
+          ignore:
+            - node_modules/
+            - dist/
+        - action: sync
+          path: ../packages/datacollect
+          target: /app/packages/datacollect
+          ignore:
+            - node_modules/
+            - dist/
+        - action: rebuild
+          path: ../package.json
+        - action: rebuild
+          path: ../pnpm-lock.yaml
     env_file: ./.env
     ports:
       - "${SYNC_SERVER_PORT:-3000}:3000"
@@ -47,6 +65,18 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
       target: admin-ui
+    develop:
+      watch:
+        - action: sync
+          path: ../packages/admin
+          target: /app/packages/admin
+          ignore:
+            - node_modules/
+            - dist/
+        - action: rebuild
+          path: ../package.json
+        - action: rebuild
+          path: ../pnpm-lock.yaml
     restart: unless-stopped
     environment:
       - VITE_API_URL=http://localhost:3000
@@ -63,6 +93,24 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
       target: mobile-app
+    develop:
+      watch:
+        - action: sync
+          path: ../packages/mobile
+          target: /app/packages/mobile
+          ignore:
+            - node_modules/
+            - dist/
+        - action: sync
+          path: ../packages/datacollect
+          target: /app/packages/datacollect
+          ignore:
+            - node_modules/
+            - dist/
+        - action: rebuild
+          path: ../package.json
+        - action: rebuild
+          path: ../pnpm-lock.yaml
     environment:
       - VITE_DB_ENCRYPTION_PASSWORD=password
       - VITE_DEVELOP=true
@@ -74,21 +122,6 @@ services:
       - sync-server
     networks:
       - datacollect-network-dev
-
-  # keycloak:
-  #   image: quay.io/keycloak/keycloak:23.0.0
-  #   container_name: keycloak
-  #   environment:
-  #     - KEYCLOAK_ADMIN=admin
-  #     - KEYCLOAK_ADMIN_PASSWORD=admin
-  #   command:
-  #     - start-dev
-  #   ports:
-  #     - "9090:8080"
-  #   depends_on:
-  #     - postgres
-  #   networks:
-  #     - datacollect-network-dev
 
 volumes:
   postgres-data-dev:
