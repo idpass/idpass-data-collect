@@ -1,27 +1,68 @@
-version: '3.8'
+name: idpass-data-collection-dev-openspp
 
-# Example Docker Compose configuration with OpenSPP integration
-# This demonstrates how to set up the full stack with external sync capabilities
+# Docker Compose configuration with OpenSPP integration
+# Based on docker-compose.dev.yaml with OpenSPP external sync capabilities
 
 services:
-  # HDM Sync Server - Main application
-  sync-server:
-    image: "hdm-sync-server:latest"
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    user: "node"
-    working_dir: /home/node/app
+  # PostgreSQL database
+  postgres:
+    image: postgres:15
+    restart: always
+    env_file: ./.env
+    volumes:
+      - postgres-data-dev:/var/lib/postgresql/data
+      - ../../init-reset-dbs.sh:/docker-entrypoint-initdb.d/init-reset-dbs.sh
+    ports:
+      - "5432:5432"
+    networks:
+      - datacollect-network-dev
+    command: ["postgres"]
+
+  # pgAdmin for database management (optional)
+  pgadmin:
+    image: dpage/pgadmin4:9
     env_file: ./.env
     ports:
-      - "3000:3000"
-    # Command is set in Dockerfile CMD
-    restart: always
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - datacollect-network-dev
+
+  # DataCollect Sync Server - Development mode with OpenSPP integration
+  sync-server:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile
+      target: backend
+    develop:
+      watch:
+        - action: sync
+          path: ../../../packages/backend
+          target: /app/packages/backend
+          ignore:
+            - node_modules/
+            - dist/
+        - action: sync
+          path: ../../../packages/datacollect
+          target: /app/packages/datacollect
+          ignore:
+            - node_modules/
+            - dist/
+        - action: rebuild
+          path: ../../../package.json
+        - action: rebuild
+          path: ../../../pnpm-lock.yaml
+    env_file: ./.env
+    ports:
+      - "${SYNC_SERVER_PORT:-3000}:3000"
+      - "9229:9229" # Node.js debugger port
+    restart: unless-stopped
     depends_on:
       - postgres
       - openspp
     networks:
-      - hdm-network
+      - datacollect-network-dev
     environment:
       # Additional environment variables for OpenSPP integration
       - EXTERNAL_SYNC_ENABLED=true
@@ -30,32 +71,69 @@ services:
       - OPENSPP_USERNAME=admin
       - OPENSPP_PASSWORD=admin
 
-  # PostgreSQL database for HDM Sync Server
-  postgres:
-    image: postgres:15
-    restart: always
-    env_file: ./postgresql.env
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    networks:
-      - hdm-network
-
-  # Admin UI (Vue.js application)
+  # Admin UI - Development mode
   admin-ui:
-    image: "hdm-admin-ui:latest"
     build:
-      context: ..
-      dockerfile: docker/Dockerfile.admin
-    ports:
-      - "5173:80"
+      context: ../..
+      dockerfile: docker/Dockerfile
+      target: admin-ui
+    develop:
+      watch:
+        - action: sync
+          path: ../../../packages/admin
+          target: /app/packages/admin
+          ignore:
+            - node_modules/
+            - dist/
+        - action: rebuild
+          path: ../../../package.json
+        - action: rebuild
+          path: ../../../pnpm-lock.yaml
+    restart: unless-stopped
     environment:
       - VITE_API_URL=http://localhost:3000
+    ports:
+      - "5173:5173"
     depends_on:
       - sync-server
     networks:
-      - hdm-network
+      - datacollect-network-dev
+
+  # Mobile App - Browser Development mode
+  mobile-app:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile
+      target: mobile-app
+    develop:
+      watch:
+        - action: sync
+          path: ../../../packages/mobile
+          target: /app/packages/mobile
+          ignore:
+            - node_modules/
+            - dist/
+        - action: sync
+          path: ../../../packages/datacollect
+          target: /app/packages/datacollect
+          ignore:
+            - node_modules/
+            - dist/
+        - action: rebuild
+          path: ../../../package.json
+        - action: rebuild
+          path: ../../../pnpm-lock.yaml
+    environment:
+      - VITE_DB_ENCRYPTION_PASSWORD=password
+      - VITE_DEVELOP=true
+      - VITE_DEBUG=true
+      - VITE_FEATURE_DYNAMIC=true
+    ports:
+      - "8081:8081"
+    depends_on:
+      - sync-server
+    networks:
+      - datacollect-network-dev
 
   # OpenSPP (Odoo-based social protection platform)
   openspp:
@@ -64,13 +142,13 @@ services:
     env_file: ./odoo.env
     volumes:
       - odoo-web-data:/var/lib/odoo
-      - ../addons:/mnt/extra-addons
+      - ../../../addons:/mnt/extra-addons
     ports:
       - "8069:8069"
     depends_on:
       - openspp-db
     networks:
-      - hdm-network
+      - datacollect-network-dev
 
   # PostGIS database for OpenSPP
   openspp-db:
@@ -84,7 +162,7 @@ services:
     ports:
       - "5433:5432"  # Different port to avoid conflict with main postgres
     networks:
-      - hdm-network
+      - datacollect-network-dev
 
   # Nginx reverse proxy for OpenSPP
   nginx:
@@ -100,13 +178,13 @@ services:
       - sync-server
       - admin-ui
     networks:
-      - hdm-network
+      - datacollect-network-dev
 
 volumes:
-  postgres-data:
+  postgres-data-dev:
   odoo-web-data:
   odoo-db-data:
 
 networks:
-  hdm-network:
+  datacollect-network-dev:
     driver: bridge
