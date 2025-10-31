@@ -12,6 +12,8 @@
     "preview": "vite preview",
     "build:ios": "npm run build && cap sync ios && cap open ios",
     "build:android": "npm run build && cap sync android && cap open android",
+    "build:android:apk": "npm run build && cap sync android && cd android && ./gradlew :app:assembleDebug",
+    "build:android:apk:release": "npm run build && cap sync android && cd android && ./gradlew :app:assembleRelease",
     "ionic:build": "npm run build",
     "ionic:serve": "npm run dev ",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts --fix",

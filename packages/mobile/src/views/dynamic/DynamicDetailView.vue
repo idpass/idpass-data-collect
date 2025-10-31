@@ -7,7 +7,7 @@ import ViewDialog from '@/components/ViewDialog.vue'
 import ChevronRight from '@/components/icons/ChevronRight.vue'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { FormSubmission } from '@idpass/data-collect-core'
+import type { FormSubmission, EntityDoc } from '@idpass/data-collect-core'
 import { SyncLevel } from '@idpass/data-collect-core'
 
 const route = useRoute()
@@ -15,7 +15,7 @@ const router = useRouter()
 const database = useDatabase()
 const tenantapp = ref<TenantAppData>()
 const entityForm = ref<EntityForm>()
-const storedEntityData = ref<unknown>()
+const storedEntityData = ref<Array<{ initial: EntityDoc; modified: EntityDoc }> | undefined>()
 const dependentForms = ref<EntityForm[]>([])
 const openViewAppDialog = ref(false)
 const events = ref<FormSubmission[]>([])
@@ -93,10 +93,10 @@ const isExpanded = (eventGuid: string) => {
 }
 
 const getEntityName = () => {
-  if (!storedEntityData.value || !Array.isArray(storedEntityData.value) || storedEntityData.value.length === 0) {
+  if (!storedEntityData.value || storedEntityData.value.length === 0) {
     return entityForm.value?.title || 'Entity'
   }
-  const entity = (storedEntityData.value as any)[0]
+  const entity = storedEntityData.value[0]
   const name = entity?.modified?.data?.name || entity?.modified?.name
   return name || entityForm.value?.title || 'Entity'
 }
@@ -119,10 +119,10 @@ const getEntityName = () => {
           <h1>{{ getEntityName() }}</h1>
           <div class="header-meta">
             <span class="meta-inline">
-              Updated {{ new Date((storedEntityData as any)[0].modified.lastUpdated).toLocaleString() }}
+              Updated {{ storedEntityData && storedEntityData[0] ? new Date(storedEntityData[0].modified.lastUpdated).toLocaleString() : '' }}
             </span>
             <span class="meta-separator">•</span>
-            <span class="meta-inline">Version {{ (storedEntityData as any)[0].modified.version }}</span>
+            <span class="meta-inline">Version {{ storedEntityData && storedEntityData[0] ? storedEntityData[0].modified.version : '' }}</span>
           </div>
         </div>
         <div class="action-group">
@@ -207,7 +207,7 @@ const getEntityName = () => {
   >
     <template #form-content>
       <div class="json-viewer">
-        <pre class="json-block">{{ (storedEntityData as any)[0].modified.data }}</pre>
+        <pre class="json-block">{{ storedEntityData && storedEntityData[0] ? JSON.stringify(storedEntityData[0].modified.data, null, 2) : '' }}</pre>
       </div>
     </template>
   </ViewDialog>

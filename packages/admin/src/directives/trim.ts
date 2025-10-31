@@ -19,6 +19,10 @@
 
 import type { ObjectDirective } from 'vue'
 
+type ExtendedHTMLElement = HTMLElement & {
+  __trimHandler?: () => void
+}
+
 /**
  * Custom Vue directive that automatically trims text input values on blur.
  * Prevents RxDB primary key issues caused by trailing/leading spaces.
@@ -50,7 +54,7 @@ export const trimDirective: ObjectDirective<HTMLElement> = {
       const input = findInput()
       if (input) {
         input.addEventListener('blur', trimValue)
-        ;(el as any).__trimHandler = trimValue
+        ;(el as ExtendedHTMLElement).__trimHandler = trimValue
       } else {
         // Retry once if input not found (for async Vuetify rendering)
         setTimeout(attachListener, 50)
@@ -62,7 +66,7 @@ export const trimDirective: ObjectDirective<HTMLElement> = {
 
   unmounted(el: HTMLElement) {
     const input = el.querySelector('input') || (el.tagName === 'INPUT' ? (el as HTMLInputElement) : null)
-    const handler = (el as any).__trimHandler
+    const handler = (el as ExtendedHTMLElement).__trimHandler
 
     if (input && handler) {
       input.removeEventListener('blur', handler)

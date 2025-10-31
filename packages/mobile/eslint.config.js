@@ -39,6 +39,16 @@ export default [
   { files: ['**/*.vue'], languageOptions: { parserOptions: { parser: tseslint.parser } } },
   includeIgnoreFile(gitignorePath),
   {
+    ignores: [
+      'dist/**',
+      'android/**',
+      'ios/**',
+      'node_modules/**',
+      '*.config.js',
+      '*.config.ts',
+    ],
+  },
+  {
     rules: {
       '@typescript-eslint/no-unused-vars': [
         'error',

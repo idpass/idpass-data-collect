@@ -20,7 +20,7 @@
     "validate-api": "swagger-codegen-cli validate -i openapi.yaml",
     "serve-docs": "swagger-ui-serve openapi.yaml",
     "api-docs": "echo 'API documentation available at http://localhost:3000/api-docs when server is running'",
-    "lint": "eslint . --config eslint.config.mjs",
+    "lint": "eslint . --config eslint.config.mjs --fix",
     "type-check": "tsc --noEmit -p tsconfig.type-check.json"
   },
   "dependencies": {

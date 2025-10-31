@@ -303,6 +303,7 @@ const formatTimestamp = (timestamp: string) => {
             </div>
             <p class="submission-meta">Last updated • {{ formatTimestamp(submission.modified.lastUpdated) }}</p>
             <p class="submission-details">Created • {{ formatTimestamp(submission.initial.lastUpdated) }}</p>
+            <p class="submission-status-label">{{ statusLabel(submission.status) }}</p>
           </div>
           <svg class="chevron" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
             <path d="M9.29 6.71 13.17 10.59 9.29 14.47 10.71 15.88 16 10.59 10.71 5.29z" fill="currentColor" />
