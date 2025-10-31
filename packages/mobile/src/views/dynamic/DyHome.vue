@@ -34,6 +34,7 @@ const appUrl = ref('')
 const filePickerRef = ref<HTMLInputElement | null>(null)
 const errorMessage = ref('')
 const showError = ref(false)
+const isSuccessMessage = ref(false)
 
 const tenantappsDb = database.tenantapps.find()
 const tenantappsSub = tenantappsDb.$.subscribe((results) => {
@@ -126,7 +127,7 @@ const scanSingleBarcode = (): Promise<Barcode> => {
       document.querySelector('body')?.classList.remove('barcode-scanner-active')
       await BarcodeScanner.stopScan().catch(() => {})
       if (activeListener) {
-        await activeListener.remove()
+        await activeListener.remove().catch(() => {})
         activeListener = null
       }
     }
@@ -158,18 +159,23 @@ const scan = async () => {
     const granted = await requestPermissions()
     isGrantedPermissions.value = granted
     if (!granted) {
-      return
+      throw new Error('Camera permissions are required to scan QR codes')
     }
   }
 
   const code = await scanSingleBarcode()
   const url = code.displayValue
+  
+  if (!url) {
+    throw new Error('QR code did not contain a valid URL')
+  }
+  
   return url
 }
 
 const saveTenantApp = async (config: TenantAppData, sourceUrl = '') => {
   if (!config?.id || !config?.name || !config?.entityForms) {
-    throw new Error('Invalid Collection Program configuration')
+    throw new Error('Invalid Collection Program configuration: missing required fields')
   }
 
   // Check if a collection program with the same id or name already exists
@@ -200,22 +206,31 @@ const saveTenantApp = async (config: TenantAppData, sourceUrl = '') => {
   })
 }
 
-const displayError = (message: string, duration = 5000) => {
+const displayError = (message: string, duration = 5000, isSuccess = false) => {
   errorMessage.value = message
+  isSuccessMessage.value = isSuccess
   showError.value = true
   setTimeout(() => {
     showError.value = false
     errorMessage.value = ''
+    isSuccessMessage.value = false
   }, duration)
 }
 
 const loadAppFromUrl = async (url: string) => {
   try {
     const response = await fetch(url)
+    
+    if (!response.ok) {
+      throw new Error(`Failed to load configuration: ${response.status} ${response.statusText}`)
+    }
+    
     const json = await response.json()
     await saveTenantApp(json, url)
+    
+    return json
   } catch (error) {
-    console.error(error)
+    console.error('Error loading app:', error)
     const message = error instanceof Error ? error.message : 'Error loading app configuration. Please try again.'
     displayError(message)
     throw error // Re-throw so caller can handle it
@@ -267,16 +282,24 @@ const handleScanApp = async () => {
       return
     }
 
+    // Close bottom sheet before scanning to avoid UI conflicts
+    showAddOptions.value = false
+    
     const url = await scan()
-    if (url) {
-      await loadAppFromUrl(url)
+    
+    if (!url) {
+      throw new Error('No URL found in scanned QR code')
     }
+    
+    const savedConfig = await loadAppFromUrl(url)
+    
+    // Show success feedback
+    displayError(`Successfully added "${savedConfig?.name || 'Collection Program'}"`, 3000, true)
+    
   } catch (error) {
-    console.error(error)
+    console.error('Error scanning QR code:', error)
     const message = error instanceof Error ? error.message : 'Unable to scan QR code. Please try again.'
     displayError(message)
-  } finally {
-    showAddOptions.value = false
   }
 }
 
@@ -296,15 +319,21 @@ const toggleAddOptions = () => {
 
 <template>
   <div class="home-screen">
-    <div v-if="showError" class="error-message">
-      <svg class="error-icon" viewBox="0 0 24 24" focusable="false">
+    <div v-if="showError" :class="['error-message', { 'success-message': isSuccessMessage }]">
+      <svg v-if="!isSuccessMessage" class="error-icon" viewBox="0 0 24 24" focusable="false">
         <path
           d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
           fill="currentColor"
         />
       </svg>
+      <svg v-else class="error-icon" viewBox="0 0 24 24" focusable="false">
+        <path
+          d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
+          fill="currentColor"
+        />
+      </svg>
       <span>{{ errorMessage }}</span>
-      <button class="error-close" type="button" @click="showError = false" aria-label="Close error">
+      <button class="error-close" type="button" @click="showError = false" aria-label="Close message">
         <svg viewBox="0 0 24 24" focusable="false">
           <path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor" />
         </svg>
@@ -821,6 +850,13 @@ const toggleAddOptions = () => {
   color: #991b1b;
   font-size: 0.95rem;
   box-shadow: 0 4px 12px rgba(220, 38, 38, 0.1);
+}
+
+.success-message {
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.1);
 }
 
 .error-icon {

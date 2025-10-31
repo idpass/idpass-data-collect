@@ -76,6 +76,7 @@ const showQrDialog = ref(false)
 const showAuthDialog = ref(false)
 const isSyncing = ref(false)
 const isDeleting = ref(false)
+const qrError = ref(false)
 const entityRecords = ref<Record<string, unknown[]>>({})
 
 const routeId = computed(() => route.params.id as string)
@@ -215,6 +216,17 @@ const qrUrl = computed(() => {
   } catch (err) {
     console.error('Failed to resolve QR URL', err)
     return ''
+  }
+})
+
+const handleQrError = () => {
+  qrError.value = true
+}
+
+watch(showQrDialog, (isOpen) => {
+  if (isOpen) {
+    // Reset error when dialog opens
+    qrError.value = false
   }
 })
 
@@ -705,10 +717,30 @@ watch(
     <v-card>
       <v-card-title class="text-h6">Scan to deploy</v-card-title>
       <v-card-text class="text-center">
-        <v-img :src="qrUrl" alt="QR Code" max-width="220" class="mx-auto my-4" />
-        <p class="text-body-2 text-medium-emphasis">
+        <v-img 
+          :src="qrUrl" 
+          alt="QR Code" 
+          max-width="220" 
+          class="mx-auto my-4"
+          @error="handleQrError"
+        >
+          <template v-if="qrError" #placeholder>
+            <div class="text-center pa-4">
+              <v-icon icon="mdi-alert-circle" size="48" color="error" class="mb-2" />
+              <p class="text-body-2 text-error">Failed to load QR code</p>
+              <p class="text-caption text-medium-emphasis mt-2">
+                The QR code image could not be loaded. Please ensure the backend is accessible and the artifact ID is valid.
+              </p>
+            </div>
+          </template>
+        </v-img>
+        <p v-if="!qrError" class="text-body-2 text-medium-emphasis">
           Share this code with field teams to load the configuration instantly on their devices.
         </p>
+        <v-alert v-if="qrError" type="warning" variant="tonal" density="compact" class="mt-2">
+          <strong>Note:</strong> When scanning this QR code from a mobile device, ensure the URL in the code is accessible from your network. 
+          If you're using localhost, configure PUBLIC_BASE_URL in your backend environment.
+        </v-alert>
       </v-card-text>
       <v-card-actions class="justify-end">
         <v-btn variant="text" color="primary" @click="showQrDialog = false">Close</v-btn>

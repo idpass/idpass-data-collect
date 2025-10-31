@@ -75,7 +75,17 @@ export async function generatePublicArtifacts(baseUrl: string, appConfig: AppCon
   await fs.writeFile(jsonPath, publicJson);
   const sanitizedBaseUrl = baseUrl.replace(/\/+$/, "");
   const publicJsonUrl = `${sanitizedBaseUrl}/artifacts/${appConfig.artifactId}.json`;
-  await qrcode.toFile(qrPath, publicJsonUrl);
+  
+  try {
+    await qrcode.toFile(qrPath, publicJsonUrl, {
+      errorCorrectionLevel: 'M',
+      type: 'png',
+      margin: 1,
+    });
+  } catch (qrError) {
+    console.error(`Failed to generate QR code for ${appConfig.artifactId}:`, qrError);
+    throw new Error(`Failed to generate QR code: ${qrError instanceof Error ? qrError.message : 'Unknown error'}`);
+  }
 
   return { jsonPath, qrPath };
 }
