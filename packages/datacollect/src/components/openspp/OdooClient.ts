@@ -23,9 +23,10 @@ import {
   OdooBaseModel,
   OpenSPPGroup,
   OpenSPPHousehold,
-  OpenSPPIndividual,
   OpenSPPIndividualExtended,
   GroupMembership,
+  OpenSPPCreateIndividualPayload,
+  OpenSPPCreateHouseholdPayload,
 } from "./odoo-types";
 
 interface JsonRpcErrorPayload {
@@ -71,6 +72,9 @@ export default class OdooClient {
 
   private async makeRequest<T>(endpoint: string, data: Record<string, unknown>): Promise<T> {
     try {
+
+      console.log('OPENSPP_REQUEST', endpoint, JSON.stringify(data, null, 2));
+      
       const response = await axios.post<JsonRpcResponse<T>>(
         `${this.baseUrl}${endpoint}`,
         {
@@ -86,8 +90,11 @@ export default class OdooClient {
         },
       );
 
+      console.log('OPENSPP_RESPONSE', JSON.stringify(response.data, null, 2));
+
       if (response.data.error) {
         const errorMsg = response.data.error.data?.message || response.data.error.message || "JSON-RPC request failed";
+        console.log("OPENSPP_ERROR", JSON.stringify(response.data.error, null, 2));
         throw new Error(errorMsg);
       }
 
@@ -200,17 +207,11 @@ export default class OdooClient {
     return this.call<number>("res.partner", "create", [data]);
   }
 
-  async createHousehold(rootId: number, data: Partial<OpenSPPHousehold>): Promise<number> {
-    const householdId = await this.call<number>("res.partner", "create", [data]);
-    
-    if (householdId && rootId) {
-      await this.addMembersToGroup(rootId, [{ individual: householdId }]);
-    }
-    
-    return householdId;
+  async createHousehold(data: OpenSPPCreateHouseholdPayload): Promise<number> {
+    return this.call<number>("res.partner", "create", [data]);
   }
 
-  async createIndividual(_rootId: number, data: Partial<OpenSPPIndividual>): Promise<number> {
+  async createIndividual(data: OpenSPPCreateIndividualPayload): Promise<number> {
     return this.call<number>("res.partner", "create", [data]);
   }
 

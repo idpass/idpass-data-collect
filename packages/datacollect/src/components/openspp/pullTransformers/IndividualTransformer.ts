@@ -85,13 +85,13 @@ export class IndividualTransformer {
 
     // Map name fields
     if (fieldMap.firstName && individual.given_name) {
-      mapped.first_name = individual.given_name;
+      mapped.firstName = individual.given_name;
     }
     if (fieldMap.lastName && individual.family_name) {
-      mapped.last_name = individual.family_name;
+      mapped.lastName = individual.family_name;
     }
     if (fieldMap.middleName && individual.addl_name) {
-      mapped.middle_name = individual.addl_name;
+      mapped.middleName = individual.addl_name;
     }
     if (fieldMap.displayName && individual.name) {
       mapped.name = individual.name;
@@ -104,7 +104,7 @@ export class IndividualTransformer {
 
     // Map date of birth
     if (fieldMap.dateOfBirth && individual.birthdate) {
-      mapped.date_of_birth = individual.birthdate;
+      mapped.dateOfBirth = individual.birthdate;
     }
 
     // Map ethnic group flag
@@ -120,48 +120,10 @@ export class IndividualTransformer {
       mapped.phone_number = individual.phone;
     }
 
-    // Map professional information
-    if (fieldMap.profession && individual.profession) {
-      mapped.profession = individual.profession;
-    }
-
-    // Map marital status
-    if (fieldMap.maritalStatus && individual.marital_status_id) {
-      mapped.marital_status = individual.marital_status_id;
-    }
-
-    // Map education level
-    if (fieldMap.educationLevel && individual.highest_education_level_id) {
-      mapped.education_level = individual.highest_education_level_id;
-    }
-
-    // Map location (GPS coordinates)
-    if (
-      fieldMap.location &&
-      (typeof individual.latitude !== "undefined" || typeof individual.longitude !== "undefined")
-    ) {
-      mapped.location_gps = JSON.stringify({
-        coords: {
-          latitude: individual.latitude,
-          longitude: individual.longitude,
-        },
-      });
-    }
 
     // Map membership kind (relationship to household)
     if (fieldMap.membershipKind && individual.relationship) {
       mapped.relationship = individual.relationship;
-    }
-
-    // Map administrative areas
-    if (fieldMap.province && individual.province_id) {
-      mapped.province_id = individual.province_id;
-    }
-    if (fieldMap.district && individual.district_id) {
-      mapped.district_id = individual.district_id;
-    }
-    if (fieldMap.area && individual.area_id) {
-      mapped.area_id = individual.area_id;
     }
 
     return mapped;

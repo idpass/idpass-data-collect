@@ -149,3 +149,69 @@ export interface OpenSPPIndividualExtended extends OpenSPPIndividual {
   district_id?: number;
   area_id?: number;
 }
+
+/**
+ * Payload interfaces for creating entities in OpenSPP.
+ * These represent the exact data structure sent to OpenSPP during push sync.
+ */
+
+/**
+ * Payload for creating an individual registrant in OpenSPP.
+ * Based on sample-data.json structure and OpenSPP API requirements.
+ */
+export interface OpenSPPCreateIndividualPayload {
+  /** Must be true for registrants */
+  is_registrant: boolean;
+  /** Must be false for individuals (true for groups/households) */
+  is_group: boolean;
+  /** Full display name (e.g., "DE LEON, PAOLO MIGUEL") */
+  name?: string;
+  /** Family name / last name */
+  family_name?: string;
+  /** Given name / first name */
+  given_name?: string;
+  /** Additional name / middle name */
+  addl_name?: string;
+  /** Date of birth in YYYY-MM-DD format */
+  birthdate?: string;
+  /** Gender: "male", "female", or undefined */
+  gender?: string;
+  /** Email address */
+  email?: string;
+  /** Phone number */
+  phone?: string;
+}
+
+export interface OpenSPPCreateHouseholdPayload {
+  /** Must be true for registrants */
+  is_registrant: boolean;
+  /** Must be true for households/groups */
+  is_group: boolean;
+  /** Household name */
+  name: string;
+  /** Group kind (1 = household) */
+  kind: number;
+  /** Household size (number of members) */
+  hh_size: number;
+  /** Household status (e.g., "active") */
+  hh_status: string;
+}
+
+/**
+ * Payload for creating a registrant ID document in OpenSPP.
+ * Model: g2p.reg.id
+ */
+export interface OpenSPPCreateRegistrantIdPayload {
+  /** Partner ID (individual or household ID) */
+  partner_id: number;
+  /** ID type (reference to OpenSPP ID type lookup) */
+  id_type: string;
+  /** ID number/value */
+  value: string;
+  /** Issuance date in YYYY-MM-DD format */
+  issuance_date: string | null;
+  /** Expiry date in YYYY-MM-DD format */
+  expiry_date: string | null;
+  /** Description/notes */
+  description: string;
+}

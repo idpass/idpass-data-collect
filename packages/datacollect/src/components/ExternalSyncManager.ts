@@ -224,6 +224,8 @@ export class ExternalSyncManager {
       }
     }
 
+    console.log("SYNC_STARTED");
+
     const supportsPush = typeof this.adapter.pushData === "function";
     const supportsPull = typeof this.adapter.pullData === "function";
 
@@ -238,6 +240,8 @@ export class ExternalSyncManager {
     if (!supportsPush && !supportsPull && typeof this.adapter.sync === "function") {
       await this.adapter.sync(credentials);
     }
+
+    console.log("SYNC_COMPLETED");
   }
 
   /**

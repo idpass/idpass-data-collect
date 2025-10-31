@@ -45,6 +45,9 @@ addRxPlugin(RxDBUpdatePlugin)
 import { RxDBCleanupPlugin } from 'rxdb/plugins/cleanup'
 addRxPlugin(RxDBCleanupPlugin)
 
+import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election'
+addRxPlugin(RxDBLeaderElectionPlugin)
+
 // dev-mode
 const isDevelop = import.meta.env.VITE_DEVELOP
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode'
@@ -65,14 +68,46 @@ async function clearStorageIfFirstInstall() {
   const PASSWORD = import.meta.env.VITE_DB_ENCRYPTION_PASSWORD
   if (!localStorage.getItem(INSTALL_KEY)) {
     try {
-      await removeRxDatabase('self-registration-1', encryptedDexieStorage, PASSWORD)
+      await removeRxDatabase('idpass-data-collect', encryptedDexieStorage, PASSWORD)
       localStorage.clear()
       sessionStorage.clear()
       localStorage.setItem(INSTALL_KEY, 'true')
       console.log('First install: Storage cleared')
     } catch (err) {
       console.log('Error clearing storage on first install:', err)
+      // If removal fails (e.g., password mismatch), try clearing IndexedDB directly
+      try {
+        const dbName = 'idpass-data-collect'
+        if ('indexedDB' in window) {
+          indexedDB.deleteDatabase(dbName)
+          console.log('Cleared IndexedDB database directly')
+        }
+      } catch (clearErr) {
+        console.log('Error clearing IndexedDB directly:', clearErr)
+      }
     }
+  }
+}
+
+// Handle password mismatch errors by clearing and recreating the database
+async function handlePasswordMismatch() {
+  console.log('Password mismatch detected, clearing database...')
+  try {
+    // Try to clear the database directly from IndexedDB
+    const dbName = 'idpass-data-collect'
+    if ('indexedDB' in window) {
+      indexedDB.deleteDatabase(dbName)
+      // Wait a bit for the deletion to complete
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    // Clear all storage
+    localStorage.clear()
+    sessionStorage.clear()
+    // Remove the install key so it will be reset on next launch
+    localStorage.removeItem('app_installed')
+    console.log('Database cleared due to password mismatch')
+  } catch (err) {
+    console.error('Error handling password mismatch:', err)
   }
 }
 
@@ -103,54 +138,104 @@ export async function getDatabase(): Promise<RxDatabase> {
 
   await clearStorageIfFirstInstall()
 
-  dbInstance = await createRxDatabase({
-    name: 'self-registration-1',
-    storage: encryptedDexieStorage,
-    eventReduce: true,
-    multiInstance: false,
-    password: PASSWORD,
-    ignoreDuplicate: true
-  })
+  try {
+    dbInstance = await createRxDatabase({
+      name: 'idpass-data-collect',
+      storage: encryptedDexieStorage,
+      eventReduce: true,
+      multiInstance: false,
+      password: PASSWORD,
+      ignoreDuplicate: true
+    })
+  } catch (error: unknown) {
+    // Check if it's a password mismatch error (DB1)
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      error.code === 'DB1'
+    ) {
+      console.warn('Database password mismatch detected, clearing and retrying...')
+      await handlePasswordMismatch()
+      // Retry creating the database after clearing
+      dbInstance = await createRxDatabase({
+        name: 'idpass-data-collect',
+        storage: encryptedDexieStorage,
+        eventReduce: true,
+        multiInstance: false,
+        password: PASSWORD,
+        ignoreDuplicate: true
+      })
+    } else {
+      throw error
+    }
+  }
 
   if (import.meta.env.VITE_DEVELOP) {
     ;(window as unknown as { db: RxDatabase }).db = dbInstance // write to window for debugging
   }
 
   console.log('setting up collections...')
-  await dbInstance.addCollections({
-    forms: {
-      schema: FormSchema,
-      methods: {
-        responseDisplay(this: RxFormDocument): string {
-          switch (this.responseCount) {
-            case 0:
-              return 'No Responses'
-            case 1:
-              return '1 Response'
-            default:
-              return this.responseCount + ' Responses'
+  try {
+    await dbInstance.addCollections({
+      forms: {
+        schema: FormSchema,
+        methods: {
+          responseDisplay(this: RxFormDocument): string {
+            switch (this.responseCount) {
+              case 0:
+                return 'No Responses'
+              case 1:
+                return '1 Response'
+              default:
+                return this.responseCount + ' Responses'
+            }
+          },
+          parsedForm(this: RxFormDocument): object {
+            return JSON.parse(this.form)
           }
-        },
-        parsedForm(this: RxFormDocument): object {
-          return JSON.parse(this.form)
         }
-      }
-    },
-    formresponses: {
-      schema: FormResponseSchema,
-      methods: {
-        parsedData(this: FormResponseType): object {
-          return JSON.parse(this.data)
+      },
+      formresponses: {
+        schema: FormResponseSchema,
+        methods: {
+          parsedData(this: FormResponseType): object {
+            return JSON.parse(this.data)
+          }
         }
+      },
+      keys: {
+        schema: keySchema
+      },
+      tenantapps: {
+        schema: TenantAppSchema
       }
-    },
-    keys: {
-      schema: keySchema
-    },
-    tenantapps: {
-      schema: TenantAppSchema
+    })
+  } catch (error) {
+    console.error('Error adding collections:', error)
+    // Check if it's a password mismatch error (DB1)
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      error.code === 'DB1'
+    ) {
+      console.warn('Password mismatch during collection setup, clearing database...')
+      await handlePasswordMismatch()
+      // Close existing instance if any
+      if (dbInstance) {
+        try {
+          await dbInstance.destroy()
+        } catch (destroyErr) {
+          console.log('Error destroying database instance:', destroyErr)
+        }
+        dbInstance = null
+      }
+      // Retry the entire database creation
+      return await getDatabase()
     }
-  })
+    throw error
+  }
   return dbInstance
 }
 
@@ -158,7 +243,7 @@ export async function createDatabase(): Promise<Plugin> {
   const database = await getDatabase()
   const formResponseReplicationState = replicateRxCollection({
     collection: database.collections.formresponses,
-    replicationIdentifier: 'self-reg-mobile-to-self-reg-db-sync',
+    replicationIdentifier: 'idpass-data-collect-mobile-to-db-sync',
     live: true,
     retryTime: 5 * 1000,
     autoStart: true,

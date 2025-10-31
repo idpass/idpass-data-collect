@@ -28,22 +28,16 @@ import OdooClient from "./OdooClient";
 import { EventApplierService } from "../../services/EventApplierService";
 import { HouseholdTransformer } from "./pullTransformers/HouseholdTransformer";
 import { IndividualTransformer } from "./pullTransformers/IndividualTransformer";
-import type { OdooConfig } from "./odoo-types";
-import type { OpenSppAdapterOptions, OpenSppEntityOptions } from "./OpenSppAdapterOptions";
+import type { OdooConfig, OpenSPPCreateIndividualPayload, OpenSPPCreateHouseholdPayload } from "./odoo-types";
+import type { OpenSppAdapterOptions } from "./OpenSppAdapterOptions";
 import { parseOpenSppAdapterOptions, resolveParentField } from "./OpenSppAdapterOptions";
 
 interface GroupedData {
-  root: FormSubmission;
   households: {
     household: FormSubmission;
     individuals: FormSubmission[];
   }[];
-}
-
-interface AdministrativeArea {
-  province_id: number | undefined;
-  district_id: number | undefined;
-  area_id: number | undefined;
+  standaloneIndividuals: FormSubmission[];
 }
 
 interface RegisteredIndividual {
@@ -54,7 +48,6 @@ interface RegisteredIndividual {
 class OpenSppSyncAdapter implements ExternalSyncAdapter {
   private url: string;
   private odooClient: InstanceType<typeof OdooClient> | null = null;
-  private _lastCredentials: ExternalSyncCredentials | null = null;
   private options: OpenSppAdapterOptions;
 
   constructor(
@@ -75,191 +68,131 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       return false;
     }
   }
-  // This only pushes new data to the server
-  //TO DO: implement batch size and update
+
   async pushData(credentials?: ExternalSyncCredentials): Promise<void> {
     if (!this.url) {
       throw new Error("URL is required");
     }
     await this.ensureClient(credentials);
-    // get last sync timestamp
-    let lastPushExternalSyncTimestamp = await this.eventStore.getLastPushExternalSyncTimestamp();
-
-    // get all events since last sync
-    // const eventsToPush = await this.eventStore.getEventsSince(lastPushExternalSyncTimestamp);
+    const lastPushExternalSyncTimestamp = await this.eventStore.getLastPushExternalSyncTimestamp();
 
     const allEvents = await this.eventStore.getAllEvents();
     const filteredEvents = this.filterSyncEvents(allEvents, lastPushExternalSyncTimestamp);
     const groupedEvents = this.groupEvents(filteredEvents);
     const updatedEvents: FormSubmission[] = [];
 
-    for (const groupData of Object.values(groupedEvents)) {
-      try {
-        const rootPayload = groupData.root.data as Record<string, unknown>;
-        const rootId = this.resolveExternalId(rootPayload, this.options.root);
+    console.log('GROUP_DATA' , JSON.stringify(groupedEvents, null, 2));
 
-        if (!rootId) {
-          console.error("Unable to determine root partner identifier for event", groupData.root);
-          continue;
+    // Process households
+    for (const householdGroup of groupedEvents.households) {
+      try {
+        const householdEvent = householdGroup.household;
+        const isCreate = householdEvent.type.startsWith("create-");
+        const isUpdate = householdEvent.type.startsWith("update-");
+        
+        let householdId: number | undefined;
+        if (isCreate) {
+          householdId = await this.createHouseholdData(householdEvent);
+        } else if (isUpdate) {
+          householdId = await this.updateHouseholdData(householdEvent);
         }
 
-        const _administrativeArea = this.resolveAdministrativeArea(rootPayload, this.options.root);
+        if (householdId) {
+          updatedEvents.push(householdEvent);
+        }
 
-        for (const householdGroup of groupData.households) {
+        const individualIds: RegisteredIndividual[] = [];
+        const createIndividualIds = new Set<number>();
+
+        for (const member of householdGroup.individuals) {
           try {
-            const householdEvent = householdGroup.household;
-            const householdData = householdEvent.data as Record<string, unknown>;
-            const householdArea = this.resolveAdministrativeArea(householdData, this.options.household);
-            const householdId = await this.createHouseholdData(rootId, householdEvent, householdArea);
+            const memberData = member.data as Record<string, unknown>;
+            const isMemberCreate = member.type.startsWith("create-");
+            const isMemberUpdate = member.type.startsWith("update-");
+            
+            let individualId: number | undefined;
+            if (isMemberCreate) {
+              individualId = await this.createIndividualData(member);
+              if (individualId) {
+                createIndividualIds.add(individualId);
+              }
+            } else if (isMemberUpdate) {
+              individualId = await this.updateIndividualData(member);
+              // Handle membership update if parentGuid changed
+              await this.handleMembershipUpdate(member.entityGuid, member);
+            }
 
-            const householdBankDetails = this.extractCollection(
-              householdData,
-              this.options.household.collections?.bankDetails,
+            if (individualId) {
+              updatedEvents.push(member);
+            }
+
+            const membershipKind = this.parseInteger(
+              this.getMappedField(memberData, this.options.individual.fieldMap?.membershipKind),
             );
-            if (householdBankDetails.length > 0 && householdId) {
-              for (const bankDetail of householdBankDetails) {
-                try {
-                  await this.createBankAccount(householdId, bankDetail);
-                } catch (error) {
-                  console.error("Error creating household bank account:", error);
-                }
-              }
+            individualIds.push({
+              id: individualId ?? null,
+              membershipKind,
+            });
+          } catch (error) {
+            console.error("Error processing individual:", error);
+          }
+        }
+
+        // Link members to household (only for creates)
+        if (individualIds.length > 0 && householdId) {
+          for (const registered of individualIds) {
+            if (!registered.id || !createIndividualIds.has(registered.id)) {
+              continue;
             }
 
-            const householdDocuments = this.extractCollection(
-              householdData,
-              this.options.household.collections?.documents,
-            );
-            if (householdDocuments.length > 0 && householdId) {
-              for (const document of householdDocuments) {
-                try {
-                  await this.createRegistrantID(householdId, document);
-                } catch (error) {
-                  console.error("Error creating household document ID:", error);
-                }
-              }
-            }
+            const kindCommand: [number, number, number[]][] | undefined =
+              typeof registered.membershipKind === "number" && registered.membershipKind > 0
+                ? [[6, 0, [registered.membershipKind]]]
+                : undefined;
 
-            if (householdId) {
-              updatedEvents.push(householdEvent);
-            }
-
-            const individualIds: RegisteredIndividual[] = [];
-
-            for (const member of householdGroup.individuals) {
-              try {
-                const memberData = member.data as Record<string, unknown>;
-                const individualArea = this.resolveAdministrativeArea(memberData, this.options.individual);
-                const individualId = await this.createIndividualData(rootId, member, individualArea);
-
-                if (individualId) {
-                  updatedEvents.push(member);
-                }
-
-                const memberBankDetails = this.extractCollection(
-                  memberData,
-                  this.options.individual.collections?.bankDetails,
-                );
-                if (memberBankDetails.length > 0 && individualId) {
-                  for (const bankDetail of memberBankDetails) {
-                    try {
-                      await this.createBankAccount(individualId, bankDetail);
-                    } catch (error) {
-                      console.error("Error creating individual bank account:", error);
-                    }
-                  }
-                }
-
-                const memberDocuments = this.extractCollection(
-                  memberData,
-                  this.options.individual.collections?.documents,
-                );
-                if (memberDocuments.length > 0 && individualId) {
-                  for (const document of memberDocuments) {
-                    try {
-                      await this.createRegistrantID(individualId, document);
-                    } catch (error) {
-                      console.error("Error creating individual document ID:", error);
-                    }
-                  }
-                }
-
-                const trainingRecords = this.extractCollection(
-                  memberData,
-                  this.options.individual.collections?.trainings,
-                );
-                if (trainingRecords.length > 0 && individualId) {
-                  for (const training of trainingRecords) {
-                    try {
-                      await this.createTrainingRecord(training, individualId);
-                    } catch (error) {
-                      console.error("Error creating training record:", error);
-                    }
-                  }
-                }
-
-                const membershipKind = this.parseInteger(
-                  this.getMappedField(memberData, this.options.individual.fieldMap?.membershipKind),
-                );
-                individualIds.push({
-                  id: individualId ?? null,
-                  membershipKind,
-                });
-              } catch (error) {
-                console.error("Error processing individual:", error);
-              }
-            }
-
-            if (individualIds.length > 0 && householdId) {
-              for (const registered of individualIds) {
-                if (!registered.id) {
-                  continue;
-                }
-
-                // kind is a Many2many field, so it needs Odoo command format
-                // Command (6, 0, [ids]) means "replace all links with these IDs"
-                // Common values: 1=Head, 2=Spouse, 3=Child, 4=Other
-                // If no kind is specified, omit the field to let OpenSPP use its default
-                const kindCommand: [number, number, number[]][] | undefined =
-                  typeof registered.membershipKind === "number" && registered.membershipKind > 0
-                    ? [[6, 0, [registered.membershipKind]]]
-                    : undefined;
-
-                try {
-                  await this.odooClient?.addMembersToGroup(householdId, [
-                    {
-                      individual: registered.id,
-                      ...(kindCommand ? { kind: kindCommand } : {}),
-                    },
-                  ]);
-                } catch (error) {
-                  console.error(`Error linking member ${registered.id} to household:`, error);
-                }
-              }
-            }
-
-            if (householdId) {
-              await this.odooClient?.addMembersToGroup(rootId, [
+            try {
+              await this.odooClient?.addMembersToGroup(householdId, [
                 {
-                  individual: householdId,
+                  individual: registered.id,
+                  ...(kindCommand ? { kind: kindCommand } : {}),
                 },
               ]);
+            } catch (error) {
+              console.error(`Error linking member ${registered.id} to household:`, error);
             }
-          } catch (error) {
-            console.error("Error processing household:", error);
           }
         }
       } catch (error) {
-        console.error("Error processing root partner group:", error);
-        continue;
+        console.error("Error processing household:", error);
+      }
+    }
+
+    // Process standalone individuals
+    for (const standaloneIndividual of groupedEvents.standaloneIndividuals) {
+      try {
+        const isCreate = standaloneIndividual.type.startsWith("create-");
+        const isUpdate = standaloneIndividual.type.startsWith("update-");
+        
+        let individualId: number | undefined;
+        if (isCreate) {
+          individualId = await this.createIndividualData(standaloneIndividual);
+        } else if (isUpdate) {
+          individualId = await this.updateIndividualData(standaloneIndividual);
+          // Handle membership update if parentGuid changed
+          await this.handleMembershipUpdate(standaloneIndividual.entityGuid, standaloneIndividual);
+        }
+
+        if (individualId) {
+          updatedEvents.push(standaloneIndividual);
+        }
+      } catch (error) {
+        console.error("Error processing standalone individual:", error);
       }
     }
 
     const latestEventTimestamp = this.getLatestTimestamp(updatedEvents);
     if (latestEventTimestamp) {
-      // Update the sync timestamp after each successful batch
       await this.eventStore.setLastPushExternalSyncTimestamp(latestEventTimestamp);
-      lastPushExternalSyncTimestamp = latestEventTimestamp;
     }
   }
 
@@ -278,8 +211,6 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     await this.ensureClient();
 
     const lastPullExternalSyncTimestamp = await this.eventStore.getLastPullExternalSyncTimestamp();
-
-    // Fetch households and individuals since last pull
     const households = await this.odooClient!.fetchHouseholdsSince(lastPullExternalSyncTimestamp);
     const individuals = await this.odooClient!.fetchIndividualsSince(lastPullExternalSyncTimestamp);
 
@@ -287,7 +218,6 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     const errors: string[] = [];
     let latestTimestamp = lastPullExternalSyncTimestamp;
 
-    // Transform and apply household events
     const householdTransformer = new HouseholdTransformer(this.options.household);
     for (const household of households) {
       try {
@@ -296,14 +226,11 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
           continue;
         }
 
-        // Check if entity already exists by externalId
         const existingEntity = await this.eventApplierService.getEntityStore().getEntityByExternalId(String(household.id));
         const existingEntityGuid = existingEntity?.modified.guid;
-
         const event = householdTransformer.transform(household, undefined, existingEntityGuid);
         events.push(event);
 
-        // Track latest timestamp
         if (household.write_date && household.write_date > latestTimestamp) {
           latestTimestamp = household.write_date;
         }
@@ -314,7 +241,6 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       }
     }
 
-    // Transform and apply individual events
     const individualTransformer = new IndividualTransformer(this.options.individual);
     for (const individual of individuals) {
       try {
@@ -323,14 +249,11 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
           continue;
         }
 
-        // Check if entity already exists by externalId
         const existingEntity = await this.eventApplierService.getEntityStore().getEntityByExternalId(String(individual.id));
         const existingEntityGuid = existingEntity?.modified.guid;
-
         const event = individualTransformer.transform(individual, undefined, existingEntityGuid);
         events.push(event);
 
-        // Track latest timestamp
         if (individual.write_date && individual.write_date > latestTimestamp) {
           latestTimestamp = individual.write_date;
         }
@@ -341,7 +264,6 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       }
     }
 
-    // Apply all events to the system
     for (const event of events) {
       try {
         await this.eventApplierService.submitForm(event);
@@ -352,12 +274,10 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       }
     }
 
-    // Log aggregated errors if any
     if (errors.length > 0) {
       console.warn(`OpenSPP pull sync completed with ${errors.length} errors:`, errors);
     }
 
-    // Update pull timestamp after successful processing
     if (latestTimestamp && latestTimestamp > lastPullExternalSyncTimestamp) {
       await this.eventStore.setLastPullExternalSyncTimestamp(latestTimestamp);
     }
@@ -399,103 +319,310 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
   }
 
   async createHouseholdData(
-    rootId: number,
     householdSubmission: FormSubmission,
-    administrativeArea: AdministrativeArea,
   ): Promise<number | undefined> {
     const householdPayload = householdSubmission.data as Record<string, unknown>;
-    const gpsCoordinates = this.parseCoordinates(this.getMappedField(householdPayload, this.options.household.fieldMap?.location));
 
-    const householdData = {
+    const householdData: OpenSPPCreateHouseholdPayload = {
       is_registrant: true,
       is_group: true,
       name: this.getString(householdPayload, this.options.household.fieldMap?.name) ?? "",
       kind: 1,
       hh_size: this.parseInteger(this.getMappedField(householdPayload, this.options.household.fieldMap?.householdSize)) ?? 0,
       hh_status: "active",
-      ethnic_group: this.isAffirmative(this.getMappedField(householdPayload, this.options.household.fieldMap?.belongsToEthnicGroup)),
-      longitude: gpsCoordinates?.longitude,
-      latitude: gpsCoordinates?.latitude,
-      ...administrativeArea,
     };
 
-    return this.odooClient?.createHousehold(rootId, householdData);
+    return this.odooClient?.createHousehold(householdData);
   }
 
   async createIndividualData(
-    rootId: number,
     member: FormSubmission,
-    administrativeArea: AdministrativeArea,
   ): Promise<number | undefined> {
     const memberPayload = member.data as Record<string, unknown>;
-    const gpsCoordinates = this.parseCoordinates(this.getMappedField(memberPayload, this.options.individual.fieldMap?.location));
+    
     const firstName = this.getString(memberPayload, this.options.individual.fieldMap?.firstName) ?? "";
     const lastName = this.getString(memberPayload, this.options.individual.fieldMap?.lastName) ?? "";
-    const displayName =
-      this.getString(memberPayload, this.options.individual.fieldMap?.displayName) || `${firstName} ${lastName}`.trim();
-    const birthdate = this.getString(memberPayload, this.options.individual.fieldMap?.dateOfBirth);
+    const middleName = this.getString(memberPayload, this.options.individual.fieldMap?.middleName);
+    const fullName = this.getString(memberPayload, this.options.individual.fieldMap?.displayName);
+    
+    let displayName = fullName;
+    if (!displayName) {
+      if (lastName && firstName) {
+        displayName = `${lastName.toUpperCase()}, ${firstName.toUpperCase()}`;
+      } else {
+        displayName = `${firstName} ${lastName}`.trim();
+      }
+    }
 
-    const individualData = {
+    let birthdate: string | undefined = undefined;
+    const dateOfBirthField = this.getMappedField(memberPayload, this.options.individual.fieldMap?.dateOfBirth);
+    if (dateOfBirthField) {
+      if (typeof dateOfBirthField === "string") {
+        const parsedDate = this.parseDateString(dateOfBirthField);
+        birthdate = parsedDate || undefined;
+      } else if (typeof dateOfBirthField === "object" && dateOfBirthField !== null) {
+        const dateObj = dateOfBirthField as Record<string, unknown>;
+        const year = this.parseInteger(dateObj.year);
+        const month = this.parseInteger(dateObj.month);
+        const day = this.parseInteger(dateObj.day);
+        if (year && month && day) {
+          birthdate = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        }
+      }
+    }
+
+    let gender: string | undefined = undefined;
+    const genderField = this.getMappedField(memberPayload, this.options.individual.fieldMap?.gender);
+    if (genderField) {
+      const genderStr = String(genderField).toLowerCase();
+      if (genderStr === "male") {
+        gender = "male";
+      } else if (genderStr === "female") {
+        gender = "female";
+      } else if (genderStr === "notmention" || genderStr === "not_mention") {
+        gender = undefined;
+      } else {
+        gender = String(genderField);
+      }
+    }
+
+    const individualData: OpenSPPCreateIndividualPayload = {
       is_registrant: true,
-      given_name: firstName,
-      family_name: lastName,
-      addl_name: this.getString(memberPayload, this.options.individual.fieldMap?.middleName),
-      name: displayName,
-      gender: this.getString(memberPayload, this.options.individual.fieldMap?.gender),
-      birthdate: birthdate ? this.formatDate(birthdate) : null,
-      ethnic_group: this.isAffirmative(this.getMappedField(memberPayload, this.options.individual.fieldMap?.belongsToEthnicGroup)),
-      email: this.getString(memberPayload, this.options.individual.fieldMap?.email) ?? "",
-      marital_status_id: this.parseInteger(this.getMappedField(memberPayload, this.options.individual.fieldMap?.maritalStatus)),
-      profession: this.getString(memberPayload, this.options.individual.fieldMap?.profession) ?? "",
-      longitude: gpsCoordinates?.longitude,
-      latitude: gpsCoordinates?.latitude,
-      highest_education_level_id: this.parseInteger(this.getMappedField(memberPayload, this.options.individual.fieldMap?.educationLevel)),
-      phone: this.getString(memberPayload, this.options.individual.fieldMap?.phone) ?? "",
-      ...administrativeArea,
+      is_group: false,
+      name: displayName || undefined,
+      family_name: lastName || undefined,
+      given_name: firstName || undefined,
+      addl_name: middleName || undefined,
+      birthdate: birthdate,
+      gender: gender,
+      email: this.getString(memberPayload, this.options.individual.fieldMap?.email) || undefined,
+      phone: this.getString(memberPayload, this.options.individual.fieldMap?.phone) || undefined,
     };
 
-    return this.odooClient?.createIndividual(rootId, individualData);
+    return this.odooClient?.createIndividual(individualData);
   }
 
-  async createTrainingRecord(training: Record<string, unknown>, partnerId: number): Promise<number | undefined> {
-    const trainingStart = this.getString(training, "training_start_date");
-    const trainingEnd = this.getString(training, "training_end_date");
-
-    return this.odooClient?.create("spp.training", {
-      registrant_id: partnerId,
-      type_of_training: this.getString(training, "training_type") ?? "",
-      training_period: trainingStart ? this.formatDate(trainingStart) : null,
-      training_end: trainingEnd ? this.formatDate(trainingEnd) : null,
-    });
+  private async resolveExternalIdFromEntity(entityGuid: string): Promise<number | undefined> {
+    try {
+      const entityPair = await this.eventApplierService.getEntityStore().getEntity(entityGuid);
+      if (!entityPair) {
+        return undefined;
+      }
+      const externalId = entityPair.modified.data.externalId;
+      if (typeof externalId === "number") {
+        return externalId;
+      }
+      if (typeof externalId === "string") {
+        return this.parseInteger(externalId);
+      }
+      return undefined;
+    } catch (error) {
+      console.error(`Error resolving external ID for entity ${entityGuid}:`, error);
+      return undefined;
+    }
   }
 
-  async createRegistrantID(partnerId: number, data: Record<string, unknown>): Promise<number | undefined> {
-    const issuanceDate = this.getString(data, "id_issuance_date");
-    const expiryDate = this.getString(data, "id_expiry_date");
+  async updateHouseholdData(
+    householdSubmission: FormSubmission,
+  ): Promise<number | undefined> {
+    const householdPayload = householdSubmission.data as Record<string, unknown>;
+    const externalId = await this.resolveExternalIdFromEntity(householdSubmission.entityGuid);
 
-    return this.odooClient?.create("g2p.reg.id", {
-      partner_id: partnerId,
-      id_type: this.getString(data, "id_type") ?? "",
-      value: this.getString(data, "id_number") ?? "",
-      issuance_date: issuanceDate ? this.formatDate(issuanceDate) : null,
-      expiry_date: expiryDate ? this.formatDate(expiryDate) : null,
-      description: this.getString(data, "id_description") ?? "",
-    });
-  }
-
-  async createBankAccount(partnerId: number, data: Record<string, unknown>): Promise<number | undefined> {
-    const bankId = this.parseInteger(data.bank_name);
-    if (!bankId) {
+    if (!externalId) {
+      console.warn("Cannot update household: external ID not found", householdSubmission.entityGuid);
       return undefined;
     }
 
-    return this.odooClient?.create("res.partner.bank", {
-      partner_id: partnerId,
-      bank_id: bankId,
-      acc_number: this.getString(data, "account_number") ?? "",
-      account_type: this.getString(data, "account_type") ?? "",
-      acc_holder_name: this.getString(data, "account_owner_name") ?? "",
-    });
+    const householdData: Partial<OpenSPPCreateHouseholdPayload> = {
+      name: this.getString(householdPayload, this.options.household.fieldMap?.name) ?? "",
+      hh_size: this.parseInteger(this.getMappedField(householdPayload, this.options.household.fieldMap?.householdSize)) ?? 0,
+      hh_status: "active",
+    };
+
+    // Remove undefined values
+    const updateData: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(householdData)) {
+      if (value !== undefined) {
+        updateData[key] = value;
+      }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return externalId;
+    }
+
+    await this.odooClient?.write("res.partner", [externalId], updateData);
+    return externalId;
+  }
+
+  async updateIndividualData(
+    member: FormSubmission,
+  ): Promise<number | undefined> {
+    const memberPayload = member.data as Record<string, unknown>;
+    const externalId = await this.resolveExternalIdFromEntity(member.entityGuid);
+
+    if (!externalId) {
+      console.warn("Cannot update individual: external ID not found", member.entityGuid);
+      return undefined;
+    }
+
+    const firstName = this.getString(memberPayload, this.options.individual.fieldMap?.firstName);
+    const lastName = this.getString(memberPayload, this.options.individual.fieldMap?.lastName);
+    const middleName = this.getString(memberPayload, this.options.individual.fieldMap?.middleName);
+    const fullName = this.getString(memberPayload, this.options.individual.fieldMap?.displayName);
+    
+    let displayName = fullName;
+    if (!displayName && lastName && firstName) {
+      displayName = `${lastName.toUpperCase()}, ${firstName.toUpperCase()}`;
+    } else if (!displayName) {
+      displayName = `${firstName || ""} ${lastName || ""}`.trim();
+    }
+
+    let birthdate: string | undefined = undefined;
+    const dateOfBirthField = this.getMappedField(memberPayload, this.options.individual.fieldMap?.dateOfBirth);
+    if (dateOfBirthField) {
+      if (typeof dateOfBirthField === "string") {
+        const parsedDate = this.parseDateString(dateOfBirthField);
+        birthdate = parsedDate || undefined;
+      } else if (typeof dateOfBirthField === "object" && dateOfBirthField !== null) {
+        const dateObj = dateOfBirthField as Record<string, unknown>;
+        const year = this.parseInteger(dateObj.year);
+        const month = this.parseInteger(dateObj.month);
+        const day = this.parseInteger(dateObj.day);
+        if (year && month && day) {
+          birthdate = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        }
+      }
+    }
+
+    let gender: string | undefined = undefined;
+    const genderField = this.getMappedField(memberPayload, this.options.individual.fieldMap?.gender);
+    if (genderField) {
+      const genderStr = String(genderField).toLowerCase();
+      if (genderStr === "male") {
+        gender = "male";
+      } else if (genderStr === "female") {
+        gender = "female";
+      } else if (genderStr === "notmention" || genderStr === "not_mention") {
+        gender = undefined;
+      } else {
+        gender = String(genderField);
+      }
+    }
+
+    const updateData: Partial<OpenSPPCreateIndividualPayload> = {};
+    if (displayName !== undefined) updateData.name = displayName || undefined;
+    if (lastName !== undefined) updateData.family_name = lastName || undefined;
+    if (firstName !== undefined) updateData.given_name = firstName || undefined;
+    if (middleName !== undefined) updateData.addl_name = middleName || undefined;
+    if (birthdate !== undefined) updateData.birthdate = birthdate;
+    if (gender !== undefined) updateData.gender = gender;
+    
+    const email = this.getString(memberPayload, this.options.individual.fieldMap?.email);
+    if (email !== undefined) updateData.email = email || undefined;
+    
+    const phone = this.getString(memberPayload, this.options.individual.fieldMap?.phone);
+    if (phone !== undefined) updateData.phone = phone || undefined;
+
+    // Remove undefined values
+    const cleanUpdateData: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(updateData)) {
+      if (value !== undefined) {
+        cleanUpdateData[key] = value;
+      }
+    }
+
+    if (Object.keys(cleanUpdateData).length === 0) {
+      return externalId;
+    }
+
+    await this.odooClient?.write("res.partner", [externalId], cleanUpdateData);
+    return externalId;
+  }
+
+  private async handleMembershipUpdate(
+    individualGuid: string,
+    individualEvent: FormSubmission,
+  ): Promise<void> {
+    try {
+      const entityPair = await this.eventApplierService.getEntityStore().getEntity(individualGuid);
+      if (!entityPair) {
+        return;
+      }
+
+      const currentParentGuid = this.getString(
+        individualEvent.data as Record<string, unknown>,
+        resolveParentField(this.options.individual),
+      );
+      const previousParentGuid = this.getString(
+        entityPair.modified.data as Record<string, unknown>,
+        resolveParentField(this.options.individual),
+      );
+
+      const externalId = await this.resolveExternalIdFromEntity(individualGuid);
+      if (!externalId) {
+        return;
+      }
+
+      // If parentGuid changed, update membership
+      if (currentParentGuid !== previousParentGuid) {
+        const newParentExternalId = await this.resolveExternalIdFromEntity(currentParentGuid || "");
+        if (newParentExternalId) {
+          const memberData = individualEvent.data as Record<string, unknown>;
+          const membershipKind = this.parseInteger(
+            this.getMappedField(memberData, this.options.individual.fieldMap?.membershipKind),
+          );
+
+          const kindCommand: [number, number, number[]][] | undefined =
+            typeof membershipKind === "number" && membershipKind > 0
+              ? [[6, 0, [membershipKind]]]
+              : undefined;
+
+          // Add to new group
+          await this.odooClient?.addMembersToGroup(newParentExternalId, [
+            {
+              individual: externalId,
+              ...(kindCommand ? { kind: kindCommand } : {}),
+            },
+          ]);
+        }
+        // Note: OpenSPP typically handles removal from old group automatically when adding to new group
+        // If explicit removal is needed, it would require fetching current memberships and removing them
+      }
+    } catch (error) {
+      console.error(`Error handling membership update for individual ${individualGuid}:`, error);
+    }
+  }
+
+  private parseDateString(dateString: string): string | null {
+    if (!dateString || dateString === "00/00/0000" || dateString.trim() === "") {
+      return null;
+    }
+
+    try {
+      const isoFormat = /^(\d{4})-(\d{2})-(\d{2})$/;
+      if (isoFormat.test(dateString)) {
+        return dateString;
+      }
+
+      const slashFormat = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+      const match = dateString.match(slashFormat);
+      if (match) {
+        const month = String(match[1]).padStart(2, "0");
+        const day = String(match[2]).padStart(2, "0");
+        const year = match[3];
+        return `${year}-${month}-${day}`;
+      }
+
+      const parsed = new Date(dateString);
+      if (!isNaN(parsed.getTime())) {
+        return parsed.toISOString().split("T")[0];
+      }
+    } catch {
+      return null;
+    }
+
+    return null;
   }
 
   private filterSyncEvents(events: FormSubmission[], since: string): FormSubmission[] {
@@ -505,17 +632,13 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       }
 
       const entityName = this.getString(event.data, "entityName");
-      const isRoot = entityName === this.options.root.entityName;
       const isHousehold = entityName === this.options.household.entityName;
       const isIndividual = entityName === this.options.individual.entityName;
       const isCreate = event.type.startsWith("create-");
+      const isUpdate = event.type.startsWith("update-");
       const isNewer = event.timestamp > since;
 
-      if (isRoot) {
-        return true;
-      }
-
-      if ((isHousehold || isIndividual) && isCreate && isNewer) {
+      if ((isHousehold || isIndividual) && (isCreate || isUpdate) && isNewer) {
         return true;
       }
 
@@ -523,9 +646,12 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     });
   }
 
-  private groupEvents(events: FormSubmission[]): Record<string, GroupedData> {
-    const grouped: Record<string, GroupedData> = {};
-    const householdIndex = new Map<string, { rootGuid: string; container: { household: FormSubmission; individuals: FormSubmission[] } }>();
+  private groupEvents(events: FormSubmission[]): GroupedData {
+    const grouped: GroupedData = {
+      households: [],
+      standaloneIndividuals: [],
+    };
+    const householdIndex = new Map<string, { household: FormSubmission; individuals: FormSubmission[] }>();
     const householdQueue: FormSubmission[] = [];
     const individualQueue: FormSubmission[] = [];
 
@@ -535,14 +661,6 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       }
 
       const entityName = this.getString(event.data, "entityName");
-
-      if (entityName === this.options.root.entityName) {
-        grouped[event.entityGuid] = {
-          root: event,
-          households: [],
-        };
-        continue;
-      }
 
       if (entityName === this.options.household.entityName) {
         householdQueue.push(event);
@@ -555,27 +673,13 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     }
 
     for (const householdEvent of householdQueue) {
-      const parentGuid = this.getString(
-        householdEvent.data as Record<string, unknown>,
-        resolveParentField(this.options.household),
-      );
-
-      if (!parentGuid) {
-        continue;
-      }
-
-      const group = grouped[parentGuid];
-      if (!group) {
-        continue;
-      }
-
       const container = {
         household: householdEvent,
         individuals: [],
       };
 
-      group.households.push(container);
-      householdIndex.set(householdEvent.entityGuid, { rootGuid: parentGuid, container });
+      grouped.households.push(container);
+      householdIndex.set(householdEvent.entityGuid, container);
     }
 
     for (const individualEvent of individualQueue) {
@@ -585,50 +689,19 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       );
 
       if (!parentGuid) {
+        grouped.standaloneIndividuals.push(individualEvent);
         continue;
       }
 
       const householdEntry = householdIndex.get(parentGuid);
-      if (!householdEntry) {
-        continue;
+      if (householdEntry) {
+        householdEntry.individuals.push(individualEvent);
+      } else {
+        grouped.standaloneIndividuals.push(individualEvent);
       }
-
-      householdEntry.container.individuals.push(individualEvent);
     }
 
     return grouped;
-  }
-
-  private resolveAdministrativeArea(data: Record<string, unknown>, option: OpenSppEntityOptions): AdministrativeArea {
-    const province = this.parseInteger(this.getMappedField(data, option.fieldMap?.province));
-    const district = this.parseInteger(this.getMappedField(data, option.fieldMap?.district));
-    const area = this.parseInteger(this.getMappedField(data, option.fieldMap?.area));
-
-    if (province === undefined && district === undefined && area === undefined) {
-      return {
-        province_id: undefined,
-        district_id: undefined,
-        area_id: undefined,
-      };
-    }
-
-    return {
-      province_id: province,
-      district_id: district,
-      area_id: area,
-    };
-  }
-
-  private resolveExternalId(data: Record<string, unknown>, option: OpenSppEntityOptions): number | undefined {
-    const idField = option.fieldMap?.id ?? "id";
-    return this.parseInteger(this.getMappedField(data, idField));
-  }
-
-  private extractCollection(payload: Record<string, unknown>, key?: string): Record<string, unknown>[] {
-    if (!key) {
-      return [];
-    }
-    return this.getRecordArray(payload, key);
   }
 
   private getMappedField(data: Record<string, unknown>, key?: string): unknown {
@@ -638,15 +711,7 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     return data[key];
   }
 
-  private _getStringFromMapping(data: Record<string, unknown>, key?: string): string | undefined {
-    if (!key) {
-      return undefined;
-    }
-    return this.getString(data, key);
-  }
-
   private getRequiredField(fieldName: string): string {
-    console.log("getRequiredField", fieldName, this.config);
     const value = this.getOptionalField(fieldName);
     if (!value) {
       throw new Error(`Missing required OpenSPP configuration field: ${fieldName}`);
@@ -679,53 +744,12 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     return parsed === undefined ? undefined : Math.trunc(parsed);
   }
 
-  private parseCoordinates(value: unknown): { longitude: number | undefined; latitude: number | undefined } | null {
-    if (typeof value !== "string") {
-      return null;
-    }
-    try {
-      const parsed = JSON.parse(value) as {
-        coords?: { longitude?: unknown; latitude?: unknown };
-      };
-      const longitude = this.parseNumber(parsed?.coords?.longitude);
-      const latitude = this.parseNumber(parsed?.coords?.latitude);
-      if (longitude === undefined && latitude === undefined) {
-        return null;
-      }
-      return { longitude, latitude };
-    } catch {
-      return null;
-    }
-  }
-
   private getString(data: Record<string, unknown>, key?: string): string | undefined {
     if (!key) {
       return undefined;
     }
     const value = data[key];
     return typeof value === "string" ? value : undefined;
-  }
-
-  private getRecordArray(data: Record<string, unknown>, key: string): Record<string, unknown>[] {
-    const value = data[key];
-    return Array.isArray(value) ? (value as Record<string, unknown>[]) : [];
-  }
-
-  private _getNumberArray(data: Record<string, unknown>, key: string): number[] {
-    return this.toNumberArray(data[key]);
-  }
-
-  private isAffirmative(value: unknown): boolean {
-    return typeof value === "string" && value.toLowerCase() === "yes";
-  }
-
-  private toNumberArray(value: unknown): number[] {
-    if (!Array.isArray(value)) {
-      return [];
-    }
-    return (value as unknown[])
-      .map((entry) => this.parseNumber(entry))
-      .filter((entry): entry is number => entry !== undefined);
   }
 
 }

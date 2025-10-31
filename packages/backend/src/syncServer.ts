@@ -112,12 +112,29 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
       const appConfig = await appConfigStore.getConfigByArtifactId(artifactId);
       const baseUrl = resolvePublicBaseUrl(req);
       const { qrPath } = await generatePublicArtifacts(baseUrl, appConfig);
+      
+      // Verify the QR code file was created successfully
+      try {
+        await fs.access(qrPath);
+      } catch (accessError) {
+        console.error(`QR code file not found at ${qrPath} after generation`, accessError);
+        res.status(500).send("Failed to generate QR code");
+        return;
+      }
+      
       res.type("png");
       return res.sendFile(qrPath);
     } catch (error) {
-      if (error instanceof Error && error.message.includes("artifact id")) {
-        res.status(404).send("Config not found");
-        return;
+      if (error instanceof Error) {
+        if (error.message.includes("artifact id") || error.message.includes("not found")) {
+          res.status(404).send("Config not found");
+          return;
+        }
+        if (error.message.includes("artifactId is required")) {
+          res.status(400).send("Invalid configuration: missing artifact ID");
+          return;
+        }
+        console.error("Error generating QR code:", error);
       }
       next(error);
     }
