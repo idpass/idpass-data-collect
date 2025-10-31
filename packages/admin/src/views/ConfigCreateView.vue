@@ -429,12 +429,14 @@ const onSpecFileSelection = async (value: File[] | File | null) => {
               label="Name"
               required
               :error-messages="nameError"
+              v-trim
             ></v-text-field>
             <v-text-field
               v-model="form.description"
               label="Description"
               required
               :error-messages="descriptionError"
+              v-trim
             ></v-text-field>
 
             <!-- VERSION -->
@@ -443,6 +445,7 @@ const onSpecFileSelection = async (value: File[] | File | null) => {
               label="Version"
               required
               :error-messages="versionError"
+              v-trim
             ></v-text-field>
 
             <!-- ENTITY FORM -->
@@ -460,12 +463,14 @@ const onSpecFileSelection = async (value: File[] | File | null) => {
                 label="Name"
                 required
                 :error-messages="itemEntityFormsError[entityForm.name]?.name"
+                v-trim
               ></v-text-field>
               <v-text-field
                 v-model="entityForm.title"
                 label="Title"
                 required
                 :error-messages="itemEntityFormsError[entityForm.name]?.title"
+                v-trim
               ></v-text-field>
               <v-select
                 v-if="getDependsOnValues(entityForm).length > 0"
@@ -528,6 +533,7 @@ const onSpecFileSelection = async (value: File[] | File | null) => {
               label="URL"
               required
               :error-messages="urlError"
+              v-trim
             ></v-text-field>
             <FieldsInput v-model="form.externalSync.extraFields" :as-array="true" />
 

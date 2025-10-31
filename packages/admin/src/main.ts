@@ -31,9 +31,13 @@ import App from './App.vue'
 import router from './router'
 import { useAuthStore } from '@/stores/auth'
 import { initializeInstance } from './api'
+import { trimDirective } from './directives/trim'
 
 const app = createApp(App)
 const pinia = createPinia()
+
+// Register custom directives BEFORE router and other plugins
+app.directive('trim', trimDirective)
 
 app.use(pinia)
 app.use(

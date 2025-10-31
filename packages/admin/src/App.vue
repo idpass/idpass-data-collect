@@ -11,7 +11,7 @@ const snackBarStore = useSnackBarStore()
   <v-app>
     <v-app-bar v-if="authStore.isAuthenticated" color="primary">
       <v-container class="d-flex align-center">
-        <v-app-bar-title>Admin</v-app-bar-title>
+        <v-app-bar-title>ID PASS DataCollect Admin</v-app-bar-title>
         <v-spacer></v-spacer>
         <v-btn to="/" variant="text" class="mx-2">
           <v-icon start icon="mdi-home"></v-icon>
