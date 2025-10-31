@@ -1,0 +1,65 @@
+name: idpass-data-collection-portainer
+services:
+  # PostgreSQL database - Internal only
+  postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-admin}
+      - POSTGRES_DB=${POSTGRES_DB:-postgres}
+    volumes:
+      - postgres-data-portainer:/var/lib/postgresql/data
+      # Init script will be available if repository is cloned correctly
+      - ./init-reset-dbs.sh:/docker-entrypoint-initdb.d/init-reset-dbs.sh:ro
+    # No ports exposed - database only accessible within Docker network
+    networks:
+      - datacollect-network-portainer
+    command: ["postgres"]
+
+  # DataCollect Sync Server - Exposed for Admin UI API calls and artifact downloads
+  sync-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: backend
+    environment:
+      - POSTGRES=${POSTGRES:-postgresql://admin:admin@postgres:5432/postgres}
+      - POSTGRES_TEST=${POSTGRES_TEST:-postgresql://admin:admin@postgres:5432/test}
+      - SYNC_SERVER_PORT=${SYNC_SERVER_PORT:-3000}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@hdm.example}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - USER_ID=${USER_ID:-SYNC_SERVER}
+      - SYNC_SERVER_PUBLIC_URL=${SYNC_SERVER_PUBLIC_URL:-}
+    ports:
+      - "${SYNC_SERVER_PORT:-3000}:3000"
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    networks:
+      - datacollect-network-portainer
+
+  # Admin UI - Public-facing interface
+  admin-ui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: admin-ui
+    environment:
+      # Admin UI needs to reach sync-server from browser
+      - VITE_API_URL=${ADMIN_API_URL:-http://localhost:${SYNC_SERVER_PORT:-3000}}
+    ports:
+      - "${ADMIN_UI_PORT:-5173}:5173"
+    restart: unless-stopped
+    depends_on:
+      - sync-server
+    networks:
+      - datacollect-network-portainer
+
+volumes:
+  postgres-data-portainer:
+
+networks:
+  datacollect-network-portainer:
+    driver: bridge

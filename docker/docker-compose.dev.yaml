@@ -79,7 +79,7 @@ services:
           path: ../pnpm-lock.yaml
     restart: unless-stopped
     environment:
-      - VITE_API_URL=http://localhost:3000
+      - VITE_API_URL=${ADMIN_API_URL:-http://localhost:3000}
     ports:
       - "5173:5173"
     depends_on:
@@ -112,6 +112,7 @@ services:
         - action: rebuild
           path: ../pnpm-lock.yaml
     environment:
+      - VITE_BACKEND_API_URL=${MOBILE_API_URL:-http://localhost:3000}
       - VITE_DB_ENCRYPTION_PASSWORD=password
       - VITE_DEVELOP=true
       - VITE_DEBUG=true
