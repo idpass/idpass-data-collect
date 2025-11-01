@@ -156,7 +156,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
 
   app.use(notFoundHandler);
   app.use(errorHandler);
-  const httpServer = app.listen(config.port, () => {
+  const httpServer = app.listen(config.port, "0.0.0.0", () => {
     console.log(`Sync server is running on port ${config.port}`);
     console.log(`API documentation available at http://localhost:${config.port}/api-docs`);
   });
