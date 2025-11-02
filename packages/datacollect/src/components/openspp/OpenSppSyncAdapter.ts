@@ -267,8 +267,19 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     // Only update timestamp for events that were actually processed and succeeded
     // This ensures failed events can be retried in the next sync
     const successfullyProcessedTimestamps = updatedEvents
-      .map((e) => e.timestamp)
-      .filter((ts): ts is string => ts != null);
+      .map((e) => {
+        // Normalize timestamp to ISO string for consistent comparison
+        // Type assertion needed because Postgres adapter can return Date objects despite interface
+        const timestampRaw = e.timestamp as string | Date | unknown;
+        if (typeof timestampRaw === "string") {
+          return timestampRaw;
+        }
+        if (timestampRaw instanceof Date) {
+          return timestampRaw.toISOString();
+        }
+        return new Date(timestampRaw as string | number).toISOString();
+      })
+      .filter((ts): ts is string => ts != null && ts !== "");
     
     if (successfullyProcessedTimestamps.length > 0) {
       // Find the latest timestamp from successfully processed events
@@ -811,7 +822,19 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       const isIndividual = entityName === this.options.individual.entityName;
       const isCreate = event.type.startsWith("create-");
       const isUpdate = event.type.startsWith("update-");
-      const isNewer = event.timestamp > since;
+      
+      // Normalize timestamps to ISO strings for proper comparison
+      // Postgres may return Date objects while IndexedDB returns strings
+      // Type assertion needed because Postgres adapter can return Date objects despite interface
+      const eventTimestampRaw = event.timestamp as string | Date | unknown;
+      const eventTimestamp = typeof eventTimestampRaw === "string" 
+        ? eventTimestampRaw 
+        : eventTimestampRaw instanceof Date 
+          ? eventTimestampRaw.toISOString() 
+          : new Date(eventTimestampRaw as string | number).toISOString();
+      const sinceTimestamp = since;
+      
+      const isNewer = eventTimestamp > sinceTimestamp;
 
       if ((isHousehold || isIndividual) && (isCreate || isUpdate) && isNewer) {
         return true;
