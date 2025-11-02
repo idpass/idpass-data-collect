@@ -82,8 +82,7 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     const filteredEvents = this.filterSyncEvents(allEvents, lastPushExternalSyncTimestamp);
     const groupedEvents = this.groupEvents(filteredEvents);
     const updatedEvents: FormSubmission[] = [];
-
-    console.log('GROUP_DATA' , JSON.stringify(groupedEvents, null, 2));
+    const syncedEntityNames: string[] = [];
 
     // Process households
     for (const householdGroup of groupedEvents.households) {
@@ -94,10 +93,17 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
         
         let householdId: number | undefined;
         if (isCreate) {
-          householdId = await this.createHouseholdData(householdEvent);
-          // Save external ID back to entity after successful creation
-          if (householdId) {
-            await this.saveExternalIdToEntity(householdEvent.entityGuid, householdId);
+          try {
+            householdId = await this.createHouseholdData(householdEvent);
+            // Save external ID back to entity after successful creation
+            if (householdId) {
+              await this.saveExternalIdToEntity(householdEvent.entityGuid, householdId);
+            } else {
+              console.error(`Failed to create household ${householdEvent.entityGuid} - createHouseholdData returned undefined`);
+            }
+          } catch (error) {
+            console.error(`Error creating household ${householdEvent.entityGuid}:`, error);
+            householdId = undefined;
           }
         } else if (isUpdate) {
           householdId = await this.updateHouseholdData(householdEvent);
@@ -112,6 +118,10 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
 
         if (householdId) {
           updatedEvents.push(householdEvent);
+          const householdName = this.getEntityName(householdEvent);
+          if (householdName) {
+            syncedEntityNames.push(householdName);
+          }
         }
 
         const individualIds: RegisteredIndividual[] = [];
@@ -125,11 +135,18 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
             
             let individualId: number | undefined;
             if (isMemberCreate) {
-              individualId = await this.createIndividualData(member);
-              if (individualId) {
-                createIndividualIds.add(individualId);
-                // Save external ID back to entity after successful creation
-                await this.saveExternalIdToEntity(member.entityGuid, individualId);
+              try {
+                individualId = await this.createIndividualData(member);
+                if (individualId) {
+                  createIndividualIds.add(individualId);
+                  // Save external ID back to entity after successful creation
+                  await this.saveExternalIdToEntity(member.entityGuid, individualId);
+                } else {
+                  console.error(`Failed to create individual ${member.entityGuid} - createIndividualData returned undefined`);
+                }
+              } catch (error) {
+                console.error(`Error creating individual ${member.entityGuid}:`, error);
+                individualId = undefined;
               }
             } else if (isMemberUpdate) {
               individualId = await this.updateIndividualData(member);
@@ -147,6 +164,10 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
 
             if (individualId) {
               updatedEvents.push(member);
+              const individualName = this.getEntityName(member);
+              if (individualName) {
+                syncedEntityNames.push(individualName);
+              }
             }
 
             const membershipKind = this.parseInteger(
@@ -204,10 +225,17 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
         
         let individualId: number | undefined;
         if (isCreate) {
-          individualId = await this.createIndividualData(standaloneIndividual);
-          // Save external ID back to entity after successful creation
-          if (individualId) {
-            await this.saveExternalIdToEntity(standaloneIndividual.entityGuid, individualId);
+          try {
+            individualId = await this.createIndividualData(standaloneIndividual);
+            // Save external ID back to entity after successful creation
+            if (individualId) {
+              await this.saveExternalIdToEntity(standaloneIndividual.entityGuid, individualId);
+            } else {
+              console.error(`Failed to create standalone individual ${standaloneIndividual.entityGuid} - createIndividualData returned undefined`);
+            }
+          } catch (error) {
+            console.error(`Error creating standalone individual ${standaloneIndividual.entityGuid}:`, error);
+            individualId = undefined;
           }
         } else if (isUpdate) {
           individualId = await this.updateIndividualData(standaloneIndividual);
@@ -225,6 +253,10 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
 
         if (individualId) {
           updatedEvents.push(standaloneIndividual);
+          const individualName = this.getEntityName(standaloneIndividual);
+          if (individualName) {
+            syncedEntityNames.push(individualName);
+          }
         }
       } catch (error) {
         console.error("Error processing standalone individual:", error);
@@ -245,6 +277,15 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
         (latest, current) => (current > latest ? current : latest),
       );
       await this.eventStore.setLastPushExternalSyncTimestamp(latestProcessedTimestamp);
+    }
+
+    // Log push sync results
+    const totalPushed = updatedEvents.length;
+    
+    console.log(`[OpenSPP Push] Entities pushed: ${totalPushed}`);
+    console.log(`[OpenSPP Push] New entities pushed since: ${lastPushExternalSyncTimestamp}`);
+    if (syncedEntityNames.length > 0) {
+      console.log(`[OpenSPP Push] Entities synced (by name): ${syncedEntityNames.join(", ")}`);
     }
   }
 
@@ -269,6 +310,7 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     const events: FormSubmission[] = [];
     const errors: string[] = [];
     let latestTimestamp = lastPullExternalSyncTimestamp;
+    const pulledEntityNames: string[] = [];
 
     const householdTransformer = new HouseholdTransformer(this.options.household);
     for (const household of households) {
@@ -282,6 +324,12 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
         const existingEntityGuid = existingEntity?.modified.guid;
         const event = householdTransformer.transform(household, undefined, existingEntityGuid);
         events.push(event);
+
+        // Extract household name for logging
+        const householdName = typeof household.name === "string" ? household.name : String(household.name || "");
+        if (householdName) {
+          pulledEntityNames.push(householdName);
+        }
 
         if (household.write_date && household.write_date > latestTimestamp) {
           latestTimestamp = household.write_date;
@@ -306,6 +354,12 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
         const event = individualTransformer.transform(individual, undefined, existingEntityGuid);
         events.push(event);
 
+        // Extract individual name for logging
+        const individualName = typeof individual.name === "string" ? individual.name : String(individual.name || "");
+        if (individualName) {
+          pulledEntityNames.push(individualName);
+        }
+
         if (individual.write_date && individual.write_date > latestTimestamp) {
           latestTimestamp = individual.write_date;
         }
@@ -328,6 +382,16 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
 
     if (errors.length > 0) {
       console.warn(`OpenSPP pull sync completed with ${errors.length} errors:`, errors);
+    }
+
+    // Log pull sync results
+    const totalPulled = events.length;
+    const newTimestamp = latestTimestamp && latestTimestamp > lastPullExternalSyncTimestamp ? latestTimestamp : lastPullExternalSyncTimestamp;
+    
+    console.log(`[OpenSPP Pull] Entities pulled: ${totalPulled}`);
+    console.log(`[OpenSPP Pull] New entities pulled since: ${lastPullExternalSyncTimestamp}`);
+    if (pulledEntityNames.length > 0) {
+      console.log(`[OpenSPP Pull] Entities synced (by name): ${pulledEntityNames.join(", ")}`);
     }
 
     if (latestTimestamp && latestTimestamp > lastPullExternalSyncTimestamp) {
@@ -376,7 +440,6 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     // Check if external ID already exists (idempotency)
     const existingExternalId = await this.resolveExternalIdFromEntity(householdSubmission.entityGuid);
     if (existingExternalId) {
-      console.log(`Household ${householdSubmission.entityGuid} already has external ID ${existingExternalId}, skipping create`);
       return existingExternalId;
     }
 
@@ -391,7 +454,10 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       hh_status: "active",
     };
 
-    return this.odooClient?.createHousehold(householdData);
+    if (!this.odooClient) {
+      throw new Error("OdooClient not initialized");
+    }
+    return this.odooClient.createHousehold(householdData);
   }
 
   async createIndividualData(
@@ -400,7 +466,6 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     // Check if external ID already exists (idempotency)
     const existingExternalId = await this.resolveExternalIdFromEntity(member.entityGuid);
     if (existingExternalId) {
-      console.log(`Individual ${member.entityGuid} already has external ID ${existingExternalId}, skipping create`);
       return existingExternalId;
     }
 
@@ -465,7 +530,10 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       phone: this.getString(memberPayload, this.options.individual.fieldMap?.phone) || undefined,
     };
 
-    return this.odooClient?.createIndividual(individualData);
+    if (!this.odooClient) {
+      throw new Error("OdooClient not initialized");
+    }
+    return this.odooClient.createIndividual(individualData);
   }
 
   private async resolveExternalIdFromEntity(entityGuid: string): Promise<number | undefined> {
@@ -857,6 +925,42 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     }
     const value = data[key];
     return typeof value === "string" ? value : undefined;
+  }
+
+  /**
+   * Extracts the display name for an entity from its FormSubmission data.
+   * Used for logging purposes.
+   */
+  private getEntityName(event: FormSubmission): string | undefined {
+    if (!event.data || typeof event.data !== "object") {
+      return undefined;
+    }
+
+    const data = event.data as Record<string, unknown>;
+    const entityName = this.getString(data, "entityName");
+
+    if (entityName === this.options.household.entityName) {
+      return this.getString(data, this.options.household.fieldMap?.name);
+    }
+
+    if (entityName === this.options.individual.entityName) {
+      const displayName = this.getString(data, this.options.individual.fieldMap?.displayName);
+      if (displayName) {
+        return displayName;
+      }
+
+      const firstName = this.getString(data, this.options.individual.fieldMap?.firstName);
+      const lastName = this.getString(data, this.options.individual.fieldMap?.lastName);
+      
+      if (lastName && firstName) {
+        return `${lastName.toUpperCase()}, ${firstName.toUpperCase()}`;
+      }
+      if (firstName || lastName) {
+        return `${firstName || ""} ${lastName || ""}`.trim();
+      }
+    }
+
+    return undefined;
   }
 
   /**
