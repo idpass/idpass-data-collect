@@ -231,16 +231,18 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       }
     }
 
-    // Update timestamp based on processed events, even if some failed
-    // This prevents infinite retry loops while still allowing failed events to be retried
-    // Use the latest timestamp from ALL filtered events, not just successful ones
-    const allFilteredTimestamps = filteredEvents
+    // Update timestamp based on successfully processed events only
+    // Only update timestamp for events that were actually processed and succeeded
+    // This ensures failed events can be retried in the next sync
+    const successfullyProcessedTimestamps = updatedEvents
       .map((e) => e.timestamp)
       .filter((ts): ts is string => ts != null);
     
-    if (allFilteredTimestamps.length > 0) {
-      const latestProcessedTimestamp = allFilteredTimestamps.reduce((latest, current) =>
-        current > latest ? current : latest,
+    if (successfullyProcessedTimestamps.length > 0) {
+      // Find the latest timestamp from successfully processed events
+      // This ensures only successfully synced events advance the timestamp
+      const latestProcessedTimestamp = successfullyProcessedTimestamps.reduce(
+        (latest, current) => (current > latest ? current : latest),
       );
       await this.eventStore.setLastPushExternalSyncTimestamp(latestProcessedTimestamp);
     }
