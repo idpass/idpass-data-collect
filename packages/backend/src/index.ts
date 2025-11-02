@@ -26,14 +26,20 @@ const {
   ADMIN_PASSWORD: adminPassword,
   ADMIN_EMAIL: adminEmail,
   POSTGRES: postgresUrl,
+  DATABASE_URL: databaseUrl, // Railway provides DATABASE_URL
 } = process.env;
+
+console.log({postgresUrl, databaseUrl});
 
 if (!adminPassword || !adminEmail) {
   throw new Error("Initial admin credentials must be set");
 }
 
-if (!postgresUrl) {
-  throw new Error("PostgreSQL connection string must be set");
+// Use POSTGRES if set, otherwise fallback to DATABASE_URL (Railway's default)
+const postgresConnectionString = postgresUrl || databaseUrl;
+
+if (!postgresConnectionString) {
+  throw new Error("PostgreSQL connection string must be set via POSTGRES or DATABASE_URL environment variable");
 }
 
 run({
@@ -41,5 +47,5 @@ run({
   adminPassword,
   adminEmail,
   userId,
-  postgresUrl,
+  postgresUrl: postgresConnectionString,
 });
