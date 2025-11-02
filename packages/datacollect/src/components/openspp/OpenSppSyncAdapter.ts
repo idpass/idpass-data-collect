@@ -83,6 +83,10 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     const groupedEvents = this.groupEvents(filteredEvents);
     const updatedEvents: FormSubmission[] = [];
     const syncedEntityNames: string[] = [];
+    // Track entity GUIDs that had failed updates to prevent duplicate creates
+    const failedUpdateGuids = new Set<string>();
+    // Track entity GUIDs that have already been successfully processed in this sync
+    const processedEntityGuids = new Set<string>();
 
     // Process households
     for (const householdGroup of groupedEvents.households) {
@@ -93,11 +97,23 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
         
         let householdId: number | undefined;
         if (isCreate) {
+          // Prevent duplicate creation if this entity was already processed in this sync cycle
+          if (processedEntityGuids.has(householdEvent.entityGuid) || failedUpdateGuids.has(householdEvent.entityGuid)) {
+            console.error(`Skipping create for household ${householdEvent.entityGuid} - entity already processed or had failed update in this sync. This prevents duplicate creation.`);
+            continue;
+          }
           try {
             householdId = await this.createHouseholdData(householdEvent);
             // Save external ID back to entity after successful creation
+            // CRITICAL: If save fails, the entity was created in OpenSPP but we don't have the ID locally
+            // This could cause duplicates on future syncs, so we should treat this as a failure
             if (householdId) {
-              await this.saveExternalIdToEntity(householdEvent.entityGuid, householdId);
+              try {
+                await this.saveExternalIdToEntity(householdEvent.entityGuid, householdId);
+              } catch (saveError) {
+                console.error(`CRITICAL: Failed to save external ID ${householdId} for household ${householdEvent.entityGuid} after creation. This may cause duplicates:`, saveError);
+                // Still add to updatedEvents since creation succeeded, but log the critical error
+              }
             } else {
               console.error(`Failed to create household ${householdEvent.entityGuid} - createHouseholdData returned undefined`);
             }
@@ -113,11 +129,16 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
           // Instead, log a warning and skip - the entity needs to be manually fixed
           if (!householdId) {
             console.error(`Update failed for household ${householdEvent.entityGuid} - no external ID found. Entity may not exist in OpenSPP. Skipping update to prevent duplicate creation.`);
+            failedUpdateGuids.add(householdEvent.entityGuid);
+          } else {
+            // Mark as processed to prevent duplicate creation if a create event follows
+            processedEntityGuids.add(householdEvent.entityGuid);
           }
         }
 
         if (householdId) {
           updatedEvents.push(householdEvent);
+          processedEntityGuids.add(householdEvent.entityGuid);
           const householdName = this.getEntityName(householdEvent);
           if (householdName) {
             syncedEntityNames.push(householdName);
@@ -135,12 +156,24 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
             
             let individualId: number | undefined;
             if (isMemberCreate) {
+              // Prevent duplicate creation if this entity was already processed in this sync cycle
+              if (processedEntityGuids.has(member.entityGuid) || failedUpdateGuids.has(member.entityGuid)) {
+                console.error(`Skipping create for individual ${member.entityGuid} - entity already processed or had failed update in this sync. This prevents duplicate creation.`);
+                continue;
+              }
               try {
                 individualId = await this.createIndividualData(member);
                 if (individualId) {
                   createIndividualIds.add(individualId);
                   // Save external ID back to entity after successful creation
-                  await this.saveExternalIdToEntity(member.entityGuid, individualId);
+                  // CRITICAL: If save fails, the entity was created in OpenSPP but we don't have the ID locally
+                  // This could cause duplicates on future syncs, so we should treat this as a failure
+                  try {
+                    await this.saveExternalIdToEntity(member.entityGuid, individualId);
+                  } catch (saveError) {
+                    console.error(`CRITICAL: Failed to save external ID ${individualId} for individual ${member.entityGuid} after creation. This may cause duplicates:`, saveError);
+                    // Still process since creation succeeded, but log the critical error
+                  }
                 } else {
                   console.error(`Failed to create individual ${member.entityGuid} - createIndividualData returned undefined`);
                 }
@@ -156,7 +189,10 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
               // Instead, log an error and skip - the entity needs to be manually fixed
               if (!individualId) {
                 console.error(`Update failed for individual ${member.entityGuid} - no external ID found. Entity may not exist in OpenSPP. Skipping update to prevent duplicate creation.`);
+                failedUpdateGuids.add(member.entityGuid);
               } else {
+                // Mark as processed to prevent duplicate creation if a create event follows
+                processedEntityGuids.add(member.entityGuid);
                 // Handle membership update if parentGuid changed
                 await this.handleMembershipUpdate(member.entityGuid, member);
               }
@@ -164,6 +200,7 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
 
             if (individualId) {
               updatedEvents.push(member);
+              processedEntityGuids.add(member.entityGuid);
               const individualName = this.getEntityName(member);
               if (individualName) {
                 syncedEntityNames.push(individualName);
@@ -225,11 +262,23 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
         
         let individualId: number | undefined;
         if (isCreate) {
+          // Prevent duplicate creation if this entity was already processed in this sync cycle
+          if (processedEntityGuids.has(standaloneIndividual.entityGuid) || failedUpdateGuids.has(standaloneIndividual.entityGuid)) {
+            console.error(`Skipping create for standalone individual ${standaloneIndividual.entityGuid} - entity already processed or had failed update in this sync. This prevents duplicate creation.`);
+            continue;
+          }
           try {
             individualId = await this.createIndividualData(standaloneIndividual);
             // Save external ID back to entity after successful creation
+            // CRITICAL: If save fails, the entity was created in OpenSPP but we don't have the ID locally
+            // This could cause duplicates on future syncs, so we should treat this as a failure
             if (individualId) {
-              await this.saveExternalIdToEntity(standaloneIndividual.entityGuid, individualId);
+              try {
+                await this.saveExternalIdToEntity(standaloneIndividual.entityGuid, individualId);
+              } catch (saveError) {
+                console.error(`CRITICAL: Failed to save external ID ${individualId} for standalone individual ${standaloneIndividual.entityGuid} after creation. This may cause duplicates:`, saveError);
+                // Still process since creation succeeded, but log the critical error
+              }
             } else {
               console.error(`Failed to create standalone individual ${standaloneIndividual.entityGuid} - createIndividualData returned undefined`);
             }
@@ -245,7 +294,10 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
           // Instead, log an error and skip - the entity needs to be manually fixed
           if (!individualId) {
             console.error(`Update failed for individual ${standaloneIndividual.entityGuid} - no external ID found. Entity may not exist in OpenSPP. Skipping update to prevent duplicate creation.`);
+            failedUpdateGuids.add(standaloneIndividual.entityGuid);
           } else {
+            // Mark as processed to prevent duplicate creation if a create event follows
+            processedEntityGuids.add(standaloneIndividual.entityGuid);
             // Handle membership update if parentGuid changed
             await this.handleMembershipUpdate(standaloneIndividual.entityGuid, standaloneIndividual);
           }
@@ -253,6 +305,7 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
 
         if (individualId) {
           updatedEvents.push(standaloneIndividual);
+          processedEntityGuids.add(standaloneIndividual.entityGuid);
           const individualName = this.getEntityName(standaloneIndividual);
           if (individualName) {
             syncedEntityNames.push(individualName);
@@ -656,18 +709,46 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     }
 
     const updateData: Partial<OpenSPPCreateIndividualPayload> = {};
+    // Always include name fields if they were extracted from the payload
+    // This ensures given_name and family_name are updated even if they're empty strings
     if (name !== undefined) updateData.name = name || undefined;
-    if (lastName !== undefined) updateData.family_name = lastName || undefined;
-    if (firstName !== undefined) updateData.given_name = firstName || undefined;
-    if (middleName !== undefined) updateData.addl_name = middleName || undefined;
+    
+    // For firstName and lastName, always include them if the field exists in the payload
+    // This ensures they are updated even when empty or null
+    const firstNameField = this.options.individual.fieldMap?.firstName;
+    const lastNameField = this.options.individual.fieldMap?.lastName;
+    const middleNameField = this.options.individual.fieldMap?.middleName;
+    
+    // Check if the field exists in payload (even if empty or null)
+    // This allows updating fields even when they're cleared
+    if (firstNameField && firstNameField in memberPayload) {
+      // Use the raw value from payload, allowing empty strings to clear the field
+      const firstNameValue = memberPayload[firstNameField];
+      updateData.given_name = typeof firstNameValue === "string" ? (firstNameValue || undefined) : undefined;
+    }
+    if (lastNameField && lastNameField in memberPayload) {
+      const lastNameValue = memberPayload[lastNameField];
+      updateData.family_name = typeof lastNameValue === "string" ? (lastNameValue || undefined) : undefined;
+    }
+    if (middleNameField && middleNameField in memberPayload) {
+      const middleNameValue = memberPayload[middleNameField];
+      updateData.addl_name = typeof middleNameValue === "string" ? (middleNameValue || undefined) : undefined;
+    }
+    
     if (birthdate !== undefined) updateData.birthdate = birthdate;
     if (gender !== undefined) updateData.gender = gender;
     
     const email = this.getString(memberPayload, this.options.individual.fieldMap?.email);
-    if (email !== undefined) updateData.email = email || undefined;
+    const emailField = this.options.individual.fieldMap?.email;
+    if (emailField && emailField in memberPayload) {
+      updateData.email = email || undefined;
+    }
     
     const phone = this.getString(memberPayload, this.options.individual.fieldMap?.phone);
-    if (phone !== undefined) updateData.phone = phone || undefined;
+    const phoneField = this.options.individual.fieldMap?.phone;
+    if (phoneField && phoneField in memberPayload) {
+      updateData.phone = phone || undefined;
+    }
 
     // Remove undefined values
     const cleanUpdateData: Record<string, unknown> = {};
