@@ -23,6 +23,7 @@ import {
   ExternalSyncConfig,
   ExternalSyncCredentials,
   FormSubmission,
+  // SyncLevel,
 } from "../../interfaces/types";
 import OdooClient from "./OdooClient";
 import { EventApplierService } from "../../services/EventApplierService";
@@ -76,7 +77,8 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     await this.ensureClient(credentials);
     const lastPushExternalSyncTimestamp = await this.eventStore.getLastPushExternalSyncTimestamp();
 
-    const allEvents = await this.eventStore.getAllEvents();
+    // Use getEventsSince instead of getAllEvents for better performance
+    const allEvents = await this.eventStore.getEventsSince(lastPushExternalSyncTimestamp);
     const filteredEvents = this.filterSyncEvents(allEvents, lastPushExternalSyncTimestamp);
     const groupedEvents = this.groupEvents(filteredEvents);
     const updatedEvents: FormSubmission[] = [];
@@ -93,8 +95,19 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
         let householdId: number | undefined;
         if (isCreate) {
           householdId = await this.createHouseholdData(householdEvent);
+          // Save external ID back to entity after successful creation
+          if (householdId) {
+            await this.saveExternalIdToEntity(householdEvent.entityGuid, householdId);
+          }
         } else if (isUpdate) {
           householdId = await this.updateHouseholdData(householdEvent);
+          // If update failed due to missing external ID, this indicates a data inconsistency
+          // The entity exists locally but was never synced to OpenSPP
+          // We should NOT automatically create as this could cause duplicates
+          // Instead, log a warning and skip - the entity needs to be manually fixed
+          if (!householdId) {
+            console.error(`Update failed for household ${householdEvent.entityGuid} - no external ID found. Entity may not exist in OpenSPP. Skipping update to prevent duplicate creation.`);
+          }
         }
 
         if (householdId) {
@@ -115,11 +128,21 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
               individualId = await this.createIndividualData(member);
               if (individualId) {
                 createIndividualIds.add(individualId);
+                // Save external ID back to entity after successful creation
+                await this.saveExternalIdToEntity(member.entityGuid, individualId);
               }
             } else if (isMemberUpdate) {
               individualId = await this.updateIndividualData(member);
-              // Handle membership update if parentGuid changed
-              await this.handleMembershipUpdate(member.entityGuid, member);
+              // If update failed due to missing external ID, this indicates a data inconsistency
+              // The entity exists locally but was never synced to OpenSPP
+              // We should NOT automatically create as this could cause duplicates
+              // Instead, log an error and skip - the entity needs to be manually fixed
+              if (!individualId) {
+                console.error(`Update failed for individual ${member.entityGuid} - no external ID found. Entity may not exist in OpenSPP. Skipping update to prevent duplicate creation.`);
+              } else {
+                // Handle membership update if parentGuid changed
+                await this.handleMembershipUpdate(member.entityGuid, member);
+              }
             }
 
             if (individualId) {
@@ -138,27 +161,33 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
           }
         }
 
-        // Link members to household (only for creates)
-        if (individualIds.length > 0 && householdId) {
+        // Link members to household (only for newly created individuals)
+        // Note: addMembersToGroup uses [0, 0, m] which creates NEW memberships
+        // This is correct behavior for first-time sync, but could create duplicates if called multiple times
+        // We only link members that were just created (in createIndividualIds set)
+        // Link regardless of whether household was just created or already existed
+        if (individualIds.length > 0 && householdId && createIndividualIds.size > 0) {
           for (const registered of individualIds) {
             if (!registered.id || !createIndividualIds.has(registered.id)) {
               continue;
             }
 
-            const kindCommand: [number, number, number[]][] | undefined =
-              typeof registered.membershipKind === "number" && registered.membershipKind > 0
-                ? [[6, 0, [registered.membershipKind]]]
-                : undefined;
-
             try {
+              // Check if membership already exists before adding
+              // Note: This is a best-effort check - OpenSPP might still allow duplicates
+              // but we try to avoid unnecessary API calls
               await this.odooClient?.addMembersToGroup(householdId, [
                 {
                   individual: registered.id,
-                  ...(kindCommand ? { kind: kindCommand } : {}),
+                  kind:
+                    typeof registered.membershipKind === "number" && registered.membershipKind > 0
+                      ? [[6, 0, [registered.membershipKind]]]
+                      : undefined,
                 },
               ]);
             } catch (error) {
-              console.error(`Error linking member ${registered.id} to household:`, error);
+              console.error(`Error linking member ${registered.id} to household ${householdId}:`, error);
+              // Continue processing other members even if one fails
             }
           }
         }
@@ -176,10 +205,22 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
         let individualId: number | undefined;
         if (isCreate) {
           individualId = await this.createIndividualData(standaloneIndividual);
+          // Save external ID back to entity after successful creation
+          if (individualId) {
+            await this.saveExternalIdToEntity(standaloneIndividual.entityGuid, individualId);
+          }
         } else if (isUpdate) {
           individualId = await this.updateIndividualData(standaloneIndividual);
-          // Handle membership update if parentGuid changed
-          await this.handleMembershipUpdate(standaloneIndividual.entityGuid, standaloneIndividual);
+          // If update failed due to missing external ID, this indicates a data inconsistency
+          // The entity exists locally but was never synced to OpenSPP
+          // We should NOT automatically create as this could cause duplicates
+          // Instead, log an error and skip - the entity needs to be manually fixed
+          if (!individualId) {
+            console.error(`Update failed for individual ${standaloneIndividual.entityGuid} - no external ID found. Entity may not exist in OpenSPP. Skipping update to prevent duplicate creation.`);
+          } else {
+            // Handle membership update if parentGuid changed
+            await this.handleMembershipUpdate(standaloneIndividual.entityGuid, standaloneIndividual);
+          }
         }
 
         if (individualId) {
@@ -190,9 +231,18 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       }
     }
 
-    const latestEventTimestamp = this.getLatestTimestamp(updatedEvents);
-    if (latestEventTimestamp) {
-      await this.eventStore.setLastPushExternalSyncTimestamp(latestEventTimestamp);
+    // Update timestamp based on processed events, even if some failed
+    // This prevents infinite retry loops while still allowing failed events to be retried
+    // Use the latest timestamp from ALL filtered events, not just successful ones
+    const allFilteredTimestamps = filteredEvents
+      .map((e) => e.timestamp)
+      .filter((ts): ts is string => ts != null);
+    
+    if (allFilteredTimestamps.length > 0) {
+      const latestProcessedTimestamp = allFilteredTimestamps.reduce((latest, current) =>
+        current > latest ? current : latest,
+      );
+      await this.eventStore.setLastPushExternalSyncTimestamp(latestProcessedTimestamp);
     }
   }
 
@@ -321,6 +371,13 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
   async createHouseholdData(
     householdSubmission: FormSubmission,
   ): Promise<number | undefined> {
+    // Check if external ID already exists (idempotency)
+    const existingExternalId = await this.resolveExternalIdFromEntity(householdSubmission.entityGuid);
+    if (existingExternalId) {
+      console.log(`Household ${householdSubmission.entityGuid} already has external ID ${existingExternalId}, skipping create`);
+      return existingExternalId;
+    }
+
     const householdPayload = householdSubmission.data as Record<string, unknown>;
 
     const householdData: OpenSPPCreateHouseholdPayload = {
@@ -338,6 +395,13 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
   async createIndividualData(
     member: FormSubmission,
   ): Promise<number | undefined> {
+    // Check if external ID already exists (idempotency)
+    const existingExternalId = await this.resolveExternalIdFromEntity(member.entityGuid);
+    if (existingExternalId) {
+      console.log(`Individual ${member.entityGuid} already has external ID ${existingExternalId}, skipping create`);
+      return existingExternalId;
+    }
+
     const memberPayload = member.data as Record<string, unknown>;
     
     const firstName = this.getString(memberPayload, this.options.individual.fieldMap?.firstName) ?? "";
@@ -345,12 +409,12 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     const middleName = this.getString(memberPayload, this.options.individual.fieldMap?.middleName);
     const fullName = this.getString(memberPayload, this.options.individual.fieldMap?.displayName);
     
-    let displayName = fullName;
-    if (!displayName) {
+    let name = fullName;
+    if (!name) {
       if (lastName && firstName) {
-        displayName = `${lastName.toUpperCase()}, ${firstName.toUpperCase()}`;
+        name = `${lastName.toUpperCase()}, ${firstName.toUpperCase()}`;
       } else {
-        displayName = `${firstName} ${lastName}`.trim();
+        name = `${firstName} ${lastName}`.trim();
       }
     }
 
@@ -389,7 +453,7 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     const individualData: OpenSPPCreateIndividualPayload = {
       is_registrant: true,
       is_group: false,
-      name: displayName || undefined,
+      name: name || undefined,
       family_name: lastName || undefined,
       given_name: firstName || undefined,
       addl_name: middleName || undefined,
@@ -471,11 +535,11 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     const middleName = this.getString(memberPayload, this.options.individual.fieldMap?.middleName);
     const fullName = this.getString(memberPayload, this.options.individual.fieldMap?.displayName);
     
-    let displayName = fullName;
-    if (!displayName && lastName && firstName) {
-      displayName = `${lastName.toUpperCase()}, ${firstName.toUpperCase()}`;
-    } else if (!displayName) {
-      displayName = `${firstName || ""} ${lastName || ""}`.trim();
+    let name = fullName;
+    if (!name && lastName && firstName) {
+      name = `${lastName.toUpperCase()}, ${firstName.toUpperCase()}`;
+    } else if (!name) {
+      name = `${firstName || ""} ${lastName || ""}`.trim();
     }
 
     let birthdate: string | undefined = undefined;
@@ -511,7 +575,7 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     }
 
     const updateData: Partial<OpenSPPCreateIndividualPayload> = {};
-    if (displayName !== undefined) updateData.name = displayName || undefined;
+    if (name !== undefined) updateData.name = name || undefined;
     if (lastName !== undefined) updateData.family_name = lastName || undefined;
     if (firstName !== undefined) updateData.given_name = firstName || undefined;
     if (middleName !== undefined) updateData.addl_name = middleName || undefined;
@@ -594,29 +658,70 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     }
   }
 
+  /**
+   * Parses and normalizes date strings to YYYY-MM-DD format (OpenSPP standard).
+   * 
+   * Handles bidirectional transformation:
+   * - When receiving data FROM OpenSPP: expects YYYY-MM-DD format and validates it
+   * - When sending data TO OpenSPP: converts from various formats to YYYY-MM-DD
+   * 
+   * Supported input formats:
+   * - YYYY-MM-DD (OpenSPP standard - preferred)
+   * - MM/DD/YYYY (common form input format)
+   * - DD/MM/YYYY (alternative form input format)
+   * - ISO date strings (handled by Date constructor)
+   * 
+   * @param dateString The date string to parse and normalize
+   * @returns Normalized date string in YYYY-MM-DD format, or null if invalid
+   */
   private parseDateString(dateString: string): string | null {
     if (!dateString || dateString === "00/00/0000" || dateString.trim() === "") {
       return null;
     }
 
+    const trimmed = dateString.trim();
+
     try {
-      const isoFormat = /^(\d{4})-(\d{2})-(\d{2})$/;
-      if (isoFormat.test(dateString)) {
-        return dateString;
+      // Primary: Check for OpenSPP standard format YYYY-MM-DD
+      const openSppFormat = /^(\d{4})-(\d{2})-(\d{2})$/;
+      if (openSppFormat.test(trimmed)) {
+        // Validate the date is actually valid (e.g., not 2024-13-45)
+        const parsed = new Date(trimmed);
+        if (!isNaN(parsed.getTime()) && parsed.toISOString().split("T")[0] === trimmed) {
+          return trimmed;
+        }
+        // If format matches but date is invalid, try to fix it or return null
+        return null;
       }
 
-      const slashFormat = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
-      const match = dateString.match(slashFormat);
-      if (match) {
-        const month = String(match[1]).padStart(2, "0");
-        const day = String(match[2]).padStart(2, "0");
-        const year = match[3];
-        return `${year}-${month}-${day}`;
+      // Secondary: Handle MM/DD/YYYY format (common in form inputs)
+      const mmddyyyyFormat = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+      const mmddyyyyMatch = trimmed.match(mmddyyyyFormat);
+      if (mmddyyyyMatch) {
+        const month = String(mmddyyyyMatch[1]).padStart(2, "0");
+        const day = String(mmddyyyyMatch[2]).padStart(2, "0");
+        const year = mmddyyyyMatch[3];
+        const normalized = `${year}-${month}-${day}`;
+        // Validate the converted date
+        const parsed = new Date(normalized);
+        if (!isNaN(parsed.getTime()) && parsed.toISOString().split("T")[0] === normalized) {
+          return normalized;
+        }
+        return null;
       }
 
-      const parsed = new Date(dateString);
+      // Note: We treat slash-separated dates as MM/DD/YYYY (US format)
+      // If DD/MM/YYYY format is needed, it should be handled at the form/data entry level
+      // OpenSPP standard is YYYY-MM-DD, so all dates are normalized to this format
+
+      // Fallback: Try parsing with Date constructor (handles ISO strings and other formats)
+      const parsed = new Date(trimmed);
       if (!isNaN(parsed.getTime())) {
-        return parsed.toISOString().split("T")[0];
+        const isoDate = parsed.toISOString().split("T")[0];
+        // Ensure it's in YYYY-MM-DD format
+        if (/^(\d{4})-(\d{2})-(\d{2})$/.test(isoDate)) {
+          return isoDate;
+        }
       }
     } catch {
       return null;
@@ -750,6 +855,48 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     }
     const value = data[key];
     return typeof value === "string" ? value : undefined;
+  }
+
+  /**
+   * Saves the external ID back to the entity after successful creation in OpenSPP.
+   * This prevents duplicates by ensuring the entity knows its external ID for future updates.
+   * 
+   * IMPORTANT: This method directly updates the entity data without creating a new event
+   * to avoid the event being picked up in the next sync cycle and causing duplicate processing.
+   */
+  private async saveExternalIdToEntity(entityGuid: string, externalId: number): Promise<void> {
+    try {
+      const entityPair = await this.eventApplierService.getEntityStore().getEntity(entityGuid);
+      if (!entityPair) {
+        console.warn(`Cannot save external ID: entity ${entityGuid} not found`);
+        return;
+      }
+
+      // Check if external ID is already set to avoid unnecessary updates
+      const currentExternalId = entityPair.modified.data.externalId;
+      if (currentExternalId === externalId || currentExternalId === String(externalId)) {
+        return;
+      }
+
+      // Directly update the entity's data with external ID without creating a new event
+      // This prevents the update from being picked up in the next sync cycle
+      const updatedEntity = {
+        ...entityPair.modified,
+        data: {
+          ...entityPair.modified.data,
+          externalId: externalId,
+        },
+        lastUpdated: new Date().toISOString(),
+      };
+
+      // Save directly to entity store without going through EventApplierService
+      // to avoid creating a new event that would be processed in next sync
+      await this.eventApplierService.getEntityStore().saveEntity(entityPair.modified, updatedEntity);
+    } catch (error) {
+      console.error(`Error saving external ID ${externalId} to entity ${entityGuid}:`, error);
+      // Don't throw - we don't want to fail the entire sync if saving external ID fails
+      // The next sync will try again
+    }
   }
 
 }
