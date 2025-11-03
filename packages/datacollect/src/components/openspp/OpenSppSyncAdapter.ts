@@ -60,6 +60,9 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
   private url: string;
   private odooClient: InstanceType<typeof OdooClient> | null = null;
   private options: OpenSppAdapterOptions;
+  private readonly batchSize: number;
+  private readonly batchDelayMs: number;
+  private readonly maxRetries: number;
 
   constructor(
     private eventStore: EventStore,
@@ -68,6 +71,18 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
   ) {
     this.url = (this.config?.url as string | undefined) ?? "";
     this.options = parseOpenSppAdapterOptions(config);
+    
+    // Configure batch size (default: 50 entities per batch)
+    const configuredBatchSize = this.getOptionalField("batchSize");
+    this.batchSize = configuredBatchSize ? parseInt(configuredBatchSize, 10) || 50 : 50;
+    
+    // Configure delay between batches in milliseconds (default: 1000ms = 1 second)
+    const configuredDelay = this.getOptionalField("batchDelayMs");
+    this.batchDelayMs = configuredDelay ? parseInt(configuredDelay, 10) || 1000 : 1000;
+    
+    // Configure max retries for failed entities (default: 2)
+    const configuredRetries = this.getOptionalField("maxRetries");
+    this.maxRetries = configuredRetries ? parseInt(configuredRetries, 10) || 2 : 2;
   }
 
   async authenticate(credentials?: ExternalSyncCredentials): Promise<boolean> {
@@ -98,38 +113,97 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       );
     });
 
-    for (const entityPair of individualsToSync) {
-      const entity = entityPair.modified;
-      const externalId = await this.resolveExternalIdFromEntity(entity.guid);
+    if (individualsToSync.length === 0) {
+      console.log("No individuals to sync");
+      return;
+    }
+
+    console.log(`Syncing ${individualsToSync.length} individuals in batches of ${this.batchSize}`);
+
+    // Track statistics
+    let successCount = 0;
+    let failureCount = 0;
+    const failedEntities: Array<{ guid: string; error: string }> = [];
+
+    // Process entities in batches to avoid overwhelming the API
+    for (let i = 0; i < individualsToSync.length; i += this.batchSize) {
+      const batch = individualsToSync.slice(i, i + this.batchSize);
+      const batchNumber = Math.floor(i / this.batchSize) + 1;
+      const totalBatches = Math.ceil(individualsToSync.length / this.batchSize);
       
-      try {
-        if (externalId) {
-          // Entity exists in OpenSPP, update it
-          await this.updateIndividualData({
-            guid: entity.guid,
-            entityGuid: entity.guid,
-            type: "update-individual",
-            data: entity.data,
-            timestamp: entity.lastUpdated,
-            userId: entity.guid,
-            syncLevel: SyncLevel.LOCAL,
-          });
-        } else {
-          // New entity, create it
-          await this.createIndividualData({
-            guid: entity.guid,
-            entityGuid: entity.guid,
-            type: "create-individual",
-            data: entity.data,
-            timestamp: entity.lastUpdated,
-            userId: entity.guid,
-            syncLevel: SyncLevel.LOCAL,
-          });
+      console.log(`Processing batch ${batchNumber}/${totalBatches} (${batch.length} entities)`);
+
+      // Process batch with retry logic
+      for (const entityPair of batch) {
+        const entity = entityPair.modified;
+        const externalId = await this.resolveExternalIdFromEntity(entity.guid);
+        
+        let attempt = 0;
+        let lastError: Error | null = null;
+        let success = false;
+
+        while (attempt <= this.maxRetries && !success) {
+          try {
+            if (externalId) {
+              // Entity exists in OpenSPP, update it
+              await this.updateIndividualData({
+                guid: entity.guid,
+                entityGuid: entity.guid,
+                type: "update-individual",
+                data: entity.data,
+                timestamp: entity.lastUpdated,
+                userId: entity.guid,
+                syncLevel: SyncLevel.LOCAL,
+              });
+            } else {
+              // New entity, create it
+              await this.createIndividualData({
+                guid: entity.guid,
+                entityGuid: entity.guid,
+                type: "create-individual",
+                data: entity.data,
+                timestamp: entity.lastUpdated,
+                userId: entity.guid,
+                syncLevel: SyncLevel.LOCAL,
+              });
+            }
+            success = true;
+            successCount++;
+          } catch (error) {
+            attempt++;
+            lastError = error instanceof Error ? error : new Error(String(error));
+            
+            if (attempt <= this.maxRetries) {
+              // Wait before retry (exponential backoff: 1s, 2s, 4s)
+              const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+              console.warn(`Retry ${attempt}/${this.maxRetries} for entity ${entity.guid} after ${delayMs}ms`);
+              await new Promise(resolve => setTimeout(resolve, delayMs));
+            } else {
+              // Max retries exceeded
+              failureCount++;
+              const errorMessage = lastError.message || String(lastError);
+              failedEntities.push({ guid: entity.guid, error: errorMessage });
+              console.error(`Failed to sync individual ${entity.guid} after ${this.maxRetries} retries:`, lastError);
+            }
+          }
         }
-      } catch (error) {
-        console.error(`Failed to sync individual ${entity.guid}:`, error);
-        // Continue with other entities
       }
+
+      // Add delay between batches to avoid rate limiting (except after the last batch)
+      if (i + this.batchSize < individualsToSync.length && this.batchDelayMs > 0) {
+        await new Promise(resolve => setTimeout(resolve, this.batchDelayMs));
+      }
+    }
+
+    // Log summary
+    console.log(`Sync complete: ${successCount} succeeded, ${failureCount} failed`);
+    if (failedEntities.length > 0) {
+      console.error(`Failed entities (${failedEntities.length}):`, failedEntities.map(e => e.guid).join(", "));
+      // Throw an error to alert the caller that some entities failed
+      throw new Error(
+        `Sync completed with ${failureCount} failures out of ${individualsToSync.length} entities. ` +
+        `First failure: ${failedEntities[0]?.error || "Unknown error"}`
+      );
     }
   }
 
@@ -384,10 +458,17 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       const currentTopLevel = entityPair.modified.externalId;
       const currentNested = entityPair.modified.data.externalId;
       const externalIdStr = String(externalId);
-      if (
-        (currentTopLevel === externalId || currentTopLevel === externalIdStr) &&
-        (currentNested === externalId || currentNested === externalIdStr)
-      ) {
+      
+      // Compare top-level (stored as string) with string version
+      const topLevelMatches = currentTopLevel === externalIdStr;
+      
+      // Compare nested (could be number or string) with both number and string versions
+      const nestedMatches = 
+        currentNested === externalId || 
+        currentNested === externalIdStr ||
+        String(currentNested) === externalIdStr;
+      
+      if (topLevelMatches && nestedMatches) {
         return;
       }
 
