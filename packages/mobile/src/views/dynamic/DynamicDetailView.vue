@@ -9,6 +9,7 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FormSubmission, EntityDoc } from '@idpass/data-collect-core'
 import { SyncLevel } from '@idpass/data-collect-core'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
 
 const route = useRoute()
 const router = useRouter()
@@ -20,6 +21,7 @@ const dependentForms = ref<EntityForm[]>([])
 const openViewAppDialog = ref(false)
 const events = ref<FormSubmission[]>([])
 const expandedEvents = ref<Set<string>>(new Set())
+const { isOffline } = useNetworkStatus()
 
 onMounted(async () => {
   const foundDocuments = await database.tenantapps
@@ -105,12 +107,18 @@ const getEntityName = () => {
 <template>
   <div v-if="tenantapp && storedEntityData" class="detail-view">
     <div class="top-bar">
-      <button class="icon-button" type="button" @click="onBack" aria-label="Back to submissions">
-        <svg viewBox="0 0 24 24" focusable="false">
-          <path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z" fill="currentColor" />
-        </svg>
-      </button>
-      <span class="breadcrumb">{{ getBreadcrumbFromPath(route.path) }}</span>
+      <div class="top-bar__left">
+        <button class="icon-button" type="button" @click="onBack" aria-label="Back to submissions">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z" fill="currentColor" />
+          </svg>
+        </button>
+        <span v-if="isOffline" class="offline-indicator" title="Offline - working locally">
+          <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+            <path d="M23.64 7c-.45-.34-4.93-4-11.64-4-1.5 0-2.89.19-4.15.48L18.18 13.8 23.64 7zm-6.6 8.22L3.27 1.44 2 2.72l2.05 2.06C1.91 5.76.59 6.82.36 7l11.63 14.49.01.01.01-.01 3.9-4.86 3.32 3.32 1.27-1.27-3.46-3.46z" fill="currentColor" />
+          </svg>
+        </span>
+      </div>
     </div>
 
     <section class="detail-hero">
@@ -217,7 +225,7 @@ const getEntityName = () => {
 .detail-view {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.5rem;
 }
 
 .top-bar {
@@ -225,6 +233,26 @@ const getEntityName = () => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 0.25rem;
+}
+
+.top-bar__left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.offline-indicator {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
+  background: rgba(234, 179, 8, 0.15);
+  color: #92400e;
+}
+
+.offline-indicator svg {
+  width: 14px;
+  height: 14px;
 }
 
 .icon-button {
@@ -245,9 +273,10 @@ const getEntityName = () => {
 
 .detail-hero {
   background: #ffffff;
-  border-radius: 16px;
-  padding: 1rem;
+  border-radius: 20px;
+  padding: 1.5rem;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .detail-hero__header {
@@ -324,9 +353,10 @@ const getEntityName = () => {
 
 .events-section {
   background: #ffffff;
-  border-radius: 16px;
-  padding: 1rem;
+  border-radius: 20px;
+  padding: 1.5rem;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .events-section h2 {
@@ -349,6 +379,7 @@ const getEntityName = () => {
   background: #f9fafb;
   border-radius: 12px;
   padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-left: 3px solid #2563eb;
   overflow: hidden;
 }
@@ -486,9 +517,10 @@ const getEntityName = () => {
 
 .dependent-section {
   background: #ffffff;
-  border-radius: 16px;
-  padding: 1rem;
+  border-radius: 20px;
+  padding: 1.5rem;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .dependent-section h2 {
@@ -515,6 +547,7 @@ const getEntityName = () => {
   background: #f9fafb;
   border-radius: 12px;
   padding: 0.75rem;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   cursor: pointer;
   transition: transform 0.2s ease;
 }

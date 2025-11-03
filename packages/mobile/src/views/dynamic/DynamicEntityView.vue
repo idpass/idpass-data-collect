@@ -6,6 +6,7 @@ import { EntityForm, getBreadcrumbFromPath } from '@/utils/dynamicFormIoUtils'
 import { SyncLevel } from '@idpass/data-collect-core'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
 
 type SubmissionSnapshot = {
   lastUpdated: string
@@ -29,6 +30,7 @@ const database = useDatabase()
 const tenantapp = ref<TenantAppData>()
 const entityForm = ref<EntityForm>()
 const submissions = ref<SubmissionRecord[]>([])
+const { isOffline } = useNetworkStatus()
 
 const searchTerm = ref('')
 
@@ -227,7 +229,11 @@ const formatTimestamp = (timestamp: string) => {
       </button>
       <div class="top-bar__meta">
         <span class="badge">{{ entityForm?.displayTemplate || 'Form' }}</span>
-        <span class="breadcrumb">{{ getBreadcrumbFromPath(route.path) }}</span>
+        <span v-if="isOffline" class="offline-indicator" title="Offline - working locally">
+          <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+            <path d="M23.64 7c-.45-.34-4.93-4-11.64-4-1.5 0-2.89.19-4.15.48L18.18 13.8 23.64 7zm-6.6 8.22L3.27 1.44 2 2.72l2.05 2.06C1.91 5.76.59 6.82.36 7l11.63 14.49.01.01.01-.01 3.9-4.86 3.32 3.32 1.27-1.27-3.46-3.46z" fill="currentColor" />
+          </svg>
+        </span>
       </div>
     </div>
 
@@ -321,7 +327,7 @@ const formatTimestamp = (timestamp: string) => {
 .entity-view {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.5rem;
 }
 
 .top-bar {
@@ -348,6 +354,20 @@ const formatTimestamp = (timestamp: string) => {
   align-items: flex-end;
 }
 
+.offline-indicator {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
+  background: rgba(234, 179, 8, 0.15);
+  color: #92400e;
+}
+
+.offline-indicator svg {
+  width: 14px;
+  height: 14px;
+}
+
 .breadcrumb {
   font-size: 0.8rem;
   color: #6b7280;
@@ -355,9 +375,10 @@ const formatTimestamp = (timestamp: string) => {
 
 .entity-header {
   background: #ffffff;
-  border-radius: 16px;
-  padding: 1rem 1.25rem;
+  border-radius: 20px;
+  padding: 1.5rem;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -395,9 +416,10 @@ const formatTimestamp = (timestamp: string) => {
 
 .submissions-panel {
   background: #ffffff;
-  border-radius: 16px;
-  padding: 1rem 1.25rem;
+  border-radius: 20px;
+  padding: 1.5rem;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -461,6 +483,7 @@ const formatTimestamp = (timestamp: string) => {
   padding: 0.875rem 1rem;
   background: #f9fafb;
   border-radius: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   cursor: pointer;
   transition: transform 0.2s ease;
 }
@@ -554,6 +577,7 @@ const formatTimestamp = (timestamp: string) => {
   padding: 2rem 1.5rem;
   background: #f9fafb;
   border-radius: 18px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   color: #6b7280;
   font-size: 0.95rem;
 }

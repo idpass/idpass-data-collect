@@ -122,8 +122,10 @@ const entityDataMap = computed(() => {
 })
 
 const totalEntities = computed(() => {
+  // Sum all entity counts, including "Unknown" and any other entityNames
+  // This ensures consistency with backend /count endpoint which counts all entities
   let count = 0
-  entityDataMap.value.forEach((value) => {
+  Object.values(entityCounts.value).forEach((value) => {
     count += value
   })
   return count
@@ -264,6 +266,8 @@ const overviewMetrics = computed(() => [
   },
 ])
 
+const isLoadingEntities = ref(false)
+
 const fetchApp = async () => {
   if (!routeId.value) {
     error.value = 'Missing collection program id.'
@@ -278,21 +282,26 @@ const fetchApp = async () => {
     app.value = data
     
     // Fetch entity counts grouped by form
-    const counts = await getEntitiesCountByForm(routeId.value)
-    entityCounts.value = counts
-    
-    // Fetch entity records
-    const records = await getEntities(routeId.value)
-    // Group records by entityName for easier display
-    const grouped: Record<string, unknown[]> = {}
-    records.forEach((record) => {
-      const key = record.entityName || 'Unknown'
-      if (!grouped[key]) {
-        grouped[key] = []
-      }
-      grouped[key].push(record)
-    })
-    entityRecords.value = grouped
+    isLoadingEntities.value = true
+    try {
+      const counts = await getEntitiesCountByForm(routeId.value)
+      entityCounts.value = counts
+      
+      // Fetch entity records
+      const records = await getEntities(routeId.value)
+      // Group records by entityName for easier display
+      const grouped: Record<string, unknown[]> = {}
+      records.forEach((record) => {
+        const key = record.entityName || 'Unknown'
+        if (!grouped[key]) {
+          grouped[key] = []
+        }
+        grouped[key].push(record)
+      })
+      entityRecords.value = grouped
+    } finally {
+      isLoadingEntities.value = false
+    }
   } catch (err) {
     if (err instanceof AxiosError && err.response?.status === 401) {
       authStore.logout()
@@ -327,7 +336,9 @@ const triggerSync = async (credentials?: { username: string; password: string })
   try {
     isSyncing.value = true
     await externalSyncApi(app.value.id, credentials)
-    snackBarStore.showSnackbar('External sync triggered', 'success')
+    snackBarStore.showSnackbar('External sync completed successfully', 'success')
+    // Refresh the page data after successful sync
+    await fetchApp()
   } catch (err) {
     console.error('Failed to sync collection program', err)
     snackBarStore.showSnackbar('Failed to trigger external sync', 'red')
@@ -351,28 +362,32 @@ const duplicateConfig = () => {
   router.push({ name: 'copy', params: { id: routeId.value } })
 }
 
-const handleDelete = async () => {
+const showArchiveDialog = ref(false)
+
+const handleArchive = async () => {
   if (!app.value) {
     return
   }
 
-  const confirmed = window.confirm(
-    'Are you sure you want to delete this collection program? This action cannot be undone.',
-  )
-  if (!confirmed) {
+  showArchiveDialog.value = true
+}
+
+const confirmArchive = async () => {
+  if (!app.value) {
     return
   }
 
   try {
     isDeleting.value = true
     await deleteAppApi(app.value.id)
-    snackBarStore.showSnackbar('Collection program deleted', 'success')
+    snackBarStore.showSnackbar('Collection program archived', 'success')
     router.push({ name: 'home' })
   } catch (err) {
-    console.error('Failed to delete collection program', err)
-    snackBarStore.showSnackbar('Failed to delete collection program', 'red')
+    console.error('Failed to archive collection program', err)
+    snackBarStore.showSnackbar('Failed to archive collection program', 'red')
   } finally {
     isDeleting.value = false
+    showArchiveDialog.value = false
   }
 }
 
@@ -441,10 +456,12 @@ watch(
           <v-btn
             class="details-header__action"
             color="primary"
-            prepend-icon="mdi-pencil"
-            @click="openEditor"
+            prepend-icon="mdi-sync"
+            :loading="isSyncing"
+            :disabled="isSyncing || !hasExternalSync"
+            @click="handleSync"
           >
-            Open in Editor
+            Trigger Sync
           </v-btn>
           <v-menu location="bottom end">
             <template #activator="{ props }">
@@ -458,10 +475,9 @@ watch(
             </template>
             <v-list density="compact">
               <v-list-item
-                prepend-icon="mdi-sync"
-                title="Trigger sync"
-                :disabled="isSyncing || !hasExternalSync"
-                @click="handleSync"
+                prepend-icon="mdi-pencil"
+                title="Edit"
+                @click="openEditor"
               />
               <v-list-item
                 prepend-icon="mdi-content-copy"
@@ -472,16 +488,16 @@ watch(
                 v-if="downloadUrl"
                 :href="downloadUrl"
                 prepend-icon="mdi-download"
-                title="Download JSON"
+                title="Download"
                 target="_blank"
               />
               <v-divider class="my-1" />
               <v-list-item
-                prepend-icon="mdi-delete"
-                title="Delete"
-                color="error"
+                prepend-icon="mdi-archive"
+                title="Archive"
+                color="warning"
                 :disabled="isDeleting"
-                @click="handleDelete"
+                @click="handleArchive"
               />
             </v-list>
           </v-menu>
@@ -503,7 +519,9 @@ watch(
                     View the latest captured entity records across each form.
                   </p>
 
-                  <div v-if="Object.keys(entityRecords).length === 0" class="entities-table__empty mt-6">
+                  <v-progress-linear v-if="isLoadingEntities" class="mt-4" color="primary" indeterminate />
+
+                  <div v-else-if="Object.keys(entityRecords).length === 0" class="entities-table__empty mt-6">
                     No entities have been captured for this collection program yet.
                   </div>
 
@@ -663,44 +681,17 @@ watch(
                   <span class="overview-card__row-label">External sync</span>
                   <span class="overview-card__row-value">{{ syncStatus.description }}</span>
                 </div>
-                <div class="overview-card__row">
-                  <span class="overview-card__row-label">Deployment URL</span>
-                  <a
-                    v-if="downloadUrl"
-                    :href="downloadUrl"
-                    target="_blank"
-                    rel="noopener"
-                    class="overview-card__link"
-                  >
-                    {{ downloadUrl }}
-                  </a>
-                  <span v-else class="overview-card__row-value overview-card__row-value--muted">
-                    Not generated yet
-                  </span>
-                </div>
               </div>
             </v-card-text>
             <v-divider />
             <v-card-actions class="overview-card__actions">
               <v-btn
-                variant="tonal"
-                color="primary"
-                prepend-icon="mdi-sync"
-                :loading="isSyncing"
-                :disabled="isSyncing || !hasExternalSync"
-                @click="handleSync"
-              >
-                Trigger Sync
-              </v-btn>
-              <v-btn
                 variant="text"
                 color="primary"
-                prepend-icon="mdi-download"
-                :href="downloadUrl || undefined"
-                :disabled="!downloadUrl"
-                target="_blank"
+                prepend-icon="mdi-export"
+                disabled
               >
-                Download JSON
+                Export Entities
               </v-btn>
             </v-card-actions>
           </v-card>
@@ -764,6 +755,28 @@ watch(
     description="Enter your credentials to start the external sync."
     @submit="onCredentialsSubmit"
   />
+
+  <v-dialog v-model="showArchiveDialog" max-width="500">
+    <v-card>
+      <v-card-title class="text-h6">
+        <v-icon icon="mdi-archive" start />
+        Archive Collection Program
+      </v-card-title>
+      <v-card-text>
+        <p>Are you sure you want to archive <strong>{{ app?.name }}</strong>?</p>
+        <p class="mt-2 text-medium-emphasis">
+          This will mark the collection program as archived. The data will remain accessible but the program will be hidden from the main list.
+        </p>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer />
+        <v-btn variant="text" @click="showArchiveDialog = false">Cancel</v-btn>
+        <v-btn color="warning" variant="tonal" :loading="isDeleting" @click="confirmArchive">
+          Archive
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <style scoped>

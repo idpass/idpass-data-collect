@@ -1,9 +1,21 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
+
+const { isOffline } = useNetworkStatus()
 </script>
 
 <template>
   <div id="app" class="app-shell safe-top safe-bottom">
+    <div v-if="isOffline" class="offline-banner" role="alert">
+      <svg class="offline-banner__icon" viewBox="0 0 24 24" focusable="false">
+        <path
+          d="M23.64 7c-.45-.34-4.93-4-11.64-4-1.5 0-2.89.19-4.15.48L18.18 13.8 23.64 7zm-6.6 8.22L3.27 1.44 2 2.72l2.05 2.06C1.91 5.76.59 6.82.36 7l11.63 14.49.01.01.01-.01 3.9-4.86 3.32 3.32 1.27-1.27-3.46-3.46z"
+          fill="currentColor"
+        />
+      </svg>
+      <span class="offline-banner__text">Offline mode - Working locally. Sync will resume when connection is restored.</span>
+    </div>
     <main class="app-content disable-scrollbars">
       <RouterView />
     </main>
@@ -27,5 +39,33 @@ import { RouterView } from 'vue-router'
   .app-content {
     padding: 2rem 0 4rem;
   }
+}
+
+.offline-banner {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1rem;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-bottom: 1px solid rgba(234, 179, 8, 0.2);
+  color: #92400e;
+  font-size: 0.875rem;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(234, 179, 8, 0.15);
+}
+
+.offline-banner__icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: #f59e0b;
+}
+
+.offline-banner__text {
+  flex: 1;
+  line-height: 1.4;
 }
 </style>

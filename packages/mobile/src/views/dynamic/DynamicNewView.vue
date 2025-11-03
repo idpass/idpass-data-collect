@@ -8,6 +8,7 @@ import { SyncLevel } from '@idpass/data-collect-core'
 import { v4 as uuidv4 } from 'uuid'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
 
 const props = defineProps<{
   id: string
@@ -24,6 +25,7 @@ const formio = ref<unknown>()
 const isGroup = ref(false)
 const submissionCount = ref(0)
 const isSavingDraft = ref(false)
+const { isOffline } = useNetworkStatus()
 
 type FormSubmissionEvent = {
   data: Record<string, unknown>
@@ -89,6 +91,11 @@ const goToSubmissions = () => {
       </button>
       <div class="top-bar__actions">
         <span class="badge">{{ entityForm?.displayTemplate || (isGroup ? 'Group' : 'Assessment') }}</span>
+        <span v-if="isOffline" class="offline-indicator" title="Offline - working locally">
+          <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+            <path d="M23.64 7c-.45-.34-4.93-4-11.64-4-1.5 0-2.89.19-4.15.48L18.18 13.8 23.64 7zm-6.6 8.22L3.27 1.44 2 2.72l2.05 2.06C1.91 5.76.59 6.82.36 7l11.63 14.49.01.01.01-.01 3.9-4.86 3.32 3.32 1.27-1.27-3.46-3.46z" fill="currentColor" />
+          </svg>
+        </span>
       </div>
     </div>
 
@@ -97,7 +104,6 @@ const goToSubmissions = () => {
         <h1>{{ entityForm?.title }}</h1>
         <p>{{ entityForm?.description || 'Collect information using this form.' }}</p>
       </div>
-      <span class="breadcrumb">{{ getBreadcrumbFromPath(route.path) }}</span>
     </header>
 
     <section class="form-wrapper">
@@ -118,6 +124,7 @@ const goToSubmissions = () => {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  padding: 1rem;
 }
 
 .top-bar {
@@ -141,6 +148,20 @@ const goToSubmissions = () => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+.offline-indicator {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
+  background: rgba(234, 179, 8, 0.15);
+  color: #92400e;
+}
+
+.offline-indicator svg {
+  width: 14px;
+  height: 14px;
 }
 
 .pill-button {
@@ -182,6 +203,7 @@ const goToSubmissions = () => {
   border-radius: 20px;
   padding: 1.5rem;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -206,8 +228,9 @@ const goToSubmissions = () => {
 .form-wrapper {
   background: #ffffff;
   border-radius: 20px;
-  padding: 1.25rem;
+  padding: 1.5rem;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .submissions-button {

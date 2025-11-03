@@ -48,12 +48,11 @@ export function createEntitiesRouter(appInstanceStore: AppInstanceStore): Router
       const entities = await appInstance.edm.getAllEntities();
       
       // Group entities by entityName from their data
+      // Entities without entityName are grouped under "Unknown" to ensure all entities are counted
       const counts: Record<string, number> = {};
       entities?.forEach((pair) => {
-        const entityName = pair.modified.data?.entityName;
-        if (entityName) {
-          counts[entityName] = (counts[entityName] || 0) + 1;
-        }
+        const entityName = pair.modified.data?.entityName || "Unknown";
+        counts[entityName] = (counts[entityName] || 0) + 1;
       });
       
       res.json(counts);

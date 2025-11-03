@@ -9,6 +9,7 @@ import { Camera } from '@capacitor/camera'
 import { Capacitor } from '@capacitor/core'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
 
 interface AppStats {
   totalRecords: number
@@ -27,6 +28,7 @@ const tenantapps = ref<TenantAppData[]>([])
 const appStats = ref<Record<string, AppStats>>({})
 const isLoadingStats = ref(false)
 const searchTerm = ref('')
+const { isOffline } = useNetworkStatus()
 
 const openInputAppDialog = ref(false)
 const showAddOptions = ref(false)
@@ -392,7 +394,12 @@ const toggleAddOptions = () => {
               </span>
             </div>
             <div class="stat">
-              <span class="stat__label">Pending</span>
+              <span class="stat__label">
+                Pending
+                <span v-if="isOffline && (appStats[app.id]?.pendingRecords ?? 0) > 0" class="stat__label-hint" title="Will sync when online">
+                  (offline)
+                </span>
+              </span>
               <span class="stat__value">
                 {{ appStats[app.id]?.pendingRecords ?? 0 }}
               </span>
@@ -535,6 +542,7 @@ const toggleAddOptions = () => {
   border-radius: 14px;
   padding: 0.65rem 1rem;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .search-bar input {
@@ -603,6 +611,7 @@ const toggleAddOptions = () => {
   border-radius: 18px;
   padding: 1.25rem;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   transition: transform 0.2s ease;
   cursor: pointer;
 }
@@ -683,6 +692,15 @@ const toggleAddOptions = () => {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.stat__label-hint {
+  font-size: 0.65rem;
+  font-weight: 400;
+  color: #f59e0b;
 }
 
 .stat__value {

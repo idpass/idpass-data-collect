@@ -236,7 +236,8 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       return undefined;
     }
 
-    const externalId = entityPair.modified.data.externalId;
+    // Check top-level externalId first (used by IndexedDB index), then fallback to data.externalId
+    const externalId = entityPair.modified.externalId ?? entityPair.modified.data.externalId;
     if (!externalId) {
       return undefined;
     }
@@ -366,6 +367,9 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
    * 
    * IMPORTANT: This method directly updates the entity data without creating a new event
    * to avoid the event being picked up in the next sync cycle and causing duplicate processing.
+   * 
+   * Sets the externalId at both the top-level (for IndexedDB index) and in data.externalId
+   * (for consistency with form data structure).
    */
   private async saveExternalIdToEntity(entityGuid: string, externalId: number): Promise<void> {
     try {
@@ -376,18 +380,27 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       }
 
       // Check if external ID is already set to avoid unnecessary updates
-      const currentExternalId = entityPair.modified.data.externalId;
-      if (currentExternalId === externalId || currentExternalId === String(externalId)) {
+      // Check both top-level and nested locations
+      const currentTopLevel = entityPair.modified.externalId;
+      const currentNested = entityPair.modified.data.externalId;
+      const externalIdStr = String(externalId);
+      if (
+        (currentTopLevel === externalId || currentTopLevel === externalIdStr) &&
+        (currentNested === externalId || currentNested === externalIdStr)
+      ) {
         return;
       }
 
-      // Directly update the entity's data with external ID without creating a new event
+      // Directly update the entity with external ID at both locations:
+      // 1. Top-level externalId (used by IndexedDB index for getEntityByExternalId)
+      // 2. data.externalId (for consistency with form data structure)
       // This prevents the update from being picked up in the next sync cycle
       const updatedEntity = {
         ...entityPair.modified,
+        externalId: String(externalId), // Top-level for index lookup
         data: {
           ...entityPair.modified.data,
-          externalId: externalId,
+          externalId: externalId, // Nested for form data consistency
         },
         lastUpdated: new Date().toISOString(),
       };

@@ -32,6 +32,7 @@ const sortBy = ref<AppListParams['sortBy']>('name')
 const sortOrder = ref<AppListParams['sortOrder']>('asc')
 const searchTerm = ref('')
 const isLoading = ref(false)
+const isRefreshing = ref(false)
 
 const selectedFile = ref<File | null>(null)
 const fileError = ref<string | null>(null)
@@ -64,8 +65,12 @@ const localOnlyCount = computed(() => Math.max(totalApps.value - syncEnabledCoun
 
 let searchDebounce: ReturnType<typeof setTimeout> | undefined
 
-const fetchApps = async () => {
-  isLoading.value = true
+const fetchApps = async (isRefresh = false) => {
+  if (isRefresh) {
+    isRefreshing.value = true
+  } else {
+    isLoading.value = true
+  }
   try {
     const response = await getAppsApi({
       page: page.value,
@@ -90,6 +95,7 @@ const fetchApps = async () => {
     console.error('Error fetching apps:', error)
   } finally {
     isLoading.value = false
+    isRefreshing.value = false
   }
 }
 
@@ -125,10 +131,13 @@ watch(
   },
 )
 
+const isUploading = ref(false)
+
 const uploadAppConfig = async () => {
   if (!selectedFile.value) return
 
   try {
+    isUploading.value = true
     const fileReader = new FileReader()
     fileReader.onload = async (event: ProgressEvent<FileReader>) => {
       try {
@@ -136,6 +145,17 @@ const uploadAppConfig = async () => {
 
         if (!json || typeof json !== 'object') {
           throw new Error('Invalid app configuration format')
+        }
+
+        // Check if app with same ID already exists
+        const existingAppId = json.id
+        if (existingAppId) {
+          const existingApps = await getAppsApi({ search: existingAppId, pageSize: 1 })
+          if (existingApps.data.some((app) => app.id === existingAppId)) {
+            fileError.value = `A collection program with ID "${existingAppId}" already exists. Please use a different ID or update the existing program instead.`
+            isUploading.value = false
+            return
+          }
         }
 
         const formData = new FormData()
@@ -156,21 +176,29 @@ const uploadAppConfig = async () => {
           authStore.logout()
           return
         }
-        console.error('Error uploading configuration:', error)
-        fileError.value =
-          error instanceof Error ? error.message : 'Error uploading app configuration'
+        if (error instanceof AxiosError && error.response?.status === 409) {
+          fileError.value = 'A collection program with this ID already exists. Please use a different ID or update the existing program.'
+        } else {
+          console.error('Error uploading configuration:', error)
+          fileError.value =
+            error instanceof Error ? error.message : 'Error uploading app configuration'
+        }
+      } finally {
+        isUploading.value = false
       }
     }
 
     fileReader.onerror = () => {
       console.error('Error reading file')
       fileError.value = 'Failed to read the configuration file'
+      isUploading.value = false
     }
 
     fileReader.readAsText(selectedFile.value)
   } catch (error) {
     console.error('Error:', error)
     fileError.value = 'Error uploading app configuration'
+    isUploading.value = false
   }
 }
 
@@ -202,7 +230,9 @@ onBeforeUnmount(() => {
           variant="tonal"
           color="primary"
           prepend-icon="mdi-refresh"
-          @click="fetchApps"
+          :loading="isRefreshing"
+          :disabled="isRefreshing"
+          @click="fetchApps(true)"
         >
           Refresh
         </v-btn>
@@ -360,8 +390,11 @@ onBeforeUnmount(() => {
           prepend-icon="mdi-upload"
           variant="outlined"
           :error-messages="fileError"
+          :loading="isUploading"
+          :disabled="isUploading"
           @change="uploadAppConfig"
         />
+        <v-progress-linear v-if="isUploading" class="mt-2" color="primary" indeterminate />
       </v-card-text>
     </v-card>
   </v-container>

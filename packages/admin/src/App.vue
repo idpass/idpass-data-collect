@@ -51,10 +51,21 @@ const snackBarStore = useSnackBarStore()
   <!-- global snackbar -->
   <v-snackbar
     v-model="snackBarStore.snackbar"
-    :timeout="3000"
+    :timeout="snackBarStore.snackbarColor === 'success' ? 5000 : 3000"
     :color="snackBarStore.snackbarColor"
+    location="top"
+    :elevation="24"
     @update:model-value="snackBarStore.hideSnackbar"
   >
+    <template v-if="snackBarStore.snackbarColor === 'success'">
+      <v-icon start icon="mdi-check-circle" />
+    </template>
+    <template v-else-if="snackBarStore.snackbarColor === 'red' || snackBarStore.snackbarColor === 'error'">
+      <v-icon start icon="mdi-alert-circle" />
+    </template>
+    <template v-else-if="snackBarStore.snackbarColor === 'warning'">
+      <v-icon start icon="mdi-alert" />
+    </template>
     {{ snackBarStore.snackbarText }}
   </v-snackbar>
 </template>

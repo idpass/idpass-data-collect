@@ -10,7 +10,7 @@ import { RouterView } from 'vue-router'
       <h5 class="m-0 bold title text-black">ID PASS DataCollect</h5>
     </nav>
   </header>
-  <main class="mx-2">
+  <main>
     <div class="user-select-none disable-scrollbars">
       <RouterView />
     </div>

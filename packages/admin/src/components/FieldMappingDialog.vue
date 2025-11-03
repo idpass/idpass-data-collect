@@ -111,141 +111,236 @@ const opensppFieldItems = computed(() => {
     field,
   }))
 })
+
+const expandedRows = ref<Set<number>>(new Set())
+
+const toggleRowExpansion = (index: number) => {
+  if (expandedRows.value.has(index)) {
+    expandedRows.value.delete(index)
+  } else {
+    expandedRows.value.add(index)
+  }
+}
 </script>
 
 <template>
-  <v-dialog v-model="dialog" max-width="900" persistent scrollable>
-    <v-card>
-      <v-card-title>Map Form Fields to OpenSPP Fields</v-card-title>
-      <v-card-text>
-        <p class="text-body-2 text-medium-emphasis mb-4">
-          Map form fields to OpenSPP fields and configure transformers for data format conversion.
-        </p>
-
-        <div v-if="mappings.length === 0" class="text-center pa-4">
-          <p class="text-body-1 text-medium-emphasis mb-4">No field mappings yet</p>
-          <v-btn color="primary" @click="addMapping">Add Mapping</v-btn>
+  <v-dialog v-model="dialog" max-width="1200" persistent scrollable>
+    <v-card class="field-mapping-dialog">
+      <v-card-title class="pb-2">Map Form Fields to OpenSPP Fields</v-card-title>
+      <v-card-subtitle class="text-caption">
+        Map form fields to OpenSPP fields and configure transformers for data format conversion.
+      </v-card-subtitle>
+      
+      <v-card-text class="pa-3 mapping-content">
+        <div v-if="mappings.length === 0" class="text-center py-8">
+          <p class="text-body-2 text-medium-emphasis mb-4">No field mappings yet</p>
+          <v-btn color="primary" size="small" @click="addMapping">Add Mapping</v-btn>
         </div>
 
         <div v-else>
-          <v-card
-            v-for="(mapping, index) in mappings"
-            :key="index"
-            class="mb-4"
-            variant="outlined"
-          >
-            <v-card-text>
-              <v-row>
-                <v-col cols="12" md="4">
-                  <v-select
-                    v-model="mapping.formField"
-                    :items="formFieldItems"
-                    label="Form Field"
-                    required
-                    clearable
-                  />
-                </v-col>
-                <v-col cols="12" md="4">
-                  <v-select
-                    v-model="mapping.opensppField"
-                    :items="opensppFieldItems"
-                    label="OpenSPP Field"
-                    required
-                    clearable
-                    @update:model-value="updateTransformerOptions(index, $event)"
-                  />
-                </v-col>
-                <v-col cols="12" md="4">
-                  <v-select
-                    v-model="mapping.transformer.type"
-                    :items="[
-                      { title: 'Text', value: 'text' },
-                      { title: 'Date', value: 'date' },
-                      { title: 'Relation', value: 'relation' },
-                    ]"
-                    label="Transformer Type"
-                    required
-                  />
-                </v-col>
-              </v-row>
+          <div class="mapping-container">
+            <v-table density="compact" class="mapping-table">
+            <thead>
+              <tr>
+                <th class="text-left" style="width: 25%">Form Field</th>
+                <th class="text-left" style="width: 25%">OpenSPP Field</th>
+                <th class="text-left" style="width: 20%">Transformer</th>
+                <th class="text-left" style="width: 20%">Options</th>
+                <th class="text-center" style="width: 10%">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template v-for="(mapping, index) in mappings" :key="index">
+                <tr class="mapping-row">
+                  <td>
+                    <v-select
+                      v-model="mapping.formField"
+                      :items="formFieldItems"
+                      placeholder="Select field"
+                      density="compact"
+                      variant="outlined"
+                      hide-details
+                      clearable
+                    />
+                  </td>
+                  <td>
+                    <v-select
+                      v-model="mapping.opensppField"
+                      :items="opensppFieldItems"
+                      placeholder="Select field"
+                      density="compact"
+                      variant="outlined"
+                      hide-details
+                      clearable
+                      @update:model-value="updateTransformerOptions(index, $event)"
+                    />
+                  </td>
+                  <td>
+                    <v-select
+                      v-model="mapping.transformer.type"
+                      :items="[
+                        { title: 'Text', value: 'text' },
+                        { title: 'Date', value: 'date' },
+                        { title: 'Relation', value: 'relation' },
+                      ]"
+                      density="compact"
+                      variant="outlined"
+                      hide-details
+                    />
+                  </td>
+                  <td>
+                    <div class="d-flex align-center gap-1">
+                      <!-- Date options summary -->
+                      <template v-if="mapping.transformer.type === 'date'">
+                        <v-chip size="x-small" variant="tonal" color="primary">
+                          {{ mapping.transformer.options?.inputFormat || 'auto' }}
+                        </v-chip>
+                        <span class="text-caption text-medium-emphasis">→</span>
+                        <v-chip size="x-small" variant="tonal" color="primary">
+                          {{ mapping.transformer.options?.outputFormat || 'YYYY-MM-DD' }}
+                        </v-chip>
+                      </template>
+                      <!-- Relation options summary -->
+                      <template v-else-if="mapping.transformer.type === 'relation'">
+                        <v-chip size="x-small" variant="tonal" color="primary">
+                          {{ mapping.transformer.options?.relationOutputFormat || '[id,label]' }}
+                        </v-chip>
+                      </template>
+                      <!-- Text or default -->
+                      <template v-else>
+                        <span class="text-caption text-medium-emphasis">Default</span>
+                      </template>
+                      <v-btn
+                        v-if="mapping.transformer.type !== 'text'"
+                        icon
+                        size="x-small"
+                        variant="text"
+                        density="compact"
+                        @click="toggleRowExpansion(index)"
+                      >
+                        <v-icon size="16">
+                          {{ expandedRows.value.has(index) ? 'mdi-chevron-up' : 'mdi-chevron-down' }}
+                        </v-icon>
+                      </v-btn>
+                    </div>
+                  </td>
+                  <td class="text-center">
+                    <v-btn
+                      icon
+                      size="small"
+                      variant="text"
+                      color="error"
+                      density="compact"
+                      @click="removeMapping(index)"
+                    >
+                      <v-icon size="18">mdi-delete-outline</v-icon>
+                    </v-btn>
+                  </td>
+                </tr>
+                <!-- Expanded options row -->
+                <tr v-if="expandedRows.value.has(index)" class="mapping-options-row">
+                  <td colspan="5" class="pa-2">
+                    <v-card variant="outlined" density="compact" class="pa-3">
+                      <!-- Date Transformer Options -->
+                      <template v-if="mapping.transformer.type === 'date'">
+                        <v-row dense>
+                          <v-col cols="12" sm="6">
+                            <v-select
+                              v-model="mapping.transformer.options!.inputFormat"
+                              :items="[
+                                { title: 'Auto-detect', value: 'auto' },
+                                { title: 'YYYY-MM-DD', value: 'YYYY-MM-DD' },
+                                { title: 'MM/DD/YYYY', value: 'MM/DD/YYYY' },
+                                { title: 'DD/MM/YYYY', value: 'DD/MM/YYYY' },
+                              ]"
+                              label="Input Format"
+                              density="compact"
+                              variant="outlined"
+                              hide-details
+                            />
+                          </v-col>
+                          <v-col cols="12" sm="6">
+                            <v-select
+                              v-model="mapping.transformer.options!.outputFormat"
+                              :items="[
+                                { title: 'YYYY-MM-DD', value: 'YYYY-MM-DD' },
+                                { title: 'MM/DD/YYYY', value: 'MM/DD/YYYY' },
+                                { title: 'DD/MM/YYYY', value: 'DD/MM/YYYY' },
+                              ]"
+                              label="Output Format"
+                              density="compact"
+                              variant="outlined"
+                              hide-details
+                            />
+                          </v-col>
+                        </v-row>
+                      </template>
 
-              <!-- Date Transformer Options -->
-              <v-row v-if="mapping.transformer.type === 'date'">
-                <v-col cols="12" md="6">
-                  <v-select
-                    v-model="mapping.transformer.options!.inputFormat"
-                    :items="[
-                      { title: 'Auto-detect', value: 'auto' },
-                      { title: 'YYYY-MM-DD', value: 'YYYY-MM-DD' },
-                      { title: 'MM/DD/YYYY', value: 'MM/DD/YYYY' },
-                      { title: 'DD/MM/YYYY', value: 'DD/MM/YYYY' },
-                    ]"
-                    label="Input Format"
-                  />
-                </v-col>
-                <v-col cols="12" md="6">
-                  <v-select
-                    v-model="mapping.transformer.options!.outputFormat"
-                    :items="[
-                      { title: 'YYYY-MM-DD', value: 'YYYY-MM-DD' },
-                      { title: 'MM/DD/YYYY', value: 'MM/DD/YYYY' },
-                      { title: 'DD/MM/YYYY', value: 'DD/MM/YYYY' },
-                    ]"
-                    label="Output Format"
-                  />
-                </v-col>
-              </v-row>
+                      <!-- Relation Transformer Options -->
+                      <template v-if="mapping.transformer.type === 'relation'">
+                        <v-select
+                          v-model="mapping.transformer.options!.relationOutputFormat"
+                          :items="[
+                            { title: '[id, label]', value: '[id,label]' },
+                            { title: 'ID only', value: 'id' },
+                            { title: 'Label only', value: 'label' },
+                          ]"
+                          label="Output Format"
+                          hint="Format used when sending to OpenSPP"
+                          density="compact"
+                          variant="outlined"
+                          persistent-hint
+                          class="mb-2"
+                        />
+                        <v-alert
+                          v-if="getFieldOptions(opensppFieldItems.find(item => item.value === mapping.opensppField)?.field).length > 0"
+                          type="info"
+                          variant="tonal"
+                          density="compact"
+                          class="mt-2"
+                        >
+                          <div class="text-caption font-weight-medium mb-1">Available options:</div>
+                          <div class="text-caption">
+                            <span
+                              v-for="(opt, idx) in getFieldOptions(opensppFieldItems.find(item => item.value === mapping.opensppField)?.field)"
+                              :key="String(opt.id)"
+                              class="mr-2"
+                            >
+                              [{{ opt.id }}, "{{ opt.label }}"]<span v-if="idx < getFieldOptions(opensppFieldItems.find(item => item.value === mapping.opensppField)?.field).length - 1">,</span>
+                            </span>
+                          </div>
+                        </v-alert>
+                      </template>
+                    </v-card>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </v-table>
+          </div>
 
-              <!-- Relation Transformer Options -->
-              <v-row v-if="mapping.transformer.type === 'relation'">
-                <v-col cols="12">
-                  <v-select
-                    v-model="mapping.transformer.options!.relationOutputFormat"
-                    :items="[
-                      { title: '[id, label]', value: '[id,label]' },
-                      { title: 'ID only', value: 'id' },
-                      { title: 'Label only', value: 'label' },
-                    ]"
-                    label="Output Format"
-                    hint="Format used when sending to OpenSPP"
-                    persistent-hint
-                  />
-                </v-col>
-                <v-col v-if="getFieldOptions(opensppFieldItems.find(item => item.value === mapping.opensppField)?.field).length > 0" cols="12">
-                  <v-alert type="info" variant="tonal" density="compact">
-                    <strong>Available options:</strong>
-                    <ul class="mt-2 mb-0">
-                      <li v-for="opt in getFieldOptions(opensppFieldItems.find(item => item.value === mapping.opensppField)?.field)" :key="String(opt.id)">
-                        [{{ opt.id }}, "{{ opt.label }}"]
-                      </li>
-                    </ul>
-                  </v-alert>
-                </v-col>
-              </v-row>
-
-              <v-btn
-                color="error"
-                variant="text"
-                size="small"
-                prepend-icon="mdi-delete"
-                @click="removeMapping(index)"
-              >
-                Remove Mapping
-              </v-btn>
-            </v-card-text>
-          </v-card>
-
-          <v-btn color="primary" variant="outlined" prepend-icon="mdi-plus" @click="addMapping">
-            Add Mapping
-          </v-btn>
+          <div class="mt-3">
+            <v-btn
+              color="primary"
+              variant="outlined"
+              size="small"
+              prepend-icon="mdi-plus"
+              density="compact"
+              @click="addMapping"
+            >
+              Add Mapping
+            </v-btn>
+          </div>
         </div>
       </v-card-text>
-      <v-card-actions>
+      
+      <v-card-actions class="pa-3">
         <v-spacer />
-        <v-btn variant="text" @click="dialog = false">Cancel</v-btn>
+        <v-btn variant="text" size="small" @click="dialog = false">Cancel</v-btn>
         <v-btn
           color="primary"
           variant="elevated"
+          size="small"
           :disabled="mappings.length === 0"
           @click="saveMappings"
         >
@@ -255,3 +350,78 @@ const opensppFieldItems = computed(() => {
     </v-card>
   </v-dialog>
 </template>
+
+<style scoped>
+.field-mapping-dialog {
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.mapping-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mapping-container {
+  flex: 1;
+  overflow-y: auto;
+  max-height: calc(85vh - 280px);
+  min-height: 200px;
+}
+
+.mapping-table {
+  width: 100%;
+}
+
+.mapping-table :deep(thead th) {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 8px 12px;
+  background-color: rgba(0, 0, 0, 0.02);
+  border-bottom: 2px solid rgba(0, 0, 0, 0.1);
+}
+
+.mapping-table :deep(tbody td) {
+  padding: 8px 12px;
+  vertical-align: middle;
+}
+
+.mapping-row {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.mapping-row:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+.mapping-options-row {
+  background-color: rgba(0, 0, 0, 0.01);
+}
+
+.mapping-options-row td {
+  border-top: none !important;
+}
+
+.field-mapping-dialog :deep(.v-select) {
+  font-size: 0.875rem;
+}
+
+.field-mapping-dialog :deep(.v-field__input) {
+  min-height: 32px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.field-mapping-dialog :deep(.v-select__selection) {
+  font-size: 0.875rem;
+}
+
+.gap-1 {
+  gap: 4px;
+}
+</style>

@@ -115,7 +115,6 @@ const onBack = () => {
 <template>
   <div v-if="storedEntityData" class="d-flex flex-column gap-2">
     <a class="primary mb-2" @click="onBack">Back</a>
-    <small>{{ getBreadcrumbFromPath(route.path) }}</small>
     <hr />
     <FormIO :form="formio" :submission="{ data: storedEntityData }" @submit="onSubmit" />
   </div>

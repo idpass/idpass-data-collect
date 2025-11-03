@@ -3,9 +3,7 @@ import {
   getAppConfigJsonUrl,
   getAppQrCodeUrl,
   deleteApp as deleteAppApi,
-  externalSync as externalSyncApi,
 } from '@/api'
-import BasicAuthDialog from '@/components/BasicAuthDialog.vue'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -25,7 +23,6 @@ interface Props {
 
 const { app } = defineProps<Props>()
 
-const showDialog = ref(false)
 const showQrDialog = ref(false)
 const qrError = ref(false)
 
@@ -34,37 +31,21 @@ const emit = defineEmits<{
 }>()
 
 const menu = ref(false)
+const showArchiveDialog = ref(false)
 
-const deleteApp = async (id: string) => {
+const handleArchive = (id: string) => {
   menu.value = false
+  showArchiveDialog.value = true
+}
+
+const confirmArchive = async () => {
   try {
-    await deleteAppApi(id)
+    await deleteAppApi(app.id)
     emit('appDeleted')
+    showArchiveDialog.value = false
   } catch (error) {
     console.error('Error:', error)
-    alert('Error deleting app config')
-  }
-}
-
-const externalSync = async (id: string) => {
-  menu.value = false
-  try {
-    if (app.externalSync?.auth === 'basic') {
-      showDialog.value = true
-      return
-    }
-
-    await externalSyncApi(id)
-  } catch (error) {
-    console.error('Error:', error)
-  }
-}
-
-const onCredentialsSubmit = async (credentials: { username: string; password: string }) => {
-  try {
-    await externalSyncApi(app.id, credentials)
-  } catch (error) {
-    console.error('Error:', error)
+    alert('Error archiving app config')
   }
 }
 
@@ -169,20 +150,19 @@ watch(showQrDialog, (isOpen) => {
             <v-btn icon="mdi-dots-vertical" variant="text" v-bind="props" />
           </template>
           <v-list density="compact">
+            <v-list-item @click="editApp(app.id)" prepend-icon="mdi-pencil" title="Edit" />
+            <v-list-item @click="copyApp(app.id)" prepend-icon="mdi-content-copy" title="Duplicate" />
             <v-list-item
               :href="downloadUrl"
               download
               prepend-icon="mdi-download"
-              title="Download config"
+              title="Download"
             />
-            <v-list-item @click="externalSync(app.id)" prepend-icon="mdi-sync" title="Sync" />
-            <v-list-item @click="editApp(app.id)" prepend-icon="mdi-pencil" title="Edit" />
-            <v-list-item @click="copyApp(app.id)" prepend-icon="mdi-content-copy" title="Duplicate" />
             <v-list-item
-              @click="deleteApp(app.id)"
-              prepend-icon="mdi-delete"
-              title="Delete"
-              color="error"
+              @click="handleArchive(app.id)"
+              prepend-icon="mdi-archive"
+              title="Archive"
+              color="warning"
             />
           </v-list>
         </v-menu>
@@ -220,15 +200,12 @@ watch(showQrDialog, (isOpen) => {
 
     <v-card-actions class="app-card__footer">
       <div class="app-card__footer-actions">
-        <v-btn variant="outlined" color="primary" prepend-icon="mdi-qrcode" @click="showQrDialog = true">
+        <v-btn color="primary" prepend-icon="mdi-qrcode" @click="showQrDialog = true">
           Show QR
         </v-btn>
-        <v-btn variant="text" color="primary" prepend-icon="mdi-link-variant" :href="downloadUrl" target="_blank">
-          Deployment URL
-        </v-btn>
       </div>
-      <v-btn variant="text" color="primary" prepend-icon="mdi-arrow-right" @click="openDetails(app.id)">
-        View details
+      <v-btn variant="text" color="primary" append-icon="mdi-arrow-right" @click="openDetails(app.id)">
+        View program
       </v-btn>
     </v-card-actions>
   </v-card>
@@ -271,12 +248,28 @@ watch(showQrDialog, (isOpen) => {
     </v-card>
   </v-dialog>
 
-  <BasicAuthDialog
-    :title="`Sync ${app.name}`"
-    :description="`Enter your credentials to sync ${app.name}`"
-    v-model="showDialog"
-    @submit="onCredentialsSubmit"
-  />
+  <v-dialog v-model="showArchiveDialog" max-width="500">
+    <v-card>
+      <v-card-title class="text-h6">
+        <v-icon icon="mdi-archive" start />
+        Archive Collection Program
+      </v-card-title>
+      <v-card-text>
+        <p>Are you sure you want to archive <strong>{{ app.name }}</strong>?</p>
+        <p class="mt-2 text-medium-emphasis">
+          This will mark the collection program as archived. The data will remain accessible but the program will be hidden from the main list.
+        </p>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer />
+        <v-btn variant="text" @click="showArchiveDialog = false">Cancel</v-btn>
+        <v-btn color="warning" variant="tonal" @click="confirmArchive">
+          Archive
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
 </template>
 
 <style scoped>

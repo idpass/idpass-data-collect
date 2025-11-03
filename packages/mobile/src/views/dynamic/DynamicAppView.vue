@@ -109,7 +109,7 @@ const onLogout = async () => {
 
 const onSync = async () => {
   if (isOffline.value) {
-    displayError('Cannot sync while offline. Please check your connection.')
+    displayError('Sync requires an online connection. Please check your network and try again.')
     return
   }
 
@@ -132,7 +132,14 @@ const formattedVersion = computed(() => `v${tenantapp.value?.version ?? '—'}`)
         </svg>
       </button>
       <div class="top-bar__actions">
-        <button class="pill-button" type="button" @click="onSync" :disabled="isSyncing">
+        <button 
+          class="pill-button" 
+          :class="{ 'pill-button--disabled': isOffline }"
+          type="button" 
+          @click="onSync" 
+          :disabled="isSyncing || isOffline"
+          :title="isOffline ? 'Sync requires an online connection' : 'Sync with server'"
+        >
           <svg viewBox="0 0 24 24" focusable="false">
             <path
               d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5 0 .34-.03.67-.08 1l1.53 1.53C18.81 14.52 19 13.78 19 13c0-3.87-3.13-7-7-7zm-5.92.92L4.55 8.45C3.79 9.69 3.33 11.07 3.14 12.5L1 10.36V15h4.64L3.5 12.86c.17-1.06.56-2.07 1.16-2.94l1.42 1.42z"
@@ -263,8 +270,12 @@ const formattedVersion = computed(() => `v${tenantapp.value?.version ?? '—'}`)
   color: #1f2937;
 }
 
-.pill-button:disabled {
-  opacity: 0.6;
+.pill-button:disabled,
+.pill-button--disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: rgba(15, 23, 42, 0.12);
+  color: rgba(15, 23, 42, 0.5);
 }
 
 .app-hero {
@@ -272,6 +283,7 @@ const formattedVersion = computed(() => `v${tenantapp.value?.version ?? '—'}`)
   border-radius: 20px;
   padding: 1.5rem;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -363,6 +375,7 @@ const formattedVersion = computed(() => `v${tenantapp.value?.version ?? '—'}`)
   border-radius: 18px;
   padding: 1rem;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -412,6 +425,7 @@ const formattedVersion = computed(() => `v${tenantapp.value?.version ?? '—'}`)
   border-radius: 18px;
   padding: 1.25rem;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   cursor: pointer;
   transition: transform 0.2s ease;
 }
