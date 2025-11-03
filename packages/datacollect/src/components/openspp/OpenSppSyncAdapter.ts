@@ -23,27 +23,37 @@ import {
   ExternalSyncConfig,
   ExternalSyncCredentials,
   FormSubmission,
-  // SyncLevel,
+  SyncLevel,
+  getExternalField,
+  EntityType,
 } from "../../interfaces/types";
 import OdooClient from "./OdooClient";
 import { EventApplierService } from "../../services/EventApplierService";
-import { HouseholdTransformer } from "./pullTransformers/HouseholdTransformer";
 import { IndividualTransformer } from "./pullTransformers/IndividualTransformer";
-import type { OdooConfig, OpenSPPCreateIndividualPayload, OpenSPPCreateHouseholdPayload } from "./odoo-types";
+import type { OdooConfig, OpenSPPCreateIndividualPayload } from "./odoo-types";
 import type { OpenSppAdapterOptions } from "./OpenSppAdapterOptions";
-import { parseOpenSppAdapterOptions, resolveParentField } from "./OpenSppAdapterOptions";
+import { parseOpenSppAdapterOptions } from "./OpenSppAdapterOptions";
+import {
+  createTransformer,
+  type TransformerType,
+} from "../../utils/fieldTransformers";
 
-interface GroupedData {
-  households: {
-    household: FormSubmission;
-    individuals: FormSubmission[];
-  }[];
-  standaloneIndividuals: FormSubmission[];
-}
-
-interface RegisteredIndividual {
-  id?: number | null;
-  membershipKind?: number | null;
+/**
+ * Field mapping configuration from external sync config.
+ * Matches the structure used in the admin UI.
+ */
+interface FieldMapping {
+  formField: string;
+  opensppField: string;
+  transformer: {
+    type: TransformerType;
+    options?: {
+      inputFormat?: "YYYY-MM-DD" | "MM/DD/YYYY" | "DD/MM/YYYY" | "auto";
+      outputFormat?: "YYYY-MM-DD" | "MM/DD/YYYY" | "DD/MM/YYYY";
+      relationOptions?: Array<{ id: number | string; label: string }>;
+      relationOutputFormat?: "id" | "label" | "[id,label]";
+    };
+  };
 }
 
 class OpenSppSyncAdapter implements ExternalSyncAdapter {
@@ -71,404 +81,99 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
   }
 
   async pushData(credentials?: ExternalSyncCredentials): Promise<void> {
-    if (!this.url) {
-      throw new Error("URL is required");
-    }
     await this.ensureClient(credentials);
-    const lastPushExternalSyncTimestamp = await this.eventStore.getLastPushExternalSyncTimestamp();
 
-    // Use getEventsSince instead of getAllEvents for better performance
-    const allEvents = await this.eventStore.getEventsSince(lastPushExternalSyncTimestamp);
-    const filteredEvents = this.filterSyncEvents(allEvents, lastPushExternalSyncTimestamp);
-    const groupedEvents = this.groupEvents(filteredEvents);
-    const updatedEvents: FormSubmission[] = [];
-    const syncedEntityNames: string[] = [];
-    // Track entity GUIDs that had failed updates to prevent duplicate creates
-    const failedUpdateGuids = new Set<string>();
-    // Track entity GUIDs that have already been successfully processed in this sync
-    const processedEntityGuids = new Set<string>();
-
-    // Process households
-    for (const householdGroup of groupedEvents.households) {
-      try {
-        const householdEvent = householdGroup.household;
-        const isCreate = householdEvent.type.startsWith("create-");
-        const isUpdate = householdEvent.type.startsWith("update-");
-        
-        let householdId: number | undefined;
-        if (isCreate) {
-          // Prevent duplicate creation if this entity was already processed in this sync cycle
-          if (processedEntityGuids.has(householdEvent.entityGuid) || failedUpdateGuids.has(householdEvent.entityGuid)) {
-            console.error(`Skipping create for household ${householdEvent.entityGuid} - entity already processed or had failed update in this sync. This prevents duplicate creation.`);
-            continue;
-          }
-          try {
-            householdId = await this.createHouseholdData(householdEvent);
-            // Save external ID back to entity after successful creation
-            // CRITICAL: If save fails, the entity was created in OpenSPP but we don't have the ID locally
-            // This could cause duplicates on future syncs, so we should treat this as a failure
-            if (householdId) {
-              try {
-                await this.saveExternalIdToEntity(householdEvent.entityGuid, householdId);
-              } catch (saveError) {
-                console.error(`CRITICAL: Failed to save external ID ${householdId} for household ${householdEvent.entityGuid} after creation. This may cause duplicates:`, saveError);
-                // Still add to updatedEvents since creation succeeded, but log the critical error
-              }
-            } else {
-              console.error(`Failed to create household ${householdEvent.entityGuid} - createHouseholdData returned undefined`);
-            }
-          } catch (error) {
-            console.error(`Error creating household ${householdEvent.entityGuid}:`, error);
-            householdId = undefined;
-          }
-        } else if (isUpdate) {
-          householdId = await this.updateHouseholdData(householdEvent);
-          // If update failed due to missing external ID, this indicates a data inconsistency
-          // The entity exists locally but was never synced to OpenSPP
-          // We should NOT automatically create as this could cause duplicates
-          // Instead, log a warning and skip - the entity needs to be manually fixed
-          if (!householdId) {
-            console.error(`Update failed for household ${householdEvent.entityGuid} - no external ID found. Entity may not exist in OpenSPP. Skipping update to prevent duplicate creation.`);
-            failedUpdateGuids.add(householdEvent.entityGuid);
-          } else {
-            // Mark as processed to prevent duplicate creation if a create event follows
-            processedEntityGuids.add(householdEvent.entityGuid);
-          }
-        }
-
-        if (householdId) {
-          updatedEvents.push(householdEvent);
-          processedEntityGuids.add(householdEvent.entityGuid);
-          const householdName = this.getEntityName(householdEvent);
-          if (householdName) {
-            syncedEntityNames.push(householdName);
-          }
-        }
-
-        const individualIds: RegisteredIndividual[] = [];
-        const createIndividualIds = new Set<number>();
-
-        for (const member of householdGroup.individuals) {
-          try {
-            const memberData = member.data as Record<string, unknown>;
-            const isMemberCreate = member.type.startsWith("create-");
-            const isMemberUpdate = member.type.startsWith("update-");
-            
-            let individualId: number | undefined;
-            if (isMemberCreate) {
-              // Prevent duplicate creation if this entity was already processed in this sync cycle
-              if (processedEntityGuids.has(member.entityGuid) || failedUpdateGuids.has(member.entityGuid)) {
-                console.error(`Skipping create for individual ${member.entityGuid} - entity already processed or had failed update in this sync. This prevents duplicate creation.`);
-                continue;
-              }
-              try {
-                individualId = await this.createIndividualData(member);
-                if (individualId) {
-                  createIndividualIds.add(individualId);
-                  // Save external ID back to entity after successful creation
-                  // CRITICAL: If save fails, the entity was created in OpenSPP but we don't have the ID locally
-                  // This could cause duplicates on future syncs, so we should treat this as a failure
-                  try {
-                    await this.saveExternalIdToEntity(member.entityGuid, individualId);
-                  } catch (saveError) {
-                    console.error(`CRITICAL: Failed to save external ID ${individualId} for individual ${member.entityGuid} after creation. This may cause duplicates:`, saveError);
-                    // Still process since creation succeeded, but log the critical error
-                  }
-                } else {
-                  console.error(`Failed to create individual ${member.entityGuid} - createIndividualData returned undefined`);
-                }
-              } catch (error) {
-                console.error(`Error creating individual ${member.entityGuid}:`, error);
-                individualId = undefined;
-              }
-            } else if (isMemberUpdate) {
-              individualId = await this.updateIndividualData(member);
-              // If update failed due to missing external ID, this indicates a data inconsistency
-              // The entity exists locally but was never synced to OpenSPP
-              // We should NOT automatically create as this could cause duplicates
-              // Instead, log an error and skip - the entity needs to be manually fixed
-              if (!individualId) {
-                console.error(`Update failed for individual ${member.entityGuid} - no external ID found. Entity may not exist in OpenSPP. Skipping update to prevent duplicate creation.`);
-                failedUpdateGuids.add(member.entityGuid);
-              } else {
-                // Mark as processed to prevent duplicate creation if a create event follows
-                processedEntityGuids.add(member.entityGuid);
-                // Handle membership update if parentGuid changed
-                await this.handleMembershipUpdate(member.entityGuid, member);
-              }
-            }
-
-            if (individualId) {
-              updatedEvents.push(member);
-              processedEntityGuids.add(member.entityGuid);
-              const individualName = this.getEntityName(member);
-              if (individualName) {
-                syncedEntityNames.push(individualName);
-              }
-            }
-
-            const membershipKind = this.parseInteger(
-              this.getMappedField(memberData, this.options.individual.fieldMap?.membershipKind),
-            );
-            individualIds.push({
-              id: individualId ?? null,
-              membershipKind,
-            });
-          } catch (error) {
-            console.error("Error processing individual:", error);
-          }
-        }
-
-        // Link members to household (only for newly created individuals)
-        // Note: addMembersToGroup uses [0, 0, m] which creates NEW memberships
-        // This is correct behavior for first-time sync, but could create duplicates if called multiple times
-        // We only link members that were just created (in createIndividualIds set)
-        // Link regardless of whether household was just created or already existed
-        if (individualIds.length > 0 && householdId && createIndividualIds.size > 0) {
-          for (const registered of individualIds) {
-            if (!registered.id || !createIndividualIds.has(registered.id)) {
-              continue;
-            }
-
-            try {
-              // Check if membership already exists before adding
-              // Note: This is a best-effort check - OpenSPP might still allow duplicates
-              // but we try to avoid unnecessary API calls
-              await this.odooClient?.addMembersToGroup(householdId, [
-                {
-                  individual: registered.id,
-                  kind:
-                    typeof registered.membershipKind === "number" && registered.membershipKind > 0
-                      ? [[6, 0, [registered.membershipKind]]]
-                      : undefined,
-                },
-              ]);
-            } catch (error) {
-              console.error(`Error linking member ${registered.id} to household ${householdId}:`, error);
-              // Continue processing other members even if one fails
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Error processing household:", error);
-      }
-    }
-
-    // Process standalone individuals
-    for (const standaloneIndividual of groupedEvents.standaloneIndividuals) {
-      try {
-        const isCreate = standaloneIndividual.type.startsWith("create-");
-        const isUpdate = standaloneIndividual.type.startsWith("update-");
-        
-        let individualId: number | undefined;
-        if (isCreate) {
-          // Prevent duplicate creation if this entity was already processed in this sync cycle
-          if (processedEntityGuids.has(standaloneIndividual.entityGuid) || failedUpdateGuids.has(standaloneIndividual.entityGuid)) {
-            console.error(`Skipping create for standalone individual ${standaloneIndividual.entityGuid} - entity already processed or had failed update in this sync. This prevents duplicate creation.`);
-            continue;
-          }
-          try {
-            individualId = await this.createIndividualData(standaloneIndividual);
-            // Save external ID back to entity after successful creation
-            // CRITICAL: If save fails, the entity was created in OpenSPP but we don't have the ID locally
-            // This could cause duplicates on future syncs, so we should treat this as a failure
-            if (individualId) {
-              try {
-                await this.saveExternalIdToEntity(standaloneIndividual.entityGuid, individualId);
-              } catch (saveError) {
-                console.error(`CRITICAL: Failed to save external ID ${individualId} for standalone individual ${standaloneIndividual.entityGuid} after creation. This may cause duplicates:`, saveError);
-                // Still process since creation succeeded, but log the critical error
-              }
-            } else {
-              console.error(`Failed to create standalone individual ${standaloneIndividual.entityGuid} - createIndividualData returned undefined`);
-            }
-          } catch (error) {
-            console.error(`Error creating standalone individual ${standaloneIndividual.entityGuid}:`, error);
-            individualId = undefined;
-          }
-        } else if (isUpdate) {
-          individualId = await this.updateIndividualData(standaloneIndividual);
-          // If update failed due to missing external ID, this indicates a data inconsistency
-          // The entity exists locally but was never synced to OpenSPP
-          // We should NOT automatically create as this could cause duplicates
-          // Instead, log an error and skip - the entity needs to be manually fixed
-          if (!individualId) {
-            console.error(`Update failed for individual ${standaloneIndividual.entityGuid} - no external ID found. Entity may not exist in OpenSPP. Skipping update to prevent duplicate creation.`);
-            failedUpdateGuids.add(standaloneIndividual.entityGuid);
-          } else {
-            // Mark as processed to prevent duplicate creation if a create event follows
-            processedEntityGuids.add(standaloneIndividual.entityGuid);
-            // Handle membership update if parentGuid changed
-            await this.handleMembershipUpdate(standaloneIndividual.entityGuid, standaloneIndividual);
-          }
-        }
-
-        if (individualId) {
-          updatedEvents.push(standaloneIndividual);
-          processedEntityGuids.add(standaloneIndividual.entityGuid);
-          const individualName = this.getEntityName(standaloneIndividual);
-          if (individualName) {
-            syncedEntityNames.push(individualName);
-          }
-        }
-      } catch (error) {
-        console.error("Error processing standalone individual:", error);
-      }
-    }
-
-    // Update timestamp based on successfully processed events only
-    // Only update timestamp for events that were actually processed and succeeded
-    // This ensures failed events can be retried in the next sync
-    const successfullyProcessedTimestamps = updatedEvents
-      .map((e) => {
-        // Normalize timestamp to ISO string for consistent comparison
-        // Type assertion needed because Postgres adapter can return Date objects despite interface
-        const timestampRaw = e.timestamp as string | Date | unknown;
-        if (typeof timestampRaw === "string") {
-          return timestampRaw;
-        }
-        if (timestampRaw instanceof Date) {
-          return timestampRaw.toISOString();
-        }
-        return new Date(timestampRaw as string | number).toISOString();
-      })
-      .filter((ts): ts is string => ts != null && ts !== "");
+    const entityStore = this.eventApplierService.getEntityStore();
     
-    if (successfullyProcessedTimestamps.length > 0) {
-      // Find the latest timestamp from successfully processed events
-      // This ensures only successfully synced events advance the timestamp
-      const latestProcessedTimestamp = successfullyProcessedTimestamps.reduce(
-        (latest, current) => (current > latest ? current : latest),
+    // Get all individual entities that need to be synced
+    // For now, we'll push entities that don't have an externalId set (new entities)
+    // or entities that have been modified locally
+    const allEntities = await entityStore.getAllEntities();
+    
+    const individualsToSync = allEntities.filter((pair) => {
+      const entity = pair.modified;
+      return (
+        entity.type === EntityType.Individual &&
+        entity.data.entityName === this.options.individual.entityName
       );
-      await this.eventStore.setLastPushExternalSyncTimestamp(latestProcessedTimestamp);
+    });
+
+    for (const entityPair of individualsToSync) {
+      const entity = entityPair.modified;
+      const externalId = await this.resolveExternalIdFromEntity(entity.guid);
+      
+      try {
+        if (externalId) {
+          // Entity exists in OpenSPP, update it
+          await this.updateIndividualData({
+            guid: entity.guid,
+            entityGuid: entity.guid,
+            type: "update-individual",
+            data: entity.data,
+            timestamp: entity.lastUpdated,
+            userId: entity.guid,
+            syncLevel: SyncLevel.LOCAL,
+          });
+        } else {
+          // New entity, create it
+          await this.createIndividualData({
+            guid: entity.guid,
+            entityGuid: entity.guid,
+            type: "create-individual",
+            data: entity.data,
+            timestamp: entity.lastUpdated,
+            userId: entity.guid,
+            syncLevel: SyncLevel.LOCAL,
+          });
+        }
+      } catch (error) {
+        console.error(`Failed to sync individual ${entity.guid}:`, error);
+        // Continue with other entities
+      }
     }
-
-    // Log push sync results
-    const totalPushed = updatedEvents.length;
-    
-    console.log(`[OpenSPP Push] Entities pushed: ${totalPushed}`);
-    console.log(`[OpenSPP Push] New entities pushed since: ${lastPushExternalSyncTimestamp}`);
-    if (syncedEntityNames.length > 0) {
-      console.log(`[OpenSPP Push] Entities synced (by name): ${syncedEntityNames.join(", ")}`);
-    }
-  }
-
-  private getLatestTimestamp(events: FormSubmission[]): string | null {
-    if (!Array.isArray(events) || events.length === 0) return null;
-    const timestamps = events.map((event: FormSubmission) => event.timestamp).filter((timestamp) => timestamp != null);
-
-    return timestamps.length > 0 ? timestamps.reduce((latest, current) => (current > latest ? current : latest)) : null;
   }
 
   async pullData(): Promise<void> {
-    if (!this.url) {
-      throw new Error("URL is required");
-    }
-
     await this.ensureClient();
 
-    const lastPullExternalSyncTimestamp = await this.eventStore.getLastPullExternalSyncTimestamp();
-    const households = await this.odooClient!.fetchHouseholdsSince(lastPullExternalSyncTimestamp);
-    const individuals = await this.odooClient!.fetchIndividualsSince(lastPullExternalSyncTimestamp);
-
-    const events: FormSubmission[] = [];
-    const errors: string[] = [];
-    let latestTimestamp = lastPullExternalSyncTimestamp;
-    const pulledEntityNames: string[] = [];
-
-    const householdTransformer = new HouseholdTransformer(this.options.household);
-    for (const household of households) {
-      try {
-        if (!household.id) {
-          console.warn("Skipping household without ID:", household);
-          continue;
-        }
-
-        const existingEntity = await this.eventApplierService.getEntityStore().getEntityByExternalId(String(household.id));
-        const existingEntityGuid = existingEntity?.modified.guid;
-        const event = householdTransformer.transform(household, undefined, existingEntityGuid);
-        events.push(event);
-
-        // Extract household name for logging
-        const householdName = typeof household.name === "string" ? household.name : String(household.name || "");
-        if (householdName) {
-          pulledEntityNames.push(householdName);
-        }
-
-        if (household.write_date && household.write_date > latestTimestamp) {
-          latestTimestamp = household.write_date;
-        }
-      } catch (error) {
-        const errorMsg = `Error transforming household ${household.id}: ${error instanceof Error ? error.message : String(error)}`;
-        console.error(errorMsg);
-        errors.push(errorMsg);
-      }
+    if (!this.odooClient) {
+      throw new Error("OdooClient not initialized");
     }
 
-    const individualTransformer = new IndividualTransformer(this.options.individual);
+    const entityStore = this.eventApplierService.getEntityStore();
+    const transformer = new IndividualTransformer(this.options.individual);
+
+    // Fetch individuals modified since last sync (or all if first sync)
+    const individuals = await this.odooClient.fetchIndividualsSince();
+
     for (const individual of individuals) {
       try {
-        if (!individual.id) {
-          console.warn("Skipping individual without ID:", individual);
-          continue;
-        }
+        // Check if we already have this entity by externalId
+        const existingEntity = individual.id
+          ? await entityStore.getEntityByExternalId(String(individual.id))
+          : null;
 
-        const existingEntity = await this.eventApplierService.getEntityStore().getEntityByExternalId(String(individual.id));
-        const existingEntityGuid = existingEntity?.modified.guid;
-        const event = individualTransformer.transform(individual, undefined, existingEntityGuid);
-        events.push(event);
+        // Transform OpenSPP individual to FormSubmission
+        const formSubmission = transformer.transform(
+          individual,
+          undefined,
+          existingEntity?.guid,
+        );
 
-        // Extract individual name for logging
-        const individualName = typeof individual.name === "string" ? individual.name : String(individual.name || "");
-        if (individualName) {
-          pulledEntityNames.push(individualName);
-        }
-
-        if (individual.write_date && individual.write_date > latestTimestamp) {
-          latestTimestamp = individual.write_date;
-        }
+        // Apply the event to create or update the entity
+        await this.eventApplierService.submitForm(formSubmission);
       } catch (error) {
-        const errorMsg = `Error transforming individual ${individual.id}: ${error instanceof Error ? error.message : String(error)}`;
-        console.error(errorMsg);
-        errors.push(errorMsg);
+        console.error(`Failed to pull individual ${individual.id}:`, error);
+        // Continue with other individuals
       }
-    }
-
-    for (const event of events) {
-      try {
-        await this.eventApplierService.submitForm(event);
-      } catch (error) {
-        const errorMsg = `Error applying event for entity ${event.entityGuid}: ${error instanceof Error ? error.message : String(error)}`;
-        console.error(errorMsg);
-        errors.push(errorMsg);
-      }
-    }
-
-    if (errors.length > 0) {
-      console.warn(`OpenSPP pull sync completed with ${errors.length} errors:`, errors);
-    }
-
-    // Log pull sync results
-    const totalPulled = events.length;
-    const newTimestamp = latestTimestamp && latestTimestamp > lastPullExternalSyncTimestamp ? latestTimestamp : lastPullExternalSyncTimestamp;
-    
-    console.log(`[OpenSPP Pull] Entities pulled: ${totalPulled}`);
-    console.log(`[OpenSPP Pull] New entities pulled since: ${lastPullExternalSyncTimestamp}`);
-    if (pulledEntityNames.length > 0) {
-      console.log(`[OpenSPP Pull] Entities synced (by name): ${pulledEntityNames.join(", ")}`);
-    }
-
-    if (latestTimestamp && latestTimestamp > lastPullExternalSyncTimestamp) {
-      await this.eventStore.setLastPullExternalSyncTimestamp(latestTimestamp);
     }
   }
 
   async sync(credentials?: ExternalSyncCredentials): Promise<void> {
-    const authenticated = await this.authenticate(credentials);
-    if (!authenticated) {
-      throw new Error("Failed to authenticate with OpenSPP");
-    }
+    // Push local changes to OpenSPP first
     await this.pushData(credentials);
+    
+    // Then pull changes from OpenSPP
     await this.pullData();
   }
 
@@ -498,573 +203,161 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     await this.odooClient.login();
   }
 
-  async createHouseholdData(
-    householdSubmission: FormSubmission,
-  ): Promise<number | undefined> {
-    // Check if external ID already exists (idempotency)
-    const existingExternalId = await this.resolveExternalIdFromEntity(householdSubmission.entityGuid);
-    if (existingExternalId) {
-      return existingExternalId;
-    }
-
-    const householdPayload = householdSubmission.data as Record<string, unknown>;
-
-    const householdData: OpenSPPCreateHouseholdPayload = {
-      is_registrant: true,
-      is_group: true,
-      name: this.getString(householdPayload, this.options.household.fieldMap?.name) ?? "",
-      kind: 1,
-      hh_size: this.parseInteger(this.getMappedField(householdPayload, this.options.household.fieldMap?.householdSize)) ?? 0,
-      hh_status: "active",
-    };
-
-    if (!this.odooClient) {
-      throw new Error("OdooClient not initialized");
-    }
-    return this.odooClient.createHousehold(householdData);
-  }
-
   async createIndividualData(
     member: FormSubmission,
   ): Promise<number | undefined> {
-    // Check if external ID already exists (idempotency)
-    const existingExternalId = await this.resolveExternalIdFromEntity(member.entityGuid);
-    if (existingExternalId) {
-      return existingExternalId;
-    }
-
-    const memberPayload = member.data as Record<string, unknown>;
-    
-    const firstName = this.getString(memberPayload, this.options.individual.fieldMap?.firstName) ?? "";
-    const lastName = this.getString(memberPayload, this.options.individual.fieldMap?.lastName) ?? "";
-    const middleName = this.getString(memberPayload, this.options.individual.fieldMap?.middleName);
-    const fullName = this.getString(memberPayload, this.options.individual.fieldMap?.displayName);
-    
-    let name = fullName;
-    if (!name) {
-      if (lastName && firstName) {
-        name = `${lastName.toUpperCase()}, ${firstName.toUpperCase()}`;
-      } else {
-        name = `${firstName} ${lastName}`.trim();
-      }
-    }
-
-    let birthdate: string | undefined = undefined;
-    const dateOfBirthField = this.getMappedField(memberPayload, this.options.individual.fieldMap?.dateOfBirth);
-    if (dateOfBirthField) {
-      if (typeof dateOfBirthField === "string") {
-        const parsedDate = this.parseDateString(dateOfBirthField);
-        birthdate = parsedDate || undefined;
-      } else if (typeof dateOfBirthField === "object" && dateOfBirthField !== null) {
-        const dateObj = dateOfBirthField as Record<string, unknown>;
-        const year = this.parseInteger(dateObj.year);
-        const month = this.parseInteger(dateObj.month);
-        const day = this.parseInteger(dateObj.day);
-        if (year && month && day) {
-          birthdate = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-        }
-      }
-    }
-
-    let gender: string | undefined = undefined;
-    const genderField = this.getMappedField(memberPayload, this.options.individual.fieldMap?.gender);
-    if (genderField) {
-      const genderStr = String(genderField).toLowerCase();
-      if (genderStr === "male") {
-        gender = "male";
-      } else if (genderStr === "female") {
-        gender = "female";
-      } else if (genderStr === "notmention" || genderStr === "not_mention") {
-        gender = undefined;
-      } else {
-        gender = String(genderField);
-      }
-    }
-
-    const individualData: OpenSPPCreateIndividualPayload = {
-      is_registrant: true,
-      is_group: false,
-      name: name || undefined,
-      family_name: lastName || undefined,
-      given_name: firstName || undefined,
-      addl_name: middleName || undefined,
-      birthdate: birthdate,
-      gender: gender,
-      email: this.getString(memberPayload, this.options.individual.fieldMap?.email) || undefined,
-      phone: this.getString(memberPayload, this.options.individual.fieldMap?.phone) || undefined,
-    };
+    await this.ensureClient();
 
     if (!this.odooClient) {
       throw new Error("OdooClient not initialized");
     }
-    return this.odooClient.createIndividual(individualData);
+
+    // Build OpenSPP payload from form submission using field mappings
+    const payload = this.buildOpenSppPayload(member.data);
+
+    console.log("CREATING_INDIVIDUAL", payload);
+
+    // Create the individual in OpenSPP
+    const externalId = await this.odooClient.createIndividual(payload);
+
+    console.log("CREATED_INDIVIDUAL", externalId);
+
+    // Save the external ID back to the entity
+    if (externalId) {
+      await this.saveExternalIdToEntity(member.entityGuid, externalId);
+    }
+
+    return externalId;
   }
 
   private async resolveExternalIdFromEntity(entityGuid: string): Promise<number | undefined> {
-    try {
-      const entityPair = await this.eventApplierService.getEntityStore().getEntity(entityGuid);
-      if (!entityPair) {
-        return undefined;
-      }
-      const externalId = entityPair.modified.data.externalId;
-      if (typeof externalId === "number") {
-        return externalId;
-      }
-      if (typeof externalId === "string") {
-        return this.parseInteger(externalId);
-      }
-      return undefined;
-    } catch (error) {
-      console.error(`Error resolving external ID for entity ${entityGuid}:`, error);
+    const entityPair = await this.eventApplierService.getEntityStore().getEntity(entityGuid);
+    if (!entityPair) {
       return undefined;
     }
-  }
 
-  async updateHouseholdData(
-    householdSubmission: FormSubmission,
-  ): Promise<number | undefined> {
-    const householdPayload = householdSubmission.data as Record<string, unknown>;
-    const externalId = await this.resolveExternalIdFromEntity(householdSubmission.entityGuid);
-
+    const externalId = entityPair.modified.data.externalId;
     if (!externalId) {
-      console.warn("Cannot update household: external ID not found", householdSubmission.entityGuid);
       return undefined;
     }
 
-    const householdData: Partial<OpenSPPCreateHouseholdPayload> = {
-      name: this.getString(householdPayload, this.options.household.fieldMap?.name) ?? "",
-      hh_size: this.parseInteger(this.getMappedField(householdPayload, this.options.household.fieldMap?.householdSize)) ?? 0,
-      hh_status: "active",
-    };
-
-    // Remove undefined values
-    const updateData: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(householdData)) {
-      if (value !== undefined) {
-        updateData[key] = value;
-      }
-    }
-
-    if (Object.keys(updateData).length === 0) {
-      return externalId;
-    }
-
-    await this.odooClient?.write("res.partner", [externalId], updateData);
-    return externalId;
+    // External ID can be stored as number or string
+    const id = typeof externalId === "number" ? externalId : parseInt(String(externalId), 10);
+    return isNaN(id) ? undefined : id;
   }
 
   async updateIndividualData(
     member: FormSubmission,
   ): Promise<number | undefined> {
-    const memberPayload = member.data as Record<string, unknown>;
+    await this.ensureClient();
+
+    if (!this.odooClient) {
+      throw new Error("OdooClient not initialized");
+    }
+
+    // Get the external ID from the entity
     const externalId = await this.resolveExternalIdFromEntity(member.entityGuid);
-
     if (!externalId) {
-      console.warn("Cannot update individual: external ID not found", member.entityGuid);
-      return undefined;
+      throw new Error(`Cannot update individual: entity ${member.entityGuid} does not have an externalId`);
     }
 
-    const firstName = this.getString(memberPayload, this.options.individual.fieldMap?.firstName);
-    const lastName = this.getString(memberPayload, this.options.individual.fieldMap?.lastName);
-    const middleName = this.getString(memberPayload, this.options.individual.fieldMap?.middleName);
-    const fullName = this.getString(memberPayload, this.options.individual.fieldMap?.displayName);
-    
-    let name = fullName;
-    if (!name && lastName && firstName) {
-      name = `${lastName.toUpperCase()}, ${firstName.toUpperCase()}`;
-    } else if (!name) {
-      name = `${firstName || ""} ${lastName || ""}`.trim();
-    }
+    // Build OpenSPP payload from form submission using field mappings
+    const payload = this.buildOpenSppPayload(member.data);
 
-    let birthdate: string | undefined = undefined;
-    const dateOfBirthField = this.getMappedField(memberPayload, this.options.individual.fieldMap?.dateOfBirth);
-    if (dateOfBirthField) {
-      if (typeof dateOfBirthField === "string") {
-        const parsedDate = this.parseDateString(dateOfBirthField);
-        birthdate = parsedDate || undefined;
-      } else if (typeof dateOfBirthField === "object" && dateOfBirthField !== null) {
-        const dateObj = dateOfBirthField as Record<string, unknown>;
-        const year = this.parseInteger(dateObj.year);
-        const month = this.parseInteger(dateObj.month);
-        const day = this.parseInteger(dateObj.day);
-        if (year && month && day) {
-          birthdate = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-        }
-      }
-    }
+    // Update the individual in OpenSPP
+    await this.odooClient.write("res.partner", [externalId], payload as unknown as Record<string, unknown>);
 
-    let gender: string | undefined = undefined;
-    const genderField = this.getMappedField(memberPayload, this.options.individual.fieldMap?.gender);
-    if (genderField) {
-      const genderStr = String(genderField).toLowerCase();
-      if (genderStr === "male") {
-        gender = "male";
-      } else if (genderStr === "female") {
-        gender = "female";
-      } else if (genderStr === "notmention" || genderStr === "not_mention") {
-        gender = undefined;
-      } else {
-        gender = String(genderField);
-      }
-    }
-
-    const updateData: Partial<OpenSPPCreateIndividualPayload> = {};
-    // Always include name fields if they were extracted from the payload
-    // This ensures given_name and family_name are updated even if they're empty strings
-    if (name !== undefined) updateData.name = name || undefined;
-    
-    // For firstName and lastName, always include them if the field exists in the payload
-    // This ensures they are updated even when empty or null
-    const firstNameField = this.options.individual.fieldMap?.firstName;
-    const lastNameField = this.options.individual.fieldMap?.lastName;
-    const middleNameField = this.options.individual.fieldMap?.middleName;
-    
-    // Check if the field exists in payload (even if empty or null)
-    // This allows updating fields even when they're cleared
-    if (firstNameField && firstNameField in memberPayload) {
-      // Use the raw value from payload, allowing empty strings to clear the field
-      const firstNameValue = memberPayload[firstNameField];
-      updateData.given_name = typeof firstNameValue === "string" ? (firstNameValue || undefined) : undefined;
-    }
-    if (lastNameField && lastNameField in memberPayload) {
-      const lastNameValue = memberPayload[lastNameField];
-      updateData.family_name = typeof lastNameValue === "string" ? (lastNameValue || undefined) : undefined;
-    }
-    if (middleNameField && middleNameField in memberPayload) {
-      const middleNameValue = memberPayload[middleNameField];
-      updateData.addl_name = typeof middleNameValue === "string" ? (middleNameValue || undefined) : undefined;
-    }
-    
-    if (birthdate !== undefined) updateData.birthdate = birthdate;
-    if (gender !== undefined) updateData.gender = gender;
-    
-    const email = this.getString(memberPayload, this.options.individual.fieldMap?.email);
-    const emailField = this.options.individual.fieldMap?.email;
-    if (emailField && emailField in memberPayload) {
-      updateData.email = email || undefined;
-    }
-    
-    const phone = this.getString(memberPayload, this.options.individual.fieldMap?.phone);
-    const phoneField = this.options.individual.fieldMap?.phone;
-    if (phoneField && phoneField in memberPayload) {
-      updateData.phone = phone || undefined;
-    }
-
-    // Remove undefined values
-    const cleanUpdateData: Record<string, unknown> = {};
-    for (const [key, value] of Object.entries(updateData)) {
-      if (value !== undefined) {
-        cleanUpdateData[key] = value;
-      }
-    }
-
-    if (Object.keys(cleanUpdateData).length === 0) {
-      return externalId;
-    }
-
-    await this.odooClient?.write("res.partner", [externalId], cleanUpdateData);
     return externalId;
   }
 
-  private async handleMembershipUpdate(
-    individualGuid: string,
-    individualEvent: FormSubmission,
-  ): Promise<void> {
+  /**
+   * Builds an OpenSPP payload from form submission data using configured field mappings.
+   * Uses field transformers to convert values to the appropriate OpenSPP format.
+   */
+  private buildOpenSppPayload(formData: Record<string, unknown>): OpenSPPCreateIndividualPayload {
+    const fieldMappings = this.getFieldMappings();
+    const payload: Record<string, unknown> = {
+      is_registrant: true,
+      is_group: false,
+    };
+
+    // Apply field mappings with transformers
+    for (const mapping of fieldMappings) {
+      const formValue = formData[mapping.formField];
+      
+      // Skip if form field value is missing
+      if (formValue === null || formValue === undefined || formValue === "") {
+        continue;
+      }
+
+      // Create transformer for this field
+      const transformer = createTransformer(
+        mapping.transformer.type,
+        mapping.transformer.options,
+      );
+
+      // Transform the value from form format to OpenSPP format
+      const transformedValue = transformer.transform(formValue);
+
+      // Map to OpenSPP field name
+      payload[mapping.opensppField] = transformedValue;
+    }
+
+    // Ensure required fields are present
+    const finalPayload: OpenSPPCreateIndividualPayload = {
+      is_registrant: true,
+      is_group: false,
+      ...payload,
+    };
+
+    return finalPayload;
+  }
+
+  /**
+   * Retrieves field mappings from the external sync config.
+   * Field mappings can be stored either:
+   * 1. Directly on config.fieldMappings as an array (preferred)
+   * 2. As a JSON string in extraFields (legacy support)
+   */
+  private getFieldMappings(): FieldMapping[] {
+    // Check if fieldMappings is directly on the config object (preferred)
+    const configWithMappings = this.config as ExternalSyncConfig & { fieldMappings?: FieldMapping[] };
+    if (configWithMappings.fieldMappings && Array.isArray(configWithMappings.fieldMappings)) {
+      return configWithMappings.fieldMappings;
+    }
+
+    // Fallback: check extraFields for legacy JSON string format
+    const mappingsJson = getExternalField(this.config, "fieldMappings");
+    if (!mappingsJson) {
+      // Return empty array if no mappings configured
+      // The adapter will still work, just won't map any fields
+      return [];
+    }
+
     try {
-      const entityPair = await this.eventApplierService.getEntityStore().getEntity(individualGuid);
-      if (!entityPair) {
-        return;
-      }
-
-      const currentParentGuid = this.getString(
-        individualEvent.data as Record<string, unknown>,
-        resolveParentField(this.options.individual),
-      );
-      const previousParentGuid = this.getString(
-        entityPair.modified.data as Record<string, unknown>,
-        resolveParentField(this.options.individual),
-      );
-
-      const externalId = await this.resolveExternalIdFromEntity(individualGuid);
-      if (!externalId) {
-        return;
-      }
-
-      // If parentGuid changed, update membership
-      if (currentParentGuid !== previousParentGuid) {
-        const newParentExternalId = await this.resolveExternalIdFromEntity(currentParentGuid || "");
-        if (newParentExternalId) {
-          const memberData = individualEvent.data as Record<string, unknown>;
-          const membershipKind = this.parseInteger(
-            this.getMappedField(memberData, this.options.individual.fieldMap?.membershipKind),
-          );
-
-          const kindCommand: [number, number, number[]][] | undefined =
-            typeof membershipKind === "number" && membershipKind > 0
-              ? [[6, 0, [membershipKind]]]
-              : undefined;
-
-          // Add to new group
-          await this.odooClient?.addMembersToGroup(newParentExternalId, [
-            {
-              individual: externalId,
-              ...(kindCommand ? { kind: kindCommand } : {}),
-            },
-          ]);
-        }
-        // Note: OpenSPP typically handles removal from old group automatically when adding to new group
-        // If explicit removal is needed, it would require fetching current memberships and removing them
-      }
+      return JSON.parse(mappingsJson) as FieldMapping[];
     } catch (error) {
-      console.error(`Error handling membership update for individual ${individualGuid}:`, error);
+      console.warn("Failed to parse field mappings, using empty mapping:", error);
+      return [];
     }
   }
 
   /**
-   * Parses and normalizes date strings to YYYY-MM-DD format (OpenSPP standard).
-   * 
-   * Handles bidirectional transformation:
-   * - When receiving data FROM OpenSPP: expects YYYY-MM-DD format and validates it
-   * - When sending data TO OpenSPP: converts from various formats to YYYY-MM-DD
-   * 
-   * Supported input formats:
-   * - YYYY-MM-DD (OpenSPP standard - preferred)
-   * - MM/DD/YYYY (common form input format)
-   * - DD/MM/YYYY (alternative form input format)
-   * - ISO date strings (handled by Date constructor)
-   * 
-   * @param dateString The date string to parse and normalize
-   * @returns Normalized date string in YYYY-MM-DD format, or null if invalid
+   * Gets a required field from the external sync config.
    */
-  private parseDateString(dateString: string): string | null {
-    if (!dateString || dateString === "00/00/0000" || dateString.trim() === "") {
-      return null;
-    }
-
-    const trimmed = dateString.trim();
-
-    try {
-      // Primary: Check for OpenSPP standard format YYYY-MM-DD
-      const openSppFormat = /^(\d{4})-(\d{2})-(\d{2})$/;
-      if (openSppFormat.test(trimmed)) {
-        // Validate the date is actually valid (e.g., not 2024-13-45)
-        const parsed = new Date(trimmed);
-        if (!isNaN(parsed.getTime()) && parsed.toISOString().split("T")[0] === trimmed) {
-          return trimmed;
-        }
-        // If format matches but date is invalid, try to fix it or return null
-        return null;
-      }
-
-      // Secondary: Handle MM/DD/YYYY format (common in form inputs)
-      const mmddyyyyFormat = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
-      const mmddyyyyMatch = trimmed.match(mmddyyyyFormat);
-      if (mmddyyyyMatch) {
-        const month = String(mmddyyyyMatch[1]).padStart(2, "0");
-        const day = String(mmddyyyyMatch[2]).padStart(2, "0");
-        const year = mmddyyyyMatch[3];
-        const normalized = `${year}-${month}-${day}`;
-        // Validate the converted date
-        const parsed = new Date(normalized);
-        if (!isNaN(parsed.getTime()) && parsed.toISOString().split("T")[0] === normalized) {
-          return normalized;
-        }
-        return null;
-      }
-
-      // Note: We treat slash-separated dates as MM/DD/YYYY (US format)
-      // If DD/MM/YYYY format is needed, it should be handled at the form/data entry level
-      // OpenSPP standard is YYYY-MM-DD, so all dates are normalized to this format
-
-      // Fallback: Try parsing with Date constructor (handles ISO strings and other formats)
-      const parsed = new Date(trimmed);
-      if (!isNaN(parsed.getTime())) {
-        const isoDate = parsed.toISOString().split("T")[0];
-        // Ensure it's in YYYY-MM-DD format
-        if (/^(\d{4})-(\d{2})-(\d{2})$/.test(isoDate)) {
-          return isoDate;
-        }
-      }
-    } catch {
-      return null;
-    }
-
-    return null;
-  }
-
-  private filterSyncEvents(events: FormSubmission[], since: string): FormSubmission[] {
-    return events.filter((event) => {
-      if (!event.data || typeof event.data !== "object") {
-        return false;
-      }
-
-      const entityName = this.getString(event.data, "entityName");
-      const isHousehold = entityName === this.options.household.entityName;
-      const isIndividual = entityName === this.options.individual.entityName;
-      const isCreate = event.type.startsWith("create-");
-      const isUpdate = event.type.startsWith("update-");
-      
-      // Normalize timestamps to ISO strings for proper comparison
-      // Postgres may return Date objects while IndexedDB returns strings
-      // Type assertion needed because Postgres adapter can return Date objects despite interface
-      const eventTimestampRaw = event.timestamp as string | Date | unknown;
-      const eventTimestamp = typeof eventTimestampRaw === "string" 
-        ? eventTimestampRaw 
-        : eventTimestampRaw instanceof Date 
-          ? eventTimestampRaw.toISOString() 
-          : new Date(eventTimestampRaw as string | number).toISOString();
-      const sinceTimestamp = since;
-      
-      const isNewer = eventTimestamp > sinceTimestamp;
-
-      if ((isHousehold || isIndividual) && (isCreate || isUpdate) && isNewer) {
-        return true;
-      }
-
-      return false;
-    });
-  }
-
-  private groupEvents(events: FormSubmission[]): GroupedData {
-    const grouped: GroupedData = {
-      households: [],
-      standaloneIndividuals: [],
-    };
-    const householdIndex = new Map<string, { household: FormSubmission; individuals: FormSubmission[] }>();
-    const householdQueue: FormSubmission[] = [];
-    const individualQueue: FormSubmission[] = [];
-
-    for (const event of events) {
-      if (!event.data || typeof event.data !== "object") {
-        continue;
-      }
-
-      const entityName = this.getString(event.data, "entityName");
-
-      if (entityName === this.options.household.entityName) {
-        householdQueue.push(event);
-        continue;
-      }
-
-      if (entityName === this.options.individual.entityName) {
-        individualQueue.push(event);
-      }
-    }
-
-    for (const householdEvent of householdQueue) {
-      const container = {
-        household: householdEvent,
-        individuals: [],
-      };
-
-      grouped.households.push(container);
-      householdIndex.set(householdEvent.entityGuid, container);
-    }
-
-    for (const individualEvent of individualQueue) {
-      const parentGuid = this.getString(
-        individualEvent.data as Record<string, unknown>,
-        resolveParentField(this.options.individual),
-      );
-
-      if (!parentGuid) {
-        grouped.standaloneIndividuals.push(individualEvent);
-        continue;
-      }
-
-      const householdEntry = householdIndex.get(parentGuid);
-      if (householdEntry) {
-        householdEntry.individuals.push(individualEvent);
-      } else {
-        grouped.standaloneIndividuals.push(individualEvent);
-      }
-    }
-
-    return grouped;
-  }
-
-  private getMappedField(data: Record<string, unknown>, key?: string): unknown {
-    if (!key) {
-      return undefined;
-    }
-    return data[key];
-  }
-
-  private getRequiredField(fieldName: string): string {
-    const value = this.getOptionalField(fieldName);
+  private getRequiredField(name: string): string {
+    const value = getExternalField(this.config, name);
     if (!value) {
-      throw new Error(`Missing required OpenSPP configuration field: ${fieldName}`);
+      throw new Error(`Required field '${name}' is missing from external sync config`);
     }
     return value;
   }
 
-  private getOptionalField(fieldName: string): string | undefined {
-    return this.config.extraFields?.find((field) => field.name === fieldName)?.value;
-  }
-
-  private formatDate(date: string): string {
-    const newDate = new Date(date);
-    return newDate.toISOString().split("T")[0];
-  }
-
-  private parseNumber(value: unknown): number | undefined {
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return value;
-    }
-    if (typeof value === "string") {
-      const parsed = Number(value);
-      return Number.isNaN(parsed) ? undefined : parsed;
-    }
-    return undefined;
-  }
-
-  private parseInteger(value: unknown): number | undefined {
-    const parsed = this.parseNumber(value);
-    return parsed === undefined ? undefined : Math.trunc(parsed);
-  }
-
-  private getString(data: Record<string, unknown>, key?: string): string | undefined {
-    if (!key) {
-      return undefined;
-    }
-    const value = data[key];
-    return typeof value === "string" ? value : undefined;
-  }
-
   /**
-   * Extracts the display name for an entity from its FormSubmission data.
-   * Used for logging purposes.
+   * Gets an optional field from the external sync config.
    */
-  private getEntityName(event: FormSubmission): string | undefined {
-    if (!event.data || typeof event.data !== "object") {
-      return undefined;
-    }
-
-    const data = event.data as Record<string, unknown>;
-    const entityName = this.getString(data, "entityName");
-
-    if (entityName === this.options.household.entityName) {
-      return this.getString(data, this.options.household.fieldMap?.name);
-    }
-
-    if (entityName === this.options.individual.entityName) {
-      const displayName = this.getString(data, this.options.individual.fieldMap?.displayName);
-      if (displayName) {
-        return displayName;
-      }
-
-      const firstName = this.getString(data, this.options.individual.fieldMap?.firstName);
-      const lastName = this.getString(data, this.options.individual.fieldMap?.lastName);
-      
-      if (lastName && firstName) {
-        return `${lastName.toUpperCase()}, ${firstName.toUpperCase()}`;
-      }
-      if (firstName || lastName) {
-        return `${firstName || ""} ${lastName || ""}`.trim();
-      }
-    }
-
-    return undefined;
+  private getOptionalField(name: string): string | undefined {
+    return getExternalField(this.config, name);
   }
 
   /**
@@ -1108,7 +401,6 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       // The next sync will try again
     }
   }
-
 }
 
 export default OpenSppSyncAdapter;

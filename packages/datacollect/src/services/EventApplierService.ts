@@ -293,7 +293,6 @@ export class EventApplierService {
   async submitForm(formDataParam: FormSubmission): Promise<EntityDoc | null> {
     try {
       const formData = cloneDeep(formDataParam);
-      this.logger.info(`Submitting form: ${JSON.stringify(formData)}`);
       validateFormSubmission(formData);
 
       // Get existing entity if it exists

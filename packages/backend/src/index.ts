@@ -29,8 +29,6 @@ const {
   DATABASE_URL: databaseUrl, // Railway provides DATABASE_URL
 } = process.env;
 
-console.log({postgresUrl, databaseUrl});
-
 if (!adminPassword || !adminEmail) {
   throw new Error("Initial admin credentials must be set");
 }

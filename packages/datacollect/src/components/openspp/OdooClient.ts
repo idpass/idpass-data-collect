@@ -72,9 +72,6 @@ export default class OdooClient {
 
   private async makeRequest<T>(endpoint: string, data: Record<string, unknown>): Promise<T> {
     try {
-
-      console.log('OPENSPP_REQUEST', endpoint, JSON.stringify(data, null, 2));
-      
       const response = await axios.post<JsonRpcResponse<T>>(
         `${this.baseUrl}${endpoint}`,
         {
@@ -89,8 +86,6 @@ export default class OdooClient {
           },
         },
       );
-
-      console.log('OPENSPP_RESPONSE', JSON.stringify(response.data, null, 2));
 
       if (response.data.error) {
         const errorMsg = response.data.error.data?.message || response.data.error.message || "JSON-RPC request failed";
@@ -237,7 +232,7 @@ export default class OdooClient {
   }
 
   async write<T = boolean>(model: string, ids: number[], data: Record<string, unknown>): Promise<T> {
-    return this.call<T>(model, "write", [[ids[0]], data]);
+    return this.call<T>(model, "write", [ids, data]);
   }
 
   async unlink<T = boolean>(model: string, ids: number[]): Promise<T> {

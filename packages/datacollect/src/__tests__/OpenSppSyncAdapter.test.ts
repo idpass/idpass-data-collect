@@ -52,6 +52,7 @@ describe("OpenSppSyncAdapter", () => {
 
     eventStore = {
       getAllEvents: jest.fn(),
+      getEventsSince: jest.fn(),
       getLastPushExternalSyncTimestamp: jest.fn().mockResolvedValue("1970-01-01T00:00:00.000Z"),
       setLastPushExternalSyncTimestamp: jest.fn(),
       getLastPullExternalSyncTimestamp: jest.fn().mockResolvedValue("1970-01-01T00:00:00.000Z"),
@@ -149,7 +150,7 @@ describe("OpenSppSyncAdapter", () => {
         },
       });
 
-      eventStore.getAllEvents.mockResolvedValue([rootEvent, householdEvent, individualEvent]);
+      eventStore.getEventsSince.mockResolvedValue([rootEvent, householdEvent, individualEvent]);
 
       adapter = new OpenSppSyncAdapter(eventStore, eventApplierService, config);
 

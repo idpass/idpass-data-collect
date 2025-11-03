@@ -70,20 +70,6 @@ const onSubmit = async (submission: FormSubmissionEvent) => {
   router.go(-1)
 }
 
-const handleSaveDraft = async () => {
-  if (isSavingDraft.value) {
-    return
-  }
-  try {
-    isSavingDraft.value = true
-    alert('Draft saved locally.')
-  } catch (error) {
-    console.error('Unable to save draft', error)
-  } finally {
-    isSavingDraft.value = false
-  }
-}
-
 const onBack = () => {
   router.go(-1)
 }
@@ -102,12 +88,6 @@ const goToSubmissions = () => {
         </svg>
       </button>
       <div class="top-bar__actions">
-        <button class="pill-button" type="button" @click="handleSaveDraft" :disabled="isSavingDraft">
-          <svg viewBox="0 0 24 24" focusable="false">
-            <path d="M17 3H7a2 2 0 0 0-2 2v14l7-3 7 3V5a2 2 0 0 0-2-2z" fill="currentColor" />
-          </svg>
-          Save Draft
-        </button>
         <span class="badge">{{ entityForm?.displayTemplate || (isGroup ? 'Group' : 'Assessment') }}</span>
       </div>
     </div>

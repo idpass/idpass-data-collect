@@ -238,6 +238,51 @@
 						}
 					},
 					"response": []
+				},
+				{
+					"name": "Update Individual (res.partner)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const json = pm.response.json();",
+									"if (!json || json.result !== true) {",
+									"  throw new Error('Individual update failed. Check response for details.');",
+									"}",
+									"pm.test('Individual update succeeded', function () {",
+									"  pm.expect(json.result).to.eql(true);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"{{database}}\",\n      {{uid}},\n      \"{{password}}\",\n      \"res.partner\",\n      \"write\",\n      [\n        [{{individualId}}],\n        {\n          \"name\": \"Updated Demo Individual\",\n          \"given_name\": \"John\",\n          \"family_name\": \"Smith\",\n          \"gender\": 1,\n          \"birthdate\": \"1990-05-15\",\n          \"email\": \"john.smith@example.org\",\n          \"phone\": \"+1234567890\"\n        }\n      ]\n    ],\n    \"kwargs\": {}\n  },\n  \"id\": 8\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/jsonrpc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"jsonrpc"
+							]
+						}
+					},
+					"response": []
 				}
 			],
 			"description": "Create households and individuals in OpenSPP like DataCollect would during a push."

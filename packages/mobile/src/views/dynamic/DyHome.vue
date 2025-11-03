@@ -859,6 +859,18 @@ const toggleAddOptions = () => {
   box-shadow: 0 4px 12px rgba(34, 197, 94, 0.1);
 }
 
+.success-message .error-icon {
+  color: #166534;
+}
+
+.success-message .error-close {
+  color: #166534;
+}
+
+.success-message .error-close:hover {
+  background: rgba(22, 101, 52, 0.1);
+}
+
 .error-icon {
   width: 20px;
   height: 20px;

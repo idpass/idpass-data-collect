@@ -214,7 +214,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
     const guids: string[] = [];
     try {
       await client.query("BEGIN");
-      console.log("Saving events: ", events);
+      
       for (const event of events) {
         await client.query(
           "INSERT INTO events (guid, tenant_id, entity_guid, type, data, timestamp, user_id, sync_level) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",

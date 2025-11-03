@@ -254,3 +254,52 @@ export const deleteUser = async (userId: string) => {
   const response = await instance.delete(`${USERS_URL}/${userId}`)
   return response.data
 }
+
+// OpenSPP Field Mapping APIs
+const OPENSPP_FIELDS_URL = '/api/openspp-fields'
+
+export interface ParsedOpenSppField {
+  name: string
+  type: 'text' | 'date' | 'relation'
+  label?: string
+  required?: boolean
+  options?: Array<{ id: number | string; label: string }>
+}
+
+export interface FieldMapping {
+  formField: string
+  opensppField: string
+  transformer: {
+    type: 'text' | 'date' | 'relation'
+    options?: {
+      // Date transformer options
+      inputFormat?: 'YYYY-MM-DD' | 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'auto'
+      outputFormat?: 'YYYY-MM-DD' | 'MM/DD/YYYY' | 'DD/MM/YYYY'
+      // Relation transformer options
+      relationOptions?: Array<{ id: number | string; label: string }>
+      relationOutputFormat?: 'id' | 'label' | '[id,label]'
+    }
+  }
+}
+
+export const parseOpenSppFieldsFromFile = async (file: File): Promise<{ fields: ParsedOpenSppField[] }> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const formData = new FormData()
+  formData.append('payload', file)
+  const response = await instance.post(`${OPENSPP_FIELDS_URL}/parse-file`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+  return response.data
+}
+
+export const parseOpenSppFieldsFromPayload = async (payload: unknown): Promise<{ fields: ParsedOpenSppField[] }> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const response = await instance.post(`${OPENSPP_FIELDS_URL}/parse`, payload)
+  return response.data
+}

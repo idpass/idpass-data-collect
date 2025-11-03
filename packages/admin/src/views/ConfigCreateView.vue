@@ -4,9 +4,11 @@ import merge from 'lodash/merge'
 import set from 'lodash/set'
 import { onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { createApp as createAppApi, getApp, updateApp as updateAppApi } from '@/api'
+import { createApp as createAppApi, getApp, updateApp as updateAppApi, type ParsedOpenSppField, type FieldMapping } from '@/api'
 import FormBuilderDialog from '@/components/FormBuilderDialog.vue'
 import FieldsInput from '@/components/FieldsInput.vue'
+import OpenSppFieldInputDialog from '@/components/OpenSppFieldInputDialog.vue'
+import FieldMappingDialog from '@/components/FieldMappingDialog.vue'
 import { parseOpenSppProgramSpecification } from '@/utils/openSppImport'
 import { useSnackBarStore } from '@/stores/snackBar'
 
@@ -20,6 +22,7 @@ type ExternalSync = {
   type?: string
   url: string
   extraFields: ExternalSyncField[]
+  fieldMappings?: FieldMapping[]
 }
 
 type AuthConfig = {
@@ -74,6 +77,12 @@ const isReady = ref(false)
 const specImportFiles = ref<File[] | null>(null)
 const isImportingSpec = ref(false)
 
+// OpenSPP Field Mapping
+const showOpenSppFieldInput = ref(false)
+const showFieldMapping = ref(false)
+const opensppFields = ref<ParsedOpenSppField[]>([])
+const selectedFormForMapping = ref<EntityForm | null>(null)
+
 onMounted(async () => {
   const id = route.params.id
   isEdit.value = route.name?.toString().includes('edit') || false
@@ -82,6 +91,10 @@ onMounted(async () => {
     form.value = merge(form.value, config)
     if (route.name?.toString().includes('copy')) {
       form.value.name = config.name + ' Copy'
+    }
+    // Load existing field mappings if they exist
+    if (config.externalSync?.fieldMappings) {
+      // Field mappings are already loaded via merge
     }
   }
   isReady.value = true
@@ -404,6 +417,99 @@ const onSpecFileSelection = async (value: File[] | File | null) => {
   }
   await importSpecFromFile(file)
 }
+
+// OpenSPP Field Mapping handlers
+const onOpenSppFieldsParsed = (fields: ParsedOpenSppField[]) => {
+  opensppFields.value = fields
+  snackBarStore.showSnackbar(`Loaded ${fields.length} OpenSPP fields`, 'success')
+}
+
+const openFieldMappingForForm = (entityForm: EntityForm) => {
+  selectedFormForMapping.value = entityForm
+  showFieldMapping.value = true
+}
+
+const onFieldMappingsSave = (mappings: FieldMapping[]) => {
+  if (!form.value.externalSync) {
+    form.value.externalSync = {
+      type: undefined,
+      url: '',
+      extraFields: [],
+    }
+  }
+  form.value.externalSync.fieldMappings = mappings
+  snackBarStore.showSnackbar(`Saved ${mappings.length} field mappings`, 'success')
+}
+
+// Extract form fields from formio schema
+const getFormFields = (formio: unknown): Array<{ key: string; label: string }> => {
+  if (!formio || typeof formio !== 'object') {
+    return []
+  }
+
+  const formioObj = formio as { components?: unknown[] }
+  if (!formioObj.components || !Array.isArray(formioObj.components)) {
+    return []
+  }
+
+  const fields: Array<{ key: string; label: string }> = []
+
+  const traverse = (components: unknown[]): void => {
+    components.forEach((component) => {
+      if (!component || typeof component !== 'object') {
+        return
+      }
+
+      const comp = component as {
+        key?: string
+        label?: string
+        input?: boolean
+        type?: string
+        components?: unknown[]
+        columns?: Array<{ components?: unknown[] }>
+        rows?: Array<Array<{ components?: unknown[] }>>
+      }
+
+      // Check if it's an input field
+      if (comp.input && comp.key && comp.type !== 'button') {
+        fields.push({
+          key: comp.key,
+          label: comp.label || comp.key,
+        })
+      }
+
+      // Traverse nested components
+      if (Array.isArray(comp.components)) {
+        traverse(comp.components)
+      }
+      if (Array.isArray(comp.columns)) {
+        comp.columns.forEach((column) => {
+          if (Array.isArray(column.components)) {
+            traverse(column.components)
+          }
+        })
+      }
+      if (Array.isArray(comp.rows)) {
+        comp.rows.forEach((row) => {
+          if (Array.isArray(row)) {
+            row.forEach((cell) => {
+              if (cell?.components && Array.isArray(cell.components)) {
+                traverse(cell.components)
+              }
+            })
+          }
+        })
+      }
+    })
+  }
+
+  traverse(formioObj.components)
+  return fields
+}
+
+const isOpenSppSync = () => {
+  return form.value.externalSync?.type === 'openspp-adapter' || form.value.externalSync?.type === 'openspp'
+}
 </script>
 
 <template>
@@ -537,6 +643,68 @@ const onSpecFileSelection = async (value: File[] | File | null) => {
             ></v-text-field>
             <FieldsInput v-model="form.externalSync.extraFields" :as-array="true" />
 
+            <!-- OpenSPP Field Mapping -->
+            <div v-if="isOpenSppSync()">
+              <v-divider class="my-6"></v-divider>
+              <div class="d-flex align-center justify-space-between mb-4">
+                <h2 class="text-h5 mb-0">OpenSPP Field Mapping</h2>
+                <v-btn
+                  color="primary"
+                  variant="outlined"
+                  prepend-icon="mdi-upload"
+                  @click="showOpenSppFieldInput = true"
+                >
+                  Import OpenSPP Fields
+                </v-btn>
+              </div>
+              <v-alert v-if="opensppFields.length === 0" type="info" variant="tonal" density="compact" class="mb-4">
+                Import OpenSPP fields from a sample payload (file upload or JSON paste) to enable field mapping.
+              </v-alert>
+              <v-alert v-else type="success" variant="tonal" density="compact" class="mb-4">
+                {{ opensppFields.length }} OpenSPP field{{ opensppFields.length === 1 ? '' : 's' }} loaded.
+                Map form fields below.
+              </v-alert>
+
+              <!-- Field Mappings per Form -->
+              <div v-for="(entityForm, formIndex) in form.entityForms" :key="formIndex" class="mb-4">
+                <v-card variant="outlined">
+                  <v-card-title class="text-subtitle-1">
+                    {{ entityForm.title || entityForm.name }}
+                    <v-chip size="small" class="ml-2">
+                      {{ getFormFields(entityForm.formio).length }} fields
+                    </v-chip>
+                  </v-card-title>
+                  <v-card-text>
+                    <div v-if="!entityForm.formio" class="text-body-2 text-medium-emphasis">
+                      Create the form first to enable field mapping.
+                    </div>
+                    <div v-else>
+                      <v-btn
+                        color="primary"
+                        variant="outlined"
+                        size="small"
+                        prepend-icon="mdi-link"
+                        @click="openFieldMappingForForm(entityForm)"
+                      >
+                        Map Fields to OpenSPP
+                      </v-btn>
+                      <div v-if="form.externalSync?.fieldMappings?.length" class="mt-3">
+                        <div class="text-body-2 text-medium-emphasis mb-2">Current mappings:</div>
+                        <v-chip
+                          v-for="(mapping, idx) in form.externalSync.fieldMappings"
+                          :key="idx"
+                          size="small"
+                          class="mr-2 mb-2"
+                        >
+                          {{ mapping.formField }} ? {{ mapping.opensppField }}
+                        </v-chip>
+                      </div>
+                    </div>
+                  </v-card-text>
+                </v-card>
+              </div>
+            </div>
+
             <!-- AUTH CONFIG -->
             <v-divider class="my-6"></v-divider>
             <h2 class="text-h5 mb-4">Auth Config</h2>
@@ -594,6 +762,19 @@ const onSpecFileSelection = async (value: File[] | File | null) => {
       :title="selectedForFormBuilder?.title"
       :formio="selectedForFormBuilder?.formio"
       @submit="saveFormio"
+    />
+
+    <OpenSppFieldInputDialog
+      v-model="showOpenSppFieldInput"
+      @fields-parsed="onOpenSppFieldsParsed"
+    />
+
+    <FieldMappingDialog
+      v-model="showFieldMapping"
+      :form-fields="selectedFormForMapping ? getFormFields(selectedFormForMapping.formio) : []"
+      :openspp-fields="opensppFields"
+      :existing-mappings="form.externalSync?.fieldMappings"
+      @save="onFieldMappingsSave"
     />
   </div>
 </template>
