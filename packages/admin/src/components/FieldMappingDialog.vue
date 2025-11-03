@@ -27,6 +27,8 @@ watch(() => props.modelValue, (val) => {
     } else {
       mappings.value = []
     }
+    // Reset expanded rows when dialog opens
+    expandedRows.value = {}
   }
 })
 
@@ -47,6 +49,19 @@ const addMapping = () => {
 
 const removeMapping = (index: number) => {
   mappings.value.splice(index, 1)
+  // Clean up expanded state for removed mapping and adjust indices
+  delete expandedRows.value[index]
+  // Shift all expanded states down by one for indices after the removed one
+  const newExpandedRows: Record<number, boolean> = {}
+  Object.keys(expandedRows.value).forEach((key) => {
+    const idx = Number(key)
+    if (idx > index) {
+      newExpandedRows[idx - 1] = expandedRows.value[idx]
+    } else if (idx < index) {
+      newExpandedRows[idx] = expandedRows.value[idx]
+    }
+  })
+  expandedRows.value = newExpandedRows
 }
 
 const getFieldOptions = (opensppField: ParsedOpenSppField | undefined) => {
@@ -112,14 +127,14 @@ const opensppFieldItems = computed(() => {
   }))
 })
 
-const expandedRows = ref<Set<number>>(new Set())
+const expandedRows = ref<Record<number, boolean>>({})
+
+const isRowExpanded = (index: number): boolean => {
+  return !!(expandedRows.value && expandedRows.value[index])
+}
 
 const toggleRowExpansion = (index: number) => {
-  if (expandedRows.value.has(index)) {
-    expandedRows.value.delete(index)
-  } else {
-    expandedRows.value.add(index)
-  }
+  expandedRows.value[index] = !expandedRows.value[index]
 }
 </script>
 
@@ -219,7 +234,7 @@ const toggleRowExpansion = (index: number) => {
                         @click="toggleRowExpansion(index)"
                       >
                         <v-icon size="16">
-                          {{ expandedRows.value.has(index) ? 'mdi-chevron-up' : 'mdi-chevron-down' }}
+                          {{ isRowExpanded(index) ? 'mdi-chevron-up' : 'mdi-chevron-down' }}
                         </v-icon>
                       </v-btn>
                     </div>
@@ -238,7 +253,7 @@ const toggleRowExpansion = (index: number) => {
                   </td>
                 </tr>
                 <!-- Expanded options row -->
-                <tr v-if="expandedRows.value.has(index)" class="mapping-options-row">
+                <tr v-if="isRowExpanded(index)" class="mapping-options-row">
                   <td colspan="5" class="pa-2">
                     <v-card variant="outlined" density="compact" class="pa-3">
                       <!-- Date Transformer Options -->
