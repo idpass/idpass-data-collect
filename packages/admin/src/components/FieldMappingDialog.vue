@@ -36,6 +36,35 @@ watch(dialog, (val) => {
   emit('update:modelValue', val)
 })
 
+// Watch for transformer type changes and set default options
+watch(
+  () => mappings.value.map(m => m.transformer.type),
+  () => {
+    mappings.value.forEach((mapping) => {
+      if (mapping.transformer.type === 'multiselect') {
+        if (!mapping.transformer.options) {
+          mapping.transformer.options = {}
+        }
+        if (!mapping.transformer.options.delimiter) {
+          mapping.transformer.options.delimiter = ','
+        }
+      }
+      if (mapping.transformer.type === 'boolean') {
+        if (!mapping.transformer.options) {
+          mapping.transformer.options = {}
+        }
+        if (!mapping.transformer.options.truthyValue) {
+          mapping.transformer.options.truthyValue = 'true'
+        }
+        if (!mapping.transformer.options.falsyValue) {
+          mapping.transformer.options.falsyValue = 'false'
+        }
+      }
+    })
+  },
+  { deep: true }
+)
+
 const addMapping = () => {
   mappings.value.push({
     formField: '',
@@ -66,9 +95,7 @@ const removeMapping = (index: number) => {
 
 const getFieldOptions = (opensppField: ParsedOpenSppField | undefined) => {
   if (!opensppField) return []
-  if (opensppField.type === 'relation' && opensppField.options) {
-    return opensppField.options
-  }
+  // ID transformer doesn't need options - it extracts id from {"id": 0, "display_name": ""}
   return []
 }
 
@@ -80,21 +107,21 @@ const updateTransformerOptions = (index: number, opensppFieldName: string) => {
   if (!opensppField) return
 
   // Update transformer type based on OpenSPP field type
-  mapping.transformer.type = opensppField.type
-
-  // Set default options for relation fields
-  if (opensppField.type === 'relation' && opensppField.options) {
-    if (!mapping.transformer.options) {
-      mapping.transformer.options = {}
-    }
-    mapping.transformer.options.relationOptions = opensppField.options
-    if (!mapping.transformer.options.relationOutputFormat) {
-      mapping.transformer.options.relationOutputFormat = '[id,label]'
-    }
+  // Map 'relation' type from OpenSPP to 'id' transformer
+  if (opensppField.type === 'relation') {
+    mapping.transformer.type = 'id'
+  } else if (opensppField.type === 'date') {
+    mapping.transformer.type = 'date'
+  } else {
+    mapping.transformer.type = 'text'
   }
 
+  // Set default options based on transformer type
+  // Note: User can manually change transformer type, so we check the actual value
+  const transformerType = mapping.transformer.type as 'text' | 'date' | 'id' | 'multiselect' | 'boolean'
+
   // Set default date format
-  if (opensppField.type === 'date') {
+  if (transformerType === 'date') {
     if (!mapping.transformer.options) {
       mapping.transformer.options = {}
     }
@@ -103,6 +130,29 @@ const updateTransformerOptions = (index: number, opensppFieldName: string) => {
     }
     if (!mapping.transformer.options.outputFormat) {
       mapping.transformer.options.outputFormat = 'YYYY-MM-DD'
+    }
+  }
+
+  // Set default options for multiselect
+  if (transformerType === 'multiselect') {
+    if (!mapping.transformer.options) {
+      mapping.transformer.options = {}
+    }
+    if (!mapping.transformer.options.delimiter) {
+      mapping.transformer.options.delimiter = ','
+    }
+  }
+
+  // Set default options for boolean
+  if (transformerType === 'boolean') {
+    if (!mapping.transformer.options) {
+      mapping.transformer.options = {}
+    }
+    if (!mapping.transformer.options.truthyValue) {
+      mapping.transformer.options.truthyValue = 'true'
+    }
+    if (!mapping.transformer.options.falsyValue) {
+      mapping.transformer.options.falsyValue = 'false'
     }
   }
 }
@@ -196,7 +246,9 @@ const toggleRowExpansion = (index: number) => {
                       :items="[
                         { title: 'Text', value: 'text' },
                         { title: 'Date', value: 'date' },
-                        { title: 'Relation', value: 'relation' },
+                        { title: 'ID', value: 'id' },
+                        { title: 'Multi-select', value: 'multiselect' },
+                        { title: 'Boolean', value: 'boolean' },
                       ]"
                       density="compact"
                       variant="outlined"
@@ -215,10 +267,24 @@ const toggleRowExpansion = (index: number) => {
                           {{ mapping.transformer.options?.outputFormat || 'YYYY-MM-DD' }}
                         </v-chip>
                       </template>
-                      <!-- Relation options summary -->
-                      <template v-else-if="mapping.transformer.type === 'relation'">
+                      <!-- ID options summary -->
+                      <template v-else-if="mapping.transformer.type === 'id'">
+                        <span class="text-caption text-medium-emphasis">Form → Integer | Object → ID</span>
+                      </template>
+                      <!-- Multi-select options summary -->
+                      <template v-else-if="mapping.transformer.type === 'multiselect'">
                         <v-chip size="x-small" variant="tonal" color="primary">
-                          {{ mapping.transformer.options?.relationOutputFormat || '[id,label]' }}
+                          Delimiter: {{ mapping.transformer.options?.delimiter || ',' }}
+                        </v-chip>
+                      </template>
+                      <!-- Boolean summary -->
+                      <template v-else-if="mapping.transformer.type === 'boolean'">
+                        <v-chip size="x-small" variant="tonal" color="primary">
+                          {{ mapping.transformer.options?.truthyValue || 'true' }}
+                        </v-chip>
+                        <span class="text-caption text-medium-emphasis">→</span>
+                        <v-chip size="x-small" variant="tonal" color="primary">
+                          {{ mapping.transformer.options?.falsyValue || 'false' }}
                         </v-chip>
                       </template>
                       <!-- Text or default -->
@@ -291,38 +357,90 @@ const toggleRowExpansion = (index: number) => {
                         </v-row>
                       </template>
 
-                      <!-- Relation Transformer Options -->
-                      <template v-if="mapping.transformer.type === 'relation'">
-                        <v-select
-                          v-model="mapping.transformer.options!.relationOutputFormat"
-                          :items="[
-                            { title: '[id, label]', value: '[id,label]' },
-                            { title: 'ID only', value: 'id' },
-                            { title: 'Label only', value: 'label' },
-                          ]"
-                          label="Output Format"
-                          hint="Format used when sending to OpenSPP"
+                      <!-- ID Transformer Options -->
+                      <template v-if="mapping.transformer.type === 'id'">
+                        <v-alert
+                          type="info"
+                          variant="tonal"
+                          density="compact"
+                        >
+                          <div class="text-caption">
+                            <strong>ID Transformer:</strong> Handles ID values between form and OpenSPP formats.
+                            <br />
+                            <br />
+                            <strong>Transform (Form → OpenSPP):</strong> Converts form values (ID number/string) to an integer that OpenSPP expects.
+                            <br />
+                            <strong>Reverse Transform (OpenSPP → Form):</strong> Extracts the "id" field from {"id": 0, "display_name": ""} objects received from OpenSPP.
+                          </div>
+                        </v-alert>
+                      </template>
+
+                      <!-- Multi-select Transformer Options -->
+                      <template v-if="mapping.transformer.type === 'multiselect'">
+                        <v-text-field
+                          v-model="mapping.transformer.options!.delimiter"
+                          label="Delimiter"
+                          hint="Character used to join array values (default: comma)"
                           density="compact"
                           variant="outlined"
                           persistent-hint
-                          class="mb-2"
+                          :rules="[(v) => !v || v.length === 1 || 'Delimiter must be a single character']"
                         />
                         <v-alert
-                          v-if="getFieldOptions(opensppFieldItems.find(item => item.value === mapping.opensppField)?.field).length > 0"
                           type="info"
                           variant="tonal"
                           density="compact"
                           class="mt-2"
                         >
-                          <div class="text-caption font-weight-medium mb-1">Available options:</div>
                           <div class="text-caption">
-                            <span
-                              v-for="(opt, idx) in getFieldOptions(opensppFieldItems.find(item => item.value === mapping.opensppField)?.field)"
-                              :key="String(opt.id)"
-                              class="mr-2"
-                            >
-                              [{{ opt.id }}, "{{ opt.label }}"]<span v-if="idx < getFieldOptions(opensppFieldItems.find(item => item.value === mapping.opensppField)?.field).length - 1">,</span>
-                            </span>
+                            Supports both Form.io component types:
+                            <br />
+                            • <strong>Select Boxes</strong> (array): Joins array values into a delimited string
+                            <br />
+                            • <strong>Checkboxes</strong> (object): Extracts keys where value is true and joins them
+                            <br />
+                            <br />
+                            <strong>Transform:</strong> Object/Array → Delimited string (e.g., "key1,key2,key3")
+                            <br />
+                            <strong>Reverse Transform:</strong> Delimited string → Object with selected keys set to true
+                          </div>
+                        </v-alert>
+                      </template>
+
+                      <!-- Boolean Transformer Options -->
+                      <template v-if="mapping.transformer.type === 'boolean'">
+                        <v-row dense>
+                          <v-col cols="12" sm="6">
+                            <v-text-field
+                              v-model="mapping.transformer.options!.truthyValue"
+                              label="Truthy Value"
+                              hint="Value treated as true (default: true)"
+                              density="compact"
+                              variant="outlined"
+                              persistent-hint
+                              placeholder="true"
+                            />
+                          </v-col>
+                          <v-col cols="12" sm="6">
+                            <v-text-field
+                              v-model="mapping.transformer.options!.falsyValue"
+                              label="Falsy Value"
+                              hint="Value treated as false (default: false)"
+                              density="compact"
+                              variant="outlined"
+                              persistent-hint
+                              placeholder="false"
+                            />
+                          </v-col>
+                        </v-row>
+                        <v-alert
+                          type="info"
+                          variant="tonal"
+                          density="compact"
+                          class="mt-2"
+                        >
+                          <div class="text-caption">
+                            Values are case-insensitive and trimmed. Used to normalize checkbox/dropdown values to boolean.
                           </div>
                         </v-alert>
                       </template>

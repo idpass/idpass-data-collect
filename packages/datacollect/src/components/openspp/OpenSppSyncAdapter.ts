@@ -50,8 +50,9 @@ interface FieldMapping {
     options?: {
       inputFormat?: "YYYY-MM-DD" | "MM/DD/YYYY" | "DD/MM/YYYY" | "auto";
       outputFormat?: "YYYY-MM-DD" | "MM/DD/YYYY" | "DD/MM/YYYY";
-      relationOptions?: Array<{ id: number | string; label: string }>;
-      relationOutputFormat?: "id" | "label" | "[id,label]";
+      delimiter?: string; // Multi-select transformer option
+      truthyValue?: string; // Boolean transformer option
+      falsyValue?: string; // Boolean transformer option
     };
   };
 }

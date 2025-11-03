@@ -270,14 +270,16 @@ export interface FieldMapping {
   formField: string
   opensppField: string
   transformer: {
-    type: 'text' | 'date' | 'relation'
+    type: 'text' | 'date' | 'id' | 'multiselect' | 'boolean'
     options?: {
       // Date transformer options
       inputFormat?: 'YYYY-MM-DD' | 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'auto'
       outputFormat?: 'YYYY-MM-DD' | 'MM/DD/YYYY' | 'DD/MM/YYYY'
-      // Relation transformer options
-      relationOptions?: Array<{ id: number | string; label: string }>
-      relationOutputFormat?: 'id' | 'label' | '[id,label]'
+      // Multi-select transformer options
+      delimiter?: string
+      // Boolean transformer options
+      truthyValue?: string
+      falsyValue?: string
     }
   }
 }

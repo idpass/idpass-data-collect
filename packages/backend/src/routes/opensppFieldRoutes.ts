@@ -74,7 +74,14 @@ function inferFieldType(value: unknown): "text" | "date" | "relation" {
     return "text"; // Default to text for null/undefined
   }
 
-  // Check for relation field format: [id, label] tuple
+  // Check for ID field format: {"id": 0, "display_name": ""}
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    if ("id" in value && "display_name" in value) {
+      return "relation"; // Map to relation type (will be transformed to ID transformer)
+    }
+  }
+
+  // Check for relation field format: [id, label] tuple (legacy format)
   if (Array.isArray(value) && value.length === 2) {
     const [id, label] = value;
     if (
@@ -105,11 +112,22 @@ function inferFieldType(value: unknown): "text" | "date" | "relation" {
 
 /**
  * Extract relation options from value
- * Handles formats like [id, label] or [{id, label}, ...]
+ * Handles formats like {"id": 0, "display_name": ""}, [id, label], or [{id, label}, ...]
  */
 function extractRelationOptions(
   value: unknown,
 ): Array<{ id: number | string; label: string }> | undefined {
+  // Check for {"id": 0, "display_name": ""} format
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    if ("id" in value && "display_name" in value) {
+      const idValue = (value as { id: unknown }).id;
+      const displayName = String((value as { display_name: unknown }).display_name || "");
+      if (typeof idValue === "number" || typeof idValue === "string") {
+        return [{ id: idValue, label: displayName }];
+      }
+    }
+  }
+
   if (Array.isArray(value)) {
     if (value.length === 2) {
       // Format: [id, label]
@@ -124,11 +142,19 @@ function extractRelationOptions(
       // Format: [{id: 1, label: "Male"}, ...]
       return value
         .map((item) => {
-          if (item && typeof item === "object" && "id" in item && "label" in item) {
-            return {
-              id: (item as { id: unknown }).id as number | string,
-              label: String((item as { label: unknown }).label),
-            };
+          if (item && typeof item === "object" && "id" in item) {
+            const idValue = (item as { id: unknown }).id;
+            const labelValue = "label" in item 
+              ? String((item as { label: unknown }).label)
+              : ("display_name" in item 
+                ? String((item as { display_name: unknown }).display_name)
+                : "");
+            if (typeof idValue === "number" || typeof idValue === "string") {
+              return {
+                id: idValue,
+                label: labelValue,
+              };
+            }
           }
           return null;
         })

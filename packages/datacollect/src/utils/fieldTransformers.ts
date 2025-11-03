@@ -17,7 +17,7 @@
  * under the License.
  */
 
-export type TransformerType = "text" | "date" | "relation";
+export type TransformerType = "text" | "date" | "id" | "multiselect" | "boolean";
 
 export interface FieldTransformer {
   type: TransformerType;
@@ -85,14 +85,16 @@ export class DateTransformer implements FieldTransformer {
   }
 
   reverseTransform(value: unknown): unknown {
+    // Transform FROM OpenSPP format TO form value
+    // Return empty string instead of null for Form.io compatibility
     if (value === null || value === undefined || value === "") {
-      return null;
+      return "";
     }
 
     const dateString = String(value);
     const parsedDate = this.parseDate(dateString);
     if (!parsedDate || isNaN(parsedDate.getTime())) {
-      return null;
+      return "";
     }
 
     // When reversing, we might want to keep original format or use output format
@@ -183,98 +185,248 @@ export class DateTransformer implements FieldTransformer {
   }
 }
 
-export interface RelationTransformerOptions {
-  relationOptions?: Array<{ id: number | string; label: string }>;
-  relationOutputFormat?: "id" | "label" | "[id,label]"; // Format for OpenSPP
+export interface IdTransformerOptions {
+  // No options needed - extracts id from {"id": 0, "display_name": ""} format
+}
+
+export interface MultiSelectTransformerOptions {
+  delimiter?: string; // Character to join array elements (default: ",")
+}
+
+export interface BooleanTransformerOptions {
+  truthyValue?: string; // String value that should be treated as true (default: "true")
+  falsyValue?: string; // String value that should be treated as false (default: "false")
 }
 
 /**
- * Relation field transformer - handles mapping between form values and OpenSPP relation format
- * OpenSPP relation format: [id, label] e.g., [1, "Male"]
+ * ID field transformer - handles mapping between form values and OpenSPP ID format
+ * - Transform (Form → OpenSPP): Converts form value to integer for OpenSPP
+ * - Reverse Transform (OpenSPP → Form): Extracts ID from {"id": 0, "display_name": ""} object
  */
-export class RelationTransformer implements FieldTransformer {
-  type: TransformerType = "relation";
-  private options: Array<{ id: number | string; label: string }>;
-  private outputFormat: "id" | "label" | "[id,label]";
+export class IdTransformer implements FieldTransformer {
+  type: TransformerType = "id";
 
-  constructor(options: RelationTransformerOptions = {}) {
-    this.options = options.relationOptions || [];
-    this.outputFormat = options.relationOutputFormat || "[id,label]";
+  constructor(options: IdTransformerOptions = {}) {
+    // No options needed
   }
 
   transform(value: unknown): unknown {
     // Transform FROM form value TO OpenSPP format
-    // Form might store id, label, or both
+    // OpenSPP expects an integer
     if (value === null || value === undefined || value === "") {
       return null;
     }
 
-    // If value is already in [id, label] format
-    if (Array.isArray(value) && value.length === 2) {
-      return value;
+    // If value is already an object with id, extract the id
+    if (typeof value === "object" && value !== null && "id" in value) {
+      const idValue = (value as { id: unknown }).id;
+      // Convert to integer
+      if (typeof idValue === "number") {
+        return idValue;
+      }
+      if (typeof idValue === "string") {
+        const parsed = parseInt(idValue, 10);
+        return isNaN(parsed) ? null : parsed;
+      }
+      return null;
     }
 
-    // If value is an object with id and label
-    if (typeof value === "object" && "id" in value && "label" in value) {
-      return [value.id, value.label];
+    // If value is a number, return as integer
+    if (typeof value === "number") {
+      return Math.floor(value);
     }
 
-    // If value is a string or number, try to find in options
-    const stringValue = String(value);
-    const matchingOption = this.options.find(
-      (opt) => String(opt.id) === stringValue || opt.label.toLowerCase() === stringValue.toLowerCase(),
-    );
-
-    if (matchingOption) {
-      return [matchingOption.id, matchingOption.label];
-    }
-
-    // If no match found and value is string, return as [null, value] or just the value
-    // For backward compatibility
+    // If value is a string, try to parse as integer
     if (typeof value === "string") {
-      return this.outputFormat === "[id,label]" ? [null, value] : value;
+      const parsed = parseInt(value, 10);
+      return isNaN(parsed) ? null : parsed;
     }
 
-    return value;
+    return null;
   }
 
   reverseTransform(value: unknown): unknown {
-    // Transform FROM OpenSPP format TO form value
+    // Transform FROM OpenSPP format {"id": 0, "display_name": ""} TO form value
+    // OpenSPP sends the object, we extract just the ID
     if (value === null || value === undefined) {
       return null;
     }
 
-    // If value is [id, label] format
-    if (Array.isArray(value) && value.length === 2) {
-      const [id, label] = value;
-      
-      if (this.outputFormat === "id") {
-        return id;
-      }
-      if (this.outputFormat === "label") {
-        return label;
-      }
-      // Return object for easier form handling
-      return { id, label };
+    // If value is in {"id": 0, "display_name": ""} format
+    if (typeof value === "object" && value !== null && "id" in value) {
+      // Return just the ID for the form
+      return (value as { id: unknown }).id;
     }
 
-    // If value is already an id or label, try to find full option
+    // If value is already a number or string (just the ID), return as-is
+    // This handles edge cases where the value might already be extracted
+    if (typeof value === "number" || typeof value === "string") {
+      return value;
+    }
+
+    return null;
+  }
+}
+
+/**
+ * Multi-select field transformer - joins selected values into a delimited string
+ * Handles Form.io Select Boxes (array) and Checkboxes (object with boolean flags)
+ */
+export class MultiSelectTransformer implements FieldTransformer {
+  type: TransformerType = "multiselect";
+  private delimiter: string;
+
+  constructor(options: MultiSelectTransformerOptions = {}) {
+    this.delimiter = options.delimiter || ",";
+  }
+
+  transform(value: unknown): unknown {
+    // Transform FROM form value TO delimited string
+    if (value === null || value === undefined) {
+      return "";
+    }
+
+    // If already a string, return as-is (might be pre-joined)
+    if (typeof value === "string") {
+      return value;
+    }
+
+    // Handle object format (Form.io checkboxes): extract keys where value is true
+    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+      const selectedKeys = Object.keys(value).filter(
+        (key) => value[key as keyof typeof value] === true
+      );
+      return selectedKeys.join(this.delimiter);
+    }
+
+    // Handle array format (Form.io select boxes): join with delimiter
+    if (Array.isArray(value)) {
+      // Filter out null/undefined/empty values and convert to strings
+      const validValues = value
+        .filter((v) => v !== null && v !== undefined && v !== "")
+        .map((v) => String(v));
+      return validValues.join(this.delimiter);
+    }
+
+    // For single values, convert to string
+    return String(value);
+  }
+
+  reverseTransform(value: unknown): unknown {
+    // Transform FROM delimited string TO form value
+    if (value === null || value === undefined || value === "") {
+      return {};
+    }
+
+    // If already an object, return as-is
+    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+      return value;
+    }
+
+    // If already an array, return as-is (for select boxes format)
+    if (Array.isArray(value)) {
+      return value;
+    }
+
+    // If string, split by delimiter and convert to object format
+    // This creates an object with keys set to true for checkbox components
     const stringValue = String(value);
-    const matchingOption = this.options.find(
-      (opt) => String(opt.id) === stringValue || opt.label.toLowerCase() === stringValue.toLowerCase(),
-    );
-
-    if (matchingOption) {
-      if (this.outputFormat === "id") {
-        return matchingOption.id;
-      }
-      if (this.outputFormat === "label") {
-        return matchingOption.label;
-      }
-      return { id: matchingOption.id, label: matchingOption.label };
+    if (stringValue.trim() === "") {
+      return {};
     }
 
-    return value;
+    const keys = stringValue.split(this.delimiter).map((v) => v.trim()).filter((v) => v !== "");
+    const result: Record<string, boolean> = {};
+    for (const key of keys) {
+      result[key] = true;
+    }
+    return result;
+  }
+}
+
+/**
+ * Boolean field transformer - normalizes checkbox/dropdown values to boolean
+ * Handles Checkbox components and Dropdown Select with Yes/No, True/False values
+ * Supports configurable truthy/falsy values (one value each)
+ */
+export class BooleanTransformer implements FieldTransformer {
+  type: TransformerType = "boolean";
+  private truthyValue: string;
+  private falsyValue: string;
+
+  constructor(options: BooleanTransformerOptions = {}) {
+    // Default truthy value
+    this.truthyValue = (options.truthyValue || "true").toLowerCase().trim();
+    // Default falsy value
+    this.falsyValue = (options.falsyValue || "false").toLowerCase().trim();
+  }
+
+  transform(value: unknown): unknown {
+    // Transform FROM form value TO boolean
+    if (value === null || value === undefined) {
+      return false;
+    }
+
+    // If already boolean, return as-is
+    if (typeof value === "boolean") {
+      return value;
+    }
+
+    // If number, treat 0/NaN as false, others as true
+    if (typeof value === "number") {
+      return value !== 0 && !isNaN(value);
+    }
+
+    // If string, normalize and check against configured values
+    if (typeof value === "string") {
+      const normalized = value.toLowerCase().trim();
+      
+      // Check against configured truthy value
+      if (normalized === this.truthyValue) {
+        return true;
+      }
+      
+      // Check against configured falsy value
+      if (normalized === this.falsyValue) {
+        return false;
+      }
+      
+      // For any other string, treat as truthy if non-empty
+      return normalized.length > 0;
+    }
+
+    // For arrays, check if non-empty
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+
+    // For objects, check if non-empty
+    if (typeof value === "object") {
+      return Object.keys(value).length > 0;
+    }
+
+    // Default to truthy check
+    return !!value;
+  }
+
+  reverseTransform(value: unknown): unknown {
+    // Transform FROM boolean TO form value
+    // Return boolean as-is, but could be customized to return configured values if needed
+    if (value === null || value === undefined) {
+      return false;
+    }
+
+    if (typeof value === "boolean") {
+      return value;
+    }
+
+    // Normalize similar to transform
+    if (typeof value === "string") {
+      const normalized = value.toLowerCase().trim();
+      return normalized === this.truthyValue;
+    }
+
+    return !!value;
   }
 }
 
@@ -283,15 +435,19 @@ export class RelationTransformer implements FieldTransformer {
  */
 export function createTransformer(
   type: TransformerType,
-  options?: DateTransformerOptions | RelationTransformerOptions,
+  options?: DateTransformerOptions | IdTransformerOptions | MultiSelectTransformerOptions | BooleanTransformerOptions,
 ): FieldTransformer {
   switch (type) {
     case "text":
       return new TextTransformer();
     case "date":
       return new DateTransformer(options as DateTransformerOptions);
-    case "relation":
-      return new RelationTransformer(options as RelationTransformerOptions);
+    case "id":
+      return new IdTransformer(options as IdTransformerOptions);
+    case "multiselect":
+      return new MultiSelectTransformer(options as MultiSelectTransformerOptions);
+    case "boolean":
+      return new BooleanTransformer(options as BooleanTransformerOptions);
     default:
       return new TextTransformer();
   }
