@@ -112,6 +112,10 @@ const updateTransformerOptions = (index: number, opensppFieldName: string) => {
     mapping.transformer.type = 'id'
   } else if (opensppField.type === 'date') {
     mapping.transformer.type = 'date'
+  } else if (opensppField.type === 'selection') {
+    // Selection fields can be mapped to multiselect or boolean transformers
+    // Default to text for now, but user can change to multiselect or boolean
+    mapping.transformer.type = 'text'
   } else {
     mapping.transformer.type = 'text'
   }
@@ -166,15 +170,32 @@ const formFieldItems = computed(() => {
   return props.formFields.map((field) => ({
     title: field.label || field.key,
     value: field.key,
+    subtitle: field.key !== field.label ? field.key : undefined,
   }))
 })
 
 const opensppFieldItems = computed(() => {
-  return props.opensppFields.map((field) => ({
-    title: field.label || field.name,
-    value: field.name,
-    field,
-  }))
+  return props.opensppFields.map((field) => {
+    const item: {
+      title: string
+      value: string
+      subtitle?: string
+      field: typeof field
+    } = {
+      title: field.label || field.name,
+      value: field.name,
+      field,
+    }
+    
+    // Add subtitle with field name and type for better searchability
+    if (field.name !== item.title) {
+      item.subtitle = `${field.name} (${field.type})`
+    } else {
+      item.subtitle = `(${field.type})`
+    }
+    
+    return item
+  })
 })
 
 const expandedRows = ref<Record<number, boolean>>({})
@@ -218,25 +239,39 @@ const toggleRowExpansion = (index: number) => {
               <template v-for="(mapping, index) in mappings" :key="index">
                 <tr class="mapping-row">
                   <td>
-                    <v-select
+                    <v-autocomplete
                       v-model="mapping.formField"
                       :items="formFieldItems"
-                      placeholder="Select field"
+                      placeholder="Type to search..."
                       density="compact"
                       variant="outlined"
                       hide-details
                       clearable
+                      no-data-text="No fields found"
+                      item-title="title"
+                      item-subtitle="subtitle"
+                      item-value="value"
+                      prepend-inner-icon="mdi-magnify"
+                      auto-select-first
+                      :menu-props="{ maxHeight: 300 }"
                     />
                   </td>
                   <td>
-                    <v-select
+                    <v-autocomplete
                       v-model="mapping.opensppField"
                       :items="opensppFieldItems"
-                      placeholder="Select field"
+                      placeholder="Type to search..."
                       density="compact"
                       variant="outlined"
                       hide-details
                       clearable
+                      no-data-text="No fields found"
+                      item-title="title"
+                      item-subtitle="subtitle"
+                      item-value="value"
+                      prepend-inner-icon="mdi-magnify"
+                      auto-select-first
+                      :menu-props="{ maxHeight: 300 }"
                       @update:model-value="updateTransformerOptions(index, $event)"
                     />
                   </td>
@@ -371,7 +406,7 @@ const toggleRowExpansion = (index: number) => {
                             <strong>Transform (Form → OpenSPP):</strong> Converts form values (ID number/string) to an integer that OpenSPP expects.
                             <br />
                             <strong>Reverse Transform (OpenSPP → Form):</strong> Extracts the "id" field from {"id": 0, "display_name": ""} objects received from OpenSPP.
-                          </div>
+                          </div>  
                         </v-alert>
                       </template>
 

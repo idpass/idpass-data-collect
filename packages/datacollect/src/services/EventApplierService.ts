@@ -379,14 +379,14 @@ export class EventApplierService {
 
       return updatedEntity;
     } catch (error) {
-      console.log("Error in submitForm:", error);
-      // this.logger.error(`Error in submitForm: ${error}`);
+      // Log error with full details for debugging
+      console.error("Error in submitForm:", error);
+      if (error instanceof Error) {
+        console.error("Error stack:", error.stack);
+        console.error("Error message:", error.message);
+      }
+      // Re-throw the error - don't suppress it
       throw error;
-      // if (error instanceof AppError) throw error;
-      // if (error instanceof Error) {
-      //   throw new AppError('SUBMIT_FORM_ERROR', error.message, { formData, originalError: error });
-      // }
-      // throw new AppError('SUBMIT_FORM_ERROR', 'Failed to submit form', { formData, originalError: error });
     }
   }
 

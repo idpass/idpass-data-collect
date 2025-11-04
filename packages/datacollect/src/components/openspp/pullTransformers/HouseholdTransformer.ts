@@ -21,6 +21,7 @@ import { v4 as uuidv4 } from "uuid";
 import { FormSubmission, SyncLevel } from "../../../interfaces/types";
 import type { OpenSppEntityOptions } from "../OpenSppAdapterOptions";
 import type { OpenSPPHousehold } from "../odoo-types";
+import { normalizeLegacyRelationField } from "../../../utils/normalizeLegacyRelationFields";
 
 /**
  * Transformer for converting OpenSPP household records into DataCollect FormSubmission objects.
@@ -111,17 +112,29 @@ export class HouseholdTransformer {
       });
     }
 
-    // Map administrative areas
+    // Map administrative areas - normalize legacy [id, label] format
     if (fieldMap.province && household.province_id) {
-      mapped.province_id = household.province_id;
+      mapped.province_id = normalizeLegacyRelationField(household.province_id);
     }
     if (fieldMap.district && household.district_id) {
-      mapped.district_id = household.district_id;
+      mapped.district_id = normalizeLegacyRelationField(household.district_id);
     }
     if (fieldMap.area && household.area_id) {
-      mapped.area_id = household.area_id;
+      mapped.area_id = normalizeLegacyRelationField(household.area_id);
     }
 
-    return mapped;
+    // Also normalize any other relation fields that might be in the household object
+    const normalizedMapped = { ...mapped };
+    for (const [key, value] of Object.entries(normalizedMapped)) {
+      // Check if value looks like a legacy tuple or relation object
+      if (
+        (Array.isArray(value) && value.length === 2) ||
+        (typeof value === "object" && value !== null && "id" in value)
+      ) {
+        normalizedMapped[key] = normalizeLegacyRelationField(value);
+      }
+    }
+
+    return normalizedMapped;
   }
 }

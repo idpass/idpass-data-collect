@@ -22,13 +22,14 @@ import { authenticateJWT } from "../middlewares/authentication";
 import { AppError, asyncHandler } from "../middlewares/errorHandlers";
 import multer from "multer";
 import fs from "fs/promises";
+import { OdooClient } from "@idpass/data-collect-core";
 
 export interface ParsedOpenSppField {
   name: string;
-  type: "text" | "date" | "relation";
+  type: "text" | "date" | "relation" | "selection";
   label?: string;
   required?: boolean;
-  options?: Array<{ id: number | string; label: string }>; // For relation fields
+  options?: Array<{ id: number | string; label: string }>; // For relation and selection fields
 }
 
 /**
@@ -55,7 +56,9 @@ function parseOpenSppFields(payload: unknown): ParsedOpenSppField[] {
       label: key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
     };
 
-    // Handle relation fields (format: [id, label] or {id, label})
+    // Handle relation fields
+    // Supports modern format: {"id": 0, "display_name": ""}
+    // Also supports legacy format: [id, label] (deprecated, will be cleaned up)
     if (field.type === "relation") {
       field.options = extractRelationOptions(value);
     }
@@ -81,7 +84,8 @@ function inferFieldType(value: unknown): "text" | "date" | "relation" {
     }
   }
 
-  // Check for relation field format: [id, label] tuple (legacy format)
+  // Check for relation field format: [id, label] tuple (legacy format, deprecated)
+  // Modern format uses {"id": 0, "display_name": ""} instead
   if (Array.isArray(value) && value.length === 2) {
     const [id, label] = value;
     if (
@@ -112,12 +116,15 @@ function inferFieldType(value: unknown): "text" | "date" | "relation" {
 
 /**
  * Extract relation options from value
- * Handles formats like {"id": 0, "display_name": ""}, [id, label], or [{id, label}, ...]
+ * Handles formats:
+ * - Modern: {"id": 0, "display_name": ""} (preferred)
+ * - Legacy: [id, label] (deprecated, supported for backward compatibility)
+ * - Array: [{id: 1, label: "Male"}, ...]
  */
 function extractRelationOptions(
   value: unknown,
 ): Array<{ id: number | string; label: string }> | undefined {
-  // Check for {"id": 0, "display_name": ""} format
+  // Check for modern {"id": 0, "display_name": ""} format (preferred)
   if (typeof value === "object" && value !== null && !Array.isArray(value)) {
     if ("id" in value && "display_name" in value) {
       const idValue = (value as { id: unknown }).id;
@@ -130,7 +137,7 @@ function extractRelationOptions(
 
   if (Array.isArray(value)) {
     if (value.length === 2) {
-      // Format: [id, label]
+      // Legacy format: [id, label] (deprecated, use {"id": 0, "display_name": ""} instead)
       const [id, label] = value;
       if (
         (typeof id === "number" || typeof id === "string") &&
@@ -243,26 +250,104 @@ export function createOpenSppFieldRoutes(): Router {
   );
 
   /**
-   * Fetch and parse OpenSPP fields from API endpoint
-   * Requires url, database, username, password in request body
+   * Convert Odoo fields_get response to ParsedOpenSppField format
+   */
+  function convertOdooFieldsToParsedFields(
+    odooFields: Record<string, unknown>,
+  ): ParsedOpenSppField[] {
+    const fields: ParsedOpenSppField[] = [];
+
+    for (const [fieldName, fieldInfo] of Object.entries(odooFields)) {
+      // Skip internal/system fields
+      if (fieldName.startsWith("__") || fieldName === "id" || fieldName === "externalId") {
+        continue;
+      }
+
+      const field = fieldInfo as Record<string, unknown>;
+      const fieldType = field.type as string;
+
+      // Map Odoo field types to ParsedOpenSppField types
+      let parsedType: "text" | "date" | "relation" | "selection" = "text";
+      
+      if (fieldType === "date" || fieldType === "datetime") {
+        parsedType = "date";
+      } else if (fieldType === "many2one" || fieldType === "many2many" || fieldType === "one2many") {
+        parsedType = "relation";
+      } else if (fieldType === "selection") {
+        parsedType = "selection";
+      }
+
+      const parsedField: ParsedOpenSppField = {
+        name: fieldName,
+        type: parsedType,
+        label: (field.string as string) || fieldName.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+        required: field.required === true,
+      };
+
+      // Handle selection fields - extract options from selection array
+      if (parsedType === "selection" && Array.isArray(field.selection)) {
+        parsedField.options = (field.selection as Array<[string | number, string]>).map(([value, label]) => ({
+          id: value,
+          label: label || String(value),
+        }));
+      }
+
+      // Handle relation fields - we can't get all options from fields_get,
+      // but we can indicate it's a relation field
+      if (parsedType === "relation") {
+        // For relation fields, options would need to be fetched separately
+        // For now, we just mark it as a relation field
+        parsedField.options = undefined;
+      }
+
+      fields.push(parsedField);
+    }
+
+    return fields;
+  }
+
+  /**
+   * Fetch and parse OpenSPP fields from API endpoint using Odoo's fields_get
+   * Requires url, database, username, password, and optionally model in request body
    */
   router.post(
     "/fetch",
     authenticateJWT,
-    asyncHandler(async (req) => {
-      const { url, database, username, password } = req.body;
+    asyncHandler(async (req, res) => {
+      const { url, database, username, password, model = "res.partner", fields, attributes } = req.body;
 
       if (!url || !database || !username || !password) {
         throw new AppError("URL, database, username, and password are required", 400);
       }
 
-      // This is a simplified implementation
-      // In a real scenario, you would use the Odoo XML-RPC client
-      // For now, we'll return an error suggesting to use the parse or parse-file endpoints
-      throw new AppError(
-        "API fetch not yet implemented. Please use the parse or parse-file endpoints with a sample payload.",
-        501,
-      );
+      try {
+        // Create OdooClient instance
+        const odooClient = new OdooClient({
+          host: url,
+          database,
+          username,
+          password,
+        });
+
+        // Authenticate
+        await odooClient.login();
+
+        // Fetch field metadata
+        const fieldNames = fields && Array.isArray(fields) ? fields : undefined;
+        const attributeList = attributes && Array.isArray(attributes) ? attributes : ["selection", "type", "string", "required"];
+        
+        const odooFields = await odooClient.fieldsGet(model, fieldNames, attributeList);
+
+        // Convert to ParsedOpenSppField format
+        const parsedFields = convertOdooFieldsToParsedFields(odooFields);
+
+        res.json({ fields: parsedFields });
+      } catch (error) {
+        if (error instanceof Error) {
+          throw new AppError(`Failed to fetch fields from Odoo API: ${error.message}`, 500);
+        }
+        throw new AppError("Failed to fetch fields from Odoo API", 500);
+      }
     }),
   );
 

@@ -17,6 +17,28 @@
  * under the License.
  */
 
+export interface FieldMapping {
+  formField: string
+  opensppField: string
+  transformer: {
+    type: 'text' | 'date' | 'id' | 'multiselect' | 'boolean'
+    options?: {
+      inputFormat?: 'YYYY-MM-DD' | 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'auto'
+      outputFormat?: 'YYYY-MM-DD' | 'MM/DD/YYYY' | 'DD/MM/YYYY'
+      delimiter?: string
+      truthyValue?: string
+      falsyValue?: string
+    }
+  }
+}
+
+export interface ExternalSync {
+  type?: string
+  url?: string
+  extraFields?: unknown[]
+  fieldMappings?: FieldMapping[]
+}
+
 export interface Config {
   id: string
   name: string
@@ -26,6 +48,7 @@ export interface Config {
   entityForms: EntityForm[]
   entityData: EntityData[]
   syncServerUrl: string
+  externalSync?: ExternalSync
 }
 
 export interface EntityForm {

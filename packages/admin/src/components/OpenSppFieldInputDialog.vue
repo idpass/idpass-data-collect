@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { parseOpenSppFieldsFromFile, parseOpenSppFieldsFromPayload, type ParsedOpenSppField } from '@/api'
+import { parseOpenSppFieldsFromFile, parseOpenSppFieldsFromPayload, fetchOpenSppFieldsFromAPI, type ParsedOpenSppField } from '@/api'
 import { useSnackBarStore } from '@/stores/snackBar'
 
 interface Props {
@@ -16,10 +16,17 @@ const emit = defineEmits<{
 const snackBarStore = useSnackBarStore()
 
 const dialog = ref(false)
-const inputMethod = ref<'file' | 'json'>('file')
+const inputMethod = ref<'file' | 'json' | 'api'>('file')
 const jsonInput = ref('')
 const selectedFile = ref<File[] | null>(null)
 const isParsing = ref(false)
+
+// API fetch form fields
+const apiUrl = ref('')
+const apiDatabase = ref('')
+const apiUsername = ref('')
+const apiPassword = ref('')
+const apiModel = ref('res.partner')
 
 watch(() => props.modelValue, (val) => {
   dialog.value = val
@@ -41,7 +48,7 @@ const parseFields = async () => {
       const result = await parseOpenSppFieldsFromFile(selectedFile.value[0])
       emit('fields-parsed', result.fields)
       snackBarStore.showSnackbar(`Parsed ${result.fields.length} fields from file`, 'success')
-    } else {
+    } else if (inputMethod.value === 'json') {
       if (!jsonInput.value || jsonInput.value.trim() === '') {
         snackBarStore.showSnackbar('Please enter JSON payload', 'warning')
         return
@@ -55,6 +62,20 @@ const parseFields = async () => {
         snackBarStore.showSnackbar('Invalid JSON format', 'error')
         return
       }
+    } else if (inputMethod.value === 'api') {
+      if (!apiUrl.value || !apiDatabase.value || !apiUsername.value || !apiPassword.value) {
+        snackBarStore.showSnackbar('Please fill in all required API credentials', 'warning')
+        return
+      }
+      const result = await fetchOpenSppFieldsFromAPI({
+        url: apiUrl.value,
+        database: apiDatabase.value,
+        username: apiUsername.value,
+        password: apiPassword.value,
+        model: apiModel.value || undefined,
+      })
+      emit('fields-parsed', result.fields)
+      snackBarStore.showSnackbar(`Fetched ${result.fields.length} fields from API`, 'success')
     }
     
     closeDialog()
@@ -73,6 +94,12 @@ const closeDialog = () => {
   dialog.value = false
   jsonInput.value = ''
   selectedFile.value = null
+  // Reset API form
+  apiUrl.value = ''
+  apiDatabase.value = ''
+  apiUsername.value = ''
+  apiPassword.value = ''
+  apiModel.value = 'res.partner'
 }
 </script>
 
@@ -84,6 +111,7 @@ const closeDialog = () => {
         <v-tabs v-model="inputMethod" class="mb-4">
           <v-tab value="file">Upload File</v-tab>
           <v-tab value="json">Paste JSON</v-tab>
+          <v-tab value="api">Fetch from API</v-tab>
         </v-tabs>
 
         <v-window v-model="inputMethod">
@@ -109,9 +137,73 @@ const closeDialog = () => {
               auto-grow
             />
           </v-window-item>
+
+          <v-window-item value="api">
+            <v-text-field
+              v-model="apiUrl"
+              label="OpenSPP URL"
+              hint="Base URL of the OpenSPP/Odoo instance (e.g., https://openspp.example.com)"
+              placeholder="https://openspp.example.com"
+              persistent-hint
+              required
+              density="compact"
+              variant="outlined"
+              class="mb-2"
+            />
+            <v-text-field
+              v-model="apiDatabase"
+              label="Database"
+              hint="Database name"
+              placeholder="openspp"
+              persistent-hint
+              required
+              density="compact"
+              variant="outlined"
+              class="mb-2"
+            />
+            <v-text-field
+              v-model="apiUsername"
+              label="Username"
+              hint="Username for authentication"
+              placeholder="admin"
+              persistent-hint
+              required
+              density="compact"
+              variant="outlined"
+              class="mb-2"
+            />
+            <v-text-field
+              v-model="apiPassword"
+              label="Password"
+              hint="Password for authentication"
+              type="password"
+              persistent-hint
+              required
+              density="compact"
+              variant="outlined"
+              class="mb-2"
+            />
+            <v-text-field
+              v-model="apiModel"
+              label="Model (optional)"
+              hint="Odoo model name (default: res.partner)"
+              placeholder="res.partner"
+              persistent-hint
+              density="compact"
+              variant="outlined"
+            />
+            <v-alert type="info" variant="tonal" density="compact" class="mt-4">
+              <div class="text-caption">
+                <strong>API Fetch:</strong> Directly fetches field metadata from Odoo/OpenSPP API using <code>fields_get</code>.
+                <br />
+                This method provides complete field information including dropdown options for Selection fields,
+                similar to how SugarCRM provides field metadata.
+              </div>
+            </v-alert>
+          </v-window-item>
         </v-window>
 
-        <v-alert type="info" variant="tonal" density="compact" class="mt-4">
+        <v-alert v-if="inputMethod !== 'api'" type="info" variant="tonal" density="compact" class="mt-4">
           The parser will extract field names and infer types (text, date, relation) from the sample payload.
         </v-alert>
       </v-card-text>
@@ -124,11 +216,12 @@ const closeDialog = () => {
           :loading="isParsing"
           :disabled="
             (inputMethod === 'file' && (!selectedFile || selectedFile.length === 0)) ||
-            (inputMethod === 'json' && !jsonInput?.trim())
+            (inputMethod === 'json' && !jsonInput?.trim()) ||
+            (inputMethod === 'api' && (!apiUrl || !apiDatabase || !apiUsername || !apiPassword))
           "
           @click="parseFields"
         >
-          Parse Fields
+          {{ inputMethod === 'api' ? 'Fetch Fields' : 'Parse Fields' }}
         </v-btn>
       </v-card-actions>
     </v-card>

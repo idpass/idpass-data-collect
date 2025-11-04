@@ -21,6 +21,7 @@ import { v4 as uuidv4 } from "uuid";
 import { FormSubmission, SyncLevel } from "../../../interfaces/types";
 import type { OpenSppEntityOptions } from "../OpenSppAdapterOptions";
 import type { OpenSPPIndividualExtended as OpenSPPIndividual } from "../odoo-types";
+import { normalizeLegacyRelationField } from "../../../utils/normalizeLegacyRelationFields";
 
 /**
  * Transformer for converting OpenSPP individual records into DataCollect FormSubmission objects.
@@ -97,9 +98,9 @@ export class IndividualTransformer {
       mapped.name = individual.name;
     }
 
-    // Map gender
+    // Map gender - normalize legacy [id, label] format to just the ID
     if (fieldMap.gender && individual.gender) {
-      mapped.gender = individual.gender;
+      mapped.gender = normalizeLegacyRelationField(individual.gender);
     }
 
     // Map date of birth
@@ -121,11 +122,24 @@ export class IndividualTransformer {
     }
 
 
-    // Map membership kind (relationship to household)
+    // Map membership kind (relationship to household) - normalize legacy format
     if (fieldMap.membershipKind && individual.relationship) {
-      mapped.relationship = individual.relationship;
+      mapped.relationship = normalizeLegacyRelationField(individual.relationship);
     }
 
-    return mapped;
+    // Also normalize any other relation fields that might be in the individual object
+    // This handles fields that aren't in the fieldMap but might be relation fields
+    const normalizedMapped = { ...mapped };
+    for (const [key, value] of Object.entries(normalizedMapped)) {
+      // Check if value looks like a legacy tuple or relation object
+      if (
+        (Array.isArray(value) && value.length === 2) ||
+        (typeof value === "object" && value !== null && "id" in value)
+      ) {
+        normalizedMapped[key] = normalizeLegacyRelationField(value);
+      }
+    }
+
+    return normalizedMapped;
   }
 }

@@ -48,6 +48,7 @@ type CallOptions = {
   limit?: number;
   order?: string;
   context?: Record<string, unknown>;
+  attributes?: string[];
 };
 
 export default class OdooClient {
@@ -250,6 +251,43 @@ export default class OdooClient {
 
   async getSessionInfo(): Promise<unknown> {
     return this.call("res.users", "get_session_info", []);
+  }
+
+  /**
+   * Get field metadata for a model, including dropdown options for Selection fields.
+   * Similar to SugarCRM's field metadata, this returns comprehensive field information.
+   *
+   * @param model The Odoo model name (e.g., "res.partner")
+   * @param fields Optional list of field names to get info for. If not provided, returns all fields.
+   * @param attributes Optional list of attributes to return (e.g., ['selection', 'type', 'string', 'required']).
+   *                   If not provided, returns all attributes.
+   * @returns Dictionary mapping field names to their metadata, including selection options for dropdown fields.
+   *
+   * @example
+   * // Get all fields for res.partner
+   * const allFields = await odooClient.fieldsGet("res.partner");
+   *
+   * @example
+   * // Get specific fields with selection options
+   * const fieldInfo = await odooClient.fieldsGet("res.partner", ["gender", "marital_status"], ["selection", "type"]);
+   * // Returns: { gender: { type: "selection", selection: [["male", "Male"], ["female", "Female"]] }, ... }
+   */
+  async fieldsGet(
+    model: string,
+    fields?: string[],
+    attributes?: string[],
+  ): Promise<Record<string, unknown>> {
+    const args: unknown[] = [];
+    if (fields && fields.length > 0) {
+      args.push(fields);
+    }
+
+    const kwargs: CallOptions = {};
+    if (attributes && attributes.length > 0) {
+      kwargs.attributes = attributes;
+    }
+
+    return this.call<Record<string, unknown>>(model, "fields_get", args, kwargs);
   }
 
   isAuthenticated(): boolean {

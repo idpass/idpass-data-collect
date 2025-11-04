@@ -17,17 +17,8 @@
  * under the License.
  */
 
-export * from "./components/EntityDataManager";
-export * from "./components/EntityStore";
-export * from "./components/EventStore";
-export * from "./components/InternalSyncManager";
-export * from "./components/SyncAdapter";
-export * from "./components/ExternalSyncManager";
-export * from "./interfaces/types";
-export * from "./services/EventApplierService";
-export * from "./storage/IndexedDbEntityStorageAdapter";
-export * from "./storage/IndexedDbEventStorageAdapter";
-export * from "./components/AuthManager";
-export * from "./storage/IndexedDbAuthStorageAdapter";
-export * from "./services/SingleAuthStorageImpl";
-export * from "./utils/fieldTransformers";
+export { default as OdooClient } from "./OdooClient";
+export type { OdooConfig } from "./odoo-types";
+export * from "./odoo-types";
+export * from "./OpenSppAdapterOptions";
+

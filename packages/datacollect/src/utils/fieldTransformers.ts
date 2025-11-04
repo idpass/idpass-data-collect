@@ -246,16 +246,38 @@ export class IdTransformer implements FieldTransformer {
   }
 
   reverseTransform(value: unknown): unknown {
-    // Transform FROM OpenSPP format {"id": 0, "display_name": ""} TO form value
-    // OpenSPP sends the object, we extract just the ID
+    // Transform FROM OpenSPP format TO form value
+    // Handles multiple formats:
+    // 1. {"id": 0, "display_name": ""} - Modern format
+    // 2. [id, label] - Legacy tuple format
+    // 3. number or string - Already extracted ID
     if (value === null || value === undefined) {
-      return null;
+      // Return empty string for Form.io compatibility (select fields handle empty string better than null)
+      return "";
+    }
+
+    // Handle legacy [id, label] tuple format
+    if (Array.isArray(value) && value.length === 2) {
+      const [idValue, label] = value;
+      // Validate tuple format: [id (number|string), label (string)]
+      if (
+        (typeof idValue === "number" || typeof idValue === "string") &&
+        typeof label === "string"
+      ) {
+        // Return just the ID for the form
+        return idValue === null || idValue === undefined ? "" : idValue;
+      }
     }
 
     // If value is in {"id": 0, "display_name": ""} format
     if (typeof value === "object" && value !== null && "id" in value) {
-      // Return just the ID for the form
-      return (value as { id: unknown }).id;
+      const idValue = (value as { id: unknown }).id;
+      // Handle null/undefined id values
+      if (idValue === null || idValue === undefined) {
+        return "";
+      }
+      // Return just the ID for the form (could be 0, which is valid)
+      return idValue;
     }
 
     // If value is already a number or string (just the ID), return as-is
@@ -264,7 +286,8 @@ export class IdTransformer implements FieldTransformer {
       return value;
     }
 
-    return null;
+    // Default to empty string for Form.io compatibility
+    return "";
   }
 }
 

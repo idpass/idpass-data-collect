@@ -260,7 +260,7 @@ const OPENSPP_FIELDS_URL = '/api/openspp-fields'
 
 export interface ParsedOpenSppField {
   name: string
-  type: 'text' | 'date' | 'relation'
+  type: 'text' | 'date' | 'relation' | 'selection'
   label?: string
   required?: boolean
   options?: Array<{ id: number | string; label: string }>
@@ -303,5 +303,23 @@ export const parseOpenSppFieldsFromPayload = async (payload: unknown): Promise<{
     throw new Error('Instance not initialized')
   }
   const response = await instance.post(`${OPENSPP_FIELDS_URL}/parse`, payload)
+  return response.data
+}
+
+export interface FetchOpenSppFieldsParams {
+  url: string
+  database: string
+  username: string
+  password: string
+  model?: string
+  fields?: string[]
+  attributes?: string[]
+}
+
+export const fetchOpenSppFieldsFromAPI = async (params: FetchOpenSppFieldsParams): Promise<{ fields: ParsedOpenSppField[] }> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const response = await instance.post(`${OPENSPP_FIELDS_URL}/fetch`, params)
   return response.data
 }
