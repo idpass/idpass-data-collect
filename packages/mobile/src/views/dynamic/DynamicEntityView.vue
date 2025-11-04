@@ -2,7 +2,7 @@
 import { useDatabase } from '@/database'
 import { TenantAppData } from '@/schemas/tenantApp.schema'
 import { store } from '@/store'
-import { EntityForm, getBreadcrumbFromPath } from '@/utils/dynamicFormIoUtils'
+import { EntityForm } from '@/utils/dynamicFormIoUtils'
 import { SyncLevel } from '@idpass/data-collect-core'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'

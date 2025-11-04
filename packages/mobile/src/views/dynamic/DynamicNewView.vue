@@ -2,7 +2,7 @@
 import { useDatabase } from '@/database'
 import { TenantAppData } from '@/schemas/tenantApp.schema'
 import { store } from '@/store'
-import { EntityForm, getBreadcrumbFromPath } from '@/utils/dynamicFormIoUtils'
+import { EntityForm } from '@/utils/dynamicFormIoUtils'
 import { Form as FormIO } from '@formio/vue/lib/index'
 import { SyncLevel } from '@idpass/data-collect-core'
 import { v4 as uuidv4 } from 'uuid'
@@ -24,7 +24,6 @@ const entityForm = ref<EntityForm>()
 const formio = ref<unknown>()
 const isGroup = ref(false)
 const submissionCount = ref(0)
-const isSavingDraft = ref(false)
 const { isOffline } = useNetworkStatus()
 
 type FormSubmissionEvent = {

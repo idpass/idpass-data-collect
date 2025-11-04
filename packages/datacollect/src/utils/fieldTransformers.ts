@@ -187,6 +187,7 @@ export class DateTransformer implements FieldTransformer {
 
 export interface IdTransformerOptions {
   // No options needed - extracts id from {"id": 0, "display_name": ""} format
+  [key: string]: unknown;
 }
 
 export interface MultiSelectTransformerOptions {
@@ -206,7 +207,7 @@ export interface BooleanTransformerOptions {
 export class IdTransformer implements FieldTransformer {
   type: TransformerType = "id";
 
-  constructor(options: IdTransformerOptions = {}) {
+  constructor(_options: IdTransformerOptions = {}) {
     // No options needed
   }
 

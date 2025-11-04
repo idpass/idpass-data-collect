@@ -2,7 +2,7 @@
 import { useDatabase } from '@/database'
 import { TenantAppData } from '@/schemas/tenantApp.schema'
 import { store } from '@/store'
-import { EntityForm, getBreadcrumbFromPath } from '@/utils/dynamicFormIoUtils'
+import { EntityForm } from '@/utils/dynamicFormIoUtils'
 import { reverseTransformEntityData } from '@/utils/reverseTransformData'
 import { Form as FormIO } from '@formio/vue/lib/index'
 import { SyncLevel } from '@idpass/data-collect-core'

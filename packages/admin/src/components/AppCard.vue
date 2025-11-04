@@ -33,9 +33,10 @@ const emit = defineEmits<{
 const menu = ref(false)
 const showArchiveDialog = ref(false)
 
-const handleArchive = (id: string) => {
+const handleArchive = () => {
   menu.value = false
   showArchiveDialog.value = true
+  // TODO: mark app as archived in the database
 }
 
 const confirmArchive = async () => {
@@ -159,7 +160,7 @@ watch(showQrDialog, (isOpen) => {
               title="Download"
             />
             <v-list-item
-              @click="handleArchive(app.id)"
+              @click="handleArchive()"
               prepend-icon="mdi-archive"
               title="Archive"
               color="warning"

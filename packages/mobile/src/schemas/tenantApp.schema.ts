@@ -35,7 +35,8 @@ export const TenantAppSchema: RxJsonSchema<TenantAppData> = {
     url: { type: 'string', format: 'url' },
     entityForms: { type: 'array' },
     entityData: { type: 'array' },
-    syncServerUrl: { type: 'string', format: 'url' }
+    syncServerUrl: { type: 'string', format: 'url' },
+    externalSync: { type: 'object', default: {} }
   },
   required: [
     'id',

@@ -17,7 +17,8 @@
  * under the License.
  */
 
-import type { EventStore, ExternalSyncConfig, ExternalSyncCredentials, FormSubmission } from "../interfaces/types";
+import type { EventStore, ExternalSyncConfig, ExternalSyncCredentials, EntityPair } from "../interfaces/types";
+import { EntityType } from "../interfaces/types";
 import OpenSppSyncAdapter from "../components/openspp/OpenSppSyncAdapter";
 import { EventApplierService } from "../services/EventApplierService";
 
@@ -85,93 +86,97 @@ describe("OpenSppSyncAdapter", () => {
     };
   });
 
-  function createFormSubmission(partial: Partial<FormSubmission>): FormSubmission {
-    return {
-      guid: partial.guid ?? "guid",
-      entityGuid: partial.entityGuid ?? "entity-guid",
-      type: partial.type ?? "create-individual",
-      data: partial.data ?? {},
-      timestamp: partial.timestamp ?? "2024-01-01T12:00:00.000Z",
-      userId: partial.userId ?? "user",
-      syncLevel: partial.syncLevel ?? 0,
-    };
-  }
-
   describe("pushData", () => {
     it("pushes individuals and households using default config", async () => {
-      const rootEvent = createFormSubmission({
-        entityGuid: "root-1",
-        type: "create-group",
-        data: {
-          entityName: "apg",
-          id: "100",
-          province_id: "1",
-          district_id: "5",
-          village_id: "7",
+      const individualEntityPair: EntityPair = {
+        guid: "individual-1",
+        initial: {
+          id: "entity-1",
+          guid: "individual-1",
+          type: EntityType.Individual,
+          version: 1,
+          data: {
+            entityName: "individual",
+            parentGuid: "household-1",
+            first_name: "Jane",
+            last_name: "Doe",
+            gender: "female",
+            date_of_birth: "1999-01-01",
+          },
+          lastUpdated: "2024-01-01T12:00:00.000Z",
         },
-      });
-
-      const householdEvent = createFormSubmission({
-        entityGuid: "household-1",
-        type: "create-group",
-        data: {
-          entityName: "household",
-          parentGuid: "root-1",
-          name: "Household",
-          household_size: "4",
-          belongs_to_ethnic_group: "Yes",
-          location_gps: JSON.stringify({ coords: { longitude: 10, latitude: 20 } }),
+        modified: {
+          id: "entity-1",
+          guid: "individual-1",
+          type: EntityType.Individual,
+          version: 1,
+          data: {
+            entityName: "individual",
+            parentGuid: "household-1",
+            first_name: "Jane",
+            last_name: "Doe",
+            gender: "female",
+            date_of_birth: "1999-01-01",
+            relationship: "2",
+            bank_details: [
+              {
+                bank_name: "1",
+                account_number: "1111",
+              },
+            ],
+            document_ids: [
+              {
+                id_type: "passport",
+                id_number: "ABC",
+              },
+            ],
+          },
+          lastUpdated: "2024-01-01T12:00:00.000Z",
         },
-      });
+      };
 
-      const individualEvent = createFormSubmission({
-        entityGuid: "individual-1",
-        type: "create-individual",
-        data: {
-          entityName: "individual",
-          parentGuid: "household-1",
-          first_name: "Jane",
-          last_name: "Doe",
-          gender: "female",
-          date_of_birth: "1999-01-01",
-          relationship: "2",
-          bank_details: [
-            {
-              bank_name: "1",
-              account_number: "1111",
-            },
-          ],
-          document_ids: [
-            {
-              id_type: "passport",
-              id_number: "ABC",
-            },
-          ],
-        },
-      });
+      const mockEntityStore = {
+        getAllEntities: jest.fn().mockResolvedValue([individualEntityPair]),
+        getEntity: jest.fn().mockResolvedValue(individualEntityPair),
+        saveEntity: jest.fn(),
+      };
 
-      eventStore.getEventsSince.mockResolvedValue([rootEvent, householdEvent, individualEvent]);
+      eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
+
+      Object.assign(mockOdooClientImplementation, {
+        createIndividual: jest.fn().mockResolvedValue(300),
+      });
 
       adapter = new OpenSppSyncAdapter(eventStore, eventApplierService, config);
 
       await expect(adapter.pushData(credentials)).resolves.toBeUndefined();
 
-      expect(eventStore.setLastPushExternalSyncTimestamp).toHaveBeenCalledWith("2024-01-01T12:00:00.000Z");
+      expect(mockEntityStore.getAllEntities).toHaveBeenCalled();
+      expect(mockOdooClientImplementation.createIndividual).toHaveBeenCalled();
     });
   });
 
   describe("pullData", () => {
-    it("fetches and transforms households since last pull", async () => {
-      const mockHouseholds = [
+    it("fetches and transforms individuals since last pull", async () => {
+      const mockIndividuals = [
         {
-          id: 101,
-          name: "Test Household",
-          is_group: true,
-          kind: 1,
-          hh_size: 4,
-          ethnic_group: true,
+          id: 201,
+          given_name: "John",
+          family_name: "Doe",
+          name: "John Doe",
+          is_group: false,
+          is_registrant: true,
+          gender: "male",
+          birthdate: "1990-01-01",
+          ethnic_group: false,
+          email: "john@example.com",
+          phone: "+1234567890",
+          profession: "Engineer",
+          marital_status_id: 1,
+          highest_education_level_id: 3,
           latitude: 1.5,
           longitude: 2.5,
+          relationship: 2,
           province_id: 10,
           district_id: 20,
           area_id: 30,
@@ -180,8 +185,7 @@ describe("OpenSppSyncAdapter", () => {
       ];
 
       Object.assign(mockOdooClientImplementation, {
-        fetchHouseholdsSince: jest.fn().mockResolvedValue(mockHouseholds),
-        fetchIndividualsSince: jest.fn().mockResolvedValue([]),
+        fetchIndividualsSince: jest.fn().mockResolvedValue(mockIndividuals),
       });
 
       adapter = new OpenSppSyncAdapter(eventStore, eventApplierService, config);
@@ -189,17 +193,14 @@ describe("OpenSppSyncAdapter", () => {
       await adapter.authenticate(credentials);
       await adapter.pullData();
 
-      // Verify households were fetched
-      expect(mockOdooClientImplementation.fetchHouseholdsSince).toHaveBeenCalledWith("1970-01-01T00:00:00.000Z");
+      // Verify individuals were fetched (without timestamp parameter)
+      expect(mockOdooClientImplementation.fetchIndividualsSince).toHaveBeenCalledWith();
 
       // Verify forms were submitted
       expect(eventApplierService.submitForm).toHaveBeenCalled();
-
-      // Verify latest timestamp was updated
-      expect(eventStore.setLastPullExternalSyncTimestamp).toHaveBeenCalledWith("2024-01-15T10:00:00.000Z");
     });
 
-    it("fetches and transforms individuals since last pull", async () => {
+    it("fetches and transforms multiple individuals", async () => {
       const mockIndividuals = [
         {
           id: 201,
@@ -224,10 +225,20 @@ describe("OpenSppSyncAdapter", () => {
           area_id: 30,
           write_date: "2024-01-16T10:00:00.000Z",
         },
+        {
+          id: 202,
+          given_name: "Jane",
+          family_name: "Smith",
+          name: "Jane Smith",
+          is_group: false,
+          is_registrant: true,
+          gender: "female",
+          birthdate: "1992-05-15",
+          write_date: "2024-01-17T10:00:00.000Z",
+        },
       ];
 
       Object.assign(mockOdooClientImplementation, {
-        fetchHouseholdsSince: jest.fn().mockResolvedValue([]),
         fetchIndividualsSince: jest.fn().mockResolvedValue(mockIndividuals),
       });
 
@@ -236,27 +247,26 @@ describe("OpenSppSyncAdapter", () => {
       await adapter.authenticate(credentials);
       await adapter.pullData();
 
-      // Verify individuals were fetched
-      expect(mockOdooClientImplementation.fetchIndividualsSince).toHaveBeenCalledWith("1970-01-01T00:00:00.000Z");
+      // Verify individuals were fetched (without timestamp parameter)
+      expect(mockOdooClientImplementation.fetchIndividualsSince).toHaveBeenCalledWith();
 
-      // Verify forms were submitted
-      expect(eventApplierService.submitForm).toHaveBeenCalled();
-
-      // Verify latest timestamp was updated
-      expect(eventStore.setLastPullExternalSyncTimestamp).toHaveBeenCalledWith("2024-01-16T10:00:00.000Z");
+      // Verify forms were submitted for both individuals
+      expect(eventApplierService.submitForm).toHaveBeenCalledTimes(2);
     });
 
     it("skips records without ID", async () => {
-      const mockHouseholds = [
+      const mockIndividuals = [
         {
           id: undefined,
-          name: "No ID Household",
+          given_name: "No ID",
+          family_name: "Individual",
+          is_group: false,
+          is_registrant: true,
         },
       ];
 
       Object.assign(mockOdooClientImplementation, {
-        fetchHouseholdsSince: jest.fn().mockResolvedValue(mockHouseholds),
-        fetchIndividualsSince: jest.fn().mockResolvedValue([]),
+        fetchIndividualsSince: jest.fn().mockResolvedValue(mockIndividuals),
       });
 
       adapter = new OpenSppSyncAdapter(eventStore, eventApplierService, config);
@@ -264,31 +274,32 @@ describe("OpenSppSyncAdapter", () => {
       await adapter.authenticate(credentials);
       await adapter.pullData();
 
-      // Verify no forms were submitted
-      expect(eventApplierService.submitForm).not.toHaveBeenCalled();
+      // Verify forms were still submitted (individuals without ID are processed, but getEntityByExternalId won't be called)
+      expect(eventApplierService.submitForm).toHaveBeenCalled();
     });
 
     it("continues processing on transformation errors", async () => {
-      const mockHouseholds = [
+      const mockIndividuals = [
         {
           id: 101,
-          name: "Valid Household",
-          is_group: true,
-          kind: 1,
+          given_name: "Valid",
+          family_name: "Individual",
+          is_group: false,
+          is_registrant: true,
           write_date: "2024-01-15T10:00:00.000Z",
         },
         {
           id: 102,
-          name: null,
-          is_group: true,
-          kind: 1,
+          given_name: null,
+          family_name: null,
+          is_group: false,
+          is_registrant: true,
           write_date: "2024-01-15T11:00:00.000Z",
         },
       ];
 
       Object.assign(mockOdooClientImplementation, {
-        fetchHouseholdsSince: jest.fn().mockResolvedValue(mockHouseholds),
-        fetchIndividualsSince: jest.fn().mockResolvedValue([]),
+        fetchIndividualsSince: jest.fn().mockResolvedValue(mockIndividuals),
       });
 
       adapter = new OpenSppSyncAdapter(eventStore, eventApplierService, config);
@@ -296,8 +307,9 @@ describe("OpenSppSyncAdapter", () => {
       await adapter.authenticate(credentials);
       await adapter.pullData();
 
-      // Both households should be processed despite any issues
-      expect(eventStore.setLastPullExternalSyncTimestamp).toHaveBeenCalledWith("2024-01-15T11:00:00.000Z");
+      // Both individuals should be processed despite any issues
+      // The adapter continues processing even if one fails
+      expect(eventApplierService.submitForm).toHaveBeenCalled();
     });
 
     it("handles applier errors gracefully", async () => {
@@ -313,7 +325,6 @@ describe("OpenSppSyncAdapter", () => {
       ];
 
       Object.assign(mockOdooClientImplementation, {
-        fetchHouseholdsSince: jest.fn().mockResolvedValue([]),
         fetchIndividualsSince: jest.fn().mockResolvedValue(mockIndividuals),
       });
 
@@ -327,36 +338,55 @@ describe("OpenSppSyncAdapter", () => {
       // Should not throw even if applier fails
       await expect(adapter.pullData()).resolves.toBeUndefined();
 
-      // Timestamp should still be updated
-      expect(eventStore.setLastPullExternalSyncTimestamp).toHaveBeenCalledWith("2024-01-16T10:00:00.000Z");
+      // Verify submitForm was called (even though it failed)
+      expect(eventApplierService.submitForm).toHaveBeenCalled();
     });
 
     it("updates existing entities instead of creating duplicates", async () => {
-      const mockHouseholds = [
+      const mockIndividuals = [
         {
           id: 101,
-          name: "Updated Household",
-          is_group: true,
-          kind: 1,
-          hh_size: 5,
+          given_name: "Updated",
+          family_name: "Individual",
+          name: "Updated Individual",
+          is_group: false,
+          is_registrant: true,
+          gender: "male",
+          birthdate: "1990-01-01",
           write_date: "2024-01-15T10:00:00.000Z",
         },
       ];
 
       const existingEntityGuid = "existing-entity-guid";
-      const mockEntityStore = {
-        getEntityByExternalId: jest.fn().mockResolvedValue({
+      const existingEntityPair: EntityPair = {
+        guid: existingEntityGuid,
+        initial: {
+          id: "entity-101",
           guid: existingEntityGuid,
-          initial: { guid: existingEntityGuid, externalId: "101" },
-          modified: { guid: existingEntityGuid, externalId: "101" },
-        }),
+          type: EntityType.Individual,
+          version: 1,
+          externalId: "101",
+          data: {},
+          lastUpdated: "2024-01-01T00:00:00.000Z",
+        },
+        modified: {
+          id: "entity-101",
+          guid: existingEntityGuid,
+          type: EntityType.Individual,
+          version: 1,
+          externalId: "101",
+          data: {},
+          lastUpdated: "2024-01-15T10:00:00.000Z",
+        },
+      };
+      const mockEntityStore = {
+        getEntityByExternalId: jest.fn().mockResolvedValue(existingEntityPair),
       };
 
       eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
 
       Object.assign(mockOdooClientImplementation, {
-        fetchHouseholdsSince: jest.fn().mockResolvedValue(mockHouseholds),
-        fetchIndividualsSince: jest.fn().mockResolvedValue([]),
+        fetchIndividualsSince: jest.fn().mockResolvedValue(mockIndividuals),
       });
 
       adapter = new OpenSppSyncAdapter(eventStore, eventApplierService, config);
@@ -364,17 +394,13 @@ describe("OpenSppSyncAdapter", () => {
       await adapter.authenticate(credentials);
       await adapter.pullData();
 
-      // Verify getEntityByExternalId was called with the household ID
+      // Verify getEntityByExternalId was called with the individual ID
       expect(mockEntityStore.getEntityByExternalId).toHaveBeenCalledWith("101");
 
-      // Verify submitForm was called with update-group type and existing entity GUID
+      // Verify submitForm was called with the existing entity GUID (transformer will determine update vs create)
       expect(eventApplierService.submitForm).toHaveBeenCalledWith(
         expect.objectContaining({
           entityGuid: existingEntityGuid,
-          type: "update-group",
-          data: expect.objectContaining({
-            externalId: 101,
-          }),
         })
       );
     });

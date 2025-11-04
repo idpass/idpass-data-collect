@@ -93,12 +93,6 @@ const removeMapping = (index: number) => {
   expandedRows.value = newExpandedRows
 }
 
-const getFieldOptions = (opensppField: ParsedOpenSppField | undefined) => {
-  if (!opensppField) return []
-  // ID transformer doesn't need options - it extracts id from {"id": 0, "display_name": ""}
-  return []
-}
-
 const updateTransformerOptions = (index: number, opensppFieldName: string) => {
   const mapping = mappings.value[index]
   if (!mapping) return
@@ -419,7 +413,7 @@ const toggleRowExpansion = (index: number) => {
                           density="compact"
                           variant="outlined"
                           persistent-hint
-                          :rules="[(v) => !v || v.length === 1 || 'Delimiter must be a single character']"
+                          :rules="[(v: unknown[]) => !v || v.length === 1 || 'Delimiter must be a single character']"
                         />
                         <v-alert
                           type="info"
