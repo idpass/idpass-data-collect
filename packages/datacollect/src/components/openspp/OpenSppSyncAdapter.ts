@@ -373,8 +373,26 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
         mapping.transformer.options,
       );
 
+      // For text transformers, normalize "false" strings to empty string before transformation
+      // This handles cases where boolean false values are stored as strings for text fields
+      let valueToTransform = formValue;
+      if (mapping.transformer.type === "text" && (formValue === "false" || formValue === false)) {
+        valueToTransform = "";
+      }
+
+      // Skip if normalized value is empty (for text fields)
+      if (mapping.transformer.type === "text" && valueToTransform === "") {
+        continue;
+      }
+
       // Transform the value from form format to OpenSPP format
-      const transformedValue = transformer.transform(formValue);
+      const transformedValue = transformer.transform(valueToTransform);
+
+      // Skip if transformed value is empty, null, or undefined
+      // OpenSPP doesn't accept empty strings for text fields
+      if (transformedValue === null || transformedValue === undefined || transformedValue === "") {
+        continue;
+      }
 
       // Map to OpenSPP field name
       payload[mapping.opensppField] = transformedValue;
