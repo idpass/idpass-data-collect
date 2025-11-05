@@ -27,6 +27,7 @@ export interface FieldTransformer {
 
 /**
  * Text field transformer - passes through values as-is or converts to string
+ * Converts boolean false or string "false" to empty string for text fields
  */
 export class TextTransformer implements FieldTransformer {
   type: TransformerType = "text";
@@ -35,11 +36,19 @@ export class TextTransformer implements FieldTransformer {
     if (value === null || value === undefined) {
       return "";
     }
+    // Convert boolean false or string "false" to empty string
+    if (value === false || value === "false") {
+      return "";
+    }
     return String(value);
   }
 
   reverseTransform(value: unknown): unknown {
     if (value === null || value === undefined) {
+      return "";
+    }
+    // Convert boolean false or string "false" to empty string
+    if (value === false || value === "false") {
       return "";
     }
     return String(value);
