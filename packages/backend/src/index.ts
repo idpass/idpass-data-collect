@@ -26,7 +26,7 @@ const {
   ADMIN_PASSWORD: adminPassword,
   ADMIN_EMAIL: adminEmail,
   POSTGRES: postgresUrl,
-  DATABASE_URL: databaseUrl, // Railway provides DATABASE_URL
+  DATABASE_URL: databaseUrl,
 } = process.env;
 
 if (!adminPassword || !adminEmail) {

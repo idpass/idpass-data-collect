@@ -409,11 +409,10 @@ const toggleRowExpansion = (index: number) => {
                         <v-text-field
                           v-model="mapping.transformer.options!.delimiter"
                           label="Delimiter"
-                          hint="Character used to join array values (default: comma)"
+                          hint="String used to join array values (default: comma)"
                           density="compact"
                           variant="outlined"
                           persistent-hint
-                          :rules="[(v: unknown[]) => !v || v.length === 1 || 'Delimiter must be a single character']"
                         />
                         <v-alert
                           type="info"

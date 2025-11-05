@@ -216,7 +216,8 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     }
 
     const entityStore = this.eventApplierService.getEntityStore();
-    const transformer = new IndividualTransformer(this.options.individual);
+    const fieldMappings = this.getFieldMappings();
+    const transformer = new IndividualTransformer(this.options.individual, fieldMappings);
 
     // Fetch individuals modified since last sync (or all if first sync)
     const individuals = await this.odooClient.fetchIndividualsSince();

@@ -191,7 +191,7 @@ export interface IdTransformerOptions {
 }
 
 export interface MultiSelectTransformerOptions {
-  delimiter?: string; // Character to join array elements (default: ",")
+  delimiter?: string; // String to join array elements (default: ",")
 }
 
 export interface BooleanTransformerOptions {
@@ -339,10 +339,10 @@ export class MultiSelectTransformer implements FieldTransformer {
   reverseTransform(value: unknown): unknown {
     // Transform FROM delimited string TO form value
     if (value === null || value === undefined || value === "") {
-      return {};
+      return "";
     }
 
-    // If already an object, return as-is
+    // If already an object, return as-is (for checkbox format)
     if (typeof value === "object" && value !== null && !Array.isArray(value)) {
       return value;
     }
@@ -352,19 +352,24 @@ export class MultiSelectTransformer implements FieldTransformer {
       return value;
     }
 
-    // If string, split by delimiter and convert to object format
-    // This creates an object with keys set to true for checkbox components
+    // If string, split by delimiter
     const stringValue = String(value);
     if (stringValue.trim() === "") {
-      return {};
+      return "";
     }
 
     const keys = stringValue.split(this.delimiter).map((v) => v.trim()).filter((v) => v !== "");
-    const result: Record<string, boolean> = {};
-    for (const key of keys) {
-      result[key] = true;
+    
+    // If only one value, return as string (for single select compatibility)
+    // This allows multiselect transformer to work with both single select and multi-select fields
+    if (keys.length === 1) {
+      return keys[0];
     }
-    return result;
+    
+    // If multiple values, return as array (for select boxes format)
+    // Note: If the form expects checkbox format (object), the mobile app's reverseTransform
+    // will handle it, but arrays are more compatible with Form.io select boxes
+    return keys;
   }
 }
 

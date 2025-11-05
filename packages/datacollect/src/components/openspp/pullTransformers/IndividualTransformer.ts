@@ -22,6 +22,29 @@ import { FormSubmission, SyncLevel } from "../../../interfaces/types";
 import type { OpenSppEntityOptions } from "../OpenSppAdapterOptions";
 import type { OpenSPPIndividualExtended as OpenSPPIndividual } from "../odoo-types";
 import { normalizeLegacyRelationField } from "../../../utils/normalizeLegacyRelationFields";
+import {
+  createTransformer,
+  type TransformerType,
+} from "../../../utils/fieldTransformers";
+
+/**
+ * Field mapping configuration from external sync config.
+ * Matches the structure used in the admin UI.
+ */
+interface FieldMapping {
+  formField: string;
+  opensppField: string;
+  transformer: {
+    type: TransformerType;
+    options?: {
+      inputFormat?: "YYYY-MM-DD" | "MM/DD/YYYY" | "DD/MM/YYYY" | "auto";
+      outputFormat?: "YYYY-MM-DD" | "MM/DD/YYYY" | "DD/MM/YYYY";
+      delimiter?: string; // Multi-select transformer option
+      truthyValue?: string; // Boolean transformer option
+      falsyValue?: string; // Boolean transformer option
+    };
+  };
+}
 
 /**
  * Transformer for converting OpenSPP individual records into DataCollect FormSubmission objects.
@@ -29,7 +52,10 @@ import { normalizeLegacyRelationField } from "../../../utils/normalizeLegacyRela
  * Handles field mapping from OpenSPP individual entity format to the create-individual event type.
  */
 export class IndividualTransformer {
-  constructor(private options: OpenSppEntityOptions) {}
+  constructor(
+    private options: OpenSppEntityOptions,
+    private fieldMappings?: FieldMapping[],
+  ) {}
 
   /**
    * Transform an OpenSPP individual record into a FormSubmission for creating or updating an individual.
@@ -71,7 +97,8 @@ export class IndividualTransformer {
   }
 
   /**
-   * Map OpenSPP individual fields to DataCollect format using the configured field map.
+   * Map OpenSPP individual fields to DataCollect format using the configured field mappings.
+   * Uses field mappings with reverse transformers to convert OpenSPP format back to form format.
    *
    * @param individual The individual record
    * @returns Mapped fields object
@@ -79,6 +106,12 @@ export class IndividualTransformer {
   private mapFields(individual: OpenSPPIndividual): Record<string, unknown> {
     const mapped: Record<string, unknown> = {};
 
+    // If field mappings are provided, use them (preferred method)
+    if (this.fieldMappings && this.fieldMappings.length > 0) {
+      return this.mapFieldsUsingMappings(individual);
+    }
+
+    // Fallback to legacy fieldMap for backward compatibility
     const fieldMap = this.options.fieldMap;
     if (!fieldMap) {
       return mapped;
@@ -121,7 +154,6 @@ export class IndividualTransformer {
       mapped.phone_number = individual.phone;
     }
 
-
     // Map membership kind (relationship to household) - normalize legacy format
     if (fieldMap.membershipKind && individual.relationship) {
       mapped.relationship = normalizeLegacyRelationField(individual.relationship);
@@ -141,5 +173,66 @@ export class IndividualTransformer {
     }
 
     return normalizedMapped;
+  }
+
+  /**
+   * Map OpenSPP individual fields using field mappings with reverse transformers.
+   * This method handles the conversion from OpenSPP format back to form format.
+   *
+   * @param individual The individual record from OpenSPP
+   * @returns Mapped fields object with reverse-transformed values
+   */
+  private mapFieldsUsingMappings(individual: OpenSPPIndividual): Record<string, unknown> {
+    const mapped: Record<string, unknown> = {};
+
+    // Cast to Record<string, unknown> to access custom fields dynamically
+    const individualRecord = individual as OpenSPPIndividual & Record<string, unknown>;
+
+    // Iterate through field mappings and apply reverse transformations
+    for (const mapping of this.fieldMappings!) {
+      const opensppField = mapping.opensppField;
+      const formField = mapping.formField;
+
+      // Get the value from OpenSPP individual record
+      // The individual record can have any field name (including custom fields like x_cst_indv_*)
+      const opensppValue = individualRecord[opensppField];
+
+      // Skip if value is missing (null or undefined)
+      // Don't skip empty strings - they need to be transformed (e.g., multiselect "" -> {})
+      if (opensppValue === null || opensppValue === undefined) {
+        continue;
+      }
+
+      try {
+        // Create transformer for this field
+        const transformer = createTransformer(
+          mapping.transformer.type,
+          mapping.transformer.options,
+        );
+
+        // Apply reverse transform: convert from OpenSPP format to form format
+        const formValue = transformer.reverseTransform(opensppValue);
+
+        // Set the mapped value
+        // Include all values except null and undefined
+        // Empty strings, empty objects {}, and empty arrays [] are valid form values
+        // and should be preserved (they represent "no selection" states)
+        if (formValue !== null && formValue !== undefined) {
+          mapped[formField] = formValue;
+        }
+      } catch (error) {
+        // Log error but continue with other fields
+        console.error(
+          `Error reverse transforming field "${formField}" from OpenSPP field "${opensppField}":`,
+          error,
+          "Value:",
+          opensppValue,
+        );
+        // Keep original value if transformation fails (for debugging)
+        mapped[formField] = opensppValue;
+      }
+    }
+
+    return mapped;
   }
 }

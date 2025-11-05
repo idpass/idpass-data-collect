@@ -22,10 +22,9 @@ export default defineConfig({
   },
   server: {
     // Allow Railway domains and localhost for development
-    // Railway domains follow the pattern: *.up.railway.app
     host: true, // Listen on all addresses
     allowedHosts: [
-      '.up.railway.app', // Allow all Railway subdomains
+      '.up.railway.app',
       'localhost',
       '127.0.0.1',
     ],
