@@ -21,7 +21,6 @@ import { v4 as uuidv4 } from "uuid";
 import { FormSubmission, SyncLevel } from "../../../interfaces/types";
 import type { OpenSppEntityOptions } from "../OpenSppAdapterOptions";
 import type { OpenSPPIndividualExtended as OpenSPPIndividual } from "../odoo-types";
-import { normalizeLegacyRelationField } from "../../../utils/normalizeLegacyRelationFields";
 import {
   createTransformer,
   type TransformerType,
@@ -104,75 +103,12 @@ export class IndividualTransformer {
    * @returns Mapped fields object
    */
   private mapFields(individual: OpenSPPIndividual): Record<string, unknown> {
-    const mapped: Record<string, unknown> = {};
-
-    // If field mappings are provided, use them (preferred method)
+    // Use field mappings if provided, otherwise return empty object
     if (this.fieldMappings && this.fieldMappings.length > 0) {
       return this.mapFieldsUsingMappings(individual);
     }
 
-    // Fallback to legacy fieldMap for backward compatibility
-    const fieldMap = this.options.fieldMap;
-    if (!fieldMap) {
-      return mapped;
-    }
-
-    // Map name fields
-    if (fieldMap.firstName && individual.given_name) {
-      mapped.firstName = individual.given_name;
-    }
-    if (fieldMap.lastName && individual.family_name) {
-      mapped.lastName = individual.family_name;
-    }
-    if (fieldMap.middleName && individual.addl_name) {
-      mapped.middleName = individual.addl_name;
-    }
-    if (fieldMap.displayName && individual.name) {
-      mapped.name = individual.name;
-    }
-
-    // Map gender - normalize legacy [id, label] format to just the ID
-    if (fieldMap.gender && individual.gender) {
-      mapped.gender = normalizeLegacyRelationField(individual.gender);
-    }
-
-    // Map date of birth
-    if (fieldMap.dateOfBirth && individual.birthdate) {
-      mapped.dateOfBirth = individual.birthdate;
-    }
-
-    // Map ethnic group flag
-    if (fieldMap.belongsToEthnicGroup && typeof individual.ethnic_group !== "undefined") {
-      mapped.belongs_to_ethnic_group = individual.ethnic_group ? "yes" : "no";
-    }
-
-    // Map contact information
-    if (fieldMap.email && individual.email) {
-      mapped.email_address = individual.email;
-    }
-    if (fieldMap.phone && individual.phone) {
-      mapped.phone_number = individual.phone;
-    }
-
-    // Map membership kind (relationship to household) - normalize legacy format
-    if (fieldMap.membershipKind && individual.relationship) {
-      mapped.relationship = normalizeLegacyRelationField(individual.relationship);
-    }
-
-    // Also normalize any other relation fields that might be in the individual object
-    // This handles fields that aren't in the fieldMap but might be relation fields
-    const normalizedMapped = { ...mapped };
-    for (const [key, value] of Object.entries(normalizedMapped)) {
-      // Check if value looks like a legacy tuple or relation object
-      if (
-        (Array.isArray(value) && value.length === 2) ||
-        (typeof value === "object" && value !== null && "id" in value)
-      ) {
-        normalizedMapped[key] = normalizeLegacyRelationField(value);
-      }
-    }
-
-    return normalizedMapped;
+    return {};
   }
 
   /**

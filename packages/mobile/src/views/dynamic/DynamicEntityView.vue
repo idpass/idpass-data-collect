@@ -257,7 +257,9 @@ const formatTimestamp = (timestamp: string) => {
       <div class="submissions-header">
         <div>
           <h2 id="submissions-heading">Entities</h2>
-          <p>{{ filteredSubmissions.length }} total submissions</p>
+          <p>
+            {{ filteredSubmissions.length }} entities {{ filteredSubmissions.length === submissions.length ? 'total' : 'found' }}
+          </p>
         </div>
         <div class="search-bar">
           <svg class="icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
@@ -266,7 +268,7 @@ const formatTimestamp = (timestamp: string) => {
               fill="currentColor"
             />
           </svg>
-          <input v-model="searchTerm" type="search" placeholder="Search submissions..." />
+          <input v-model="searchTerm" type="search" placeholder="Search by name..." />
         </div>
       </div>
 
@@ -316,7 +318,7 @@ const formatTimestamp = (timestamp: string) => {
           </svg>
         </li>
         <li v-if="!filteredSubmissions.length" class="empty-state">
-          <p>No submissions yet. Start a new entry to begin collecting data.</p>
+          <p>No collected data yet. Start a new entry to begin collecting data.</p>
         </li>
       </ul>
     </section>
