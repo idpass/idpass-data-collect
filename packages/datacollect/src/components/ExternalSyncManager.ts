@@ -161,22 +161,20 @@ export class ExternalSyncManager {
    * ```
    */
   async initialize() {
-    let adapterModule = adaptersMapping[this.config.type as keyof typeof adaptersMapping];
-
-    // If not found in static mapping, try looking for a loadable adapter
-    if (!adapterModule) {
-      adapterModule = await loadSyncAdapter(this.config.type) as any;
-    }
-
-    if (!adapterModule) {
-      return;
-    }
-
-    const AdapterCtor = adapterModule as unknown as new (
+    let AdapterCtor: (new (
       eventStore: EventStore,
       eventApplierService: EventApplierService,
       config: ExternalSyncConfig,
-    ) => ExternalSyncAdapter;
+    ) => ExternalSyncAdapter) | undefined = adaptersMapping[this.config.type as keyof typeof adaptersMapping];
+
+    // If not found in static mapping, try looking for a loadable adapter
+    if (!AdapterCtor) {
+      AdapterCtor = await loadSyncAdapter(this.config.type);
+    }
+
+    if (!AdapterCtor) {
+      return;
+    }
 
     this.adapter = new AdapterCtor(this.eventStore, this.eventApplierService, this.config);
   }
