@@ -214,6 +214,7 @@ export * from "./components/SyncAdapter";
 
 // Core Services
 export * from "./services/EventApplierService";
+export * from "./services/loadSyncAdapter";
 
 // Storage Adapters
 export * from "./storage/IndexedDbEntityStorageAdapter";

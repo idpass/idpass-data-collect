@@ -22,7 +22,7 @@ import { EventApplierService } from "../services/EventApplierService";
 import MockSyncServerAdapter from "../services/MockSyncServerAdapter";
 import OpenFnSyncAdapter from "./openfn/OpenFnSyncAdapter";
 import OpenSppSyncAdapter from "./openspp/OpenSppSyncAdapter";
-
+import { loadSyncAdapter } from "../services/loadSyncAdapter";
 /**
  * Registry of available external sync adapters mapped by their type identifiers.
  *
@@ -161,7 +161,12 @@ export class ExternalSyncManager {
    * ```
    */
   async initialize() {
-    const adapterModule = adaptersMapping[this.config.type as keyof typeof adaptersMapping];
+    let adapterModule = adaptersMapping[this.config.type as keyof typeof adaptersMapping];
+
+    // If not found in static mapping and type contains 'adapter', try dynamic loading
+    if (!adapterModule && this.config.type.includes('adapter')) {
+      adapterModule = await loadSyncAdapter(this.config.type) as any;
+    }
 
     if (!adapterModule) {
       return;
