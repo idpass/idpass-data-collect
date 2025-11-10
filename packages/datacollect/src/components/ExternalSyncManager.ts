@@ -163,8 +163,8 @@ export class ExternalSyncManager {
   async initialize() {
     let adapterModule = adaptersMapping[this.config.type as keyof typeof adaptersMapping];
 
-    // If not found in static mapping and type contains 'adapter', try dynamic loading
-    if (!adapterModule && this.config.type.includes('adapter')) {
+    // If not found in static mapping, try looking for a loadable adapter
+    if (!adapterModule) {
       adapterModule = await loadSyncAdapter(this.config.type) as any;
     }
 
