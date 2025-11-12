@@ -30,6 +30,7 @@
     "build:types": "tsc --project tsconfig.json --emitDeclarationOnly --outDir dist/types",
     "build:cjs": "tsc --project tsconfig.json --module commonjs --outDir dist/cjs",
     "build:esm": "tsc --project tsconfig.json --module esnext --outDir dist/esm",
+    "postinstall": "pnpm build",
     "docs": "typedoc",
     "docs:watch": "typedoc --watch",
     "docs:serve": "npx http-server ../../docs/api/datacollect -p 8080 -o",
