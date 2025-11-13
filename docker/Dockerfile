@@ -4,13 +4,13 @@ RUN npm i -g pnpm
 FROM base AS build
 WORKDIR /app
 COPY . .
-RUN pnpm install --frozen-lockfile
+RUN pnpm -r install --frozen-lockfile
 RUN pnpm run build:datacollect
 
 FROM base as backend
 WORKDIR /app
 COPY --from=build /app .
-EXPOSE 3000 9229
+EXPOSE 3000
 CMD ["pnpm", "run", "dev:backend"]
 
 FROM base as admin-ui

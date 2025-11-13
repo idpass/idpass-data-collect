@@ -31,7 +31,7 @@ jobs:
           version: 8
 
       - name: Install dependencies
-        run: pnpm recursive install
+        run: pnpm -r install --frozen-lockfile
 
       - name: Build website
         run: pnpm run build:docs

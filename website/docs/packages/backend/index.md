@@ -171,8 +171,8 @@ The Backend provides a comprehensive REST API with full OpenAPI 3.0 documentatio
 ### 📚 [Complete API Reference](./api-reference-overview.md)
 Detailed documentation of all endpoints, request/response schemas, and examples.
 
-### 🌐 [Interactive API Documentation](http://localhost:3000/api-docs)
-Live Swagger UI for testing endpoints directly (available when server is running).
+### 🌐 [OpenAPI Specification](http://localhost:3000/api-docs/openapi.json)
+OpenAPI spec available as JSON (when server is running). Import into Postman, Insomnia, or other API clients.
 
 ### 📄 [OpenAPI Specification](./api-reference-generated/idpass-data-collect-backend-api.md)
 Complete OpenAPI 3.0 YAML specification for client generation and tooling.

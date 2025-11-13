@@ -23,7 +23,6 @@ import cors from "cors";
 import express from "express";
 import path from "path";
 import fs from "fs/promises";
-import swaggerUi from "swagger-ui-express";
 import YAML from "yamljs";
 import { errorHandler, notFoundHandler, setupUncaughtHandlers } from "./middlewares/errorHandlers";
 import { createAppConfigRoutes } from "./routes/appConfigRoutes";
@@ -62,26 +61,16 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
     }),
   );
 
-  // API Documentation
-  try {
-    const swaggerDocument = YAML.load(path.join(__dirname, "../openapi.yaml"));
-    app.use(
-      "/api-docs",
-      swaggerUi.serve,
-      swaggerUi.setup(swaggerDocument, {
-        explorer: true,
-        customCss: ".swagger-ui .topbar { display: none }",
-        customSiteTitle: "IDPass DataCollect Backend API",
-        swaggerOptions: {
-          docExpansion: "tag",
-          filter: true,
-          showRequestDuration: true,
-        },
-      }),
-    );
-  } catch (error) {
-    console.warn("OpenAPI documentation not available:", error);
-  }
+  // API Documentation endpoint (serves OpenAPI spec as JSON)
+  app.get("/api-docs/openapi.json", (req, res) => {
+    try {
+      const openApiSpec = YAML.load(path.join(__dirname, "../openapi.yaml"));
+      res.json(openApiSpec);
+    } catch (error) {
+      console.warn("OpenAPI specification not available:", error);
+      res.status(500).json({ error: "OpenAPI specification not available" });
+    }
+  });
 
   app.use("/api/apps", createAppConfigRoutes(appConfigStore, appInstanceStore));
   app.use("/api/entities", createEntitiesRouter(appInstanceStore));

@@ -27,13 +27,13 @@ The generated documentation is organized by **API tags**:
 - **App Configuration** - Multi-tenant configuration management
 - **Data Management** - Entity management and duplicate resolution
 
-## 🌐 **Interactive Testing**
+## 🌐 **OpenAPI Specification**
 
-For live API testing with Swagger UI, start the backend server and visit:
+The complete OpenAPI specification is available at:
+- **JSON Endpoint**: `http://localhost:3000/api-docs/openapi.json` (when server is running)
+- **Source File**: [`packages/backend/openapi.yaml`](https://github.com/idpass/idpass-data-collect/blob/main/packages/backend/openapi.yaml)
 
-```
-http://localhost:3000/api-docs
-```
+You can import this specification into tools like Postman, Insomnia, or any OpenAPI-compatible client for interactive testing.
 
 ## 🔧 **Authentication**
 
@@ -50,9 +50,3 @@ curl -X POST http://localhost:3000/api/users/login \
   -H "Content-Type: application/json" \
   -d '{"email": "admin@hdm.example", "password": "your-password"}'
 ```
-
-## 📖 **OpenAPI Specification**
-
-The complete specification is available at:
-- **Source File**: [`packages/backend/openapi.yaml`](https://github.com/idpass/idpass-data-collect/blob/main/packages/backend/openapi.yaml)
-- **Interactive Docs**: `

@@ -8,7 +8,7 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "reinstall": "pnpm run clean && pnpm recursive install",
+    "reinstall": "pnpm run clean && pnpm -r install",
     "clean": "pnpm -r --if-present run clean && rm -rf **/*/node_modules",
     "test": "pnpm -r --if-present run test",
     "test:datacollect": "pnpm --filter @idpass/data-collect-core test",
