@@ -48,11 +48,6 @@ const sortOrderOptions = [
   { title: 'Descending', value: 'desc' },
 ]
 
-const pageSizeOptions = [6, 12, 24, 48].map((value) => ({
-  title: `${value} per page`,
-  value,
-}))
-
 const hasNoResults = computed(() => !isLoading.value && apps.value.length === 0)
 const totalApps = computed(() => meta.value.total)
 const syncEnabledCount = computed(
@@ -297,23 +292,24 @@ onBeforeUnmount(() => {
         <div class="filters-card__header">
           <div>
             <p class="filters-card__eyebrow">Filters</p>
-            <h2 class="filters-card__title">Refine collection programs</h2>
           </div>
           <p class="filters-card__meta">Showing {{ apps.length }} of {{ totalApps }} programs</p>
         </div>
 
-        <v-row class="mt-4" dense>
-          <v-col cols="12" md="5">
+        <v-row class="mt-6 filters-row" dense align="end">
+          <v-col cols="12" md="8">
             <v-text-field
+              class="search-field"
               v-model="searchTerm"
               label="Search collection programs"
               prepend-inner-icon="mdi-magnify"
               clearable
               variant="outlined"
+              density="comfortable"
               hint="Filter by name or ID"
             />
           </v-col>
-          <v-col cols="12" sm="6" md="2">
+          <v-col cols="6" md="2">
             <v-select
               v-model="sortBy"
               :items="sortByOptions"
@@ -324,7 +320,7 @@ onBeforeUnmount(() => {
               density="comfortable"
             />
           </v-col>
-          <v-col cols="12" sm="6" md="2">
+          <v-col cols="6" md="2">
             <v-select
               v-model="sortOrder"
               :items="sortOrderOptions"
@@ -334,22 +330,6 @@ onBeforeUnmount(() => {
               variant="outlined"
               density="comfortable"
             />
-          </v-col>
-          <v-col cols="12" sm="6" md="2">
-            <v-select
-              v-model="pageSize"
-              :items="pageSizeOptions"
-              label="Page size"
-              item-title="title"
-              item-value="value"
-              variant="outlined"
-              density="comfortable"
-            />
-          </v-col>
-          <v-col cols="12" sm="6" md="1" class="d-flex align-end">
-            <v-btn variant="text" color="primary" prepend-icon="mdi-close-circle" @click="searchTerm = ''">
-              Clear
-            </v-btn>
           </v-col>
         </v-row>
       </v-card-text>
@@ -532,6 +512,18 @@ onBeforeUnmount(() => {
   font-size: 0.875rem;
   color: rgba(0, 0, 0, 0.6);
   margin: 0;
+}
+
+.filters-row {
+  align-items: flex-end;
+}
+
+.filters-row :deep(.v-field) {
+  height: 56px;
+}
+
+.filters-row :deep(.v-field__input) {
+  min-height: 56px;
 }
 
 .apps-grid {
