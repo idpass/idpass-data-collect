@@ -76,6 +76,15 @@ Here's a complete example of an external sync configuration with detailed field 
   - `batchSize`: Number of records to process in each batch (default: 100)
   - `timeout`: Request timeout in milliseconds (default: 30000)
 
+  **For OpenSPP Adapter:**
+  - `database`: OpenSPP/Odoo database name (required)
+  - `username`: Username for authentication (required)
+  - `password`: Password for authentication (required)
+  - `batchSize`: Number of entities per batch (default: 50)
+  - `batchDelayMs`: Delay between batches in milliseconds (default: 1000)
+  - `maxRetries`: Maximum retry attempts for failed entities (default: 2)
+  - `fieldMappings`: JSON array of field mappings with transformers (see Field Mapping section)
+
   **For Mock Sync Server:**
   - `batchSize`: Number of events to process per batch
   - `retryAttempts`: Number of retry attempts for failed requests
@@ -210,6 +219,38 @@ Integration with OpenFn workflow automation platform:
   ]
 }
 ```
+
+### 3. OpenSPP Adapter
+
+**Type**: `openspp-adapter`
+
+Integration with OpenSPP social protection platform:
+
+- **Push**: Sends entities to OpenSPP with field mapping and transformation
+- **Pull**: Retrieves updates from OpenSPP and applies them locally
+- **Authentication**: Uses basic authentication (username/password)
+- **Field Mapping**: Visual interface for mapping form fields to OpenSPP fields
+- **Data Transformers**: Automatic format conversion (dates, IDs, multi-select, boolean)
+- **Batch Processing**: Configurable batch sizes and delays
+
+**Configuration**:
+```json
+{
+  "type": "openspp-adapter",
+  "url": "https://openspp.example.com",
+  "auth": "basic",
+  "extraFields": [
+    { "name": "database", "value": "openspp" },
+    { "name": "username", "value": "admin" },
+    { "name": "password", "value": "password" },
+    { "name": "batchSize", "value": "50" },
+    { "name": "batchDelayMs", "value": "1000" },
+    { "name": "maxRetries", "value": "2" }
+  ]
+}
+```
+
+For detailed OpenSPP adapter documentation, see the [OpenSPP Adapter Guide](../adapters/openspp-adapter.md).
 
 ## Usage Examples
 
@@ -356,6 +397,53 @@ The system maintains separate timestamps for:
 
 This enables incremental synchronization and prevents data loss.
 
+## Field Mapping and Transformers
+
+For adapters that support field mapping (like OpenSPP), you can configure field mappings with data transformers to handle format conversion between form data and external system formats.
+
+### Field Mapping Structure
+
+Field mappings define how form fields map to external system fields, with optional transformers for data conversion:
+
+```json
+{
+  "formField": "first_name",
+  "opensppField": "firstname",
+  "transformer": {
+    "type": "text",
+    "options": {}
+  }
+}
+```
+
+### Transformer Types
+
+The system supports several transformer types:
+
+- **text**: Pass-through or string conversion (default)
+- **date**: Date format conversion with configurable input/output formats
+- **id**: ID value handling for relation fields
+- **multiselect**: Array-to-delimited-string conversion
+- **boolean**: Boolean normalization with configurable truthy/falsy values
+
+For detailed transformer documentation, see the [OpenSPP Adapter Guide](../adapters/openspp-adapter.md#transformer-types).
+
+### Configuring Field Mappings
+
+Field mappings can be configured:
+
+1. **Via Admin UI**: Use the visual field mapping dialog in the configuration editor
+2. **Via JSON Config**: Include mappings in the `fieldMappings` extraField as a JSON string
+
+Example field mappings configuration:
+
+```json
+{
+  "name": "fieldMappings",
+  "value": "[{\"formField\":\"birth_date\",\"opensppField\":\"birthdate\",\"transformer\":{\"type\":\"date\",\"options\":{\"inputFormat\":\"auto\",\"outputFormat\":\"YYYY-MM-DD\"}}},{\"formField\":\"gender\",\"opensppField\":\"gender_id\",\"transformer\":{\"type\":\"id\"}}]"
+}
+```
+
 ## Extending the System
 
 ### Adding New Adapters
@@ -382,6 +470,7 @@ class CustomSyncAdapter implements ExternalSyncAdapter {
 const adaptersMapping = {
   "mock-sync-server": MockSyncServerAdapter,
   "openfn-adapter": OpenFnSyncAdapter,
+  "openspp-adapter": OpenSppSyncAdapter,
   "custom-adapter": CustomSyncAdapter, // Add new adapter
 };
 ```
@@ -393,6 +482,7 @@ const adaptersMapping = {
   :items="[
     { title: 'Mock Sync Server', value: 'mock-sync-server' },
     { title: 'OpenFn', value: 'openfn-adapter' },
+    { title: 'OpenSPP', value: 'openspp-adapter' },
     { title: 'Custom System', value: 'custom-adapter' }, // Add new option
   ]"
   label="Type"
@@ -436,10 +526,13 @@ interface CustomSyncConfig extends ExternalSyncConfig {
 ## Related Components
 
 - **ConfigCreateView.vue**: Admin UI for configuring external sync
+- **FieldMappingDialog.vue**: Visual interface for field mapping configuration
 - **MockSyncServerAdapter**: Testing adapter for development
 - **OpenFnSyncAdapter**: OpenFn platform integration
+- **OpenSppSyncAdapter**: OpenSPP platform integration with field mapping
 - **EventStore**: Event storage and timestamp management
 - **EventApplierService**: Event application to entities
+- **FieldTransformers**: Data transformation utilities (text, date, id, multiselect, boolean)
 
 ## Troubleshooting
 

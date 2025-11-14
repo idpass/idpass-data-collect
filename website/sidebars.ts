@@ -380,6 +380,10 @@ const developerSidebarItems = [
                 id: "packages/backend/backend-api-overview",
               },
               ...backendApiSidebar,
+              {
+                type: "doc",
+                id: "packages/backend/openspp-fields-api",
+              },
             ],
           },
         ],
@@ -406,6 +410,10 @@ const developerSidebarItems = [
         type: "category",
         label: "Adapters",
         items: [
+          {
+            type: "doc",
+            id: "adapters/openspp-adapter",
+          },
           {
             type: "doc",
             id: "adapters/openfn-adapter",
@@ -440,6 +448,10 @@ const userSidebarItems = [
       {
         type: "doc",
         id: "user-guide/admin-ui-dashboard",
+      },
+      {
+        type: "doc",
+        id: "user-guide/import-openspp-fields",
       },
     ],
   },

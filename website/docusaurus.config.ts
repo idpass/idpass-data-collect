@@ -10,7 +10,7 @@ const config: Config = {
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
     v4: true, // Improve compatibility with the upcoming Docusaurus v4
-    experimental_faster: false // if true, causes "Rspack FS Error: No such file or directory"
+    experimental_faster: true // if true, causes "Rspack FS Error: No such file or directory"
   },
 
   // Set the production url of your site here
@@ -18,8 +18,8 @@ const config: Config = {
   baseUrl: '/',
   trailingSlash: false,
 
-  onBrokenLinks: 'warn',
-  onBrokenMarkdownLinks: 'warn',
+  onBrokenLinks: 'throw',
+  onBrokenMarkdownLinks: 'throw',
 
   // Even if you don't use internationalization, you can use this field to set
   // useful metadata like html lang. For example, if your site is Chinese, you
@@ -90,13 +90,7 @@ const config: Config = {
     ],
   ],
 
-  themes: [
-    '@docusaurus/theme-mermaid',
-  ],
-  
-  markdown: {
-    mermaid: true,
-  },
+  markdown: {},
 
   themeConfig: {
     // Replace with your project's social card
@@ -225,12 +219,6 @@ const config: Config = {
       theme: prismThemes.oneLight,
       darkTheme: prismThemes.oneDark,
       additionalLanguages: ['typescript', 'javascript', 'bash', 'json', 'yaml', 'markdown'],
-    },
-    mermaid: {
-      theme: {
-        light: 'default', 
-        dark: 'dark'
-      },
     },
   } satisfies Preset.ThemeConfig,
 };

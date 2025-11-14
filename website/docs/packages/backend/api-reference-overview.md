@@ -26,6 +26,7 @@ The generated documentation is organized by **API tags**:
 - **Synchronization** - Data sync between clients and server
 - **App Configuration** - Multi-tenant configuration management
 - **Data Management** - Entity management and duplicate resolution
+- **OpenSPP Fields** - Field metadata parsing and fetching for OpenSPP integration
 
 ## 🌐 **OpenAPI Specification**
 

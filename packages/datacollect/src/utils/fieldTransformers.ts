@@ -211,7 +211,7 @@ export interface BooleanTransformerOptions {
 /**
  * ID field transformer - handles mapping between form values and OpenSPP ID format
  * - Transform (Form → OpenSPP): Converts form value to integer for OpenSPP
- * - Reverse Transform (OpenSPP → Form): Extracts ID from {"id": 0, "display_name": ""} object
+ * - Reverse Transform (OpenSPP → Form): Extracts ID from `{"id": 0, "display_name": ""}` object
  */
 export class IdTransformer implements FieldTransformer {
   type: TransformerType = "id";
