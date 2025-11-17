@@ -108,7 +108,7 @@ VITE_API_URL=http://localhost:3000
 
 ## Multi-Tenant Configuration
 
-Backend supports multiple tenants via app config files. See `examples/sample_config.json` and `examples/sample_config_2.json` for complete examples. Config structure:
+Backend supports multiple tenants via app config files. Config structure:
 ```json
 {
   "id": "tenant-id",

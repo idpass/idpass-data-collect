@@ -17,6 +17,16 @@
  * under the License.
  */
 
+/**
+ * Vitest setup file for mobile app tests.
+ *
+ * This file configures the test environment for Capacitor mobile app testing.
+ * The setup includes mocks for Capacitor plugins, IndexedDB, and browser APIs
+ * required for offline-first functionality. Integration tests for Capacitor
+ * features (camera, barcode scanning, etc.) require device emulation or
+ * physical devices and are better suited for E2E testing frameworks.
+ */
+
 import { vi } from 'vitest'
 
 // Mock IndexedDB API

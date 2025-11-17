@@ -347,6 +347,43 @@ The adapter processes entities in batches to avoid overwhelming the OpenSPP API:
 4. Failed entities are tracked and retried
 5. Success/failure statistics are logged
 
+### Retry Logic with Exponential Backoff
+
+When an entity fails to sync, the adapter implements exponential backoff retry logic:
+
+- **Initial Retry Delay**: 1 second
+- **Exponential Backoff**: Each retry doubles the delay (1s, 2s, 4s, ...)
+- **Maximum Delay**: Capped at 10 seconds
+- **Retry Attempts**: Up to `maxRetries` times (default: 2)
+
+Example retry sequence:
+- Attempt 1: Immediate
+- Attempt 2: Wait 1 second
+- Attempt 3: Wait 2 seconds
+- Attempt 4: Wait 4 seconds (if maxRetries > 2)
+
+After all retries are exhausted, the entity is marked as failed and included in the error report.
+
+### Batch Processing Configuration
+
+Configure batch processing parameters in the `extraFields` array:
+
+```json
+{
+  "extraFields": [
+    { "name": "batchSize", "value": "50" },
+    { "name": "batchDelayMs", "value": "1000" },
+    { "name": "maxRetries", "value": "2" }
+  ]
+}
+```
+
+**Recommendations:**
+- **Small datasets (< 100 entities)**: Use default settings
+- **Medium datasets (100-1000 entities)**: Increase `batchDelayMs` to 2000ms
+- **Large datasets (> 1000 entities)**: Reduce `batchSize` to 25-30 and increase `batchDelayMs` to 3000ms
+- **Rate-limited APIs**: Increase `batchDelayMs` and reduce `batchSize`
+
 ## Sync Process
 
 ### Push Sync (DataCollect → OpenSPP)
@@ -373,7 +410,7 @@ Here's a complete example configuration for syncing individual beneficiary data:
 {
   "id": "beneficiary-tracking",
   "name": "Beneficiary Tracking",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "entityForms": [
     {
       "name": "individual",

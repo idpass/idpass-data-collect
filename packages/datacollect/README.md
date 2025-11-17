@@ -45,7 +45,13 @@ If `opensppAdapterOptions` is omitted, the adapter falls back to defaults aligne
 ## Installation
 
 ```bash
-npm install idpass-data-collect
+pnpm add @idpass/data-collect-core
+```
+
+Or if using npm:
+
+```bash
+npm install @idpass/data-collect-core
 ```
 
 ## Quick Start
@@ -61,7 +67,7 @@ import {
   IndexedDbEntityStorageAdapter,
   IndexedDbEventStorageAdapter,
   SyncLevel,
-} from "idpass-data-collect";
+} from "@idpass/data-collect-core";
 
 // Initialize storage adapters
 const entityAdapter = new IndexedDbEntityStorageAdapter("tenant-123");
@@ -100,7 +106,7 @@ import {
   EventApplierService,
   PostgresEntityStorageAdapter,
   PostgresEventStorageAdapter,
-} from "idpass-data-collect";
+} from "@idpass/data-collect-core";
 
 // Initialize PostgreSQL adapters
 const entityAdapter = new PostgresEntityStorageAdapter(

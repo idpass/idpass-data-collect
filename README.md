@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-20.x-green)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-22.x-green)](https://nodejs.org/)
 
 > A robust offline-first data management system for household and beneficiary data with event sourcing and synchronization capabilities
 
@@ -32,9 +32,9 @@ For setting up on Docker, see the [docker/README](docker/README.md)
 
 ### Prerequisites
 
-- Node.js 20.x
+- Node.js 22.x or higher
 - PostgreSQL 15+ (for backend)
-- npm or yarn
+- pnpm 10.x
 
 ### Installation
 
@@ -45,44 +45,34 @@ git clone https://github.com/idpass/idpass-data-collect.git
 cd idpass-data-collect
 ```
 
-2. Install dependencies and build:
+2. Install dependencies:
 
 ```bash
-# Install root dependencies
-npm install
-
-# Build datacollect library
-cd packages/datacollect
-npm install
-npm run build
-
-# Install backend dependencies
-cd ../backend
-npm install
-
-# Install admin dependencies
-cd ../admin
-npm install
+# Install all workspace dependencies
+pnpm install
 ```
 
-3. Set up environment variables:
+3. Build the datacollect library (required before using in other packages):
 
 ```bash
-cd ../..
+pnpm build:datacollect
+```
+
+4. Set up environment variables:
+
+```bash
 cp .env.example .env
 # Edit .env with your configuration
 ```
 
-4. Start the development servers:
+5. Start the development servers:
 
 ```bash
 # Terminal 1: Backend server
-cd packages/backend
-npm run dev
+pnpm dev:backend
 
 # Terminal 2: Admin interface
-cd packages/admin
-npm run dev
+pnpm dev:admin
 ```
 
 ## 📖 Documentation
@@ -97,7 +87,7 @@ npm run dev
 ## 💻 Basic Usage
 
 ```typescript
-import { EntityDataManager } from "idpass-data-collect";
+import { EntityDataManager } from "@idpass/data-collect-core";
 
 // Initialize the data manager
 const manager = new EntityDataManager(/* ... */);
@@ -144,15 +134,15 @@ The system uses event sourcing with CQRS pattern:
 
 ```bash
 # Run all tests
-npm test
+pnpm test
 
 # Run tests for specific package
-cd packages/datacollect && npm test
-cd packages/backend && npm test
-cd packages/admin && npm run test:unit
+pnpm test:datacollect
+pnpm test:backend
+pnpm test:admin
 
-# Run with coverage
-npm test -- --coverage
+# Run with coverage (package-specific)
+cd packages/datacollect && pnpm test -- --coverage
 ```
 
 ## 🤝 Contributing

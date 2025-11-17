@@ -10,10 +10,10 @@ We actively maintain and provide security updates for the following versions:
 
 | Version | Supported | Status                                      |
 | ------- | --------- | ------------------------------------------- |
-| 1.0.x   | ✅ Yes    | Active development                          |
+| 1.1.x   | ✅ Yes    | Active development                          |
 | < 1.0   | ❌ No     | Pre-release, not recommended for production |
 
-**Note**: As this is currently version 1.0.0, we recommend always using the latest stable release for security updates.
+**Note**: We recommend always using the latest stable release for security updates.
 
 ## Security Considerations
 

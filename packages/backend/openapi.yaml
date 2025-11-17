@@ -18,7 +18,7 @@ info:
     ## Synchronization
     
     The sync endpoints support bidirectional synchronization between clients and server, as well as external system integration. Events are synchronized with pagination for efficient data transfer.
-  version: 1.0.0
+  version: 1.1.0
   contact:
     name: OpenSPP
     url: https://github.com/idpass/idpass-data-collect
@@ -614,6 +614,128 @@ paths:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
 
+  # OpenSPP Field Metadata
+  /openspp-fields/parse-file:
+    post:
+      tags:
+        - OpenSPP
+      summary: Parse OpenSPP fields from uploaded file
+      description: Upload a JSON file containing a sample OpenSPP payload to extract field definitions. This endpoint is for admin UI use only.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - payload
+              properties:
+                payload:
+                  type: string
+                  format: binary
+                  description: JSON file containing sample OpenSPP data
+      responses:
+        '200':
+          description: Fields parsed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fields:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ParsedOpenSppField'
+        '400':
+          description: Invalid file or missing payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /openspp-fields/parse:
+    post:
+      tags:
+        - OpenSPP
+      summary: Parse OpenSPP fields from JSON payload
+      description: Parse field definitions from a JSON payload in the request body. This endpoint is for admin UI use only.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Sample OpenSPP payload (single object or array)
+              additionalProperties: true
+              example:
+                firstname: "John"
+                lastname: "Doe"
+                birthdate: "1990-01-01"
+                gender_id:
+                  id: 1
+                  display_name: "Male"
+      responses:
+        '200':
+          description: Fields parsed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fields:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ParsedOpenSppField'
+        '400':
+          description: Invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /openspp-fields/fetch:
+    post:
+      tags:
+        - OpenSPP
+      summary: Fetch OpenSPP fields from API
+      description: Fetch field metadata directly from an OpenSPP/Odoo instance using the fields_get API. This endpoint is for admin UI use only.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FetchOpenSppFieldsRequest'
+      responses:
+        '200':
+          description: Fields fetched successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fields:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ParsedOpenSppField'
+        '400':
+          description: Missing required fields or invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Failed to fetch fields from Odoo API
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   securitySchemes:
     BearerAuth:
@@ -861,6 +983,92 @@ components:
           type: string
           example: "Detailed error message"
 
+    ParsedOpenSppField:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Field name in OpenSPP/Odoo
+          example: "firstname"
+        type:
+          type: string
+          enum:
+            - text
+            - date
+            - relation
+            - selection
+          description: Detected field type
+          example: "text"
+        label:
+          type: string
+          description: Human-readable field label
+          example: "First Name"
+        required:
+          type: boolean
+          description: Whether the field is required
+          example: false
+        options:
+          type: array
+          description: Options for relation or selection fields
+          items:
+            type: object
+            properties:
+              id:
+                oneOf:
+                  - type: number
+                  - type: string
+                description: Option ID
+                example: 1
+              label:
+                type: string
+                description: Option label
+                example: "Male"
+
+    FetchOpenSppFieldsRequest:
+      type: object
+      required:
+        - url
+        - database
+        - username
+        - password
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Base URL of the OpenSPP/Odoo instance
+          example: "https://openspp.example.com"
+        database:
+          type: string
+          description: Database name
+          example: "openspp"
+        username:
+          type: string
+          description: Username for authentication
+          example: "admin"
+        password:
+          type: string
+          format: password
+          description: Password for authentication
+          example: "password"
+        model:
+          type: string
+          description: Odoo model name
+          default: "res.partner"
+          example: "res.partner"
+        fields:
+          type: array
+          description: Specific fields to fetch (optional)
+          items:
+            type: string
+          example: ["firstname", "lastname", "birthdate"]
+        attributes:
+          type: array
+          description: Field attributes to retrieve
+          items:
+            type: string
+          default: ["selection", "type", "string", "required"]
+          example: ["selection", "type", "string", "required"]
+
 tags:
   - name: Authentication
     description: User authentication endpoints
@@ -872,3 +1080,5 @@ tags:
     description: Application configuration management
   - name: Data Management
     description: Entity data management and duplicate resolution
+  - name: OpenSPP
+    description: OpenSPP field metadata and integration endpoints (admin UI use only)

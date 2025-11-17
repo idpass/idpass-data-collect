@@ -17,6 +17,16 @@
  * under the License.
  */
 
+/**
+ * Vitest setup file for admin UI tests.
+ *
+ * This file configures the test environment for Vue 3 components with Vuetify.
+ * Component tests are being added incrementally as features are developed.
+ * Currently, unit tests focus on utility functions and core business logic.
+ * Component integration tests require additional setup for Form.io and complex
+ * Vuetify component interactions.
+ */
+
 import { vi } from 'vitest'
 import { config } from '@vue/test-utils'
 import { createVuetify } from 'vuetify'
