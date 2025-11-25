@@ -1,6 +1,7 @@
 import {themes as prismThemes} from 'prism-react-renderer';
 import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
+import remarkMermaid from './src/plugin/remark-mermaid/index.js';
 
 const config: Config = {
   title: 'ID PASS  DataCollect',
@@ -35,7 +36,10 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
-          routeBasePath: '/'
+          routeBasePath: '/',
+          remarkPlugins: [
+            remarkMermaid,
+          ],
         },
         theme: {
           customCss: './src/css/custom.css',
@@ -89,8 +93,6 @@ const config: Config = {
       },
     ],
   ],
-
-  markdown: {},
 
   themeConfig: {
     // Replace with your project's social card

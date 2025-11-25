@@ -26,9 +26,11 @@
     "clsx": "2.0.0",
     "docusaurus-lunr-search": "^3.6.0",
     "lunr": "^2.3.9",
+    "mermaid": "^11.12.1",
     "prism-react-renderer": "2.3.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "unist-util-visit": "^5.0.0"
   },
   "devDependencies": {
     "@docusaurus/faster": "^3.8.1",

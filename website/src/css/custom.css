@@ -330,3 +330,34 @@ html[data-theme='dark'] .header-github-link:before {
 .menu__link--sublist-caret[aria-expanded="false"]:after {
   transform: rotate(0deg) scale(0.75);
 }
+
+/* Mermaid diagram styling */
+.mermaid-container {
+  margin: 1.5rem 0;
+  padding: 1rem 0;
+}
+
+.mermaid-container .mermaid {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Ensure mermaid diagrams are centered and responsive */
+.mermaid-container pre {
+  background: transparent;
+  padding: 0;
+  margin: 0;
+}
+
+/* Dark mode adjustments for mermaid */
+html[data-theme='dark'] .mermaid-container {
+  background: transparent;
+}
