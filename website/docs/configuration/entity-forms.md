@@ -173,6 +173,7 @@ Entity Forms use Form.io for form rendering and data collection. The `formio` pr
 - **Date/Time Fields**: `datetime`, `date`
 - **Selection Fields**: `select`, `radio`, `checkbox`
 - **File Upload**: `file`
+- **Biometric Capture**: `biometricCapture` (Custom component for BCA integration)
 - **Custom Components**: Any Form.io compatible component
 
 ### Conditional Logic

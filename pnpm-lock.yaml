@@ -439,9 +439,6 @@ importers:
       '@capacitor/toast':
         specifier: ^6.0.2
         version: 6.0.3(@capacitor/core@6.2.1)
-      '@formio/js':
-        specifier: ^5.0.0-rc.48
-        version: 5.2.1(@popperjs/core@2.11.8)
       '@formio/vue':
         specifier: ^5.0.0
         version: 5.0.0(formiojs@4.21.7)(vue@3.5.20(typescript@5.8.3))
@@ -484,6 +481,9 @@ importers:
       form-data:
         specifier: ^4.0.0
         version: 4.0.4
+      formiojs:
+        specifier: ^4.16.0
+        version: 4.21.7
       jquery:
         specifier: ^3.7.1
         version: 3.7.1
@@ -620,6 +620,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.1.1(react@19.1.1)
+      unist-util-visit:
+        specifier: ^5.0.0
+        version: 5.0.0
     devDependencies:
       '@docusaurus/faster':
         specifier: ^3.8.1
@@ -2617,17 +2620,8 @@ packages:
   '@formio/bootstrap3@2.12.4-rc.1':
     resolution: {integrity: sha512-4B5rs+w9tAk5i+wbdw2/NrTxPqnDX7/W19tiTd9lfXnIGQmaj0ecMEVqDmOJg8pIlyU02g3c4ih6JnA/JVmUbA==}
 
-  '@formio/bootstrap@3.1.2':
-    resolution: {integrity: sha512-1t0IgfxDr9+bPulLRGmirwj2R2fTTtohy1F2A+9g+7LCMRoKs8U0N4alVSy7qSTrruEsOe1JXiCbSPrD/gyZ9A==}
-
   '@formio/choices.js@10.2.1':
     resolution: {integrity: sha512-NCE5u7jG3XGokJP16MyAbVSUptKu/mpJYAxd4PPIoLiO/l9Do5uoOQ0MgNb9qG9qABJiOX+qNRE8q8RybY/SwQ==}
-
-  '@formio/core@2.5.1':
-    resolution: {integrity: sha512-J1lICbVQPdKtWvjNvO2aGYog3rv0r3lkpZmUjxgnCQFeausiqR+CnivRz2G/Rexkv9y5jV46BuDHFkNS01ssAg==}
-
-  '@formio/js@5.2.1':
-    resolution: {integrity: sha512-DdkqAdFV5emc/Lih7JafPWllGRpSAUpINv8i36Gggycsu4aPQyR4avcl1NTey3EZUkqsKHx4u5f6DCIIVjoaEQ==}
 
   '@formio/semantic@2.6.1':
     resolution: {integrity: sha512-obp1BT5UnzD+uYBbqmnsTfO2hGxI2A2iR/cj3P5JUFLYSBpnr3TS2ShQ7Ee5GCRRtJPu0JnljuJj+YSKLCMuhg==}
@@ -4086,7 +4080,7 @@ packages:
     resolution: {integrity: sha512-7Yx/SXSOcQq5HiiV3orevHUFn+pmMB4cgbEkDYgnkUWb0WfeQ/wa2yFv6D5ICiCQOVpjA7vYDXrC7AGO8yjDHA==}
     engines: {node: ^18.0.0 || >=20.0.0}
     peerDependencies:
-      vite: '>=5.4.20'
+      vite: '>=6.3.6'
       vue: ^3.2.25
 
   '@vitest/eslint-plugin@1.3.6':
@@ -4544,9 +4538,6 @@ packages:
   autocompleter@7.1.0:
     resolution: {integrity: sha512-uCToOnq7eAD/GJAteDbYuQ7ksDtrYWOy5CIAq43wh0dT+5frMpPlyD9tp+y5fz8KIcsP+zR2MjzoTAdW5aJESw==}
 
-  autocompleter@8.0.4:
-    resolution: {integrity: sha512-q334YswwucSBphN5djVkEt3beVhHotrCtPGNIXmyilw9UnXV9Cb+gNAZ2yhZSfiBSzP6rxHLLT2gpr57xgbcwQ==}
-
   autoprefixer@10.4.21:
     resolution: {integrity: sha512-O+A6LWV5LDHSJD3LjHYoNi4VLsj/Whi7k6zG12xTYaU4cQ8oxQGckXNX8cRHK5yOZ/ppVHe0ZBXGzSV9jXdVbQ==}
     engines: {node: ^10 || ^12 || >=14}
@@ -4860,9 +4851,6 @@ packages:
   chevrotain@11.0.3:
     resolution: {integrity: sha512-ci2iJH6LeIkvP9eJW6gpueU8cnZhv85ELY8w8WiFtNjMHA5ad6pQLaJo9mEly/9qUyCpvqX8/POVUTf18/HFdw==}
 
-  choices.js@11.1.0:
-    resolution: {integrity: sha512-mIt0uLhedHg2ea/K2PACrVpt391vRGHuOoctPAiHcyemezwzNMxj7jOzNEk8e7EbjLh0S0sspDkSCADOKz9kcw==}
-
   chokidar@3.6.0:
     resolution: {integrity: sha512-7VT13fmjotKpGipCW9JEQAusEPE+Ei8nl6/g4FBAmIm0GOOLMua9NDDo/DWp0ZAxCr3cPq5ZpBqmPAQgDda2Pw==}
     engines: {node: '>= 8.10.0'}
@@ -5024,9 +5012,6 @@ packages:
 
   compare-versions@5.0.3:
     resolution: {integrity: sha512-4UZlZP8Z99MGEY+Ovg/uJxJuvoXuN4M6B3hKaiackiHrgzQFEe3diJi1mf1PNHbFujM7FvLrK2bpgIaImbtZ1A==}
-
-  compare-versions@6.1.1:
-    resolution: {integrity: sha512-4hm4VPpIecmlg59CHXnRDnqGplJFrbLG4aFEl5vl6cK1u76ws3LLvX7ikFnTDl5vo39sjWD6AaDPYodJp/NNHg==}
 
   component-emitter@1.3.1:
     resolution: {integrity: sha512-T0+barUSQRTUQASh8bx02dl+DhF54GtIDY13Y3m9oWTklKbb3Wv974meRpeZ3lp1JpLVECWWNHC4vaG2XHXouQ==}
@@ -6323,10 +6308,6 @@ packages:
 
   fuse.js@6.6.2:
     resolution: {integrity: sha512-cJaJkxCCxC8qIIcPBF9yGxY0W/tVZS3uEISDxhYIdtk8OL93pe+6Zj7LjCqVV4dzbqcriOZ+kQ/NE4RXZHsIGA==}
-    engines: {node: '>=10'}
-
-  fuse.js@7.1.0:
-    resolution: {integrity: sha512-trLf4SzuuUxfusZADLINj+dE8clK1frKdmqiJNb1Es75fmI5oY6X2mxLVUciLLjxqw/xr72Dhy+lER6dGd02FQ==}
     engines: {node: '>=10'}
 
   gauge@3.0.2:
@@ -13886,70 +13867,11 @@ snapshots:
     dependencies:
       resize-observer-polyfill: 1.5.1
 
-  '@formio/bootstrap@3.1.2': {}
-
   '@formio/choices.js@10.2.1':
     dependencies:
       deepmerge: 4.3.1
       fuse.js: 6.6.2
       redux: 4.2.1
-
-  '@formio/core@2.5.1':
-    dependencies:
-      browser-cookies: 1.2.0
-      core-js: 3.45.1
-      dayjs: 1.11.18
-      dompurify: 3.2.6
-      eventemitter3: 5.0.1
-      fast-json-patch: 3.1.1
-      fetch-ponyfill: 7.1.0
-      inputmask: 5.0.9
-      json-logic-js: 2.0.5
-      lodash: 4.17.21
-      moment: 2.30.1
-    transitivePeerDependencies:
-      - encoding
-
-  '@formio/js@5.2.1(@popperjs/core@2.11.8)':
-    dependencies:
-      '@formio/bootstrap': 3.1.2
-      '@formio/core': 2.5.1
-      '@formio/text-mask-addons': 3.8.0-formio.4
-      '@formio/vanilla-text-mask': 5.1.1-formio.1
-      abortcontroller-polyfill: 1.7.8
-      autocompleter: 8.0.4
-      bootstrap: 5.3.8(@popperjs/core@2.11.8)
-      browser-cookies: 1.2.0
-      browser-md5-file: 1.1.1
-      choices.js: 11.1.0
-      compare-versions: 6.1.1
-      core-js: 3.45.1
-      dialog-polyfill: 0.5.6
-      dom-autoscroller: 2.3.4
-      dompurify: 3.2.6
-      downloadjs: 1.4.7
-      dragula: 3.7.3
-      eventemitter3: 5.0.1
-      fast-deep-equal: 3.1.3
-      fast-json-patch: 3.1.1
-      idb: 7.1.1
-      inputmask: 5.0.9
-      ismobilejs: 1.1.1
-      json-logic-js: 2.0.5
-      jstimezonedetect: 1.0.7
-      jwt-decode: 3.1.2
-      lodash: 4.17.21
-      moment: 2.30.1
-      moment-timezone: 0.5.48
-      quill: 2.0.3
-      signature_pad: 4.2.0
-      string-hash: 1.1.3
-      tippy.js: 6.3.7
-      uuid: 9.0.1
-      vanilla-picker: 2.12.3
-    transitivePeerDependencies:
-      - '@popperjs/core'
-      - encoding
 
   '@formio/semantic@2.6.1': {}
 
@@ -16196,8 +16118,6 @@ snapshots:
 
   autocompleter@7.1.0: {}
 
-  autocompleter@8.0.4: {}
-
   autoprefixer@10.4.21(postcss@8.5.6):
     dependencies:
       browserslist: 4.25.4
@@ -16589,10 +16509,6 @@ snapshots:
       '@chevrotain/utils': 11.0.3
       lodash-es: 4.17.21
 
-  choices.js@11.1.0:
-    dependencies:
-      fuse.js: 7.1.0
-
   chokidar@3.6.0:
     dependencies:
       anymatch: 3.1.3
@@ -16728,8 +16644,6 @@ snapshots:
   common-tags@1.8.2: {}
 
   compare-versions@5.0.3: {}
-
-  compare-versions@6.1.1: {}
 
   component-emitter@1.3.1: {}
 
@@ -18277,8 +18191,6 @@ snapshots:
   functional-red-black-tree@1.0.1: {}
 
   fuse.js@6.6.2: {}
-
-  fuse.js@7.1.0: {}
 
   gauge@3.0.2:
     dependencies:

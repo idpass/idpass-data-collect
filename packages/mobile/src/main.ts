@@ -23,7 +23,7 @@ import 'font-awesome/css/font-awesome.min.css'
 // Deps for calendar picker in Formio
 import 'flatpickr-formio/dist/flatpickr.min.css'
 import 'flatpickr-formio'
-import '@formio/js/dist/formio.full.min.css'
+import 'formiojs/dist/formio.full.min.css'
 
 import { createApp } from 'vue'
 import App from './App.vue'
@@ -34,8 +34,10 @@ import './style.css'
 import { useAuthManagerStore } from './store/authManager'
 
 import { createPinia } from 'pinia'
+import { registerCustomComponents } from './formio'
 
 async function initApp() {
+  registerCustomComponents()
   const isFeatureDynamicTurnedOn = import.meta.env.VITE_FEATURE_DYNAMIC
   const AppComponent = isFeatureDynamicTurnedOn ? DyApp : App
   const pinia = createPinia()

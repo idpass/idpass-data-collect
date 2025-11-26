@@ -101,6 +101,18 @@ This will build the app and open Xcode for further configuration and deployment.
 - Barcode scanning
 - Secure authentication with Auth0/Keycloak
 - Bidirectional sync with backend server
+- Biometric Capture App (BCA) integration for enrollment
+
+## Biometric Capture Integration
+
+The app supports integration with the IDPASS Biometric Capture App (BCA).
+To enable this feature:
+1. Ensure the BCA app is installed on the device (`io.idpass.bca`).
+2. Use the "Biometric Capture" component in your Entity Forms.
+3. Configure the component with the appropriate Intent Action.
+
+The app uses a custom Capacitor plugin to launch the BCA intent and retrieve the result.
+
 
 ## Testing
 
