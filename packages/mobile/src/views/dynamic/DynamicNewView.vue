@@ -74,10 +74,6 @@ const onSubmit = async (submission: FormSubmissionEvent) => {
 const onBack = () => {
   router.go(-1)
 }
-
-const goToSubmissions = () => {
-  router.push(route.path.replace(/\/new$/, ''))
-}
 </script>
 
 <template>
@@ -108,13 +104,6 @@ const goToSubmissions = () => {
     <section class="form-wrapper">
       <FormIO :form="formio" @submit="onSubmit" />
     </section>
-
-    <button class="submissions-button" type="button" @click="goToSubmissions">
-      <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-        <path d="M21 3H3v18l6-3 6 3 6-3V3zm-2 13-4 2-4-2-4 2V5h12v11z" fill="currentColor" />
-      </svg>
-      View Saved Submissions ({{ submissionCount }})
-    </button>
   </div>
 </template>
 

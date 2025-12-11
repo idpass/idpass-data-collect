@@ -112,15 +112,39 @@ export default class BiometricCapture extends Field {
   private statusElementId = '';
   private isCapturing = false;
 
+  // Override setValue to refresh UI when value is set externally (e.g., when editing a form)
+  setValue(value: unknown, flags?: Record<string, unknown>) {
+    const result = super.setValue(value, flags);
+
+    // If the component is already attached, refresh the UI
+    if (this.element && this.fingerList.length > 0) {
+      console.log('[BiometricCapture] setValue called, refreshing UI');
+      this.initializeFingerStatesFromValue();
+      this.refreshFingerDisplays();
+      this.updateSummaryStatus();
+      this.updateCaptureAllButton();
+    }
+
+    return result;
+  }
+
   render(_element: unknown) {
     this.fingerList = normalizeFingerSelections(this.component.captureFingers);
     this.initializeFingerStatesFromValue();
     this.statusElementId = `${this.key}-status`;
 
     const fingerCards = this.fingerList.map((finger) => this.renderFingerCard(finger)).join('');
+    const showCaptureAll = this.fingerList.length > 1;
 
     return super.render(`
       <div class="biometric-capture-container card card-body">
+        ${showCaptureAll ? `
+        <div class="capture-all-section mb-3">
+          <button type="button" class="btn btn-primary w-100" data-action="capture-all">
+            Capture All Fingers (${this.fingerList.length})
+          </button>
+        </div>
+        ` : ''}
         <div class="finger-grid">
           ${fingerCards}
         </div>
@@ -134,12 +158,30 @@ export default class BiometricCapture extends Field {
   attach(element: unknown) {
     const refs = super.attach(element);
     this.bindFingerEventHandlers(element as HTMLElement);
+
+    // Re-initialize from stored value in case it wasn't available during render
+    this.initializeFingerStatesFromValue();
+
+    // Update UI to reflect stored state
     this.refreshFingerDisplays();
     this.updateSummaryStatus();
+    this.updateCaptureAllButton();
+
+    console.log('[BiometricCapture] Attached. Current states:', 
+      Object.entries(this.fingerStates).map(([k, v]) => `${k}:${v.status}`).join(', ')
+    );
+
     return refs;
   }
 
   private bindFingerEventHandlers(element: HTMLElement) {
+    // Bind "Capture All" button
+    const captureAllBtn = element.querySelector('[data-action="capture-all"]');
+    if (captureAllBtn) {
+      this.addEventListener(captureAllBtn, 'click', () => this.captureAllFingers());
+    }
+
+    // Bind individual finger buttons
     this.fingerList.forEach((finger) => {
       const captureBtn = element.querySelector(`[data-action="capture"][data-finger="${finger}"]`);
       if (captureBtn) {
@@ -165,9 +207,7 @@ export default class BiometricCapture extends Field {
           <button type="button" class="btn btn-sm btn-primary" data-action="capture" data-finger="${finger}">
             Capture
           </button>
-          <button type="button" class="btn btn-sm btn-outline-secondary" data-action="skip" data-finger="${finger}">
-            Cannot Capture
-          </button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-action="skip" data-finger="${finger}"></button>
         </div>
         <div class="finger-meta mt-2 text-muted small" data-role="meta"></div>
       </div>
@@ -175,12 +215,30 @@ export default class BiometricCapture extends Field {
   }
 
   private initializeFingerStatesFromValue(): void {
-    const stored = deserializeFingerStore(this.dataValue);
+    // Try multiple sources for stored data
+    const rawValue = this.dataValue || this.getValue();
+    const stored = deserializeFingerStore(rawValue);
+
+    console.log('[BiometricCapture] Initializing from stored value:', {
+      hasDataValue: !!this.dataValue,
+      hasGetValue: !!this.getValue(),
+      storedKeys: Object.keys(stored),
+      fingerList: this.fingerList
+    });
+
     this.fingerStates = {} as Record<FingerValue, FingerCaptureState>;
 
     this.fingerList.forEach((finger) => {
       const existing = stored?.[finger];
-      this.fingerStates[finger] = sanitizeState(existing);
+      this.fingerStates[finger] = sanitizeState(existing, finger);
+
+      if (existing) {
+        console.log(`[BiometricCapture] Restored state for ${finger}:`, {
+          status: this.fingerStates[finger].status,
+          hasPreviewData: !!this.fingerStates[finger].previewData,
+          qualityScore: this.fingerStates[finger].qualityScore
+        });
+      }
     });
   }
 
@@ -220,6 +278,7 @@ export default class BiometricCapture extends Field {
     const fingerLabel = formatFingerLabel(finger);
     this.isCapturing = true;
     this.toggleFingerLoadingState(finger, true);
+    this.updateCaptureAllButton();
     this.updateSummaryStatus(`Capturing ${fingerLabel}...`, '#0d6efd');
 
     try {
@@ -241,20 +300,207 @@ export default class BiometricCapture extends Field {
     } finally {
       this.isCapturing = false;
       this.toggleFingerLoadingState(finger, false);
+      this.updateCaptureAllButton();
+    }
+  }
+
+  private async captureAllFingers(): Promise<void> {
+    if (this.isCapturing) {
+      this.updateSummaryStatus('Another capture is currently running. Please wait.', '#d97706');
+      return;
+    }
+
+    // Get all fingers that are still pending or had errors
+    const pendingFingers = this.fingerList.filter(
+      (finger) => {
+        const status = this.fingerStates[finger]?.status;
+        return status === 'pending' || status === 'error';
+      }
+    );
+
+    if (pendingFingers.length === 0) {
+      this.updateSummaryStatus('All fingers have been captured or skipped.', '#6b7280');
+      return;
+    }
+
+    const action = resolveIntentAction(this.component.intentAction);
+    this.isCapturing = true;
+    this.updateCaptureAllButton();
+    pendingFingers.forEach((finger) => this.toggleFingerLoadingState(finger, true));
+    this.updateSummaryStatus(`Capturing ${pendingFingers.length} finger(s)...`, '#0d6efd');
+
+    try {
+      const requestPayload = this.buildCaptureRequest(pendingFingers);
+      const requestJson = JSON.stringify(requestPayload);
+      const generatedExtras = {
+        request: requestJson,
+        input: requestJson,
+        autoCapture: Boolean(requestPayload.autoCapture ?? false),
+        transactionId: requestPayload.transactionId
+      };
+      const manualExtras = parseIntentExtras(this.component.intentExtras);
+      const extras = { ...generatedExtras, ...manualExtras };
+
+      const result = await BiometricCapturePlugin.launchCapture({ action, extras });
+      this.handleMultiCaptureSuccess(pendingFingers, result);
+    } catch (error: unknown) {
+      this.handleMultiCaptureFailure(pendingFingers, error);
+    } finally {
+      this.isCapturing = false;
+      pendingFingers.forEach((finger) => this.toggleFingerLoadingState(finger, false));
+      this.updateCaptureAllButton();
+    }
+  }
+
+  private handleMultiCaptureSuccess(fingers: FingerValue[], result: { result: CaptureResult }): void {
+    const intentResult = result?.result || {};
+
+    // Debug logging for troubleshooting
+    console.log('[BiometricCapture] Raw intent result keys:', Object.keys(intentResult));
+
+    // Try multiple possible response data locations
+    const responseDataRaw = intentResult.responseDataData || intentResult.responseData || intentResult.response;
+    const parsedResponse = parseJson<{ biometrics?: BiometricData[] }>(responseDataRaw);
+
+    // Try multiple possible fingerprint image locations
+    const fingerprintImagesRaw = intentResult.fingerprintImages || intentResult.fingerprint_images;
+    const fingerprintImages = parseJson<Record<string, string>>(fingerprintImagesRaw);
+
+    const biometrics = parsedResponse?.biometrics;
+
+    console.log('[BiometricCapture] Parsed response:', {
+      hasBiometrics: !!biometrics,
+      biometricsCount: biometrics?.length || 0,
+      hasFingerprintImages: !!fingerprintImages,
+      fingerprintImageKeys: fingerprintImages ? Object.keys(fingerprintImages) : []
+    });
+
+    let capturedCount = 0;
+    let errorCount = 0;
+
+    fingers.forEach((finger, index) => {
+      // Try to find biometric data for this finger
+      let fingerBio = extractBiometricForFinger(biometrics, finger);
+
+      // Fallback: if we have biometrics but couldn't match by bioSubType, try by index
+      if (!fingerBio && biometrics && biometrics.length > 0 && index < biometrics.length) {
+        fingerBio = biometrics[index];
+        console.log(`[BiometricCapture] Using fallback index ${index} for finger ${finger}`);
+      }
+
+      if (fingerBio && !fingerBio.error) {
+        const previewData = extractFingerprintPreview(fingerprintImages, finger, fingerBio);
+        const qualityScore = extractQualityScore(fingerBio);
+
+        console.log(`[BiometricCapture] Finger ${finger}: quality=${qualityScore}, hasPreview=${!!previewData}`);
+
+        this.fingerStates[finger] = {
+          status: 'captured',
+          qualityScore: qualityScore,
+          previewData: previewData,
+          lastUpdated: new Date().toISOString(),
+          rawResponse: {
+            intentResult,
+            parsedResponse,
+            fingerprintImages
+          }
+        };
+        capturedCount++;
+      } else {
+        const errorMsg = fingerBio?.error
+          ? `${fingerBio.error.errorCode || ''}: ${fingerBio.error.errorInfo || fingerBio.error.errorMessage || 'Capture failed'}`
+          : 'No biometric data returned';
+
+        console.log(`[BiometricCapture] Finger ${finger} error: ${errorMsg}`);
+
+        this.fingerStates[finger] = {
+          status: 'error',
+          error: formatErrorMessage(errorMsg),
+          lastUpdated: new Date().toISOString()
+        };
+        errorCount++;
+      }
+
+      this.updateFingerCard(finger);
+    });
+
+    this.persistState();
+
+    if (errorCount === 0) {
+      this.updateSummaryStatus(`Successfully captured ${capturedCount} finger(s)`, '#15803d');
+    } else if (capturedCount === 0) {
+      this.updateSummaryStatus(`Failed to capture all ${errorCount} finger(s)`, '#b91c1c');
+    } else {
+      this.updateSummaryStatus(`Captured ${capturedCount}, failed ${errorCount} finger(s)`, '#d97706');
+    }
+  }
+
+  private handleMultiCaptureFailure(fingers: FingerValue[], error: unknown): void {
+    const errorObj = error as { message?: string; code?: string } | string | undefined;
+    const rawMessage = (typeof errorObj === 'object' ? errorObj?.message : errorObj) || 'Capture failed';
+    const message = formatErrorMessage(rawMessage);
+
+    fingers.forEach((finger) => {
+      const state = this.ensureFingerState(finger);
+      state.status = 'error';
+      state.error = message;
+      state.lastUpdated = new Date().toISOString();
+      this.updateFingerCard(finger);
+    });
+
+    this.persistState();
+    this.updateSummaryStatus(`Failed to capture ${fingers.length} finger(s): ${message}`, '#b91c1c');
+  }
+
+  private updateCaptureAllButton(): void {
+    const captureAllBtn = this.element?.querySelector('[data-action="capture-all"]') as HTMLButtonElement | null;
+    if (!captureAllBtn) return;
+
+    const pendingFingers = this.fingerList.filter(
+      (finger) => {
+        const status = this.fingerStates[finger]?.status;
+        return status === 'pending' || status === 'error';
+      }
+    );
+
+    captureAllBtn.disabled = this.isCapturing || pendingFingers.length === 0;
+
+    if (this.isCapturing) {
+      captureAllBtn.textContent = 'Capturing...';
+    } else if (pendingFingers.length === 0) {
+      captureAllBtn.textContent = 'All Fingers Captured';
+    } else {
+      captureAllBtn.textContent = `Capture All Fingers (${pendingFingers.length})`;
     }
   }
 
   private handleCaptureSuccess(finger: FingerValue, result: { result: CaptureResult }): void {
     const fingerLabel = formatFingerLabel(finger);
     const intentResult = result?.result || {};
-    const parsedResponse = parseJson<{ biometrics?: unknown }>(
-      intentResult.responseDataData || intentResult.responseData
-    );
-    const fingerprintImages = parseJson<Record<string, string>>(intentResult.fingerprintImages);
+
+    // Debug logging
+    console.log('[BiometricCapture] Single capture result keys:', Object.keys(intentResult));
+
+    // Try multiple possible response data locations
+    const responseDataRaw = intentResult.responseDataData || intentResult.responseData || intentResult.response;
+    const parsedResponse = parseJson<{ biometrics?: BiometricData[] }>(responseDataRaw);
+
+    // Try multiple possible fingerprint image locations
+    const fingerprintImagesRaw = intentResult.fingerprintImages || intentResult.fingerprint_images;
+    const fingerprintImages = parseJson<Record<string, string>>(fingerprintImagesRaw);
+
     const biometrics = parsedResponse?.biometrics;
     const fingerBio = extractBiometricForFinger(biometrics, finger);
     const previewData = extractFingerprintPreview(fingerprintImages, finger, fingerBio);
     const qualityScore = extractQualityScore(fingerBio);
+
+    console.log('[BiometricCapture] Single capture:', {
+      finger,
+      hasBiometrics: !!biometrics,
+      hasFingerBio: !!fingerBio,
+      qualityScore,
+      hasPreviewData: !!previewData
+    });
 
     this.fingerStates[finger] = {
       status: 'captured',
@@ -270,23 +516,28 @@ export default class BiometricCapture extends Field {
 
     this.persistState();
     this.updateFingerCard(finger);
+    this.updateCaptureAllButton();
     const qualityMsg = qualityScore != null ? ` (quality ${qualityScore})` : '';
     this.updateSummaryStatus(`Captured ${fingerLabel}${qualityMsg}`, '#15803d');
   }
 
   private handleCaptureFailure(finger: FingerValue, error: unknown): void {
     const fingerLabel = formatFingerLabel(finger);
-    const errorObj = error as { message?: string } | string | undefined;
-    const message = (typeof errorObj === 'object' ? errorObj?.message : errorObj) || 'Capture failed';
+    const errorObj = error as { message?: string; code?: string } | string | undefined;
+    const rawMessage = (typeof errorObj === 'object' ? errorObj?.message : errorObj) || 'Capture failed';
+
+    // Convert technical error messages to user-friendly messages
+    const message = formatErrorMessage(rawMessage);
 
     const state = this.ensureFingerState(finger);
     state.status = 'error';
-    state.error = String(message);
+    state.error = message;
     state.lastUpdated = new Date().toISOString();
 
     this.persistState();
     this.updateFingerCard(finger);
-    this.updateSummaryStatus(`Failed to capture ${fingerLabel}: ${state.error}`, '#b91c1c');
+    this.updateCaptureAllButton();
+    this.updateSummaryStatus(`Failed to capture ${fingerLabel}: ${message}`, '#b91c1c');
   }
 
   private skipFinger(finger: FingerValue): void {
@@ -311,6 +562,7 @@ export default class BiometricCapture extends Field {
 
     this.persistState();
     this.updateFingerCard(finger);
+    this.updateCaptureAllButton();
   }
 
   private refreshFingerDisplays(): void {
@@ -366,14 +618,23 @@ export default class BiometricCapture extends Field {
       metaElement.textContent = state.lastUpdated ? `Last updated ${formatTimestamp(state.lastUpdated)}` : '';
     }
 
-    const skipButton = card.querySelector('[data-action="skip"]');
+    const skipButton = card.querySelector('[data-action="skip"]') as HTMLButtonElement | null;
     if (skipButton) {
-      skipButton.textContent = state.status === 'skipped' ? 'Undo Skip' : 'Cannot Capture';
+      const skipText = getSkipButtonText(state.status);
+      skipButton.textContent = skipText;
+      // Hide button if no text (captured state or pending with no errors)
+      skipButton.style.display = skipText ? '' : 'none';
       skipButton.disabled = this.isCapturing;
     }
 
-    const captureBtn = card.querySelector('[data-action="capture"]');
+    const captureBtn = card.querySelector('[data-action="capture"]') as HTMLButtonElement | null;
     if (captureBtn) {
+      captureBtn.textContent = getCaptureButtonText(state.status);
+      if (state.status === 'captured') {
+        captureBtn.className = 'btn btn-sm btn-outline-primary';
+      } else {
+        captureBtn.className = 'btn btn-sm btn-primary';
+      }
       captureBtn.disabled = this.isCapturing;
     }
   }
@@ -399,7 +660,8 @@ export default class BiometricCapture extends Field {
     const captureBtn = card.querySelector('[data-action="capture"]');
     if (captureBtn) {
       captureBtn.disabled = isLoading;
-      captureBtn.textContent = isLoading ? 'Capturing…' : 'Capture';
+      const state = this.ensureFingerState(finger);
+      captureBtn.textContent = isLoading ? 'Capturing…' : getCaptureButtonText(state.status);
     }
 
     const skipBtn = card.querySelector('[data-action="skip"]');
@@ -517,7 +779,7 @@ function deserializeFingerStore(value: unknown): Record<string, FingerCaptureSta
   return {};
 }
 
-function sanitizeState(state?: Partial<FingerCaptureState>): FingerCaptureState {
+function sanitizeState(state?: Partial<FingerCaptureState>, finger?: FingerValue): FingerCaptureState {
   if (!state) {
     return createDefaultState();
   }
@@ -525,14 +787,70 @@ function sanitizeState(state?: Partial<FingerCaptureState>): FingerCaptureState 
   const allowed: FingerStatus[] = ['pending', 'captured', 'skipped', 'error'];
   const normalizedStatus = allowed.includes(state.status as FingerStatus) ? (state.status as FingerStatus) : 'pending';
 
+  // Try to extract previewData from rawResponse if not directly available
+  let previewData = typeof state.previewData === 'string' ? state.previewData : undefined;
+  let qualityScore = typeof state.qualityScore === 'number' ? state.qualityScore : undefined;
+
+  if (!previewData && state.rawResponse && finger) {
+    const extracted = extractPreviewFromRawResponse(state.rawResponse, finger);
+    if (extracted.previewData) {
+      previewData = extracted.previewData;
+    }
+    if (extracted.qualityScore !== undefined && qualityScore === undefined) {
+      qualityScore = extracted.qualityScore;
+    }
+  }
+
   return {
     status: normalizedStatus,
-    qualityScore: typeof state.qualityScore === 'number' ? state.qualityScore : undefined,
-    previewData: typeof state.previewData === 'string' ? state.previewData : undefined,
+    qualityScore: qualityScore,
+    previewData: previewData,
     lastUpdated: typeof state.lastUpdated === 'string' ? state.lastUpdated : undefined,
     error: typeof state.error === 'string' ? state.error : undefined,
     rawResponse: state.rawResponse
   };
+}
+
+function extractPreviewFromRawResponse(
+  rawResponse: unknown,
+  finger: FingerValue
+): { previewData?: string; qualityScore?: number } {
+  if (!rawResponse || typeof rawResponse !== 'object') {
+    return {};
+  }
+
+  const raw = rawResponse as Record<string, unknown>;
+  const parsedResponse = raw.parsedResponse as Record<string, unknown> | undefined;
+
+  if (!parsedResponse) {
+    return {};
+  }
+
+  const biometrics = parsedResponse.biometrics as BiometricData[] | undefined;
+  if (!Array.isArray(biometrics)) {
+    return {};
+  }
+
+  // Find the biometric data for this finger
+  const fingerBio = extractBiometricForFinger(biometrics, finger);
+  if (!fingerBio) {
+    return {};
+  }
+
+  let previewData: string | undefined;
+
+  // Check for previewImage (new BCA format)
+  if (typeof fingerBio.previewImage === 'string' && fingerBio.previewImage.length > 0) {
+    previewData = toDataUrl(fingerBio.previewImage);
+  }
+  // Fallback to fingerprintImage (legacy format)
+  else if (typeof fingerBio.fingerprintImage === 'string' && fingerBio.fingerprintImage.length > 0) {
+    previewData = toDataUrl(fingerBio.fingerprintImage);
+  }
+
+  const qualityScore = extractQualityScore(fingerBio);
+
+  return { previewData, qualityScore };
 }
 
 function createDefaultState(): FingerCaptureState {
@@ -571,6 +889,28 @@ function getStatusBadgeClass(status: FingerStatus): string {
   }
 }
 
+function getCaptureButtonText(status: FingerStatus): string {
+  switch (status) {
+    case 'captured':
+      return 'Recapture';
+    default:
+      return 'Capture';
+  }
+}
+
+function getSkipButtonText(status: FingerStatus): string {
+  switch (status) {
+    case 'captured':
+      // Hide button for captured fingers
+      return '';
+    case 'skipped':
+      return 'Undo Skip';
+    default:
+      // For pending and error states, show "Cannot Capture"
+      return 'Cannot Capture';
+  }
+}
+
 function parseJson<T = unknown>(value: unknown): T | undefined {
   if (!value) {
     return undefined;
@@ -596,7 +936,13 @@ interface BiometricData {
   bioSubTypeCode?: string | string[];
   biosubType?: string | string[];
   fingerprintImage?: string;
+  previewImage?: string;
   qualityScore?: number | string;
+  error?: {
+    errorCode?: string;
+    errorInfo?: string;
+    errorMessage?: string;
+  };
 }
 
 function extractBiometricForFinger(biometrics: unknown, finger: FingerValue): BiometricData | undefined {
@@ -604,7 +950,8 @@ function extractBiometricForFinger(biometrics: unknown, finger: FingerValue): Bi
     return undefined;
   }
 
-  return biometrics.find((bio: BiometricData) => {
+  // Try to find exact match first
+  const exactMatch = biometrics.find((bio: BiometricData) => {
     if (!bio) return false;
     const subtype = bio.bioSubType || bio.bioSubTypeCode || bio.biosubType;
     if (Array.isArray(subtype)) {
@@ -614,7 +961,19 @@ function extractBiometricForFinger(biometrics: unknown, finger: FingerValue): Bi
       return subtype === finger;
     }
     return false;
-  }) || biometrics[0];
+  });
+
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  // If only one biometric and one finger requested, use it
+  if (biometrics.length === 1) {
+    return biometrics[0];
+  }
+
+  // Try to match by index based on order (fallback for multi-finger capture)
+  return undefined;
 }
 
 function extractFingerprintPreview(
@@ -622,6 +981,7 @@ function extractFingerprintPreview(
   finger: FingerValue,
   fallbackBio?: BiometricData
 ): string | undefined {
+  // First, check fingerprintImages map (legacy format)
   if (fingerprintImages && typeof fingerprintImages === 'object') {
     const images = fingerprintImages as Record<string, string>;
     const raw = images[finger];
@@ -630,6 +990,13 @@ function extractFingerprintPreview(
     }
   }
 
+  // Check previewImage in biometric data (new BCA format)
+  if (fallbackBio && typeof fallbackBio.previewImage === 'string') {
+    const value = fallbackBio.previewImage;
+    return value.startsWith('data:') ? value : toDataUrl(value);
+  }
+
+  // Fallback to fingerprintImage (legacy format)
   if (fallbackBio && typeof fallbackBio.fingerprintImage === 'string') {
     const value = fallbackBio.fingerprintImage;
     return value.startsWith('data:') ? value : toDataUrl(value);
@@ -659,4 +1026,56 @@ function formatTimestamp(value: string): string {
   } catch {
     return value;
   }
+}
+
+/**
+ * Convert technical error messages to user-friendly messages.
+ * Maps common BCA and system errors to actionable guidance.
+ */
+function formatErrorMessage(rawMessage: string): string {
+  const message = String(rawMessage).toLowerCase();
+
+  // BCA app not installed
+  if (message.includes('no application found') || message.includes('no activity found')) {
+    return 'Biometric Capture App (BCA) is not installed. Please install BCA and try again.';
+  }
+
+  // Capture was canceled - usually means device not ready or user canceled
+  if (message === 'capture was canceled' || message.includes('result_canceled')) {
+    return 'Capture was canceled. Please ensure a biometric device is connected in the BCA app and try again.';
+  }
+
+  // Device not ready errors
+  if (message.includes('device not ready') || message.includes('device not found') || message.includes('no device')) {
+    return 'No biometric device detected. Please connect a fingerprint scanner and try again.';
+  }
+
+  // Device busy
+  if (message.includes('device busy') || message.includes('another capture')) {
+    return 'Biometric device is busy. Please wait and try again.';
+  }
+
+  // Timeout errors
+  if (message.includes('timeout') || message.includes('timed out')) {
+    return 'Capture timed out. Please place your finger on the scanner and try again.';
+  }
+
+  // Quality errors
+  if (message.includes('quality') || message.includes('poor quality')) {
+    return 'Fingerprint quality too low. Please clean the scanner and try again.';
+  }
+
+  // Permission errors
+  if (message.includes('permission') || message.includes('denied')) {
+    return 'USB permission denied. Please grant permission to the biometric device.';
+  }
+
+  // SDK/Internal errors
+  if (message.includes('sdk error') || message.includes('internal error')) {
+    return 'Internal error occurred. Please restart the BCA app and try again.';
+  }
+
+  // Return original message if no match (capitalize first letter)
+  const trimmed = rawMessage.trim();
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
 }
