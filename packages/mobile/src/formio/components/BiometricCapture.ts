@@ -86,6 +86,10 @@ export default class BiometricCapture extends Field {
       captureFingers: DEFAULT_CAPTURE_OPTIONS.fingers,
       captureDeviceId: '',
       captureTransactionPrefix: DEFAULT_CAPTURE_OPTIONS.transactionPrefix,
+      skipPolicy: 'after_attempts',
+      skipAttemptsThreshold: 3,
+      skipReasonRequired: false,
+      skipReasons: [],
       validate: {
         required: false
       }
@@ -684,6 +688,11 @@ export default class BiometricCapture extends Field {
     const transactionPrefix = this.component.captureTransactionPrefix || DEFAULT_CAPTURE_OPTIONS.transactionPrefix;
     const transactionId = `${transactionPrefix}_${now.getTime()}`;
 
+    const skipPolicy = this.component.skipPolicy || 'after_attempts';
+    const skipAttemptsThreshold = Number(this.component.skipAttemptsThreshold ?? 3);
+    const skipReasonRequired = Boolean(this.component.skipReasonRequired ?? false);
+    const skipReasons = Array.isArray(this.component.skipReasons) ? this.component.skipReasons : [];
+
     return {
       env,
       purpose,
@@ -692,6 +701,10 @@ export default class BiometricCapture extends Field {
       captureTime: now.toISOString(),
       transactionId,
       autoCapture,
+      skipPolicy,
+      skipAttemptsThreshold,
+      skipReasonRequired,
+      skipReasons,
       bio: [
         {
           type: 'Finger',

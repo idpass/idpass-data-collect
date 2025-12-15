@@ -50,6 +50,10 @@ if (typeof Formio !== 'undefined') {
         captureFingers: ['Right_Thumb'],
         captureDeviceId: '',
         captureTransactionPrefix: 'FORMIO',
+        skipPolicy: 'after_attempts',
+        skipAttemptsThreshold: 3,
+        skipReasonRequired: false,
+        skipReasons: [],
         validate: {
           required: false
         }
@@ -170,6 +174,52 @@ if (typeof Formio !== 'undefined') {
                     placeholder: 'Select one or more fingers',
                     clearOnRefresh: false,
                     defaultValue: ['Right_Thumb']
+                  },
+                  {
+                    type: 'panel',
+                    title: 'Skip Logic',
+                    key: 'skipLogic',
+                    collapsible: true,
+                    collapsed: true,
+                    components: [
+                      {
+                        type: 'select',
+                        key: 'skipPolicy',
+                        label: 'Skip Policy',
+                        tooltip: 'When to allow skipping a finger capture.',
+                        data: {
+                          values: [
+                            { label: 'Never', value: 'never' },
+                            { label: 'Always', value: 'always' },
+                            { label: 'After Attempts', value: 'after_attempts' }
+                          ]
+                        },
+                        defaultValue: 'after_attempts'
+                      },
+                      {
+                        type: 'number',
+                        key: 'skipAttemptsThreshold',
+                        label: 'Skip Attempts Threshold',
+                        tooltip: 'Number of failed attempts before skip is allowed.',
+                        defaultValue: 3,
+                        customConditional: "show = row.skipPolicy === 'after_attempts';"
+                      },
+                      {
+                        type: 'checkbox',
+                        key: 'skipReasonRequired',
+                        label: 'Require Skip Reason',
+                        tooltip: 'If checked, the user must provide a reason when skipping.',
+                        defaultValue: false
+                      },
+                      {
+                        type: 'tags',
+                        key: 'skipReasons',
+                        label: 'Predefined Skip Reasons',
+                        tooltip: 'List of reasons for the user to select from.',
+                        placeholder: 'Add a reason and press Enter',
+                        storeas: 'array'
+                      }
+                    ]
                   }
                 ]
               },
