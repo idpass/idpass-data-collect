@@ -33,6 +33,8 @@ public class BiometricCapturePlugin extends Plugin {
 
         Intent intent = new Intent(action);
         intent.addCategory(Intent.CATEGORY_DEFAULT);
+        // Enforce explicit package to prevent malicious apps from intercepting biometric capture requests
+        intent.setPackage("io.idpass.bca");
 
         JSObject extras = call.getObject("extras");
         String requestPayload = null;

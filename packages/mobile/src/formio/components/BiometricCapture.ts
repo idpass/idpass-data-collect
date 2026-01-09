@@ -23,6 +23,9 @@ import BiometricCapturePlugin, { CaptureResult } from '../../plugins/BiometricCa
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const Field = (Formio as { Components: { components: { field: unknown } } }).Components.components.field as any;
 
+// Enable debug logging only in development environment
+const DEBUG = typeof process !== 'undefined' && process.env?.NODE_ENV === 'development';
+
 const DEFAULT_CAPTURE_OPTIONS = {
   env: 'Developer',
   purpose: 'Auth',
@@ -30,7 +33,7 @@ const DEFAULT_CAPTURE_OPTIONS = {
   timeout: 30000,
   autoCapture: true,
   qualityThreshold: 60,
-  deviceId: 'io.idpass.bca.finger.SECUGEN_001',
+  deviceId: '',
   fingers: ['Right_Thumb'],
   transactionPrefix: 'FORMIO'
 };
@@ -122,7 +125,7 @@ export default class BiometricCapture extends Field {
 
     // If the component is already attached, refresh the UI
     if (this.element && this.fingerList.length > 0) {
-      console.log('[BiometricCapture] setValue called, refreshing UI');
+      if (DEBUG) console.log('[BiometricCapture] setValue called, refreshing UI');
       this.initializeFingerStatesFromValue();
       this.refreshFingerDisplays();
       this.updateSummaryStatus();
@@ -171,9 +174,11 @@ export default class BiometricCapture extends Field {
     this.updateSummaryStatus();
     this.updateCaptureAllButton();
 
-    console.log('[BiometricCapture] Attached. Current states:', 
-      Object.entries(this.fingerStates).map(([k, v]) => `${k}:${v.status}`).join(', ')
-    );
+    if (DEBUG) {
+      console.log('[BiometricCapture] Attached. Current states:', 
+        Object.entries(this.fingerStates).map(([k, v]) => `${k}:${v.status}`).join(', ')
+      );
+    }
 
     return refs;
   }
@@ -223,12 +228,14 @@ export default class BiometricCapture extends Field {
     const rawValue = this.dataValue || this.getValue();
     const stored = deserializeFingerStore(rawValue);
 
-    console.log('[BiometricCapture] Initializing from stored value:', {
-      hasDataValue: !!this.dataValue,
-      hasGetValue: !!this.getValue(),
-      storedKeys: Object.keys(stored),
-      fingerList: this.fingerList
-    });
+    if (DEBUG) {
+      console.log('[BiometricCapture] Initializing from stored value:', {
+        hasDataValue: !!this.dataValue,
+        hasGetValue: !!this.getValue(),
+        storedKeys: Object.keys(stored),
+        fingerList: this.fingerList
+      });
+    }
 
     this.fingerStates = {} as Record<FingerValue, FingerCaptureState>;
 
@@ -236,7 +243,7 @@ export default class BiometricCapture extends Field {
       const existing = stored?.[finger];
       this.fingerStates[finger] = sanitizeState(existing, finger);
 
-      if (existing) {
+      if (existing && DEBUG) {
         console.log(`[BiometricCapture] Restored state for ${finger}:`, {
           status: this.fingerStates[finger].status,
           hasPreviewData: !!this.fingerStates[finger].previewData,
@@ -254,8 +261,24 @@ export default class BiometricCapture extends Field {
   }
 
   private persistState(): void {
+    // Strip sensitive raw biometric templates before persisting to reduce privacy risk
+    // Keep preview images (small thumbnails) for UI display, but exclude rawResponse
+    // which contains full fingerprint templates that would be synced to backend
+    const sanitizedFingers: Record<string, FingerCaptureState> = {};
+    
+    Object.entries(this.fingerStates).forEach(([finger, state]) => {
+      sanitizedFingers[finger] = {
+        status: state.status,
+        qualityScore: state.qualityScore,
+        previewData: state.previewData, // Keep preview for UI display
+        lastUpdated: state.lastUpdated,
+        error: state.error
+        // Explicitly exclude: rawResponse (contains sensitive biometric templates)
+      };
+    });
+    
     const payload: StoredBiometricValue = {
-      fingers: this.fingerStates,
+      fingers: sanitizedFingers,
       lastUpdated: new Date().toISOString()
     };
     this.setValue(payload);
@@ -360,7 +383,9 @@ export default class BiometricCapture extends Field {
     const intentResult = result?.result || {};
 
     // Debug logging for troubleshooting
-    console.log('[BiometricCapture] Raw intent result keys:', Object.keys(intentResult));
+    if (DEBUG) {
+      console.log('[BiometricCapture] Raw intent result keys:', Object.keys(intentResult));
+    }
 
     // Try multiple possible response data locations
     const responseDataRaw = intentResult.responseDataData || intentResult.responseData || intentResult.response;
@@ -372,12 +397,14 @@ export default class BiometricCapture extends Field {
 
     const biometrics = parsedResponse?.biometrics;
 
-    console.log('[BiometricCapture] Parsed response:', {
-      hasBiometrics: !!biometrics,
-      biometricsCount: biometrics?.length || 0,
-      hasFingerprintImages: !!fingerprintImages,
-      fingerprintImageKeys: fingerprintImages ? Object.keys(fingerprintImages) : []
-    });
+    if (DEBUG) {
+      console.log('[BiometricCapture] Parsed response:', {
+        hasBiometrics: !!biometrics,
+        biometricsCount: biometrics?.length || 0,
+        hasFingerprintImages: !!fingerprintImages,
+        fingerprintImageKeys: fingerprintImages ? Object.keys(fingerprintImages) : []
+      });
+    }
 
     let capturedCount = 0;
     let skippedCount = 0;
@@ -390,15 +417,21 @@ export default class BiometricCapture extends Field {
       // Fallback: if we have biometrics but couldn't match by bioSubType, try by index
       if (!fingerBio && biometrics && biometrics.length > 0 && index < biometrics.length) {
         fingerBio = biometrics[index];
-        console.log(`[BiometricCapture] Using fallback index ${index} for finger ${finger}`);
+        if (DEBUG) {
+          console.log(`[BiometricCapture] Using fallback index ${index} for finger ${finger}`);
+        }
       }
 
-      // Log the raw biometric data to understand BCA's response format
-      console.log(`[BiometricCapture] Raw biometric data for ${finger}:`, JSON.stringify(fingerBio, null, 2));
+      // Log the raw biometric data to understand BCA's response format (only in debug mode)
+      if (DEBUG) {
+        console.log(`[BiometricCapture] Raw biometric data for ${finger}:`, JSON.stringify(fingerBio, null, 2));
+      }
 
       // Check if BCA returned this finger as skipped
       if (isBioSkipped(fingerBio)) {
-        console.log(`[BiometricCapture] Finger ${finger} was skipped by user in BCA`);
+        if (DEBUG) {
+          console.log(`[BiometricCapture] Finger ${finger} was skipped by user in BCA`);
+        }
         this.fingerStates[finger] = {
           status: 'skipped',
           lastUpdated: new Date().toISOString()
@@ -408,7 +441,9 @@ export default class BiometricCapture extends Field {
         const previewData = extractFingerprintPreview(fingerprintImages, finger, fingerBio);
         const qualityScore = extractQualityScore(fingerBio);
 
-        console.log(`[BiometricCapture] Finger ${finger}: quality=${qualityScore}, hasPreview=${!!previewData}`);
+        if (DEBUG) {
+          console.log(`[BiometricCapture] Finger ${finger}: quality=${qualityScore}, hasPreview=${!!previewData}`);
+        }
 
         this.fingerStates[finger] = {
           status: 'captured',
@@ -427,7 +462,9 @@ export default class BiometricCapture extends Field {
           ? `${fingerBio.error.errorCode || ''}: ${fingerBio.error.errorInfo || fingerBio.error.errorMessage || 'Capture failed'}`
           : 'No biometric data returned';
 
-        console.log(`[BiometricCapture] Finger ${finger} error: ${errorMsg}`);
+        if (DEBUG) {
+          console.log(`[BiometricCapture] Finger ${finger} error: ${errorMsg}`);
+        }
 
         this.fingerStates[finger] = {
           status: 'error',
@@ -503,7 +540,9 @@ export default class BiometricCapture extends Field {
     const intentResult = result?.result || {};
 
     // Debug logging
-    console.log('[BiometricCapture] Single capture result keys:', Object.keys(intentResult));
+    if (DEBUG) {
+      console.log('[BiometricCapture] Single capture result keys:', Object.keys(intentResult));
+    }
 
     // Try multiple possible response data locations
     const responseDataRaw = intentResult.responseDataData || intentResult.responseData || intentResult.response;
@@ -516,12 +555,14 @@ export default class BiometricCapture extends Field {
     const biometrics = parsedResponse?.biometrics;
     const fingerBio = extractBiometricForFinger(biometrics, finger);
 
-    console.log('[BiometricCapture] Single capture:', {
-      finger,
-      hasBiometrics: !!biometrics,
-      hasFingerBio: !!fingerBio,
-      isSkipped: isBioSkipped(fingerBio)
-    });
+    if (DEBUG) {
+      console.log('[BiometricCapture] Single capture:', {
+        finger,
+        hasBiometrics: !!biometrics,
+        hasFingerBio: !!fingerBio,
+        isSkipped: isBioSkipped(fingerBio)
+      });
+    }
 
     // Check if BCA returned this finger as skipped
     if (isBioSkipped(fingerBio)) {
@@ -613,11 +654,13 @@ export default class BiometricCapture extends Field {
 
     const state = this.fingerStates[finger] || createDefaultState();
 
-    console.log(`[BiometricCapture] updateFingerCard for ${finger}:`, {
-      status: state.status,
-      hasPreviewData: !!state.previewData,
-      previewDataLength: state.previewData?.length || 0
-    });
+    if (DEBUG) {
+      console.log(`[BiometricCapture] updateFingerCard for ${finger}:`, {
+        status: state.status,
+        hasPreviewData: !!state.previewData,
+        previewDataLength: state.previewData?.length || 0
+      });
+    }
 
     const statusBadge = card.querySelector('[data-role="status"]');
     if (statusBadge) {
@@ -1141,7 +1184,7 @@ function isBioSkipped(bio: BiometricData | undefined): boolean {
   const knownProps = ['bioSubType', 'bioSubTypeCode', 'biosubType', 'fingerprintImage', 'previewImage', 
                       'qualityScore', 'notCaptured', 'skipped', 'captured', 'captureStatus', 'status', 'error'];
   const unknownProps = Object.keys(bio).filter(k => !knownProps.includes(k));
-  if (unknownProps.length > 0) {
+  if (unknownProps.length > 0 && DEBUG) {
     console.log('[BiometricCapture] Unknown biometric properties:', unknownProps, 
       'Values:', unknownProps.map(k => `${k}=${JSON.stringify(bio[k])}`).join(', '));
   }
