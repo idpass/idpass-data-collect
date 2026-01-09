@@ -380,6 +380,7 @@ export default class BiometricCapture extends Field {
     });
 
     let capturedCount = 0;
+    let skippedCount = 0;
     let errorCount = 0;
 
     fingers.forEach((finger, index) => {
@@ -392,7 +393,18 @@ export default class BiometricCapture extends Field {
         console.log(`[BiometricCapture] Using fallback index ${index} for finger ${finger}`);
       }
 
-      if (fingerBio && !fingerBio.error) {
+      // Log the raw biometric data to understand BCA's response format
+      console.log(`[BiometricCapture] Raw biometric data for ${finger}:`, JSON.stringify(fingerBio, null, 2));
+
+      // Check if BCA returned this finger as skipped
+      if (isBioSkipped(fingerBio)) {
+        console.log(`[BiometricCapture] Finger ${finger} was skipped by user in BCA`);
+        this.fingerStates[finger] = {
+          status: 'skipped',
+          lastUpdated: new Date().toISOString()
+        };
+        skippedCount++;
+      } else if (fingerBio && !fingerBio.error) {
         const previewData = extractFingerprintPreview(fingerprintImages, finger, fingerBio);
         const qualityScore = extractQualityScore(fingerBio);
 
@@ -430,12 +442,20 @@ export default class BiometricCapture extends Field {
 
     this.persistState();
 
-    if (errorCount === 0) {
+    // Build summary message based on results
+    const parts: string[] = [];
+    if (capturedCount > 0) parts.push(`captured ${capturedCount}`);
+    if (skippedCount > 0) parts.push(`skipped ${skippedCount}`);
+    if (errorCount > 0) parts.push(`failed ${errorCount}`);
+
+    if (errorCount === 0 && skippedCount === 0) {
       this.updateSummaryStatus(`Successfully captured ${capturedCount} finger(s)`, '#15803d');
-    } else if (capturedCount === 0) {
+    } else if (capturedCount === 0 && skippedCount === 0) {
       this.updateSummaryStatus(`Failed to capture all ${errorCount} finger(s)`, '#b91c1c');
+    } else if (errorCount === 0) {
+      this.updateSummaryStatus(`${parts.join(', ')} finger(s)`, '#15803d');
     } else {
-      this.updateSummaryStatus(`Captured ${capturedCount}, failed ${errorCount} finger(s)`, '#d97706');
+      this.updateSummaryStatus(`${parts.join(', ')} finger(s)`, '#d97706');
     }
   }
 
@@ -495,16 +515,30 @@ export default class BiometricCapture extends Field {
 
     const biometrics = parsedResponse?.biometrics;
     const fingerBio = extractBiometricForFinger(biometrics, finger);
-    const previewData = extractFingerprintPreview(fingerprintImages, finger, fingerBio);
-    const qualityScore = extractQualityScore(fingerBio);
 
     console.log('[BiometricCapture] Single capture:', {
       finger,
       hasBiometrics: !!biometrics,
       hasFingerBio: !!fingerBio,
-      qualityScore,
-      hasPreviewData: !!previewData
+      isSkipped: isBioSkipped(fingerBio)
     });
+
+    // Check if BCA returned this finger as skipped
+    if (isBioSkipped(fingerBio)) {
+      this.fingerStates[finger] = {
+        status: 'skipped',
+        lastUpdated: new Date().toISOString()
+      };
+
+      this.persistState();
+      this.updateFingerCard(finger);
+      this.updateCaptureAllButton();
+      this.updateSummaryStatus(`${fingerLabel} was marked as unavailable`, '#92400e');
+      return;
+    }
+
+    const previewData = extractFingerprintPreview(fingerprintImages, finger, fingerBio);
+    const qualityScore = extractQualityScore(fingerBio);
 
     this.fingerStates[finger] = {
       status: 'captured',
@@ -545,22 +579,22 @@ export default class BiometricCapture extends Field {
   }
 
   private skipFinger(finger: FingerValue): void {
-    const state = this.ensureFingerState(finger);
+    const currentState = this.fingerStates[finger];
     const now = new Date().toISOString();
 
-    if (state.status === 'skipped') {
-      state.status = 'pending';
-      state.error = undefined;
-      state.previewData = undefined;
-      state.qualityScore = undefined;
-      state.lastUpdated = now;
+    if (currentState?.status === 'skipped') {
+      // Un-skip: create fresh pending state
+      this.fingerStates[finger] = {
+        status: 'pending',
+        lastUpdated: now
+      };
       this.updateSummaryStatus(`Re-enabled ${formatFingerLabel(finger)} for capture.`, '#0f172a');
     } else {
-      state.status = 'skipped';
-      state.previewData = undefined;
-      state.qualityScore = undefined;
-      state.error = undefined;
-      state.lastUpdated = now;
+      // Skip: create fresh skipped state (no preview data, no raw response)
+      this.fingerStates[finger] = {
+        status: 'skipped',
+        lastUpdated: now
+      };
       this.updateSummaryStatus(`Marked ${formatFingerLabel(finger)} as unavailable.`, '#92400e');
     }
 
@@ -577,7 +611,13 @@ export default class BiometricCapture extends Field {
     const card = this.element?.querySelector(`.finger-card[data-finger="${finger}"]`);
     if (!card) return;
 
-    const state = this.ensureFingerState(finger);
+    const state = this.fingerStates[finger] || createDefaultState();
+
+    console.log(`[BiometricCapture] updateFingerCard for ${finger}:`, {
+      status: state.status,
+      hasPreviewData: !!state.previewData,
+      previewDataLength: state.previewData?.length || 0
+    });
 
     const statusBadge = card.querySelector('[data-role="status"]');
     if (statusBadge) {
@@ -585,8 +625,9 @@ export default class BiometricCapture extends Field {
       statusBadge.className = `badge ${getStatusBadgeClass(state.status)}`;
     }
 
-    const previewElement = card.querySelector('[data-role="preview"]');
+    const previewElement = card.querySelector('[data-role="preview"]') as HTMLElement | null;
     if (previewElement) {
+      // Clear all content first
       previewElement.innerHTML = '';
       previewElement.classList.remove('text-danger', 'text-muted');
 
@@ -800,6 +841,15 @@ function sanitizeState(state?: Partial<FingerCaptureState>, finger?: FingerValue
   const allowed: FingerStatus[] = ['pending', 'captured', 'skipped', 'error'];
   const normalizedStatus = allowed.includes(state.status as FingerStatus) ? (state.status as FingerStatus) : 'pending';
 
+  // For skipped fingers, explicitly clear preview data and raw response
+  // This ensures no preview images are shown for skipped fingers
+  if (normalizedStatus === 'skipped') {
+    return {
+      status: 'skipped',
+      lastUpdated: typeof state.lastUpdated === 'string' ? state.lastUpdated : undefined
+    };
+  }
+
   // Try to extract previewData from rawResponse if not directly available
   let previewData = typeof state.previewData === 'string' ? state.previewData : undefined;
   let qualityScore = typeof state.qualityScore === 'number' ? state.qualityScore : undefined;
@@ -914,8 +964,8 @@ function getCaptureButtonText(status: FingerStatus): string {
 function getSkipButtonText(status: FingerStatus): string {
   switch (status) {
     case 'captured':
-      // Hide button for captured fingers
-      return '';
+      // Allow marking captured finger as unavailable (e.g., wrong finger captured)
+      return 'Mark Unavailable';
     case 'skipped':
       return 'Undo Skip';
     default:
@@ -951,6 +1001,14 @@ interface BiometricData {
   fingerprintImage?: string;
   previewImage?: string;
   qualityScore?: number | string;
+  // BCA may use various fields to indicate a skipped finger
+  notCaptured?: boolean;
+  skipped?: boolean;
+  captured?: boolean;
+  captureStatus?: string;
+  status?: string;
+  // Allow any additional properties for flexibility
+  [key: string]: unknown;
   error?: {
     errorCode?: string;
     errorInfo?: string;
@@ -994,6 +1052,11 @@ function extractFingerprintPreview(
   finger: FingerValue,
   fallbackBio?: BiometricData
 ): string | undefined {
+  // Do not extract preview for skipped biometrics
+  if (isBioSkipped(fallbackBio)) {
+    return undefined;
+  }
+
   // First, check fingerprintImages map (legacy format)
   if (fingerprintImages && typeof fingerprintImages === 'object') {
     const images = fingerprintImages as Record<string, string>;
@@ -1025,6 +1088,65 @@ function extractQualityScore(bio: BiometricData | undefined): number | undefined
 
   const score = typeof bio.qualityScore === 'string' ? parseFloat(bio.qualityScore) : bio.qualityScore;
   return Number.isFinite(score) ? Number(score) : undefined;
+}
+
+/**
+ * Check if a biometric response indicates the finger was skipped by the user in BCA.
+ * BCA may return skipped fingers with various field patterns.
+ */
+function isBioSkipped(bio: BiometricData | undefined): boolean {
+  if (!bio) return false;
+  
+  // Direct boolean indicators
+  if (bio.notCaptured === true) return true;
+  if (bio.skipped === true) return true;
+  if (bio.captured === false) return true;
+  
+  // Check captureStatus field
+  if (typeof bio.captureStatus === 'string') {
+    const status = bio.captureStatus.toLowerCase();
+    if (status === 'skipped' || status === 'not_captured' || status === 'notcaptured' || status === 'exception') {
+      return true;
+    }
+  }
+  
+  // Check generic status field
+  if (typeof bio.status === 'string') {
+    const status = bio.status.toLowerCase();
+    if (status === 'skipped' || status === 'not_captured' || status === 'notcaptured' || status === 'exception') {
+      return true;
+    }
+  }
+  
+  // Check for skip-related error codes from BCA
+  if (bio.error) {
+    const errorCode = String(bio.error.errorCode || '').toLowerCase();
+    const errorInfo = String(bio.error.errorInfo || '').toLowerCase();
+    const errorMessage = String(bio.error.errorMessage || '').toLowerCase();
+    
+    // Common skip/not-captured indicators in error responses
+    if (errorCode.includes('skip') || errorCode.includes('not_captured') || errorCode === '0') {
+      return true;
+    }
+    if (errorInfo.includes('skipped') || errorInfo.includes('not captured') || errorInfo.includes('user skipped') || errorInfo.includes('exception')) {
+      return true;
+    }
+    if (errorMessage.includes('skipped') || errorMessage.includes('not captured') || errorMessage.includes('user skipped') || errorMessage.includes('exception')) {
+      return true;
+    }
+  }
+  
+  // Check for any other properties that might indicate skip
+  // Log unknown properties to help debug
+  const knownProps = ['bioSubType', 'bioSubTypeCode', 'biosubType', 'fingerprintImage', 'previewImage', 
+                      'qualityScore', 'notCaptured', 'skipped', 'captured', 'captureStatus', 'status', 'error'];
+  const unknownProps = Object.keys(bio).filter(k => !knownProps.includes(k));
+  if (unknownProps.length > 0) {
+    console.log('[BiometricCapture] Unknown biometric properties:', unknownProps, 
+      'Values:', unknownProps.map(k => `${k}=${JSON.stringify(bio[k])}`).join(', '));
+  }
+  
+  return false;
 }
 
 function toDataUrl(raw: string): string {
