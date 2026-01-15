@@ -21,10 +21,6 @@ const snackBarStore = useSnackBarStore()
           <v-icon start icon="mdi-account-group"></v-icon>
           Users
         </v-btn>
-        <v-btn to="/create" variant="text" class="mx-2">
-          <v-icon start icon="mdi-plus"></v-icon>
-          Create Config
-        </v-btn>
         <v-menu>
           <template v-slot:activator="{ props }">
             <v-btn v-bind="props" icon="mdi-account" class="mx-2"></v-btn>
@@ -60,7 +56,9 @@ const snackBarStore = useSnackBarStore()
     <template v-if="snackBarStore.snackbarColor === 'success'">
       <v-icon start icon="mdi-check-circle" />
     </template>
-    <template v-else-if="snackBarStore.snackbarColor === 'red' || snackBarStore.snackbarColor === 'error'">
+    <template
+      v-else-if="snackBarStore.snackbarColor === 'red' || snackBarStore.snackbarColor === 'error'"
+    >
       <v-icon start icon="mdi-alert-circle" />
     </template>
     <template v-else-if="snackBarStore.snackbarColor === 'warning'">
