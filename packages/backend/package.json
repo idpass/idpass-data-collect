@@ -18,6 +18,7 @@
     "build": "pnpm run clean && tsc --project tsconfig.json && pnpm run copy-files",
     "format": "prettier --write .",
     "api-docs": "echo 'OpenAPI spec available at http://localhost:3000/api-docs/openapi.json'",
+    "validate-api": "redocly lint openapi.yaml --skip-rule=operation-4xx-response --skip-rule=no-server-example.com --skip-rule=operation-operationId --skip-rule=no-identical-paths --skip-rule=no-ambiguous-paths",
     "lint": "eslint . --config eslint.config.mjs --fix",
     "type-check": "tsc --noEmit -p tsconfig.type-check.json"
   },
@@ -41,6 +42,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",
+    "@redocly/cli": "^2.14.5",
     "@types/bcrypt": "^5.0.2",
     "@types/body-parser": "^1.19.5",
     "@types/cors": "^2.8.17",
