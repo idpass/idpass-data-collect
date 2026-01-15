@@ -197,7 +197,15 @@ export function createOpenSppFieldRoutes(): Router {
   router.post(
     "/parse-file",
     authenticateJWT,
-    upload.single("payload"),
+    (req, res, next) => {
+      upload.single("payload")(req, res, (err) => {
+        if (err) {
+          // Convert multer errors to AppError with 400 status
+          return next(new AppError(err.message || "File upload error", 400));
+        }
+        next();
+      });
+    },
     asyncHandler(async (req, res) => {
       if (!req.file) {
         throw new AppError("No JSON file uploaded", 400);
