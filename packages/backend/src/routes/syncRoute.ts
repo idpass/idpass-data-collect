@@ -18,6 +18,7 @@
  */
 
 import { Router } from "express";
+import bodyParser from "body-parser";
 import { AuditLogEntry, ExternalSyncCredentials, FormSubmission } from "@idpass/data-collect-core";
 import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
@@ -25,6 +26,10 @@ import { AppInstanceStore } from "../types";
 
 export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
   const router = Router();
+  
+  // Apply increased body parser limit only to sync routes that handle biometric data
+  // This prevents DoS attacks on other endpoints while allowing large biometric payloads
+  router.use(bodyParser.json({ limit: "50mb" }));
 
   router.get(
     "/pull",

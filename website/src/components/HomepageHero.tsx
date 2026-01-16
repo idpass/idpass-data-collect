@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function HomepageHero(): JSX.Element {
+export default function HomepageHero(): React.JSX.Element {
   return (
     <header className="hero">
       <div className="container">

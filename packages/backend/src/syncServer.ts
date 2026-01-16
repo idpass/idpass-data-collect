@@ -49,7 +49,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
 
   setupUncaughtHandlers();
   app.use(cors());
-  app.use(bodyParser.json());
+  app.use(bodyParser.json({ limit: "50mb" }));
   app.use(
     express.static(path.join(__dirname, "public"), {
       setHeaders: (res, path) => {

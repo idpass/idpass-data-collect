@@ -1,9 +1,5 @@
 <script setup lang="ts">
-import {
-  getAppConfigJsonUrl,
-  getAppQrCodeUrl,
-  deleteApp as deleteAppApi,
-} from '@/api'
+import { getAppConfigJsonUrl, getAppQrCodeUrl, deleteApp as deleteAppApi } from '@/api'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -36,7 +32,6 @@ const showArchiveDialog = ref(false)
 const handleArchive = () => {
   menu.value = false
   showArchiveDialog.value = true
-  // TODO: mark app as archived in the database
 }
 
 const confirmArchive = async () => {
@@ -73,7 +68,6 @@ const syncDetails = computed(() => {
       label: 'Local only',
       color: 'grey-darken-2',
       icon: 'mdi-lan-disconnect',
-      description: 'Data collected remains on device until manually exported.',
     }
   }
 
@@ -83,32 +77,8 @@ const syncDetails = computed(() => {
     label: 'Sync enabled',
     color: requiresAuth ? 'warning' : 'success',
     icon: requiresAuth ? 'mdi-shield-key-outline' : 'mdi-sync',
-    description: app.description || ''
   }
 })
-
-const metricItems = computed(() => [
-  {
-    label: 'Entities captured',
-    value: app.entitiesCount ?? 0,
-    icon: 'mdi-account-group-outline',
-  },
-  {
-    label: 'Version',
-    value: app.version || 'Not specified',
-    icon: 'mdi-tag-outline',
-  },
-  {
-    label: 'Config ID',
-    value: app.id,
-    icon: 'mdi-identifier',
-  },
-  {
-    label: 'Artifact ID',
-    value: app.artifactId,
-    icon: 'mdi-package-variant',
-  },
-])
 
 const downloadUrl = computed(() => getAppConfigJsonUrl(app.artifactId))
 const qrUrl = computed(() => getAppQrCodeUrl(app.artifactId))
@@ -119,106 +89,98 @@ const handleQrError = () => {
 
 watch(showQrDialog, (isOpen) => {
   if (isOpen) {
-    // Reset error when dialog opens
     qrError.value = false
   }
 })
 </script>
 
 <template>
-  <v-card class="app-card" border="md" elevation="0">
+  <v-card class="app-card" border="md" elevation="0" @click="openDetails(app.id)">
+    <!-- Header with name and menu -->
     <v-card-text class="app-card__header">
       <div class="app-card__header-main">
         <div class="app-card__avatar">{{ avatarLabel }}</div>
-        <div>
+        <div class="app-card__header-text">
           <h3 class="app-card__name" :title="app.name">{{ app.name }}</h3>
-          <p class="app-card__id" :title="app.id">Config ID • {{ app.id }}</p>
+          <p class="app-card__id" :title="app.id">{{ app.id }}</p>
         </div>
       </div>
-      <div class="app-card__header-actions">
-        <v-chip
-          class="app-card__status"
-          :color="syncDetails.color"
-          variant="tonal"
-          size="small"
-          density="comfortable"
-        >
-          <v-icon :icon="syncDetails.icon" size="16" start />
+      <v-menu v-model="menu" location="bottom end">
+        <template #activator="{ props }">
+          <v-btn icon="mdi-dots-vertical" variant="text" size="small" v-bind="props" @click.stop />
+        </template>
+        <v-list density="compact">
+          <v-list-item @click="editApp(app.id)" prepend-icon="mdi-pencil" title="Edit" />
+          <v-list-item @click="copyApp(app.id)" prepend-icon="mdi-content-copy" title="Duplicate" />
+          <v-list-item
+            :href="downloadUrl"
+            download
+            prepend-icon="mdi-download"
+            title="Download"
+            @click.stop
+          />
+          <v-divider class="my-1" />
+          <v-list-item
+            @click="handleArchive()"
+            prepend-icon="mdi-archive"
+            title="Archive"
+            class="text-warning"
+          />
+        </v-list>
+      </v-menu>
+    </v-card-text>
+
+    <!-- Inline metrics and status -->
+    <v-card-text class="app-card__body">
+      <div class="app-card__metrics">
+        <v-chip :color="syncDetails.color" variant="tonal" size="small" density="comfortable">
+          <v-icon :icon="syncDetails.icon" size="14" start />
           {{ syncDetails.label }}
         </v-chip>
-        <v-menu v-model="menu" location="bottom end">
-          <template #activator="{ props }">
-            <v-btn icon="mdi-dots-vertical" variant="text" v-bind="props" />
-          </template>
-          <v-list density="compact">
-            <v-list-item @click="editApp(app.id)" prepend-icon="mdi-pencil" title="Edit" />
-            <v-list-item @click="copyApp(app.id)" prepend-icon="mdi-content-copy" title="Duplicate" />
-            <v-list-item
-              :href="downloadUrl"
-              download
-              prepend-icon="mdi-download"
-              title="Download"
-            />
-            <v-list-item
-              @click="handleArchive()"
-              prepend-icon="mdi-archive"
-              title="Archive"
-              color="warning"
-            />
-          </v-list>
-        </v-menu>
-      </div>
-    </v-card-text>
-
-    <v-card-text class="app-card__summary">
-      <div class="app-card__summary-tags">
         <v-chip variant="tonal" color="primary" size="small">
-          <v-icon icon="mdi-account-multiple" size="16" start />
-          {{ app.entitiesCount || 0 }} entities
+          <v-icon icon="mdi-database" size="14" start />
+          {{ app.entitiesCount || 0 }}
         </v-chip>
-        <v-chip variant="outlined" size="small">
-          Version {{ app.version || 'N/A' }}
-        </v-chip>
+        <v-chip variant="outlined" size="small"> v{{ app.version || 'N/A' }} </v-chip>
       </div>
-      <p class="app-card__summary-text">{{ syncDetails.description }}</p>
+      <p v-if="app.description" class="app-card__description">
+        {{ app.description }}
+      </p>
     </v-card-text>
 
-    <v-divider />
-
-    <v-card-text class="app-card__metrics">
-      <div v-for="metric in metricItems" :key="metric.label" class="app-card__metric">
-        <div class="app-card__metric-icon">
-          <v-icon :icon="metric.icon" size="20" />
-        </div>
-        <div class="app-card__metric-content">
-          <p class="app-card__metric-label">{{ metric.label }}</p>
-          <p class="app-card__metric-value" :title="String(metric.value)">{{ metric.value }}</p>
-        </div>
-      </div>
-    </v-card-text>
-
-    <v-divider />
-
-    <v-card-actions class="app-card__footer">
-      <div class="app-card__footer-actions">
-        <v-btn color="primary" prepend-icon="mdi-qrcode" @click="showQrDialog = true">
-          Show QR
-        </v-btn>
-      </div>
-      <v-btn variant="text" color="primary" append-icon="mdi-arrow-right" @click="openDetails(app.id)">
-        View program
+    <!-- Actions -->
+    <v-card-actions class="app-card__actions">
+      <v-btn
+        size="small"
+        variant="tonal"
+        color="primary"
+        prepend-icon="mdi-qrcode"
+        @click.stop="showQrDialog = true"
+      >
+        QR Code
+      </v-btn>
+      <v-spacer />
+      <v-btn
+        size="small"
+        variant="text"
+        color="primary"
+        append-icon="mdi-chevron-right"
+        @click.stop="openDetails(app.id)"
+      >
+        Details
       </v-btn>
     </v-card-actions>
   </v-card>
 
+  <!-- QR Dialog -->
   <v-dialog v-model="showQrDialog" max-width="360">
     <v-card>
       <v-card-title class="text-h6">Scan to deploy</v-card-title>
       <v-card-text class="text-center">
-        <v-img 
-          :src="qrUrl" 
-          alt="QR Code" 
-          max-width="220" 
+        <v-img
+          :src="qrUrl"
+          alt="QR Code"
+          max-width="200"
           class="mx-auto my-4"
           @error="handleQrError"
         >
@@ -227,189 +189,149 @@ watch(showQrDialog, (isOpen) => {
               <v-icon icon="mdi-alert-circle" size="48" color="error" class="mb-2" />
               <p class="text-body-2 text-error">Failed to load QR code</p>
               <p class="text-caption text-medium-emphasis mt-2">
-                The QR code image could not be loaded. Please ensure the backend is accessible and the artifact ID is valid.
+                Please ensure the backend is accessible.
               </p>
             </div>
           </template>
         </v-img>
         <p v-if="!qrError" class="text-body-2 text-medium-emphasis">
-          Share this code with field teams to load the configuration instantly on their devices.
+          Share this code with field teams to load the configuration.
         </p>
-        <v-alert v-if="qrError" type="warning" variant="tonal" density="compact" class="mt-2">
-          <strong>Note:</strong> When scanning this QR code from a mobile device, ensure the URL in the code is accessible from your network. 
-          If you're using localhost, configure PUBLIC_BASE_URL in your backend environment.
-        </v-alert>
       </v-card-text>
       <v-card-actions class="justify-end">
-        <v-btn variant="text" color="primary" @click="showQrDialog = false">Close</v-btn>
-        <v-btn variant="flat" color="primary" :href="downloadUrl" target="_blank" prepend-icon="mdi-download">
-          Download JSON
+        <v-btn variant="text" @click="showQrDialog = false">Close</v-btn>
+        <v-btn
+          variant="flat"
+          color="primary"
+          :href="downloadUrl"
+          target="_blank"
+          prepend-icon="mdi-download"
+        >
+          Download
         </v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
 
-  <v-dialog v-model="showArchiveDialog" max-width="500">
+  <!-- Archive Dialog -->
+  <v-dialog v-model="showArchiveDialog" max-width="420">
     <v-card>
       <v-card-title class="text-h6">
         <v-icon icon="mdi-archive" start />
-        Archive Collection Program
+        Archive Program
       </v-card-title>
       <v-card-text>
-        <p>Are you sure you want to archive <strong>{{ app.name }}</strong>?</p>
-        <p class="mt-2 text-medium-emphasis">
-          This will mark the collection program as archived. The data will remain accessible but the program will be hidden from the main list.
+        <p>
+          Are you sure you want to archive <strong>{{ app.name }}</strong
+          >?
+        </p>
+        <p class="mt-2 text-medium-emphasis text-body-2">
+          The program will be hidden from the main list but data will remain accessible.
         </p>
       </v-card-text>
       <v-card-actions>
         <v-spacer />
         <v-btn variant="text" @click="showArchiveDialog = false">Cancel</v-btn>
-        <v-btn color="warning" variant="tonal" @click="confirmArchive">
-          Archive
-        </v-btn>
+        <v-btn color="warning" variant="tonal" @click="confirmArchive">Archive</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
-
 </template>
 
 <style scoped>
 .app-card {
-  border-radius: 20px;
+  border-radius: 16px;
   overflow: hidden;
   background: var(--v-theme-surface);
-  display: flex;
-  flex-direction: column;
-  height: 100%;
+  cursor: pointer;
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.15s ease;
+}
+
+.app-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
 }
 
 .app-card__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
+  padding-bottom: 8px;
 }
 
 .app-card__header-main {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
 }
 
 .app-card__avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   background: rgba(33, 150, 243, 0.12);
   color: rgb(25, 118, 210);
   font-weight: 600;
-  font-size: 1.125rem;
+  font-size: 1rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+}
+
+.app-card__header-text {
+  min-width: 0;
+  flex: 1;
 }
 
 .app-card__name {
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 600;
-  margin: 0 0 4px;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .app-card__id {
-  font-size: 0.8125rem;
-  color: rgba(0, 0, 0, 0.54);
-  margin: 0;
+  font-size: 0.75rem;
+  color: rgba(0, 0, 0, 0.5);
+  margin: 2px 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.app-card__header-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.app-card__status {
-  font-weight: 500;
-}
-
-.app-card__summary {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.app-card__summary-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.app-card__summary-text {
-  font-size: 0.875rem;
-  color: rgba(0, 0, 0, 0.6);
-  margin: 0;
+.app-card__body {
+  padding-top: 0;
+  padding-bottom: 12px;
 }
 
 .app-card__metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-}
-
-.app-card__metric {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 8px 0;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
 }
 
-.app-card__metric-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.04);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.app-card__metric-label {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: rgba(0, 0, 0, 0.5);
-  margin: 0 0 4px;
-}
-
-.app-card__metric-value {
-  font-size: 0.95rem;
-  font-weight: 500;
+.app-card__description {
+  font-size: 0.85rem;
+  color: rgba(0, 0, 0, 0.6);
   margin: 0;
-  color: rgba(0, 0, 0, 0.8);
-  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
 }
 
-.app-card__metric-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.app-card__footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.app-card__footer-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-@media (max-width: 600px) {
-  .app-card__metrics {
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  }
+.app-card__actions {
+  padding-top: 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 </style>
