@@ -22,16 +22,26 @@ import { EventApplierService } from "../services/EventApplierService";
 import MockSyncServerAdapter from "../services/MockSyncServerAdapter";
 import OpenFnSyncAdapter from "./openfn/OpenFnSyncAdapter";
 import OpenSppSyncAdapter from "./openspp/OpenSppSyncAdapter";
+import OpenSppV2SyncAdapter from "./openspp-v2/OpenSppV2SyncAdapter";
 
 /**
  * Registry of available external sync adapters mapped by their type identifiers.
  *
  * Add new adapters here to make them available for external synchronization.
+ *
+ * Adapter types:
+ * - mock-sync-server: Mock adapter for testing
+ * - openfn-adapter: OpenFn webhook-based integration
+ * - openspp-v1-adapter: OpenSPP V1 (JSON-RPC/Odoo API)
+ * - openspp-adapter: Legacy alias for openspp-v1-adapter
+ * - openspp-v2-adapter: OpenSPP V2 (REST API with OAuth2)
  */
 const adaptersMapping = {
   "mock-sync-server": MockSyncServerAdapter,
   "openfn-adapter": OpenFnSyncAdapter,
-  "openspp-adapter": OpenSppSyncAdapter,
+  "openspp-v1-adapter": OpenSppSyncAdapter,
+  "openspp-adapter": OpenSppSyncAdapter, // Legacy alias for backwards compatibility
+  "openspp-v2-adapter": OpenSppV2SyncAdapter,
 };
 
 /**

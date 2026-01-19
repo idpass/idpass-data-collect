@@ -14,6 +14,7 @@ import {
 } from '@/api'
 import FormBuilderDialog from '@/components/FormBuilderDialog.vue'
 import FieldsInput from '@/components/FieldsInput.vue'
+import AdapterConfigFields from '@/components/AdapterConfigFields.vue'
 import OpenSppFieldInputDialog from '@/components/OpenSppFieldInputDialog.vue'
 import FieldMappingDialog from '@/components/FieldMappingDialog.vue'
 import { parseOpenSppProgramSpecification } from '@/utils/openSppImport'
@@ -30,7 +31,10 @@ type EntityForm = {
 type ExternalSync = {
   type?: string
   url: string
+  /** @deprecated Use adapterConfig instead */
   extraFields: ExternalSyncField[]
+  /** Typed adapter configuration */
+  adapterConfig?: Record<string, string | number | boolean>
   fieldMappings?: FieldMapping[]
 }
 
@@ -69,6 +73,7 @@ const form = ref<ConfigSchema>({
     type: undefined,
     url: '',
     extraFields: [],
+    adapterConfig: {},
   },
   authConfigs: [],
 })
@@ -525,6 +530,7 @@ const onFieldMappingsSave = (mappings: FieldMapping[]) => {
       type: undefined,
       url: '',
       extraFields: [],
+      adapterConfig: {},
     }
   }
   form.value.externalSync.fieldMappings = mappings
@@ -595,9 +601,12 @@ const getFormFields = (formio: unknown): Array<{ key: string; label: string }> =
 }
 
 const isOpenSppSync = () => {
+  const type = form.value.externalSync?.type
   return (
-    form.value.externalSync?.type === 'openspp-adapter' ||
-    form.value.externalSync?.type === 'openspp'
+    type === 'openspp-adapter' ||
+    type === 'openspp-v1-adapter' ||
+    type === 'openspp-v2-adapter' ||
+    type === 'openspp'
   )
 }
 
@@ -629,7 +638,7 @@ const goBack = () => {
       <v-tabs v-model="activeTab" color="primary" grow>
         <v-tab value="form">
           <v-icon start icon="mdi-form-select" />
-          Create from Form
+          Create Form
         </v-tab>
         <v-tab value="json">
           <v-icon start icon="mdi-code-json" />
@@ -891,7 +900,8 @@ const goBack = () => {
               v-model="form.externalSync.type"
               :items="[
                 { title: 'Mock Sync Server', value: 'mock-sync-server' },
-                { title: 'OpenSPP', value: 'openspp-adapter' },
+                { title: 'OpenSPP V1 (Legacy)', value: 'openspp-v1-adapter' },
+                { title: 'OpenSPP V2', value: 'openspp-v2-adapter' },
                 { title: 'OpenFn', value: 'openfn-adapter' },
               ]"
               label="Sync Type"
@@ -907,7 +917,27 @@ const goBack = () => {
               v-trim
               variant="outlined"
             />
-            <FieldsInput v-model="form.externalSync.extraFields" :as-array="true" />
+
+            <!-- Adapter-specific configuration fields -->
+            <AdapterConfigFields
+              v-if="form.externalSync.type"
+              :adapter-type="form.externalSync.type"
+              v-model="form.externalSync.adapterConfig!"
+            />
+
+            <!-- Legacy extra fields (for backwards compatibility) -->
+            <v-expansion-panels v-if="form.externalSync.extraFields?.length" class="mt-4">
+              <v-expansion-panel>
+                <v-expansion-panel-title>
+                  <span class="text-body-2 text-medium-emphasis">
+                    Legacy Extra Fields ({{ form.externalSync.extraFields.length }})
+                  </span>
+                </v-expansion-panel-title>
+                <v-expansion-panel-text>
+                  <FieldsInput v-model="form.externalSync.extraFields" :as-array="true" />
+                </v-expansion-panel-text>
+              </v-expansion-panel>
+            </v-expansion-panels>
 
             <!-- OpenSPP Field Mapping -->
             <div v-if="isOpenSppSync()" class="mt-6">
