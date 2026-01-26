@@ -1,0 +1,121 @@
+<script setup lang="ts">
+import { useProgramDraftStore } from '@/stores/programDraft'
+
+const draftStore = useProgramDraftStore()
+
+// Validate on blur for immediate feedback
+const onFieldBlur = (field: 'name' | 'description' | 'version') => {
+  draftStore.validateGeneral()
+}
+</script>
+
+<template>
+  <div class="general-step">
+    <p class="step-description">
+      Enter the basic information for your collection program. This information helps identify and
+      organize your program.
+    </p>
+
+    <v-form class="general-form">
+      <div class="form-section">
+        <label class="form-label">
+          Program Name
+          <span class="required">*</span>
+        </label>
+        <v-text-field
+          v-model="draftStore.draft.name"
+          placeholder="Enter a descriptive name for your program"
+          :error-messages="draftStore.errors.general.name"
+          variant="outlined"
+          density="comfortable"
+          @blur="onFieldBlur('name')"
+        />
+        <p class="form-hint">
+          This name will be displayed in the program list and used to identify your collection program.
+        </p>
+      </div>
+
+      <div class="form-section">
+        <label class="form-label">
+          Description
+          <span class="required">*</span>
+        </label>
+        <v-textarea
+          v-model="draftStore.draft.description"
+          placeholder="Describe the purpose and scope of this collection program"
+          :error-messages="draftStore.errors.general.description"
+          variant="outlined"
+          density="comfortable"
+          rows="3"
+          auto-grow
+          @blur="onFieldBlur('description')"
+        />
+        <p class="form-hint">
+          Provide a clear description to help users understand what data this program collects.
+        </p>
+      </div>
+
+      <div class="form-section">
+        <label class="form-label">
+          Version
+          <span class="required">*</span>
+        </label>
+        <v-text-field
+          v-model="draftStore.draft.version"
+          placeholder="1.0.0"
+          :error-messages="draftStore.errors.general.version"
+          variant="outlined"
+          density="comfortable"
+          style="max-width: 200px"
+          @blur="onFieldBlur('version')"
+        />
+        <p class="form-hint">
+          Use semantic versioning (e.g., 1.0.0) to track changes to your program configuration.
+        </p>
+      </div>
+    </v-form>
+  </div>
+</template>
+
+<style scoped>
+.general-step {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.step-description {
+  color: rgba(0, 0, 0, 0.6);
+  margin-bottom: 32px;
+  line-height: 1.6;
+}
+
+.general-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.form-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-label {
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: rgba(0, 0, 0, 0.87);
+}
+
+.form-label .required {
+  color: rgb(var(--v-theme-error));
+  margin-left: 2px;
+}
+
+.form-hint {
+  font-size: 0.75rem;
+  color: rgba(0, 0, 0, 0.5);
+  margin: 0;
+  margin-top: -4px;
+}
+</style>
