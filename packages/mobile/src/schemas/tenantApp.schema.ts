@@ -36,7 +36,24 @@ export const TenantAppSchema: RxJsonSchema<TenantAppData> = {
     entityForms: { type: 'array' },
     entityData: { type: 'array' },
     syncServerUrl: { type: 'string', format: 'url' },
-    externalSync: { type: 'object', default: {} }
+    externalSync: { type: 'object', default: {} },
+    trustedIssuers: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          issuerId: { type: 'string' },
+          publicKey: {
+            type: 'object',
+            properties: {
+              ed25519: { type: 'string' },
+              es256: { type: 'string' }
+            }
+          }
+        }
+      },
+      default: []
+    }
   },
   required: [
     'id',

@@ -98,6 +98,18 @@ const dynamicRouter = createRouter({
       path: '/callback',
       name: 'callback',
       component: () => import('@/views/dynamic/auth/AuthScreen.vue')
+    },
+    {
+      path: '/scan-claim169',
+      name: 'scan-claim169',
+      component: () => import('@/components/Claim169Scanner.vue'),
+      meta: { requiresAuth: false }
+    },
+    {
+      path: '/claim169-identity',
+      name: 'claim169-identity',
+      component: () => import('@/views/Claim169IdentityView.vue'),
+      meta: { requiresAuth: false }
     }
   ]
 })

@@ -10,6 +10,7 @@ import { Capacitor } from '@capacitor/core'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { registerIssuerKey } from '@/services/claim169Service'
 
 interface AppStats {
   totalRecords: number
@@ -41,6 +42,14 @@ const isSuccessMessage = ref(false)
 const tenantappsDb = database.tenantapps.find()
 const tenantappsSub = tenantappsDb.$.subscribe((results) => {
   tenantapps.value = results
+  // Register trusted issuers from all tenant apps
+  results.forEach(app => {
+    if (app.trustedIssuers) {
+      app.trustedIssuers.forEach(issuer => {
+        registerIssuerKey(issuer.issuerId, issuer.publicKey)
+      })
+    }
+  })
 })
 
 onMounted(() => {
@@ -317,6 +326,11 @@ const handleClickApp = (appId: string) => {
 const toggleAddOptions = () => {
   showAddOptions.value = !showAddOptions.value
 }
+
+const handleScanIdentity = () => {
+  showAddOptions.value = false
+  router.push({ name: 'scan-claim169' })
+}
 </script>
 
 <template>
@@ -471,6 +485,25 @@ const toggleAddOptions = () => {
             <div>
               <span class="option__title">Select JSON File</span>
               <span class="option__subtitle">Choose a Collection Program JSON file from your device</span>
+            </div>
+          </button>
+
+          <div class="options-divider">
+            <span>or verify identity</span>
+          </div>
+
+          <button class="option option--identity" type="button" @click="handleScanIdentity">
+            <span class="option__icon option__icon--identity" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path
+                  d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+                  fill="currentColor"
+                />
+              </svg>
+            </span>
+            <div>
+              <span class="option__title">Scan Identity QR</span>
+              <span class="option__subtitle">Verify a Claim-169 identity QR code from MOSIP Inji</span>
             </div>
           </button>
         </div>
@@ -751,6 +784,8 @@ const toggleAddOptions = () => {
   bottom: 0;
   transform: translateX(-50%);
   width: min(480px, 100%);
+  max-height: 85vh;
+  overflow-y: auto;
   background: #ffffff;
   border-radius: 24px 24px 0 0;
   padding: 1.5rem;
@@ -920,5 +955,37 @@ const toggleAddOptions = () => {
 .error-close svg {
   width: 18px;
   height: 18px;
+}
+
+.options-divider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0.5rem 0;
+}
+
+.options-divider::before,
+.options-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #e5e7eb;
+}
+
+.options-divider span {
+  font-size: 0.8rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.option--identity {
+  border: 1px solid rgba(147, 51, 234, 0.2);
+  background: rgba(147, 51, 234, 0.04);
+}
+
+.option__icon--identity {
+  background: rgba(147, 51, 234, 0.12);
+  color: #9333ea;
 }
 </style>
