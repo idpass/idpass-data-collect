@@ -4,7 +4,7 @@ import { useProgramDraftStore } from '@/stores/programDraft'
 const draftStore = useProgramDraftStore()
 
 // Validate on blur for immediate feedback
-const onFieldBlur = (field: 'name' | 'description' | 'version') => {
+const onFieldBlur = (_field: 'name' | 'description' | 'version') => {
   draftStore.validateGeneral()
 }
 </script>
@@ -84,38 +84,38 @@ const onFieldBlur = (field: 'name' | 'description' | 'version') => {
 }
 
 .step-description {
-  color: rgba(0, 0, 0, 0.6);
-  margin-bottom: 32px;
-  line-height: 1.6;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-xl);
+  line-height: var(--line-height-relaxed);
 }
 
 .general-form {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--spacing-lg);
 }
 
 .form-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .form-label {
   font-weight: 500;
-  font-size: 0.875rem;
-  color: rgba(0, 0, 0, 0.87);
+  font-size: var(--font-size-sm);
+  color: var(--text-main);
 }
 
 .form-label .required {
-  color: rgb(var(--v-theme-error));
+  color: var(--status-danger);
   margin-left: 2px;
 }
 
 .form-hint {
-  font-size: 0.75rem;
-  color: rgba(0, 0, 0, 0.5);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
   margin: 0;
-  margin-top: -4px;
+  margin-top: calc(-1 * var(--spacing-xs));
 }
 </style>

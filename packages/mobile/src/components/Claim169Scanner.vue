@@ -127,12 +127,10 @@ const handleScan = async () => {
         state: { verifiedIdentity: JSON.stringify(verifiedIdentity) }
       })
     } catch (decodeError) {
-      console.error('Failed to decode Claim-169 QR:', decodeError)
       const errorMsg = decodeError instanceof Error ? decodeError.message : String(decodeError)
       displayError(`Invalid QR code format: ${errorMsg}`)
     }
   } catch (error) {
-    console.error('Scan error:', error)
     const message = error instanceof Error ? error.message : 'Failed to scan QR code'
     displayError(message)
   } finally {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProgramDraftStore } from '@/stores/programDraft'
 import { useSnackBarStore } from '@/stores/snackBar'
@@ -10,9 +10,12 @@ const snackBarStore = useSnackBarStore()
 
 const isSubmitting = computed(() => draftStore.isSaving)
 
-// Validate all steps
-const validationResults = computed(() => {
+// Validate on mount rather than on every render
+onMounted(() => {
   draftStore.validateAll()
+})
+
+const validationResults = computed(() => {
   return {
     general: draftStore.stepValidation.general,
     forms: draftStore.stepValidation.forms,
@@ -267,91 +270,94 @@ const submitProgram = async () => {
 }
 
 .step-description {
-  color: rgba(0, 0, 0, 0.6);
-  margin-bottom: 24px;
-  line-height: 1.6;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-lg);
+  line-height: var(--line-height-relaxed);
 }
 
 .validation-summary {
-  border-radius: 12px;
-  margin-bottom: 24px;
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-lg);
 }
 
 .validation-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
 }
 
 .validation-title {
   font-weight: 600;
+  color: var(--text-main);
 }
 
 .validation-items {
-  padding: 8px;
+  padding: var(--spacing-sm);
 }
 
 .validation-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border-radius: 8px;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color var(--transition-fast);
 }
 
 .validation-item:hover {
-  background-color: rgba(0, 0, 0, 0.04);
+  background-color: var(--neutral-50);
 }
 
 .validation-item--error {
-  background-color: rgba(var(--v-theme-error), 0.05);
+  background-color: var(--status-danger-light);
 }
 
 .validation-item__label {
   flex: 1;
+  color: var(--text-main);
 }
 
 .config-summary {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-bottom: 32px;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-xl);
 }
 
 .summary-card {
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
 }
 
 .summary-card__header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
   cursor: pointer;
 }
 
 .summary-card__header:hover {
-  background-color: rgba(0, 0, 0, 0.02);
+  background-color: var(--neutral-50);
 }
 
 .summary-card__header h3 {
-  font-size: 0.875rem;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   margin: 0;
+  color: var(--text-main);
 }
 
 .summary-card__body {
-  padding: 16px;
+  padding: var(--spacing-md);
 }
 
 .summary-field {
   display: flex;
   justify-content: space-between;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  padding: var(--spacing-sm) 0;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .summary-field:last-child {
@@ -359,36 +365,37 @@ const submitProgram = async () => {
 }
 
 .summary-field__label {
-  font-size: 0.875rem;
-  color: rgba(0, 0, 0, 0.6);
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
 }
 
 .summary-field__value {
-  font-size: 0.875rem;
+  font-size: var(--font-size-sm);
   font-weight: 500;
   text-align: right;
   max-width: 60%;
   word-break: break-word;
+  color: var(--text-main);
 }
 
 .summary-empty {
-  color: rgba(0, 0, 0, 0.5);
-  font-size: 0.875rem;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
   font-style: italic;
 }
 
 .entity-forms-summary {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .entity-form-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  padding: var(--spacing-sm) 0;
+  border-bottom: 1px solid var(--border-light);
 }
 
 .entity-form-item:last-child {
@@ -403,25 +410,26 @@ const submitProgram = async () => {
 
 .entity-form-item__name {
   font-weight: 500;
+  color: var(--text-main);
 }
 
 .entity-form-item__depends {
-  font-size: 0.75rem;
-  color: rgba(0, 0, 0, 0.5);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
 }
 
 .auth-config-summary {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 0;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) 0;
 }
 
 .submit-section {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 16px;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-light);
 }
 </style>

@@ -19,6 +19,7 @@
 
 import { useAuthStore } from '@/stores/auth'
 import { useProgramDraftStore } from '@/stores/programDraft'
+import { useSnackBarStore } from '@/stores/snackBar'
 import { createRouter, createWebHistory } from 'vue-router'
 import AppManagerView from '../views/AppManagerView.vue'
 
@@ -140,19 +141,23 @@ router.beforeEach(async (to, from, next) => {
     const isEnteringWizard = !from.path.startsWith('/programs/wizard')
 
     if (isEnteringWizard) {
-      // Check for mode and id in query params (from redirects)
       const mode = to.query.mode as string | undefined
       const id = to.query.id as string | undefined
 
-      if (mode === 'edit' && id) {
-        await draftStore.initEditDraft(id)
-      } else if (mode === 'copy' && id) {
-        await draftStore.initCopyDraft(id)
-      } else if (draftStore.hasRecoverableDraft) {
-        // Offer to recover existing draft (handled in component)
-        draftStore.loadDraftFromStorage()
-      } else {
-        draftStore.initNewDraft()
+      try {
+        if (mode === 'edit' && id) {
+          await draftStore.initEditDraft(id)
+        } else if (mode === 'copy' && id) {
+          await draftStore.initCopyDraft(id)
+        } else {
+          // Initialize empty draft but preserve storage so WizardLayout can check for recovery
+          draftStore.initNewDraft(false)
+        }
+      } catch {
+        const snackBarStore = useSnackBarStore()
+        snackBarStore.showSnackbar('Failed to load collection program configuration', 'error')
+        next({ name: 'home' })
+        return
       }
     }
   }

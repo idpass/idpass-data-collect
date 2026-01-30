@@ -112,9 +112,6 @@ const navigateToStep = (step: StepDef) => {
 }
 
 const goBack = () => {
-  if (draftStore.isDirty) {
-    // Could show a confirmation dialog here
-  }
   draftStore.clearDraftFromStorage()
   router.push('/')
 }
@@ -271,16 +268,17 @@ const lastSavedText = computed(() => {
   display: flex;
   flex-direction: column;
   min-height: calc(100vh - 64px);
+  background: var(--background);
 }
 
 /* Top Bar */
 .wizard-topbar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 8px 24px;
-  background: rgba(0, 0, 0, 0.02);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  background: var(--neutral-50);
+  border-bottom: 1px solid var(--border-light);
   flex-shrink: 0;
 }
 
@@ -289,13 +287,14 @@ const lastSavedText = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 24px;
+  gap: var(--spacing-lg);
 }
 
 .wizard-topbar__title {
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: var(--font-size-sm);
   white-space: nowrap;
+  color: var(--text-main);
 }
 
 .wizard-topbar__right {
@@ -306,50 +305,50 @@ const lastSavedText = computed(() => {
 .wizard-topbar__saved {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 0.7rem;
-  color: rgba(0, 0, 0, 0.5);
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
 }
 
 /* Inline Steps */
 .wizard-steps-inline {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--spacing-xs);
 }
 
 .step-dot {
   width: 24px;
   height: 24px;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s;
-  font-size: 0.65rem;
+  transition: all var(--transition-fast);
+  font-size: var(--font-size-xs);
   font-weight: 600;
 }
 
 .step-dot--pending {
-  background: rgba(0, 0, 0, 0.08);
-  color: rgba(0, 0, 0, 0.4);
+  background: var(--neutral-100);
+  color: var(--neutral-400);
 }
 
 .step-dot--current {
-  background: rgb(var(--v-theme-primary));
-  color: white;
-  box-shadow: 0 0 0 3px rgba(var(--v-theme-primary), 0.2);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  box-shadow: 0 0 0 3px rgba(44, 62, 80, 0.2);
 }
 
 .step-dot--complete {
-  background: rgb(var(--v-theme-success));
-  color: white;
+  background: var(--status-success);
+  color: var(--text-inverted);
 }
 
 .step-dot--error {
-  background: rgb(var(--v-theme-error));
-  color: white;
+  background: var(--status-danger);
+  color: var(--text-inverted);
 }
 
 .step-dot:hover {
@@ -363,7 +362,7 @@ const lastSavedText = computed(() => {
 .step-connector {
   width: 20px;
   height: 2px;
-  background: rgba(0, 0, 0, 0.12);
+  background: var(--border-light);
 }
 
 /* Main Body */
@@ -371,7 +370,7 @@ const lastSavedText = computed(() => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 0 24px 24px;
+  padding: 0 var(--spacing-lg) var(--spacing-lg);
   max-width: 100%;
   overflow-x: hidden;
 }
@@ -379,16 +378,17 @@ const lastSavedText = computed(() => {
 .wizard-step-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 16px 0 12px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-  margin-bottom: 16px;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) 0 var(--spacing-sm);
+  border-bottom: 1px solid var(--border-light);
+  margin-bottom: var(--spacing-md);
 }
 
 .wizard-step-title h2 {
-  font-size: 1rem;
+  font-size: var(--font-size-base);
   font-weight: 600;
   margin: 0;
+  color: var(--text-main);
 }
 
 .wizard-step-content {
@@ -399,23 +399,23 @@ const lastSavedText = computed(() => {
 .wizard-footer {
   display: flex;
   align-items: center;
-  padding: 16px 0;
+  padding: var(--spacing-md) 0;
   margin-top: auto;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  border-top: 1px solid var(--border-light);
 }
 
 /* Responsive */
 @media (max-width: 768px) {
   .wizard-topbar {
     flex-wrap: wrap;
-    padding: 8px 16px;
+    padding: var(--spacing-sm) var(--spacing-md);
   }
 
   .wizard-topbar__center {
     order: 3;
     width: 100%;
     justify-content: center;
-    padding-top: 8px;
+    padding-top: var(--spacing-sm);
   }
 
   .wizard-topbar__title {
@@ -423,7 +423,7 @@ const lastSavedText = computed(() => {
   }
 
   .wizard-body {
-    padding: 0 16px 16px;
+    padding: 0 var(--spacing-md) var(--spacing-md);
   }
 
   .step-connector {

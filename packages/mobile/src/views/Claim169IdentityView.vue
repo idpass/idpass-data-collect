@@ -18,15 +18,35 @@
  * under the License.
  */
 
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import type { VerifiedIdentity } from '@/services/claim169Service'
-import { genderToString, imageFormatToMimeType } from '@/services/claim169Service'
+import { genderToString, imageFormatToMimeType, mapClaim169ToEntityData } from '@/services/claim169Service'
+import { normalizePhotoBytes, photoToDataUrl } from '@/utils/photoUtils'
+import { useDatabase } from '@/database'
+import { initStore, store } from '@/store'
+import { TenantAppData } from '@/schemas/tenantApp.schema'
+import { SyncLevel } from '@idpass/data-collect-core'
+import { v4 as uuidv4 } from 'uuid'
 
 const router = useRouter()
+const database = useDatabase()
 
 const verifiedIdentity = ref<VerifiedIdentity | null>(null)
 const showRawData = ref(false)
+const tenantApps = ref<TenantAppData[]>([])
+const showAppSelector = ref(false)
+const isSaving = ref(false)
+const saveError = ref('')
+
+// Subscribe to available tenant apps for the "Save to Records" feature
+const tenantAppsSub = database.tenantapps.find().$.subscribe((results: TenantAppData[]) => {
+  tenantApps.value = results
+})
+
+onUnmounted(() => {
+  tenantAppsSub.unsubscribe()
+})
 
 onMounted(() => {
   // Get the verified identity from router state
@@ -50,33 +70,10 @@ const cwt = computed(() => verifiedIdentity.value?.cwt)
 
 const photoUrl = computed(() => {
   if (!identity.value?.photo) return null
-  const photo = identity.value.photo
-  // Handle both Uint8Array and regular array (from JSON serialization)
-  let bytes: Uint8Array
-  if (photo instanceof Uint8Array) {
-    bytes = photo
-  } else if (typeof photo === 'object' && photo !== null) {
-    // JSON serialization converts Uint8Array to object with numeric keys
-    const photoObj = photo as unknown as Record<string, unknown>
-    const values = Object.keys(photoObj)
-      .filter(k => !isNaN(Number(k)))
-      .sort((a, b) => Number(a) - Number(b))
-      .map(k => Number(photoObj[k]))
-    bytes = new Uint8Array(values)
-  } else {
-    return null
-  }
+  const bytes = normalizePhotoBytes(identity.value.photo)
+  if (!bytes) return null
   const mimeType = imageFormatToMimeType(identity.value.photoFormat)
-  let binary = ''
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i])
-  }
-  const base64 = btoa(binary)
-  return `data:${mimeType};base64,${base64}`
-})
-
-const formattedDateOfBirth = computed(() => {
-  return identity.value?.dateOfBirth
+  return photoToDataUrl(bytes, mimeType)
 })
 
 const formattedGender = computed(() => {
@@ -93,10 +90,6 @@ const formattedExpiration = computed(() => {
   return new Date(cwt.value.expiresAt * 1000).toLocaleDateString()
 })
 
-const fullAddress = computed(() => {
-  return identity.value?.address || null
-})
-
 const handleBack = () => {
   router.back()
 }
@@ -105,9 +98,58 @@ const handleScanAnother = () => {
   router.push({ name: 'scan-claim169' })
 }
 
+const isSaved = ref(false)
+
+const saveToApp = async (app: TenantAppData) => {
+  if (!verifiedIdentity.value) return
+
+  isSaving.value = true
+  saveError.value = ''
+  showAppSelector.value = false
+
+  try {
+    await initStore(app.id, app.syncServerUrl)
+
+    const entityData = mapClaim169ToEntityData(verifiedIdentity.value)
+
+    await store.submitForm({
+      guid: uuidv4(),
+      entityGuid: entityData.guid,
+      type: 'create-individual',
+      data: {
+        ...entityData,
+        name: entityData.fullName || entityData.guid
+      },
+      timestamp: new Date().toISOString(),
+      userId: 'admin',
+      syncLevel: SyncLevel.LOCAL
+    })
+
+    isSaved.value = true
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to save identity record'
+    saveError.value = message
+  } finally {
+    isSaving.value = false
+  }
+}
+
 const handleSaveToRecords = () => {
-  // TODO: Implement saving to local records
-  console.log('Save to records:', verifiedIdentity.value)
+  if (!verifiedIdentity.value) return
+  saveError.value = ''
+
+  if (tenantApps.value.length === 0) {
+    saveError.value = 'No collection programs available. Add a program first.'
+    return
+  }
+
+  if (tenantApps.value.length === 1) {
+    saveToApp(tenantApps.value[0])
+    return
+  }
+
+  // Multiple apps: show selector
+  showAppSelector.value = true
 }
 
 const toggleRawData = () => {
@@ -206,9 +248,9 @@ const toggleRawData = () => {
             <span class="info-label">Last Name</span>
             <span class="info-value">{{ identity.lastName }}</span>
           </div>
-          <div v-if="formattedDateOfBirth" class="info-item">
+          <div v-if="identity?.dateOfBirth" class="info-item">
             <span class="info-label">Date of Birth</span>
-            <span class="info-value">{{ formattedDateOfBirth }}</span>
+            <span class="info-value">{{ identity.dateOfBirth }}</span>
           </div>
           <div v-if="formattedGender" class="info-item">
             <span class="info-label">Gender</span>
@@ -222,7 +264,7 @@ const toggleRawData = () => {
       </section>
 
       <!-- Contact Information -->
-      <section v-if="identity?.phone || identity?.email || fullAddress" class="info-section">
+      <section v-if="identity?.phone || identity?.email || identity?.address" class="info-section">
         <h3>Contact Information</h3>
         <div class="info-grid">
           <div v-if="identity?.phone" class="info-item">
@@ -233,9 +275,9 @@ const toggleRawData = () => {
             <span class="info-label">Email</span>
             <span class="info-value">{{ identity.email }}</span>
           </div>
-          <div v-if="fullAddress" class="info-item full-width">
+          <div v-if="identity?.address" class="info-item full-width">
             <span class="info-label">Address</span>
-            <span class="info-value">{{ fullAddress }}</span>
+            <span class="info-value">{{ identity.address }}</span>
           </div>
         </div>
       </section>
@@ -284,13 +326,53 @@ const toggleRawData = () => {
         <pre>{{ JSON.stringify(verifiedIdentity, null, 2) }}</pre>
       </div>
 
+      <!-- Save Error -->
+      <div v-if="saveError" class="save-error">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path
+            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
+            fill="currentColor"
+          />
+        </svg>
+        <span>{{ saveError }}</span>
+      </div>
+
       <!-- Actions -->
       <div class="actions">
         <button class="action-button secondary" type="button" @click="handleScanAnother">
           Scan Another
         </button>
-        <button class="action-button primary" type="button" @click="handleSaveToRecords">
-          Save to Records
+        <button
+          class="action-button primary"
+          type="button"
+          :disabled="isSaved || isSaving"
+          @click="handleSaveToRecords"
+        >
+          <span v-if="isSaving" class="btn-spinner"></span>
+          {{ isSaved ? 'Saved' : isSaving ? 'Saving...' : 'Save to Records' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- App Selector Modal -->
+    <div v-if="showAppSelector" class="app-selector-overlay" @click.self="showAppSelector = false">
+      <div class="app-selector-card">
+        <h3>Select Program</h3>
+        <p>Choose a collection program to save this record to:</p>
+        <div class="app-list">
+          <button
+            v-for="app in tenantApps"
+            :key="app.id"
+            class="app-item"
+            type="button"
+            @click="saveToApp(app)"
+          >
+            <span class="app-item-name">{{ app.name }}</span>
+            <span v-if="app.description" class="app-item-desc">{{ app.description }}</span>
+          </button>
+        </div>
+        <button class="app-selector-cancel" type="button" @click="showAppSelector = false">
+          Cancel
         </button>
       </div>
     </div>
@@ -566,6 +648,13 @@ const toggleRawData = () => {
   box-shadow: 0 10px 30px rgba(79, 70, 229, 0.3);
 }
 
+.action-button.primary:disabled {
+  background: var(--status-success, #2D8A56);
+  opacity: 0.85;
+  box-shadow: none;
+  cursor: default;
+}
+
 .action-button.secondary {
   background: #f3f4f6;
   color: #374151;
@@ -598,5 +687,117 @@ const toggleRawData = () => {
 .loading p {
   color: #6b7280;
   font-size: 0.95rem;
+}
+
+.save-error {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #fee2e2;
+  border-radius: 10px;
+  color: #991b1b;
+  font-size: 0.9rem;
+}
+
+.save-error svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.btn-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin-right: 0.5rem;
+}
+
+.app-selector-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+
+.app-selector-card {
+  background: #ffffff;
+  border-radius: 18px 18px 14px 14px;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 480px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-selector-card h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 0.25rem;
+}
+
+.app-selector-card p {
+  font-size: 0.9rem;
+  color: #6b7280;
+  margin-bottom: 1rem;
+}
+
+.app-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+}
+
+.app-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 0.875rem 1rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.app-item:active {
+  background: #eff6ff;
+  border-color: #2563eb;
+}
+
+.app-item-name {
+  font-weight: 600;
+  color: #1f2937;
+  font-size: 0.95rem;
+}
+
+.app-item-desc {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.app-selector-cancel {
+  width: 100%;
+  padding: 0.75rem;
+  background: transparent;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  color: #6b7280;
+  cursor: pointer;
 }
 </style>

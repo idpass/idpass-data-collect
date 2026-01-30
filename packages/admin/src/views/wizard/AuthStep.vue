@@ -129,9 +129,9 @@ const removeAuthConfig = (index: number) => {
 }
 
 .step-description {
-  color: rgba(0, 0, 0, 0.6);
-  margin-bottom: 32px;
-  line-height: 1.6;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-xl);
+  line-height: var(--line-height-relaxed);
 }
 
 .empty-state {
@@ -139,31 +139,32 @@ const removeAuthConfig = (index: number) => {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 48px 24px;
-  background: rgba(0, 0, 0, 0.02);
-  border-radius: 12px;
+  padding: var(--spacing-2xl) var(--spacing-lg);
+  background: var(--neutral-50);
+  border-radius: var(--radius-lg);
 }
 
 .empty-state h3 {
-  margin: 16px 0 8px;
-  font-size: 1.125rem;
+  margin: var(--spacing-md) 0 var(--spacing-sm);
+  font-size: var(--font-size-lg);
   font-weight: 600;
+  color: var(--text-main);
 }
 
 .empty-state p {
-  color: rgba(0, 0, 0, 0.6);
-  margin-bottom: 24px;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-lg);
   max-width: 400px;
 }
 
 .auth-configs-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--spacing-md);
 }
 
 .auth-config-card {
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
@@ -171,43 +172,43 @@ const removeAuthConfig = (index: number) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  background: rgba(0, 0, 0, 0.02);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--neutral-50);
 }
 
 .auth-config-header__info {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-sm);
 }
 
 .auth-config-body {
-  padding: 16px;
+  padding: var(--spacing-md);
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: var(--spacing-lg);
 }
 
 .form-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .form-label {
   font-weight: 500;
-  font-size: 0.875rem;
-  color: rgba(0, 0, 0, 0.87);
+  font-size: var(--font-size-sm);
+  color: var(--text-main);
 }
 
 .form-label .required {
-  color: rgb(var(--v-theme-error));
+  color: var(--status-danger);
   margin-left: 2px;
 }
 
 .form-hint {
-  font-size: 0.75rem;
-  color: rgba(0, 0, 0, 0.5);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
   margin: 0;
 }
 

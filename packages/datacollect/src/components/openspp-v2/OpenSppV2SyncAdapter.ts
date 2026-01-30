@@ -33,7 +33,6 @@ import type {
   IndividualResource,
   HumanName,
   CodeableConcept,
-  ContactPoint,
   Extension,
 } from "./types";
 import { createTransformer, type TransformerType } from "../../utils/fieldTransformers";

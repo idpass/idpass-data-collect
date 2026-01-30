@@ -198,14 +198,16 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
     }
   }
 
-  const initNewDraft = () => {
+  const initNewDraft = (clearStorage = true) => {
     draft.value = getEmptyDraft()
     errors.value = getEmptyErrors()
     mode.value = 'create'
     editingId.value = null
     isDirty.value = false
     lastSavedAt.value = null
-    clearDraftFromStorage()
+    if (clearStorage) {
+      clearDraftFromStorage()
+    }
   }
 
   const initEditDraft = async (id: string) => {

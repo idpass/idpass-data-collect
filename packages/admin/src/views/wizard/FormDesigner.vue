@@ -146,40 +146,41 @@ const cancel = () => {
   flex-direction: column;
   height: calc(100vh - 180px);
   min-height: 500px;
-  margin: -16px -24px -24px;
+  margin: calc(-1 * var(--spacing-md)) calc(-1 * var(--spacing-lg)) calc(-1 * var(--spacing-lg));
 }
 
 .designer-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-  background: white;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--border-light);
+  background: var(--surface);
 }
 
 .designer-header__info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .designer-header__info h2 {
-  font-size: 1rem;
+  font-size: var(--font-size-base);
   font-weight: 600;
   margin: 0;
+  color: var(--text-main);
 }
 
 .designer-header__info p {
-  font-size: 0.75rem;
-  color: rgba(0, 0, 0, 0.5);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
   margin: 0;
 }
 
 .designer-header__actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .designer-content {

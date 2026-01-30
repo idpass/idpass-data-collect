@@ -1,0 +1,540 @@
+/*
+ * Licensed to the Association pour la cooperation numerique (ACN) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ACN licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+/**
+ * Bootstrap Overrides - Humanitarian Tech Theme
+ * Aligns Bootstrap 4.6 components with ID PASS brand guidelines
+ */
+
+/* Primary Button - Brand Orange with dark text for accessibility */
+.btn-primary {
+  background-color: var(--brand) !important;
+  border-color: var(--brand) !important;
+  color: var(--text-main) !important;
+  min-height: var(--touch-target);
+  font-weight: 500;
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+  background-color: var(--brand-light) !important;
+  border-color: var(--brand-light) !important;
+  color: var(--text-main) !important;
+}
+
+.btn-primary:active,
+.btn-primary.active {
+  background-color: var(--brand-dark) !important;
+  border-color: var(--brand-dark) !important;
+}
+
+.btn-primary:focus {
+  box-shadow: var(--focus-ring) !important;
+}
+
+.btn-primary:disabled,
+.btn-primary.disabled {
+  background-color: var(--brand) !important;
+  border-color: var(--brand) !important;
+  opacity: 0.5;
+}
+
+/* Secondary Button - Slate Blue (Trust) */
+.btn-secondary {
+  background-color: var(--primary) !important;
+  border-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+  min-height: var(--touch-target);
+  font-weight: 500;
+}
+
+.btn-secondary:hover,
+.btn-secondary:focus {
+  background-color: var(--primary-light) !important;
+  border-color: var(--primary-light) !important;
+}
+
+.btn-secondary:active,
+.btn-secondary.active {
+  background-color: var(--primary-dark) !important;
+  border-color: var(--primary-dark) !important;
+}
+
+.btn-secondary:focus {
+  box-shadow: var(--focus-ring) !important;
+}
+
+/* Outline Buttons */
+.btn-outline-primary {
+  color: var(--primary) !important;
+  border-color: var(--primary) !important;
+  background-color: transparent !important;
+  min-height: var(--touch-target);
+}
+
+.btn-outline-primary:hover,
+.btn-outline-primary:focus {
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+}
+
+/* Success Button */
+.btn-success {
+  background-color: var(--status-success) !important;
+  border-color: var(--status-success) !important;
+  min-height: var(--touch-target);
+}
+
+.btn-success:hover,
+.btn-success:focus {
+  background-color: var(--status-success-dark) !important;
+  border-color: var(--status-success-dark) !important;
+}
+
+/* Danger Button */
+.btn-danger {
+  background-color: var(--status-danger) !important;
+  border-color: var(--status-danger) !important;
+  min-height: var(--touch-target);
+}
+
+.btn-danger:hover,
+.btn-danger:focus {
+  background-color: var(--status-danger-dark) !important;
+  border-color: var(--status-danger-dark) !important;
+}
+
+/* Warning Button */
+.btn-warning {
+  background-color: var(--status-warning) !important;
+  border-color: var(--status-warning) !important;
+  color: var(--text-inverted) !important;
+  min-height: var(--touch-target);
+}
+
+.btn-warning:hover,
+.btn-warning:focus {
+  background-color: var(--status-warning-dark) !important;
+  border-color: var(--status-warning-dark) !important;
+}
+
+/* Info Button */
+.btn-info {
+  background-color: var(--status-info) !important;
+  border-color: var(--status-info) !important;
+  min-height: var(--touch-target);
+}
+
+.btn-info:hover,
+.btn-info:focus {
+  background-color: var(--status-info-dark) !important;
+  border-color: var(--status-info-dark) !important;
+}
+
+/* Light Button */
+.btn-light {
+  background-color: var(--neutral-100) !important;
+  border-color: var(--neutral-100) !important;
+  color: var(--text-main) !important;
+  min-height: var(--touch-target);
+}
+
+.btn-light:hover,
+.btn-light:focus {
+  background-color: var(--neutral-200) !important;
+  border-color: var(--neutral-200) !important;
+}
+
+/* Text Colors */
+.text-primary {
+  color: var(--primary) !important;
+}
+
+.text-secondary {
+  color: var(--text-muted) !important;
+}
+
+.text-success {
+  color: var(--status-success) !important;
+}
+
+.text-danger {
+  color: var(--status-danger) !important;
+}
+
+.text-warning {
+  color: var(--status-warning) !important;
+}
+
+.text-info {
+  color: var(--status-info) !important;
+}
+
+.text-muted {
+  color: var(--text-muted) !important;
+}
+
+/* Background Colors */
+.bg-primary {
+  background-color: var(--primary) !important;
+}
+
+.bg-secondary {
+  background-color: var(--secondary) !important;
+}
+
+.bg-success {
+  background-color: var(--status-success) !important;
+}
+
+.bg-danger {
+  background-color: var(--status-danger) !important;
+}
+
+.bg-warning {
+  background-color: var(--status-warning) !important;
+}
+
+.bg-info {
+  background-color: var(--status-info) !important;
+}
+
+.bg-light {
+  background-color: var(--neutral-50) !important;
+}
+
+/* Border Colors */
+.border-primary {
+  border-color: var(--primary) !important;
+}
+
+.border-secondary {
+  border-color: var(--border-default) !important;
+}
+
+.border-success {
+  border-color: var(--status-success) !important;
+}
+
+.border-danger {
+  border-color: var(--status-danger) !important;
+}
+
+.border-warning {
+  border-color: var(--status-warning) !important;
+}
+
+.border-info {
+  border-color: var(--status-info) !important;
+}
+
+/* Alerts */
+.alert-primary {
+  background-color: var(--brand-100) !important;
+  border-color: var(--brand) !important;
+  color: var(--brand-dark) !important;
+}
+
+.alert-secondary {
+  background-color: var(--neutral-100) !important;
+  border-color: var(--neutral-200) !important;
+  color: var(--text-main) !important;
+}
+
+.alert-success {
+  background-color: var(--status-success-light) !important;
+  border-color: var(--status-success) !important;
+  color: var(--status-success) !important;
+}
+
+.alert-danger {
+  background-color: var(--status-danger-light) !important;
+  border-color: var(--status-danger) !important;
+  color: var(--status-danger) !important;
+}
+
+.alert-warning {
+  background-color: var(--status-warning-light) !important;
+  border-color: var(--status-warning) !important;
+  color: var(--status-warning) !important;
+}
+
+.alert-info {
+  background-color: var(--status-info-light) !important;
+  border-color: var(--status-info) !important;
+  color: var(--status-info) !important;
+}
+
+/* Badges */
+.badge-primary {
+  background-color: var(--primary) !important;
+}
+
+.badge-secondary {
+  background-color: var(--neutral-400) !important;
+}
+
+.badge-success {
+  background-color: var(--status-success) !important;
+}
+
+.badge-danger {
+  background-color: var(--status-danger) !important;
+}
+
+.badge-warning {
+  background-color: var(--status-warning) !important;
+  color: var(--text-inverted) !important;
+}
+
+.badge-info {
+  background-color: var(--status-info) !important;
+}
+
+/* Cards */
+.card {
+  border-color: var(--border-light) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-card) !important;
+}
+
+.card-header {
+  background-color: var(--neutral-50) !important;
+  border-bottom-color: var(--border-light) !important;
+}
+
+.card-footer {
+  background-color: var(--neutral-50) !important;
+  border-top-color: var(--border-light) !important;
+}
+
+/* Form Controls */
+.form-control {
+  border-color: var(--border-default) !important;
+  border-radius: var(--radius-default) !important;
+  min-height: var(--touch-target) !important;
+  font-family: var(--font-family) !important;
+}
+
+.form-control:focus {
+  border-color: var(--brand) !important;
+  box-shadow: var(--focus-ring) !important;
+}
+
+.form-control::placeholder {
+  color: var(--text-muted) !important;
+}
+
+/* Custom Select */
+.custom-select {
+  border-color: var(--border-default) !important;
+  border-radius: var(--radius-default) !important;
+  min-height: var(--touch-target) !important;
+}
+
+.custom-select:focus {
+  border-color: var(--brand) !important;
+  box-shadow: var(--focus-ring) !important;
+}
+
+/* Input Groups */
+.input-group-text {
+  background-color: var(--neutral-50) !important;
+  border-color: var(--border-default) !important;
+}
+
+/* Navbar */
+.navbar-light {
+  background-color: var(--surface) !important;
+}
+
+.navbar-light .navbar-brand {
+  color: var(--text-main) !important;
+}
+
+.navbar-light .navbar-nav .nav-link {
+  color: var(--text-muted) !important;
+}
+
+.navbar-light .navbar-nav .nav-link:hover,
+.navbar-light .navbar-nav .nav-link:focus {
+  color: var(--primary) !important;
+}
+
+.navbar-light .navbar-nav .nav-link.active {
+  color: var(--primary) !important;
+}
+
+/* List Groups */
+.list-group-item {
+  border-color: var(--border-light) !important;
+}
+
+.list-group-item.active {
+  background-color: var(--primary) !important;
+  border-color: var(--primary) !important;
+}
+
+.list-group-item-action:hover,
+.list-group-item-action:focus {
+  background-color: var(--neutral-50) !important;
+}
+
+/* Modals */
+.modal-content {
+  border-radius: var(--radius-xl) !important;
+  border: none !important;
+  box-shadow: var(--shadow-modal) !important;
+}
+
+.modal-header {
+  border-bottom-color: var(--border-light) !important;
+}
+
+.modal-footer {
+  border-top-color: var(--border-light) !important;
+}
+
+/* Dropdowns */
+.dropdown-menu {
+  border-color: var(--border-light) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-floating) !important;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+  background-color: var(--neutral-50) !important;
+}
+
+.dropdown-item.active,
+.dropdown-item:active {
+  background-color: var(--primary) !important;
+}
+
+/* Tables */
+.table {
+  color: var(--text-main) !important;
+}
+
+.table thead th {
+  border-bottom-color: var(--border-default) !important;
+  color: var(--text-muted) !important;
+}
+
+.table td,
+.table th {
+  border-top-color: var(--border-light) !important;
+}
+
+.table-hover tbody tr:hover {
+  background-color: var(--neutral-50) !important;
+}
+
+.table-striped tbody tr:nth-of-type(odd) {
+  background-color: var(--neutral-50) !important;
+}
+
+/* Pagination */
+.page-link {
+  color: var(--primary) !important;
+  border-color: var(--border-light) !important;
+  min-width: var(--touch-target) !important;
+  min-height: var(--touch-target) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.page-link:hover {
+  color: var(--brand) !important;
+  background-color: var(--neutral-50) !important;
+}
+
+.page-item.active .page-link {
+  background-color: var(--primary) !important;
+  border-color: var(--primary) !important;
+}
+
+.page-item.disabled .page-link {
+  color: var(--text-muted) !important;
+}
+
+/* Progress Bars */
+.progress {
+  background-color: var(--neutral-100) !important;
+  border-radius: var(--radius-full) !important;
+}
+
+.progress-bar {
+  background-color: var(--brand) !important;
+}
+
+.bg-success .progress-bar,
+.progress-bar.bg-success {
+  background-color: var(--status-success) !important;
+}
+
+.bg-danger .progress-bar,
+.progress-bar.bg-danger {
+  background-color: var(--status-danger) !important;
+}
+
+.bg-warning .progress-bar,
+.progress-bar.bg-warning {
+  background-color: var(--status-warning) !important;
+}
+
+.bg-info .progress-bar,
+.progress-bar.bg-info {
+  background-color: var(--status-info) !important;
+}
+
+/* Spinners */
+.spinner-border {
+  color: var(--brand) !important;
+}
+
+.spinner-border.text-primary {
+  color: var(--primary) !important;
+}
+
+/* Links */
+a {
+  color: var(--primary);
+}
+
+a:hover {
+  color: var(--brand);
+}
+
+/* Focus States - Accessibility */
+.btn:focus,
+.form-control:focus,
+.custom-select:focus,
+.page-link:focus {
+  outline: none !important;
+}
+
+/* Ensure all interactive elements have visible focus */
+*:focus-visible {
+  outline: none !important;
+  box-shadow: var(--focus-ring) !important;
+}

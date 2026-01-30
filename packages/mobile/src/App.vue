@@ -27,19 +27,19 @@ const { isOffline } = useNetworkStatus()
 <style scoped>
 .app-shell {
   min-height: 100vh;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, #f2f4f8 100%);
-  color: var(--color-text);
+  background: linear-gradient(180deg, var(--surface) 0%, var(--background) 100%);
+  color: var(--text-main);
 }
 
 .app-content {
-  padding: 1.5rem 1rem 3.5rem;
+  padding: var(--spacing-lg) var(--spacing-md) var(--spacing-2xl);
   max-width: 480px;
   margin: 0 auto;
 }
 
 @media (min-width: 768px) {
   .app-content {
-    padding: 2rem 0 4rem;
+    padding: var(--spacing-xl) 0 var(--spacing-2xl);
   }
 }
 
@@ -49,25 +49,25 @@ const { isOffline } = useNetworkStatus()
   z-index: 100;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.875rem 1rem;
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  border-bottom: 1px solid rgba(234, 179, 8, 0.2);
-  color: #92400e;
-  font-size: 0.875rem;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: linear-gradient(135deg, var(--status-warning-light) 0%, #fde68a 100%);
+  border-bottom: 1px solid var(--status-warning);
+  color: var(--status-warning);
+  font-size: var(--font-size-sm);
   font-weight: 500;
-  box-shadow: 0 2px 8px rgba(234, 179, 8, 0.15);
+  box-shadow: var(--shadow-subtle);
 }
 
 .offline-banner__icon {
   width: 18px;
   height: 18px;
   flex-shrink: 0;
-  color: #f59e0b;
+  color: var(--status-warning);
 }
 
 .offline-banner__text {
   flex: 1;
-  line-height: 1.4;
+  line-height: var(--line-height-normal);
 }
 </style>

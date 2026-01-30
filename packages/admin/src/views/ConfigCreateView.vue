@@ -1104,27 +1104,28 @@ const goBack = () => {
 <style scoped>
 .config-create {
   max-width: 900px;
-  padding-bottom: 64px;
+  padding-bottom: var(--spacing-2xl);
 }
 
 .config-header {
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-lg);
 }
 
 .config-title {
-  font-size: 1.75rem;
+  font-size: var(--font-size-3xl);
   font-weight: 600;
-  margin: 0 0 8px;
+  margin: 0 0 var(--spacing-sm);
+  color: var(--text-main);
 }
 
 .config-subtitle {
-  font-size: 0.95rem;
-  color: rgba(0, 0, 0, 0.6);
+  font-size: var(--font-size-base);
+  color: var(--text-muted);
   margin: 0;
 }
 
 .method-card {
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
@@ -1133,30 +1134,31 @@ const goBack = () => {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 24px 0;
+  padding: var(--spacing-lg) 0;
   max-width: 500px;
   margin: 0 auto;
 }
 
 .import-title {
-  font-size: 1.25rem;
+  font-size: var(--font-size-xl);
   font-weight: 600;
-  margin: 0 0 8px;
+  margin: 0 0 var(--spacing-sm);
+  color: var(--text-main);
 }
 
 .import-description {
-  font-size: 0.95rem;
-  color: rgba(0, 0, 0, 0.6);
+  font-size: var(--font-size-base);
+  color: var(--text-muted);
   margin: 0;
 }
 
 .config-form-card {
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
 .config-form-tabs {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .config-form-window {
@@ -1169,8 +1171,8 @@ const goBack = () => {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 48px 24px;
-  color: rgba(0, 0, 0, 0.6);
+  padding: var(--spacing-2xl) var(--spacing-lg);
+  color: var(--text-muted);
 }
 
 .entity-forms-list {
@@ -1179,6 +1181,6 @@ const goBack = () => {
 }
 
 .auth-config-item {
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-md);
 }
 </style>

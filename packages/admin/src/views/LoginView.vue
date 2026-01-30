@@ -85,7 +85,7 @@ const handleLogin = async () => {
 
 <style scoped>
 .login-container {
-  background-color: #f5f5f5;
+  background-color: var(--background);
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -96,5 +96,7 @@ const handleLogin = async () => {
   width: 100%;
   max-width: 450px;
   margin: 0 auto;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
 }
 </style>

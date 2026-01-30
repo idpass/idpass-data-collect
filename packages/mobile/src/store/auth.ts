@@ -100,7 +100,6 @@ export const useAuthStore = defineStore('auth', () => {
     let userId = userIds.value[server]
     let fullSyncServerUrl = fullSyncServerUrls.value[server]
 
-    console.log('getSyncServerAuth', appId, server, token, userId, fullSyncServerUrl)
     if (!token) {
       token = localStorage.getItem(`syncServerToken_${server}`)
       setSyncServerToken(server, token)

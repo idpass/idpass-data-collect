@@ -5,6 +5,7 @@ import { useProgramDraftStore } from '@/stores/programDraft'
 import { useSnackBarStore } from '@/stores/snackBar'
 import type { ParsedOpenSppField, FieldMapping } from '@/api'
 import OpenSppFieldInputDialog from '@/components/OpenSppFieldInputDialog.vue'
+import { getFormFields } from '@/utils/formioFields'
 
 const router = useRouter()
 const draftStore = useProgramDraftStore()
@@ -55,69 +56,6 @@ const opensppFieldItems = computed(() => {
     field,
   }))
 })
-
-const getFormFields = (formio: unknown): Array<{ key: string; label: string }> => {
-  if (!formio || typeof formio !== 'object') {
-    return []
-  }
-
-  const formioObj = formio as { components?: unknown[] }
-  if (!formioObj.components || !Array.isArray(formioObj.components)) {
-    return []
-  }
-
-  const fields: Array<{ key: string; label: string }> = []
-
-  const traverse = (components: unknown[]): void => {
-    components.forEach((component) => {
-      if (!component || typeof component !== 'object') {
-        return
-      }
-
-      const comp = component as {
-        key?: string
-        label?: string
-        input?: boolean
-        type?: string
-        components?: unknown[]
-        columns?: Array<{ components?: unknown[] }>
-        rows?: Array<Array<{ components?: unknown[] }>>
-      }
-
-      if (comp.input && comp.key && comp.type !== 'button') {
-        fields.push({
-          key: comp.key,
-          label: comp.label || comp.key,
-        })
-      }
-
-      if (Array.isArray(comp.components)) {
-        traverse(comp.components)
-      }
-      if (Array.isArray(comp.columns)) {
-        comp.columns.forEach((column) => {
-          if (Array.isArray(column.components)) {
-            traverse(column.components)
-          }
-        })
-      }
-      if (Array.isArray(comp.rows)) {
-        comp.rows.forEach((row) => {
-          if (Array.isArray(row)) {
-            row.forEach((cell) => {
-              if (cell?.components && Array.isArray(cell.components)) {
-                traverse(cell.components)
-              }
-            })
-          }
-        })
-      }
-    })
-  }
-
-  traverse(formioObj.components)
-  return fields
-}
 
 const onOpenSppFieldsParsed = (fields: ParsedOpenSppField[]) => {
   opensppFields.value = fields
@@ -486,7 +424,7 @@ const cancel = () => {
 
 <style scoped>
 .mapping-step {
-  margin: -16px -24px -24px;
+  margin: calc(-1 * var(--spacing-md)) calc(-1 * var(--spacing-lg)) calc(-1 * var(--spacing-lg));
   display: flex;
   flex-direction: column;
   min-height: calc(100vh - 200px);
@@ -496,42 +434,43 @@ const cancel = () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-  background: white;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--border-light);
+  background: var(--surface);
   flex-wrap: wrap;
-  gap: 16px;
+  gap: var(--spacing-md);
 }
 
 .mapping-header__info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .mapping-header__info h2 {
-  font-size: 1rem;
+  font-size: var(--font-size-base);
   font-weight: 600;
   margin: 0;
+  color: var(--text-main);
 }
 
 .mapping-header__info p {
-  font-size: 0.75rem;
-  color: rgba(0, 0, 0, 0.5);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
   margin: 0;
 }
 
 .mapping-header__actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .field-status {
   display: flex;
-  gap: 8px;
-  padding: 16px 24px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .empty-state {
@@ -539,23 +478,24 @@ const cancel = () => {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 64px 24px;
+  padding: var(--spacing-2xl) var(--spacing-lg);
   flex: 1;
 }
 
 .empty-state h3 {
-  margin: 16px 0 8px;
-  font-size: 1.125rem;
+  margin: var(--spacing-md) 0 var(--spacing-sm);
+  font-size: var(--font-size-lg);
   font-weight: 600;
+  color: var(--text-main);
 }
 
 .empty-state p {
-  color: rgba(0, 0, 0, 0.6);
-  margin-bottom: 24px;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-lg);
 }
 
 .mappings-container {
-  padding: 24px;
+  padding: var(--spacing-lg);
   flex: 1;
   overflow: auto;
 }
@@ -565,27 +505,28 @@ const cancel = () => {
 }
 
 .mappings-table :deep(thead th) {
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
   font-weight: 600;
   text-transform: uppercase;
-  padding: 12px;
-  background: rgba(0, 0, 0, 0.02);
+  padding: var(--spacing-sm);
+  background: var(--neutral-50);
+  color: var(--text-muted);
 }
 
 .mappings-table :deep(tbody td) {
-  padding: 12px;
+  padding: var(--spacing-sm);
   vertical-align: middle;
 }
 
 .mapping-row {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .options-row {
-  background: rgba(0, 0, 0, 0.02);
+  background: var(--neutral-50);
 }
 
 .gap-1 {
-  gap: 4px;
+  gap: var(--spacing-xs);
 }
 </style>

@@ -70,7 +70,6 @@ const processQrContent = async (content: string): Promise<VerifiedIdentity> => {
   // Register trusted issuers passed via scan options (ensures they're available for verification)
   const trustedIssuers = Claim169ScannerService.options.value.trustedIssuers
   if (trustedIssuers && trustedIssuers.length > 0) {
-    console.debug('Claim169ScannerOverlay: Registering', trustedIssuers.length, 'trusted issuers before decode')
     for (const issuer of trustedIssuers) {
       if (issuer.issuerId) {
         registerIssuerKey(issuer.issuerId, {
@@ -123,7 +122,6 @@ const startScan = async () => {
       const verifiedIdentity = await processQrContent(content)
       Claim169ScannerService.complete(verifiedIdentity)
     } catch (decodeError) {
-      console.error('Failed to decode Claim-169 QR:', decodeError)
       const errorMsg = decodeError instanceof Error ? decodeError.message : String(decodeError)
       displayError(`Invalid QR code: ${errorMsg}`)
       
@@ -131,7 +129,6 @@ const startScan = async () => {
       isProcessing.value = false
     }
   } catch (error) {
-    console.error('Scan error:', error)
     const message = error instanceof Error ? error.message : 'Failed to scan QR code'
     displayError(message)
     isProcessing.value = false

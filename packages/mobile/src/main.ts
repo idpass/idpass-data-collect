@@ -31,6 +31,8 @@ import DyApp from './DyApp.vue'
 import { createDatabase } from './database'
 import router from './router'
 import './style.css'
+// Bootstrap overrides for Humanitarian Tech theme - must come after Bootstrap
+import './assets/css/bootstrap-overrides.css'
 import { useAuthManagerStore } from './store/authManager'
 
 import { createPinia } from 'pinia'

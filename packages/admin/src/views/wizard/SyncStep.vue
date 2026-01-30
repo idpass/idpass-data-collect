@@ -7,6 +7,7 @@ import FieldsInput from '@/components/FieldsInput.vue'
 import OpenSppFieldInputDialog from '@/components/OpenSppFieldInputDialog.vue'
 import type { ParsedOpenSppField } from '@/api'
 import { useSnackBarStore } from '@/stores/snackBar'
+import { getFormFields } from '@/utils/formioFields'
 
 const router = useRouter()
 const draftStore = useProgramDraftStore()
@@ -43,68 +44,6 @@ const goToFieldMapping = () => {
   router.push({ name: 'wizard-mapping' })
 }
 
-const getFormFields = (formio: unknown): Array<{ key: string; label: string }> => {
-  if (!formio || typeof formio !== 'object') {
-    return []
-  }
-
-  const formioObj = formio as { components?: unknown[] }
-  if (!formioObj.components || !Array.isArray(formioObj.components)) {
-    return []
-  }
-
-  const fields: Array<{ key: string; label: string }> = []
-
-  const traverse = (components: unknown[]): void => {
-    components.forEach((component) => {
-      if (!component || typeof component !== 'object') {
-        return
-      }
-
-      const comp = component as {
-        key?: string
-        label?: string
-        input?: boolean
-        type?: string
-        components?: unknown[]
-        columns?: Array<{ components?: unknown[] }>
-        rows?: Array<Array<{ components?: unknown[] }>>
-      }
-
-      if (comp.input && comp.key && comp.type !== 'button') {
-        fields.push({
-          key: comp.key,
-          label: comp.label || comp.key,
-        })
-      }
-
-      if (Array.isArray(comp.components)) {
-        traverse(comp.components)
-      }
-      if (Array.isArray(comp.columns)) {
-        comp.columns.forEach((column) => {
-          if (Array.isArray(column.components)) {
-            traverse(column.components)
-          }
-        })
-      }
-      if (Array.isArray(comp.rows)) {
-        comp.rows.forEach((row) => {
-          if (Array.isArray(row)) {
-            row.forEach((cell) => {
-              if (cell?.components && Array.isArray(cell.components)) {
-                traverse(cell.components)
-              }
-            })
-          }
-        })
-      }
-    })
-  }
-
-  traverse(formioObj.components)
-  return fields
-}
 </script>
 
 <template>
@@ -289,49 +228,49 @@ const getFormFields = (formio: unknown): Array<{ key: string; label: string }> =
 }
 
 .step-description {
-  color: rgba(0, 0, 0, 0.6);
-  margin-bottom: 32px;
-  line-height: 1.6;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-xl);
+  line-height: var(--line-height-relaxed);
 }
 
 .sync-form {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--spacing-lg);
 }
 
 .form-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .form-label {
   font-weight: 500;
-  font-size: 0.875rem;
-  color: rgba(0, 0, 0, 0.87);
+  font-size: var(--font-size-sm);
+  color: var(--text-main);
 }
 
 .form-label .required {
-  color: rgb(var(--v-theme-error));
+  color: var(--status-danger);
   margin-left: 2px;
 }
 
 .form-hint {
-  font-size: 0.75rem;
-  color: rgba(0, 0, 0, 0.5);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
   margin: 0;
-  margin-top: -4px;
+  margin-top: calc(-1 * var(--spacing-xs));
 }
 
 .section-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--spacing-md);
 }
 
 .openspp-mapping {
-  padding-top: 24px;
+  padding-top: var(--spacing-lg);
 }
 </style>

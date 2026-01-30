@@ -1,6 +1,188 @@
+/*
+ * Licensed to the Association pour la cooperation numerique (ACN) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ACN licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
 @import './base.css';
+
+/**
+ * Main App Styles - Humanitarian Tech Theme
+ */
 
 #app {
   margin: 0 auto;
   font-weight: normal;
+  min-height: 100vh;
+  background-color: var(--background);
+}
+
+/* Card Component Base */
+.app-card {
+  background-color: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--transition-normal), transform var(--transition-normal);
+}
+
+.app-card:hover {
+  box-shadow: var(--shadow-floating);
+}
+
+/* Button Utilities */
+.btn-brand {
+  background-color: var(--brand) !important;
+  color: var(--text-main) !important;
+  border: none;
+  min-height: var(--touch-target);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+
+.btn-brand:hover {
+  background-color: var(--brand-light) !important;
+}
+
+.btn-brand:active {
+  background-color: var(--brand-dark) !important;
+}
+
+.btn-brand:focus-visible {
+  box-shadow: var(--focus-ring-offset);
+}
+
+.btn-primary-trust {
+  background-color: var(--primary) !important;
+  color: var(--primary-foreground) !important;
+  border: none;
+  min-height: var(--touch-target);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  transition: background-color var(--transition-fast);
+}
+
+.btn-primary-trust:hover {
+  background-color: var(--primary-light) !important;
+}
+
+.btn-primary-trust:active {
+  background-color: var(--primary-dark) !important;
+}
+
+/* Status Badge Utilities */
+.badge-success {
+  background-color: var(--status-success-light);
+  color: var(--status-success);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.badge-warning {
+  background-color: var(--status-warning-light);
+  color: var(--status-warning);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.badge-danger {
+  background-color: var(--status-danger-light);
+  color: var(--status-danger);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.badge-info {
+  background-color: var(--status-info-light);
+  color: var(--status-info);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+/* Text Utilities */
+.text-brand {
+  color: var(--brand);
+}
+
+.text-primary {
+  color: var(--primary);
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.text-main {
+  color: var(--text-main);
+}
+
+/* Background Utilities */
+.bg-brand {
+  background-color: var(--brand);
+}
+
+.bg-brand-light {
+  background-color: var(--brand-100);
+}
+
+.bg-primary {
+  background-color: var(--primary);
+}
+
+.bg-surface {
+  background-color: var(--surface);
+}
+
+.bg-background {
+  background-color: var(--background);
+}
+
+/* Border Utilities */
+.border-brand {
+  border-color: var(--brand);
+}
+
+.border-primary {
+  border-color: var(--primary);
+}
+
+.border-light {
+  border-color: var(--border-light);
+}
+
+/* Shadow Utilities */
+.shadow-card {
+  box-shadow: var(--shadow-card);
+}
+
+.shadow-floating {
+  box-shadow: var(--shadow-floating);
+}
+
+.shadow-modal {
+  box-shadow: var(--shadow-modal);
 }

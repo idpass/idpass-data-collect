@@ -19,7 +19,7 @@
 
 import Formio from 'formiojs';
 import { Claim169ScannerService } from '../../services/Claim169ScannerService';
-import { registerIssuerKey, Claim169IdentityData, VerifiedIdentity, genderToString, imageFormatToMimeType, claim169DateToISO } from '../../services/claim169Service';
+import { registerIssuerKey, Claim169IdentityData, VerifiedIdentity, genderToString, imageFormatToMimeType } from '../../services/claim169Service';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const Field = (Formio as { Components: { components: { field: unknown } } }).Components.components.field as any;
@@ -89,15 +89,22 @@ export default class Claim169Scanner extends Field {
     return info;
   }
 
-  render(content: string) {
+  escapeHtml(text: string): string {
+    const div = document.createElement('div');
+    div.appendChild(document.createTextNode(text));
+    return div.innerHTML;
+  }
+
+  render(_content: string) {
     const value = this.dataValue || this.getValue();
     const isCaptured = value && value.identity;
+    const label = this.escapeHtml(this.component.label || 'Scan Identity');
 
     return super.render(`
       <div class="card card-body bg-light">
         <div class="d-flex align-items-center justify-content-between">
           <div>
-            <div class="fw-bold mb-1">${this.component.label || 'Scan Identity'}</div>
+            <div class="fw-bold mb-1">${label}</div>
             <div class="text-muted small">
               ${isCaptured ? 'Identity scanned and verified' : 'Scan a Claim-169 QR code'}
             </div>
@@ -112,9 +119,9 @@ export default class Claim169Scanner extends Field {
             <div class="d-flex align-items-center">
               ${this.renderPhoto(value)}
               <div class="ms-3">
-                <div class="fw-bold">${value.identity.fullName || 'Unknown Name'}</div>
+                <div class="fw-bold">${this.escapeHtml(value.identity.fullName || 'Unknown Name')}</div>
                 <div class="text-muted small text-truncate" style="max-width: 200px;">
-                  ID: ${value.identity.id || 'N/A'}
+                  ID: ${this.escapeHtml(value.identity.id || 'N/A')}
                 </div>
                 ${value.isVerified ? '<span class="badge bg-success">Verified</span>' : '<span class="badge bg-warning text-dark">Unverified</span>'}
                 ${value.isExpired ? '<span class="badge bg-danger">Expired</span>' : ''}
@@ -157,44 +164,25 @@ export default class Claim169Scanner extends Field {
   }
 
   async startScan() {
-    // Register trusted issuers from component configuration
-    console.debug('Claim169Scanner: Starting scan, component config:', {
-      trustedIssuers: this.component.trustedIssuers,
-      fieldMappings: this.component.fieldMappings,
-      storeOriginalData: this.component.storeOriginalData
-    });
-    
     // Build trusted issuers list from component configuration
     const trustedIssuers: Array<{ issuerId: string; ed25519Key?: string; es256Key?: string }> = [];
-    
+
     if (this.component.trustedIssuers && Array.isArray(this.component.trustedIssuers)) {
-      console.debug(`Claim169Scanner: Processing ${this.component.trustedIssuers.length} trusted issuers`);
       this.component.trustedIssuers.forEach((issuer: TrustedIssuerConfig) => {
-        console.debug('Claim169Scanner: Processing issuer config:', JSON.stringify(issuer));
         if (issuer.issuerId) {
           // Support both flattened keys (new format) and nested publicKey (legacy format)
           const ed25519Key = issuer.ed25519Key || issuer.publicKey?.ed25519;
           const es256Key = issuer.es256Key || issuer.publicKey?.es256;
-          
-          console.debug(`Claim169Scanner: Adding issuer ${issuer.issuerId} with keys:`, {
-            hasEd25519: !!ed25519Key,
-            hasEs256: !!es256Key
-          });
-          
+
           trustedIssuers.push({
             issuerId: issuer.issuerId,
             ed25519Key,
             es256Key
           });
-          
-          // Also register in global registry for backward compatibility
+
           registerIssuerKey(issuer.issuerId, { ed25519: ed25519Key, es256: es256Key });
-        } else {
-          console.warn('Claim169Scanner: Issuer config missing issuerId:', issuer);
         }
       });
-    } else {
-      console.debug('Claim169Scanner: No trusted issuers configured');
     }
 
     try {
@@ -208,7 +196,6 @@ export default class Claim169Scanner extends Field {
         this.handleScanResult(result);
       }
     } catch (error) {
-      console.error('Scan failed:', error);
       this.emit('error', error);
     }
   }
@@ -267,7 +254,7 @@ export default class Claim169Scanner extends Field {
     }
     
     if (fieldPath === 'dateOfBirth') {
-        return claim169DateToISO(current as string);
+        return current as string;
     }
 
     if (fieldPath === 'photo' && current) {

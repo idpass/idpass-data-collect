@@ -36,12 +36,12 @@ export enum Claim169Gender {
   Other = 3
 }
 
-// Image format enum from Claim-169 spec
+// Image format enum from Claim-169 spec (1-based, matching WASM library output)
 export enum Claim169ImageFormat {
-  Jpeg = 0,
-  Jpeg2000 = 1,
-  Avif = 2,
-  Webp = 3
+  Jpeg = 1,
+  Jpeg2000 = 2,
+  Avif = 3,
+  Webp = 4
 }
 
 // Marital status enum from Claim-169 spec
@@ -126,9 +126,6 @@ export interface DecodeOptions {
 // Known issuer public keys (mutable registry)
 const ISSUER_KEY_REGISTRY: Map<string, { ed25519?: Uint8Array; es256?: Uint8Array }> = new Map()
 
-// Initial known keys (if any hardcoded ones are needed)
-// ISSUER_KEY_REGISTRY.set('mosip-issuer-1', { ed25519: ... })
-
 /**
  * Register a trusted issuer key
  */
@@ -137,7 +134,6 @@ export function registerIssuerKey(
   keys: { ed25519?: Uint8Array | string; es256?: Uint8Array | string }
 ): void {
   if (!keys || (!keys.ed25519 && !keys.es256)) {
-    console.warn(`No keys provided for issuer: ${issuerId}`)
     return
   }
 
@@ -148,7 +144,6 @@ export function registerIssuerKey(
       typeof keys.ed25519 === 'string'
         ? Uint8Array.from(atob(keys.ed25519), (c) => c.charCodeAt(0))
         : keys.ed25519
-    console.debug(`Registered Ed25519 key for issuer ${issuerId}, length: ${parsedKeys.ed25519.length}`)
   }
 
   if (keys.es256) {
@@ -156,11 +151,9 @@ export function registerIssuerKey(
       typeof keys.es256 === 'string'
         ? Uint8Array.from(atob(keys.es256), (c) => c.charCodeAt(0))
         : keys.es256
-    console.debug(`Registered ES256 key for issuer ${issuerId}, length: ${parsedKeys.es256.length}`)
   }
 
   ISSUER_KEY_REGISTRY.set(issuerId, parsedKeys)
-  console.debug(`Registered keys for issuer: ${issuerId}, total issuers in registry: ${ISSUER_KEY_REGISTRY.size}`)
 }
 
 /**
@@ -178,11 +171,11 @@ export function getIssuerPublicKey(
 export function genderToString(gender: number | undefined): string | undefined {
   if (gender === undefined) return undefined
   switch (gender) {
-    case 1:
+    case Claim169Gender.Male:
       return 'male'
-    case 2:
+    case Claim169Gender.Female:
       return 'female'
-    case 3:
+    case Claim169Gender.Other:
       return 'other'
     default:
       return undefined
@@ -194,24 +187,17 @@ export function genderToString(gender: number | undefined): string | undefined {
  */
 export function imageFormatToMimeType(format: number | undefined): string {
   switch (format) {
-    case 1:
+    case Claim169ImageFormat.Jpeg:
       return 'image/jpeg'
-    case 2:
+    case Claim169ImageFormat.Jpeg2000:
       return 'image/jp2'
-    case 3:
+    case Claim169ImageFormat.Avif:
       return 'image/avif'
-    case 4:
+    case Claim169ImageFormat.Webp:
       return 'image/webp'
     default:
-      return 'image/jpeg' // Default to JPEG
+      return 'image/jpeg'
   }
-}
-
-/**
- * Pass through date string (already in ISO format from library)
- */
-export function claim169DateToISO(date: string | undefined): string | undefined {
-  return date
 }
 
 /**
@@ -246,11 +232,10 @@ export async function decodeAndVerifyClaim169(
       try {
         const verifyDecoder = new Decoder(qrContent).verifyWithEd25519(ed25519PublicKey)
         const decoded = verifyDecoder.decode()
-        // If we get here, verification succeeded
         isVerified = true
         return buildVerifiedIdentity(decoded, isVerified, qrContent)
-      } catch (error) {
-        console.warn('Ed25519 verification failed:', error)
+      } catch {
+        // Ed25519 verification failed; fall through to next method
       }
     }
 
@@ -260,60 +245,50 @@ export async function decodeAndVerifyClaim169(
         const decoded = verifyDecoder.decode()
         isVerified = true
         return buildVerifiedIdentity(decoded, isVerified, qrContent)
-      } catch (error) {
-        console.warn('ES256 verification failed:', error)
+      } catch {
+        // ES256 verification failed; fall through to auto-verify
       }
     }
 
     // Auto-verify with known issuer keys if explicit keys weren't provided or failed
     if (!isVerified) {
       try {
-        // Peek at the issuer using a temporary unverified decoder
         const tempDecoder = new Decoder(qrContent).allowUnverified()
         const tempDecoded = tempDecoder.decode()
         const issuer = tempDecoded.cwtMeta?.issuer
-        
+
         if (issuer) {
-          console.debug('Found issuer in QR:', issuer)
           const keys = getIssuerPublicKey(issuer)
           if (keys) {
-            console.debug('Found known keys for issuer:', issuer)
             if (keys.ed25519 && keys.ed25519.length === 32) {
               try {
                 const verifyDecoder = new Decoder(qrContent).verifyWithEd25519(keys.ed25519)
                 const decoded = verifyDecoder.decode()
                 isVerified = true
-                console.debug('Verified with Ed25519')
                 return buildVerifiedIdentity(decoded, isVerified, qrContent)
-              } catch (e) {
-                console.warn('Ed25519 auto-verify failed', e)
+              } catch {
+                // Ed25519 auto-verify failed; try ES256
               }
-            } else if (keys.ed25519) {
-              console.warn('Ed25519 key has invalid length:', keys.ed25519.length, '(expected 32)')
             }
             if (!isVerified && keys.es256) {
               try {
                 const verifyDecoder = new Decoder(qrContent).verifyWithEcdsaP256(keys.es256)
                 const decoded = verifyDecoder.decode()
                 isVerified = true
-                console.debug('Verified with ES256')
                 return buildVerifiedIdentity(decoded, isVerified, qrContent)
-              } catch (e) {
-                console.warn('ES256 auto-verify failed', e)
+              } catch {
+                // ES256 auto-verify failed
               }
             }
-          } else {
-             console.debug('No known keys for issuer:', issuer)
           }
         }
-      } catch (e) {
-        console.warn('Failed to peek issuer for auto-verification', e)
+      } catch {
+        // Failed to peek issuer for auto-verification
       }
     }
   }
 
-  // If no verification was performed or requested, allow unverified decode
-  console.debug('Claim169: Proceeding with unverified decode')
+  // No verification was performed or requested; allow unverified decode
   const decoder = new Decoder(qrContent).allowUnverified()
 
   // Decode the QR content
@@ -331,10 +306,6 @@ function buildVerifiedIdentity(
 ): VerifiedIdentity {
   const claim = decoded.claim169
   const cwt = decoded.cwtMeta
-
-  if (cwt?.issuer) {
-    console.debug('Claim169 Issuer:', cwt.issuer)
-  }
 
   // Check expiration
   const now = Math.floor(Date.now() / 1000)
@@ -439,7 +410,7 @@ export function mapClaim169ToEntityData(
     fullName: identity.fullName,
     firstName: identity.firstName,
     lastName: identity.lastName,
-    dateOfBirth: claim169DateToISO(identity.dateOfBirth),
+    dateOfBirth: identity.dateOfBirth,
     gender: genderToString(identity.gender),
     nationality: identity.nationality,
     address: identity.address,

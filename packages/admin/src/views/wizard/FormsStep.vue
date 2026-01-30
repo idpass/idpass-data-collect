@@ -198,9 +198,9 @@ const getDependsOnOptions = (form: { name: string; title: string; dependsOn: str
 }
 
 .step-description {
-  color: rgba(0, 0, 0, 0.6);
-  margin-bottom: 24px;
-  line-height: 1.6;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-lg);
+  line-height: var(--line-height-relaxed);
 }
 
 .empty-state {
@@ -208,39 +208,40 @@ const getDependsOnOptions = (form: { name: string; title: string; dependsOn: str
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 48px 24px;
-  background: rgba(0, 0, 0, 0.02);
-  border-radius: 12px;
+  padding: var(--spacing-2xl) var(--spacing-lg);
+  background: var(--neutral-50);
+  border-radius: var(--radius-lg);
 }
 
 .empty-state h3 {
-  margin: 16px 0 8px;
-  font-size: 1.125rem;
+  margin: var(--spacing-md) 0 var(--spacing-sm);
+  font-size: var(--font-size-lg);
   font-weight: 600;
+  color: var(--text-main);
 }
 
 .empty-state p {
-  color: rgba(0, 0, 0, 0.6);
-  margin-bottom: 24px;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-lg);
 }
 
 .forms-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--spacing-md);
 }
 
 .form-card {
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
 .form-card__header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: rgba(0, 0, 0, 0.02);
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--neutral-50);
 }
 
 .form-card__number {
@@ -249,10 +250,10 @@ const getDependsOnOptions = (form: { name: string; title: string; dependsOn: str
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgb(var(--v-theme-primary));
-  color: white;
-  border-radius: 50%;
-  font-size: 0.75rem;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
   font-weight: 600;
 }
 
@@ -260,43 +261,44 @@ const getDependsOnOptions = (form: { name: string; title: string; dependsOn: str
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .form-card__title {
   font-weight: 500;
+  color: var(--text-main);
 }
 
 .form-card__body {
-  padding: 16px;
+  padding: var(--spacing-md);
 }
 
 .field-label {
   display: block;
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
   font-weight: 500;
-  color: rgba(0, 0, 0, 0.6);
-  margin-bottom: 4px;
+  color: var(--text-muted);
+  margin-bottom: var(--spacing-xs);
 }
 
 .field-hint {
-  font-size: 0.7rem;
-  color: rgba(0, 0, 0, 0.5);
-  margin: -8px 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  margin: calc(-1 * var(--spacing-sm)) 0 0;
 }
 
 .form-card__actions {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-light);
 }
 
 .error-text {
-  color: rgb(var(--v-theme-error));
-  font-size: 0.75rem;
+  color: var(--status-danger);
+  font-size: var(--font-size-xs);
 }
 
 .add-form-btn {
