@@ -2,6 +2,7 @@
 
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
+import Claim169ScannerOverlay from '@/components/Claim169ScannerOverlay.vue'
 </script>
 
 <template>
@@ -15,6 +16,7 @@ import { RouterView } from 'vue-router'
       <RouterView />
     </div>
   </main>
+  <Claim169ScannerOverlay />
 </template>
 
 <style scoped>
@@ -29,5 +31,6 @@ main {
   flex-direction: row;
   justify-content: space-between;
   padding: 1rem 0;
+  padding-left: 24px;
 } */
 </style>

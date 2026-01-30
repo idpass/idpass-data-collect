@@ -136,6 +136,11 @@ export function registerIssuerKey(
   issuerId: string,
   keys: { ed25519?: Uint8Array | string; es256?: Uint8Array | string }
 ): void {
+  if (!keys || (!keys.ed25519 && !keys.es256)) {
+    console.warn(`No keys provided for issuer: ${issuerId}`)
+    return
+  }
+
   const parsedKeys: { ed25519?: Uint8Array; es256?: Uint8Array } = {}
 
   if (keys.ed25519) {
@@ -143,6 +148,7 @@ export function registerIssuerKey(
       typeof keys.ed25519 === 'string'
         ? Uint8Array.from(atob(keys.ed25519), (c) => c.charCodeAt(0))
         : keys.ed25519
+    console.debug(`Registered Ed25519 key for issuer ${issuerId}, length: ${parsedKeys.ed25519.length}`)
   }
 
   if (keys.es256) {
@@ -150,10 +156,11 @@ export function registerIssuerKey(
       typeof keys.es256 === 'string'
         ? Uint8Array.from(atob(keys.es256), (c) => c.charCodeAt(0))
         : keys.es256
+    console.debug(`Registered ES256 key for issuer ${issuerId}, length: ${parsedKeys.es256.length}`)
   }
 
   ISSUER_KEY_REGISTRY.set(issuerId, parsedKeys)
-  console.debug(`Registered keys for issuer: ${issuerId}`)
+  console.debug(`Registered keys for issuer: ${issuerId}, total issuers in registry: ${ISSUER_KEY_REGISTRY.size}`)
 }
 
 /**
@@ -230,15 +237,18 @@ export async function decodeAndVerifyClaim169(
   // Lazily load the claim169 module (WASM)
   const { Decoder } = await getClaim169Module()
 
-  let decoder = new Decoder(qrContent)
   let isVerified = false
 
   // Attempt verification if keys are provided
+  // Note: The Decoder is consumed by verification methods, so we need fresh instances for each attempt
   if (!skipVerification) {
     if (ed25519PublicKey) {
       try {
-        decoder = decoder.verifyWithEd25519(ed25519PublicKey)
+        const verifyDecoder = new Decoder(qrContent).verifyWithEd25519(ed25519PublicKey)
+        const decoded = verifyDecoder.decode()
+        // If we get here, verification succeeded
         isVerified = true
+        return buildVerifiedIdentity(decoded, isVerified, qrContent)
       } catch (error) {
         console.warn('Ed25519 verification failed:', error)
       }
@@ -246,8 +256,10 @@ export async function decodeAndVerifyClaim169(
 
     if (!isVerified && es256PublicKey) {
       try {
-        decoder = decoder.verifyWithEcdsaP256(es256PublicKey)
+        const verifyDecoder = new Decoder(qrContent).verifyWithEcdsaP256(es256PublicKey)
+        const decoded = verifyDecoder.decode()
         isVerified = true
+        return buildVerifiedIdentity(decoded, isVerified, qrContent)
       } catch (error) {
         console.warn('ES256 verification failed:', error)
       }
@@ -266,20 +278,26 @@ export async function decodeAndVerifyClaim169(
           const keys = getIssuerPublicKey(issuer)
           if (keys) {
             console.debug('Found known keys for issuer:', issuer)
-            if (keys.ed25519) {
+            if (keys.ed25519 && keys.ed25519.length === 32) {
               try {
-                decoder = decoder.verifyWithEd25519(keys.ed25519)
+                const verifyDecoder = new Decoder(qrContent).verifyWithEd25519(keys.ed25519)
+                const decoded = verifyDecoder.decode()
                 isVerified = true
                 console.debug('Verified with Ed25519')
+                return buildVerifiedIdentity(decoded, isVerified, qrContent)
               } catch (e) {
                 console.warn('Ed25519 auto-verify failed', e)
               }
+            } else if (keys.ed25519) {
+              console.warn('Ed25519 key has invalid length:', keys.ed25519.length, '(expected 32)')
             }
             if (!isVerified && keys.es256) {
               try {
-                decoder = decoder.verifyWithEcdsaP256(keys.es256)
+                const verifyDecoder = new Decoder(qrContent).verifyWithEcdsaP256(keys.es256)
+                const decoded = verifyDecoder.decode()
                 isVerified = true
                 console.debug('Verified with ES256')
+                return buildVerifiedIdentity(decoded, isVerified, qrContent)
               } catch (e) {
                 console.warn('ES256 auto-verify failed', e)
               }
@@ -295,13 +313,22 @@ export async function decodeAndVerifyClaim169(
   }
 
   // If no verification was performed or requested, allow unverified decode
-  if (!isVerified) {
-    decoder = decoder.allowUnverified()
-    console.debug('Claim169: Proceeding with unverified decode')
-  }
+  console.debug('Claim169: Proceeding with unverified decode')
+  const decoder = new Decoder(qrContent).allowUnverified()
 
   // Decode the QR content
   const decoded = decoder.decode()
+  return buildVerifiedIdentity(decoded, isVerified, qrContent)
+}
+
+/**
+ * Helper to build VerifiedIdentity from decoded data
+ */
+function buildVerifiedIdentity(
+  decoded: { claim169?: any; cwtMeta?: any }, // eslint-disable-line @typescript-eslint/no-explicit-any
+  isVerified: boolean,
+  qrContent: string
+): VerifiedIdentity {
   const claim = decoded.claim169
   const cwt = decoded.cwtMeta
 
