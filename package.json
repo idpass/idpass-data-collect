@@ -33,7 +33,7 @@
     "pr-check": "pnpm run type-check && pnpm run lint && pnpm run test && pnpm run check-licenses --fix"
   },
   "devDependencies": {
-    "glob": "^10.4.5",
+    "glob": "^10.5.0",
     "husky": "^8.0.3",
     "lint-staged": "^15.5.2"
   },
@@ -57,5 +57,16 @@
   "bugs": {
     "url": "https://github.com/idpass/idpass-data-collect/issues"
   },
-  "homepage": "https://github.com/idpass/idpass-data-collect#readme"
+  "homepage": "https://github.com/idpass/idpass-data-collect#readme",
+  "pnpm": {
+    "overrides": {
+      "tar@<=7.5.6": ">=7.5.7",
+      "lodash-es@<=4.17.22": ">=4.17.23",
+      "lodash@<=4.17.22": ">=4.17.23",
+      "js-yaml@>=4.0.0 <4.1.1": ">=4.1.1",
+      "ws@>=8.0.0 <8.17.1": ">=8.17.1",
+      "@babel/runtime@<7.26.10": ">=7.26.10",
+      "webpack-dev-server@<=5.2.0": ">=5.2.1"
+    }
+  }
 }
