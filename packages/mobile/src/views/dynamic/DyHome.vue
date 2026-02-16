@@ -772,10 +772,6 @@ const handleScanIdentity = () => {
   z-index: 5;
 }
 
-.fab:focus-visible {
-  box-shadow: var(--focus-ring-offset);
-}
-
 .overlay {
   position: fixed;
   inset: 0;
@@ -837,10 +833,6 @@ const handleScanIdentity = () => {
 
 .option:active {
   transform: scale(0.99);
-}
-
-.option:focus-visible {
-  box-shadow: var(--focus-ring);
 }
 
 .option__icon {

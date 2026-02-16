@@ -38,10 +38,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Focus States - Accessibility */
+/* Focus States - Accessibility.
+ * Uses outline instead of box-shadow to prevent overlap in nested inputs
+ * (e.g., search boxes with affix icons or input-group wrappers). */
 :focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
+  outline: var(--focus-outline-width) solid var(--focus-outline-color);
+  outline-offset: var(--focus-outline-offset);
 }
 
 /* Selection */

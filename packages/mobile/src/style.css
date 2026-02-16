@@ -84,7 +84,8 @@ body.barcode-scanner-active {
 }
 
 .btn:focus-visible {
-  box-shadow: var(--focus-ring-offset);
+  outline: var(--focus-outline-width) solid var(--focus-outline-color);
+  outline-offset: var(--focus-outline-offset);
 }
 
 /* Primary Button - Brand Orange with dark text for accessibility */

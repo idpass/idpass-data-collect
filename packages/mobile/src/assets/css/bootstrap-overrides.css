@@ -533,8 +533,9 @@ a:hover {
   outline: none !important;
 }
 
-/* Ensure all interactive elements have visible focus */
+/* Ensure all interactive elements have visible focus.
+ * Uses outline instead of box-shadow to prevent overlap in nested inputs. */
 *:focus-visible {
-  outline: none !important;
-  box-shadow: var(--focus-ring) !important;
+  outline: var(--focus-outline-width) solid var(--focus-outline-color) !important;
+  outline-offset: var(--focus-outline-offset) !important;
 }

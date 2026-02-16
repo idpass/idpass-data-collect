@@ -63,10 +63,6 @@
   background-color: var(--brand-dark) !important;
 }
 
-.btn-brand:focus-visible {
-  box-shadow: var(--focus-ring-offset);
-}
-
 .btn-primary-trust {
   background-color: var(--primary) !important;
   color: var(--primary-foreground) !important;

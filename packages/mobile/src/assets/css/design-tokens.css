@@ -101,9 +101,14 @@
   --shadow-floating: 0 10px 15px -3px rgba(44, 62, 80, 0.1), 0 4px 6px -2px rgba(44, 62, 80, 0.05);
   --shadow-modal: 0 25px 50px -12px rgba(44, 62, 80, 0.25);
 
-  /* Focus Ring - Brand orange for visibility */
+  /* Focus Ring - Brand orange for visibility.
+   * Use outline tokens for global :focus-visible (avoids overlap in nested inputs).
+   * Use box-shadow tokens for container :focus-within or standalone form controls. */
   --focus-ring: 0 0 0 3px var(--brand-light);
   --focus-ring-offset: 0 0 0 2px var(--surface), 0 0 0 4px var(--brand);
+  --focus-outline-width: 2px;
+  --focus-outline-color: var(--brand);
+  --focus-outline-offset: 2px;
 
   /* Typography */
   --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
