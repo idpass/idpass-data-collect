@@ -19,7 +19,12 @@
 
 /**
  * OpenSPP V2 API Types
- * Based on the OpenSPP API V2 specification
+ *
+ * Aligned with ADR-019 response format:
+ * - Resources use `type` (not `resourceType`) as discriminator
+ * - Search results use `SearchResult` envelope (data/meta/links)
+ * - Errors use RFC 9457 `ProblemDetail`
+ * - Batch/transaction operations retain FHIR `Bundle` format
  */
 
 /**
@@ -29,6 +34,7 @@ export interface OAuth2TokenResponse {
   access_token: string;
   token_type: string;
   expires_in: number;
+  scope?: string;
 }
 
 /**
@@ -73,6 +79,7 @@ export interface ContactPoint {
   system: "phone" | "email" | "fax" | "other";
   value: string;
   use?: "home" | "work" | "mobile" | "temp";
+  rank?: number;
 }
 
 /**
@@ -88,6 +95,31 @@ export interface Address {
 }
 
 /**
+ * Time period with start and end dates
+ */
+export interface Period {
+  start?: string;
+  end?: string;
+}
+
+/**
+ * Reference to another resource
+ */
+export interface Reference {
+  reference: string;
+  display?: string;
+}
+
+/**
+ * Resource metadata (versionId for optimistic locking, lastUpdated, source)
+ */
+export interface ResourceMeta {
+  versionId?: string;
+  lastUpdated?: string;
+  source?: string;
+}
+
+/**
  * Extension data for Studio custom fields
  */
 export interface Extension {
@@ -96,47 +128,90 @@ export interface Extension {
 }
 
 /**
- * Individual resource from OpenSPP V2 API
+ * Individual resource from OpenSPP V2 API.
+ * Uses `type` (not `resourceType`) per ADR-019.
  */
 export interface IndividualResource {
-  resourceType: "Individual";
+  type: "Individual";
   identifier: Identifier[];
   active?: boolean;
   name?: HumanName;
   birthDate?: string;
+  birthDateEstimated?: boolean;
   gender?: CodeableConcept;
   telecom?: ContactPoint[];
   address?: Address[];
+  photo?: string;
   extension?: Record<string, Extension>;
+  meta?: ResourceMeta;
 }
 
 /**
  * Group member reference
  */
 export interface GroupMember {
-  entity: {
-    reference: string;
-    display?: string;
-  };
+  entity: Reference;
   role?: CodeableConcept;
   startDate?: string;
   endDate?: string;
+  period?: Period;
+  inactive?: boolean;
 }
 
 /**
- * Group resource from OpenSPP V2 API
+ * Group resource from OpenSPP V2 API.
+ * Uses `type` as discriminator and `groupType` for classification
+ * (to avoid collision with the discriminator field).
  */
 export interface GroupResource {
-  resourceType: "Group";
+  type: "Group";
   identifier: Identifier[];
   active?: boolean;
+  groupType?: "household" | "family" | "organization" | "other";
   name?: string;
+  quantity?: number;
   member?: GroupMember[];
+  address?: Address[];
   extension?: Record<string, Extension>;
+  meta?: ResourceMeta;
+}
+
+// ==================== Search Result (ADR-019) ====================
+
+/**
+ * Pagination metadata for search results
+ */
+export interface SearchResultMeta {
+  total: number;
+  count: number;
+  offset: number;
 }
 
 /**
- * Bundle entry for batch operations
+ * Navigation links for paginated search results
+ */
+export interface SearchResultLinks {
+  self: string;
+  next?: string | null;
+  prev?: string | null;
+}
+
+/**
+ * Search result envelope (ADR-019).
+ * Replaces the FHIR Bundle `searchset` format.
+ * Resources are directly in `data[]` with no entry wrapper.
+ */
+export interface SearchResult<T = IndividualResource | GroupResource> {
+  data: T[];
+  meta: SearchResultMeta;
+  links: SearchResultLinks;
+}
+
+// ==================== Batch/Transaction (FHIR Bundle format) ====================
+
+/**
+ * Bundle entry for batch operations.
+ * Inner resources use `type` (ADR-019), but the Bundle wrapper uses `resourceType`.
  */
 export interface BundleEntry<T = IndividualResource | GroupResource> {
   fullUrl?: string;
@@ -153,7 +228,8 @@ export interface BundleEntry<T = IndividualResource | GroupResource> {
 }
 
 /**
- * Bundle resource for batch/transaction operations
+ * Bundle resource for batch/transaction operations.
+ * Retains legacy FHIR format per API spec.
  */
 export interface Bundle<T = IndividualResource | GroupResource> {
   resourceType: "Bundle";
@@ -161,31 +237,31 @@ export interface Bundle<T = IndividualResource | GroupResource> {
   entry: BundleEntry<T>[];
 }
 
+// ==================== Error Types (RFC 9457) ====================
+
 /**
- * Search result bundle
+ * Individual field error within a ProblemDetail response
  */
-export interface SearchBundle<T = IndividualResource | GroupResource> {
-  resourceType: "Bundle";
-  type: "searchset";
-  total?: number;
-  entry?: BundleEntry<T>[];
-  link?: Array<{
-    relation: "self" | "next" | "previous";
-    url: string;
-  }>;
+export interface FieldError {
+  field: string;
+  code: string;
+  message: string;
 }
 
 /**
- * Operation outcome for errors
+ * RFC 9457 Problem Details error response.
+ * Replaces FHIR OperationOutcome.
  */
-export interface OperationOutcome {
-  resourceType: "OperationOutcome";
-  issue: Array<{
-    severity: "fatal" | "error" | "warning" | "information";
-    code: string;
-    diagnostics?: string;
-  }>;
+export interface ProblemDetail {
+  type: string;
+  title: string;
+  status: number;
+  detail: string;
+  instance?: string;
+  errors?: FieldError[];
 }
+
+// ==================== Studio Types ====================
 
 /**
  * Studio field definition
@@ -211,6 +287,8 @@ export interface StudioFieldsResponse {
   items: StudioField[];
   nextPageId?: number;
 }
+
+// ==================== Client Configuration ====================
 
 /**
  * Configuration for the OpenSPP V2 client

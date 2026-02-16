@@ -21,21 +21,39 @@ import type { EventStore, ExternalSyncConfig, EntityPair } from "../interfaces/t
 import { EntityType } from "../interfaces/types";
 import OpenSppV2SyncAdapter from "../components/openspp-v2/OpenSppV2SyncAdapter";
 import { EventApplierService } from "../services/EventApplierService";
-import type { IndividualResource, SearchBundle } from "../components/openspp-v2/types";
+import type { IndividualResource, GroupResource, SearchResult } from "../components/openspp-v2/types";
 
-// Mock the OpenSppV2Client
 const mockV2ClientImplementation = {
   authenticate: jest.fn().mockResolvedValue(undefined),
   isAuthenticated: jest.fn().mockReturnValue(true),
   formatIdentifier: jest.fn((value: string) => `urn:datacollect:entity|${value}`),
   createIdentifier: jest.fn((value: string) => ({ system: "urn:datacollect:entity", value })),
   getIndividual: jest.fn().mockResolvedValue(null),
-  searchIndividuals: jest.fn().mockResolvedValue({ resourceType: "Bundle", type: "searchset", entry: [] }),
+  searchIndividuals: jest.fn().mockResolvedValue({
+    data: [],
+    meta: { total: 0, count: 0, offset: 0 },
+    links: { self: "/api/v2/spp/Individual" },
+  }),
   createIndividual: jest.fn().mockImplementation((resource: IndividualResource) => ({
     ...resource,
     identifier: resource.identifier,
+    meta: { versionId: "123456" },
   })),
-  updateIndividual: jest.fn().mockImplementation((_, resource: IndividualResource) => resource),
+  updateIndividual: jest.fn().mockImplementation((_: string, resource: IndividualResource) => resource),
+  patchIndividual: jest.fn().mockImplementation(() => ({ type: "Individual", identifier: [] })),
+  getGroup: jest.fn().mockResolvedValue(null),
+  searchGroups: jest.fn().mockResolvedValue({
+    data: [],
+    meta: { total: 0, count: 0, offset: 0 },
+    links: { self: "/api/v2/spp/Group" },
+  }),
+  createGroup: jest.fn().mockImplementation((resource: GroupResource) => ({
+    ...resource,
+    identifier: resource.identifier,
+    meta: { versionId: "123456" },
+  })),
+  updateGroup: jest.fn().mockImplementation((_: string, resource: GroupResource) => resource),
+  patchGroup: jest.fn().mockImplementation(() => ({ type: "Group", identifier: [] })),
 };
 
 jest.mock("../components/openspp-v2/OpenSppV2Client", () => {
@@ -92,27 +110,22 @@ describe("OpenSppV2SyncAdapter", () => {
   describe("authenticate", () => {
     it("authenticates successfully with valid credentials", async () => {
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
-
       const result = await adapter.authenticate();
-
       expect(result).toBe(true);
       expect(mockV2ClientImplementation.authenticate).toHaveBeenCalled();
     });
 
     it("returns false on authentication failure", async () => {
       mockV2ClientImplementation.authenticate.mockRejectedValueOnce(new Error("Auth failed"));
-
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
-
       const result = await adapter.authenticate();
-
       expect(result).toBe(false);
     });
   });
 
-  describe("pushData", () => {
-    it("pushes individuals to OpenSPP V2", async () => {
-      const individualEntityPair: EntityPair = {
+  describe("pushData - individuals", () => {
+    it("creates new individuals with type discriminator", async () => {
+      const entityPair: EntityPair = {
         guid: "individual-1",
         initial: {
           id: "entity-1",
@@ -145,22 +158,20 @@ describe("OpenSppV2SyncAdapter", () => {
       };
 
       const mockEntityStore = {
-        getAllEntities: jest.fn().mockResolvedValue([individualEntityPair]),
-        getEntity: jest.fn().mockResolvedValue(individualEntityPair),
+        getAllEntities: jest.fn().mockResolvedValue([entityPair]),
+        getEntity: jest.fn().mockResolvedValue(entityPair),
         getEntityByExternalId: jest.fn().mockResolvedValue(null),
         saveEntity: jest.fn(),
       };
-
       eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
 
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
-
       await expect(adapter.pushData()).resolves.toBeUndefined();
 
       expect(mockEntityStore.getAllEntities).toHaveBeenCalled();
       expect(mockV2ClientImplementation.createIndividual).toHaveBeenCalledWith(
         expect.objectContaining({
-          resourceType: "Individual",
+          type: "Individual",
           identifier: expect.arrayContaining([
             expect.objectContaining({
               system: "urn:datacollect:entity",
@@ -175,8 +186,8 @@ describe("OpenSppV2SyncAdapter", () => {
       );
     });
 
-    it("updates existing individuals with externalId", async () => {
-      const individualEntityPair: EntityPair = {
+    it("uses PATCH for existing individuals with externalId", async () => {
+      const entityPair: EntityPair = {
         guid: "individual-1",
         initial: {
           id: "entity-1",
@@ -184,12 +195,7 @@ describe("OpenSppV2SyncAdapter", () => {
           type: EntityType.Individual,
           version: 1,
           externalId: "individual-1",
-          data: {
-            entityName: "individual",
-            firstName: "Jane",
-            lastName: "Doe",
-            externalId: "individual-1",
-          },
+          data: { entityName: "individual", firstName: "Jane", lastName: "Doe", externalId: "individual-1" },
           lastUpdated: "2024-01-01T12:00:00.000Z",
         },
         modified: {
@@ -198,38 +204,29 @@ describe("OpenSppV2SyncAdapter", () => {
           type: EntityType.Individual,
           version: 1,
           externalId: "individual-1",
-          data: {
-            entityName: "individual",
-            firstName: "Jane",
-            lastName: "Smith",
-            externalId: "individual-1",
-          },
+          data: { entityName: "individual", firstName: "Jane", lastName: "Smith", externalId: "individual-1" },
           lastUpdated: "2024-01-02T12:00:00.000Z",
         },
       };
 
       const mockEntityStore = {
-        getAllEntities: jest.fn().mockResolvedValue([individualEntityPair]),
-        getEntity: jest.fn().mockResolvedValue(individualEntityPair),
-        getEntityByExternalId: jest.fn().mockResolvedValue(individualEntityPair),
+        getAllEntities: jest.fn().mockResolvedValue([entityPair]),
+        getEntity: jest.fn().mockResolvedValue(entityPair),
+        getEntityByExternalId: jest.fn().mockResolvedValue(entityPair),
         saveEntity: jest.fn(),
       };
-
       eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
 
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
-
       await expect(adapter.pushData()).resolves.toBeUndefined();
 
-      expect(mockV2ClientImplementation.updateIndividual).toHaveBeenCalledWith(
+      expect(mockV2ClientImplementation.patchIndividual).toHaveBeenCalledWith(
         "urn:datacollect:entity|individual-1",
         expect.objectContaining({
-          resourceType: "Individual",
-          name: expect.objectContaining({
-            family: "Smith",
-          }),
+          name: expect.objectContaining({ family: "Smith" }),
         }),
       );
+      expect(mockV2ClientImplementation.createIndividual).not.toHaveBeenCalled();
     });
 
     it("handles empty entity list", async () => {
@@ -239,57 +236,123 @@ describe("OpenSppV2SyncAdapter", () => {
         getEntityByExternalId: jest.fn().mockResolvedValue(null),
         saveEntity: jest.fn(),
       };
-
       eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
 
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
-
       await expect(adapter.pushData()).resolves.toBeUndefined();
 
       expect(mockV2ClientImplementation.createIndividual).not.toHaveBeenCalled();
-      expect(mockV2ClientImplementation.updateIndividual).not.toHaveBeenCalled();
+      expect(mockV2ClientImplementation.patchIndividual).not.toHaveBeenCalled();
     });
   });
 
-  describe("pullData", () => {
-    it("pulls individuals from OpenSPP V2", async () => {
-      const mockSearchResult: SearchBundle<IndividualResource> = {
-        resourceType: "Bundle",
-        type: "searchset",
-        total: 1,
-        entry: [
+  describe("pushData - groups", () => {
+    it("creates new groups with type and groupType", async () => {
+      const groupPair: EntityPair = {
+        guid: "group-1",
+        initial: {
+          id: "entity-g1",
+          guid: "group-1",
+          type: EntityType.Group,
+          version: 1,
+          data: { entityName: "group", name: "Santos Household", groupType: "household" },
+          lastUpdated: "2024-01-01T12:00:00.000Z",
+        },
+        modified: {
+          id: "entity-g1",
+          guid: "group-1",
+          type: EntityType.Group,
+          version: 1,
+          data: { entityName: "group", name: "Santos Household", groupType: "household" },
+          lastUpdated: "2024-01-01T12:00:00.000Z",
+        },
+      };
+
+      const mockEntityStore = {
+        getAllEntities: jest.fn().mockResolvedValue([groupPair]),
+        getEntity: jest.fn().mockResolvedValue(groupPair),
+        getEntityByExternalId: jest.fn().mockResolvedValue(null),
+        saveEntity: jest.fn(),
+      };
+      eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      await expect(adapter.pushData()).resolves.toBeUndefined();
+
+      expect(mockV2ClientImplementation.createGroup).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "Group",
+          groupType: "household",
+          name: "Santos Household",
+        }),
+      );
+    });
+
+    it("uses PATCH for existing groups with externalId", async () => {
+      const groupPair: EntityPair = {
+        guid: "group-1",
+        initial: {
+          id: "entity-g1",
+          guid: "group-1",
+          type: EntityType.Group,
+          version: 1,
+          externalId: "group-1",
+          data: { entityName: "group", name: "Old Name", externalId: "group-1" },
+          lastUpdated: "2024-01-01T12:00:00.000Z",
+        },
+        modified: {
+          id: "entity-g1",
+          guid: "group-1",
+          type: EntityType.Group,
+          version: 1,
+          externalId: "group-1",
+          data: { entityName: "group", name: "New Name", externalId: "group-1" },
+          lastUpdated: "2024-01-02T12:00:00.000Z",
+        },
+      };
+
+      const mockEntityStore = {
+        getAllEntities: jest.fn().mockResolvedValue([groupPair]),
+        getEntity: jest.fn().mockResolvedValue(groupPair),
+        getEntityByExternalId: jest.fn().mockResolvedValue(groupPair),
+        saveEntity: jest.fn(),
+      };
+      eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      await expect(adapter.pushData()).resolves.toBeUndefined();
+
+      expect(mockV2ClientImplementation.patchGroup).toHaveBeenCalledWith(
+        "urn:datacollect:entity|group-1",
+        expect.objectContaining({ name: "New Name" }),
+      );
+    });
+  });
+
+  describe("pullData - individuals", () => {
+    it("pulls individuals using SearchResult format", async () => {
+      const mockSearchResult: SearchResult<IndividualResource> = {
+        data: [
           {
-            resource: {
-              resourceType: "Individual",
-              identifier: [
-                { system: "urn:datacollect:entity", value: "pulled-individual-1" },
-              ],
-              name: {
-                given: "John",
-                family: "Doe",
-                text: "Doe, John",
-              },
-              birthDate: "1990-05-15",
-              gender: {
-                coding: [
-                  { system: "urn:iso:std:iso:5218", code: "1", display: "Male" },
-                ],
-              },
-            },
+            type: "Individual",
+            identifier: [{ system: "urn:datacollect:entity", value: "pulled-individual-1" }],
+            name: { given: "John", family: "Doe", text: "Doe, John" },
+            birthDate: "1990-05-15",
+            gender: { coding: [{ system: "urn:iso:std:iso:5218", code: "1", display: "Male" }] },
           },
         ],
+        meta: { total: 1, count: 1, offset: 0 },
+        links: { self: "/api/v2/spp/Individual?_count=100&_offset=0" },
       };
 
       mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce(mockSearchResult);
-      // Return empty result for second call to end pagination
       mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce({
-        resourceType: "Bundle",
-        type: "searchset",
-        entry: [],
+        data: [],
+        meta: { total: 1, count: 0, offset: 1 },
+        links: { self: "/api/v2/spp/Individual?_count=100&_offset=1" },
       });
 
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
-
       await adapter.pullData();
 
       expect(mockV2ClientImplementation.searchIndividuals).toHaveBeenCalled();
@@ -335,40 +398,31 @@ describe("OpenSppV2SyncAdapter", () => {
         getEntityByExternalId: jest.fn().mockResolvedValue(existingEntityPair),
         saveEntity: jest.fn(),
       };
-
       eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
 
-      const mockSearchResult: SearchBundle<IndividualResource> = {
-        resourceType: "Bundle",
-        type: "searchset",
-        total: 1,
-        entry: [
-          {
-            resource: {
-              resourceType: "Individual",
-              identifier: [
-                { system: "urn:datacollect:entity", value: "pulled-individual-1" },
-              ],
-              name: {
-                given: "Updated",
-                family: "Name",
-              },
-            },
-          },
-        ],
-      };
-
-      // Reset and set up fresh mocks
       mockV2ClientImplementation.searchIndividuals.mockReset();
-      mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce(mockSearchResult);
       mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce({
-        resourceType: "Bundle",
-        type: "searchset",
-        entry: [],
+        data: [{
+          type: "Individual",
+          identifier: [{ system: "urn:datacollect:entity", value: "pulled-individual-1" }],
+          name: { given: "Updated", family: "Name" },
+        }],
+        meta: { total: 1, count: 1, offset: 0 },
+        links: { self: "/api/v2/spp/Individual" },
+      } as SearchResult<IndividualResource>);
+      mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce({
+        data: [],
+        meta: { total: 1, count: 0, offset: 1 },
+        links: { self: "/api/v2/spp/Individual" },
+      });
+      mockV2ClientImplementation.searchGroups.mockReset();
+      mockV2ClientImplementation.searchGroups.mockResolvedValue({
+        data: [],
+        meta: { total: 0, count: 0, offset: 0 },
+        links: { self: "/api/v2/spp/Group" },
       });
 
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
-
       await adapter.pullData();
 
       expect(eventApplierService.submitForm).toHaveBeenCalledWith(
@@ -380,32 +434,80 @@ describe("OpenSppV2SyncAdapter", () => {
     });
 
     it("handles empty search results", async () => {
-      // Reset mocks and set up for this specific test
       mockV2ClientImplementation.searchIndividuals.mockReset();
       mockV2ClientImplementation.searchIndividuals.mockResolvedValue({
-        resourceType: "Bundle",
-        type: "searchset",
-        entry: [],
+        data: [],
+        meta: { total: 0, count: 0, offset: 0 },
+        links: { self: "/api/v2/spp/Individual" },
+      });
+      mockV2ClientImplementation.searchGroups.mockReset();
+      mockV2ClientImplementation.searchGroups.mockResolvedValue({
+        data: [],
+        meta: { total: 0, count: 0, offset: 0 },
+        links: { self: "/api/v2/spp/Group" },
       });
 
-      // Create fresh event applier service mock
       const freshMockEntityStore = {
         getAllEntities: jest.fn().mockResolvedValue([]),
         getEntity: jest.fn().mockResolvedValue(null),
         getEntityByExternalId: jest.fn().mockResolvedValue(null),
         saveEntity: jest.fn(),
       };
-
       const freshEventApplierService = {
         submitForm: jest.fn(),
         getEntityStore: jest.fn().mockReturnValue(freshMockEntityStore),
       } as unknown as jest.Mocked<EventApplierService>;
 
       adapter = new OpenSppV2SyncAdapter(eventStore, freshEventApplierService, config);
-
       await adapter.pullData();
 
       expect(freshEventApplierService.submitForm).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("pullData - groups", () => {
+    it("pulls groups using SearchResult format", async () => {
+      mockV2ClientImplementation.searchIndividuals.mockReset();
+      mockV2ClientImplementation.searchIndividuals.mockResolvedValue({
+        data: [],
+        meta: { total: 0, count: 0, offset: 0 },
+        links: { self: "/api/v2/spp/Individual" },
+      });
+
+      const mockGroupResult: SearchResult<GroupResource> = {
+        data: [
+          {
+            type: "Group",
+            identifier: [{ system: "urn:datacollect:entity", value: "pulled-group-1" }],
+            groupType: "household",
+            name: "Santos Household",
+          },
+        ],
+        meta: { total: 1, count: 1, offset: 0 },
+        links: { self: "/api/v2/spp/Group" },
+      };
+
+      mockV2ClientImplementation.searchGroups.mockReset();
+      mockV2ClientImplementation.searchGroups.mockResolvedValueOnce(mockGroupResult);
+      mockV2ClientImplementation.searchGroups.mockResolvedValueOnce({
+        data: [],
+        meta: { total: 1, count: 0, offset: 1 },
+        links: { self: "/api/v2/spp/Group" },
+      });
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      await adapter.pullData();
+
+      expect(eventApplierService.submitForm).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "create-group",
+          data: expect.objectContaining({
+            entityName: "group",
+            name: "Santos Household",
+            groupType: "household",
+          }),
+        }),
+      );
     });
   });
 
@@ -424,8 +526,6 @@ describe("OpenSppV2SyncAdapter", () => {
       };
 
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, customConfig);
-
-      // Verify adapter was created with custom config
       await adapter.authenticate();
       expect(mockV2ClientImplementation.authenticate).toHaveBeenCalled();
     });
@@ -442,7 +542,6 @@ describe("OpenSppV2SyncAdapter", () => {
       };
 
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, legacyConfig);
-
       await adapter.authenticate();
       expect(mockV2ClientImplementation.authenticate).toHaveBeenCalled();
     });

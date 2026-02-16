@@ -24,7 +24,7 @@ import type {
   IndividualResource,
   GroupResource,
   Bundle,
-  SearchBundle,
+  SearchResult,
   StudioFieldsResponse,
   Identifier,
 } from "./types";
@@ -187,17 +187,18 @@ export class OpenSppV2Client {
 
   /**
    * Search for individuals with optional filters.
+   * Returns ADR-019 SearchResult envelope with data/meta/links.
    *
    * @param params Search parameters (name, birthdate, identifier, group, etc.)
-   * @returns Search result bundle
+   * @returns SearchResult with Individual resources
    */
   async searchIndividuals(
     params: Record<string, string> = {},
-  ): Promise<SearchBundle<IndividualResource>> {
+  ): Promise<SearchResult<IndividualResource>> {
     await this.authenticate();
 
     try {
-      const response = await this.httpClient.get<SearchBundle<IndividualResource>>(
+      const response = await this.httpClient.get<SearchResult<IndividualResource>>(
         "/api/v2/spp/Individual",
         {
           headers: this.getAuthHeaders(),
@@ -263,6 +264,39 @@ export class OpenSppV2Client {
     }
   }
 
+  /**
+   * Partially update an individual using JSON Merge Patch (RFC 7396).
+   * Only specified fields are updated; omitted fields remain unchanged.
+   *
+   * @param identifier Full identifier in format {namespace}|{value}
+   * @param patch Partial individual fields to update
+   * @param versionId Optional versionId for optimistic locking (If-Match header)
+   * @returns The updated individual
+   */
+  async patchIndividual(
+    identifier: string,
+    patch: Partial<Omit<IndividualResource, "type" | "identifier">>,
+    versionId?: string,
+  ): Promise<IndividualResource> {
+    await this.authenticate();
+
+    const headers: Record<string, string> = { ...this.getAuthHeaders() };
+    if (versionId) {
+      headers["If-Match"] = `"${versionId}"`;
+    }
+
+    try {
+      const response = await this.httpClient.patch<IndividualResource>(
+        `/api/v2/spp/Individual/${encodeURIComponent(identifier)}`,
+        patch,
+        { headers },
+      );
+      return response.data;
+    } catch (error) {
+      throw this.handleApiError(error, "Failed to patch individual");
+    }
+  }
+
   // ==================== Group Operations ====================
 
   /**
@@ -293,15 +327,16 @@ export class OpenSppV2Client {
 
   /**
    * Search for groups with optional filters.
+   * Returns ADR-019 SearchResult envelope with data/meta/links.
    *
    * @param params Search parameters
-   * @returns Search result bundle
+   * @returns SearchResult with Group resources
    */
-  async searchGroups(params: Record<string, string> = {}): Promise<SearchBundle<GroupResource>> {
+  async searchGroups(params: Record<string, string> = {}): Promise<SearchResult<GroupResource>> {
     await this.authenticate();
 
     try {
-      const response = await this.httpClient.get<SearchBundle<GroupResource>>(
+      const response = await this.httpClient.get<SearchResult<GroupResource>>(
         "/api/v2/spp/Group",
         {
           headers: this.getAuthHeaders(),
@@ -361,6 +396,38 @@ export class OpenSppV2Client {
   }
 
   /**
+   * Partially update a group using JSON Merge Patch (RFC 7396).
+   *
+   * @param identifier Full identifier in format {namespace}|{value}
+   * @param patch Partial group fields to update
+   * @param versionId Optional versionId for optimistic locking (If-Match header)
+   * @returns The updated group
+   */
+  async patchGroup(
+    identifier: string,
+    patch: Partial<Omit<GroupResource, "type" | "identifier">>,
+    versionId?: string,
+  ): Promise<GroupResource> {
+    await this.authenticate();
+
+    const headers: Record<string, string> = { ...this.getAuthHeaders() };
+    if (versionId) {
+      headers["If-Match"] = `"${versionId}"`;
+    }
+
+    try {
+      const response = await this.httpClient.patch<GroupResource>(
+        `/api/v2/spp/Group/${encodeURIComponent(identifier)}`,
+        patch,
+        { headers },
+      );
+      return response.data;
+    } catch (error) {
+      throw this.handleApiError(error, "Failed to patch group");
+    }
+  }
+
+  /**
    * Add a member to a group.
    *
    * @param groupIdentifier Full group identifier
@@ -404,12 +471,12 @@ export class OpenSppV2Client {
    *
    * @param groupIdentifier Full group identifier
    * @param memberIdentifier Full individual identifier
-   * @param reason Optional reason for removal
+   * @param options Optional reason and endedDate for the removal
    */
   async removeGroupMember(
     groupIdentifier: string,
     memberIdentifier: string,
-    reason?: string,
+    options?: { reason?: string; endedDate?: string },
   ): Promise<void> {
     await this.authenticate();
 
@@ -419,8 +486,11 @@ export class OpenSppV2Client {
       },
     };
 
-    if (reason) {
-      body.reason = reason;
+    if (options?.reason) {
+      body.reason = options.reason;
+    }
+    if (options?.endedDate) {
+      body.endedDate = options.endedDate;
     }
 
     try {
@@ -527,8 +597,9 @@ export class OpenSppV2Client {
     if (axios.isAxiosError(error)) {
       const axiosError = error as AxiosError<{ detail?: string; message?: string }>;
       const status = axiosError.response?.status;
-      const detail =
+      const rawDetail =
         axiosError.response?.data?.detail || axiosError.response?.data?.message || axiosError.message;
+      const detail = typeof rawDetail === "object" ? JSON.stringify(rawDetail) : rawDetail;
 
       if (status === 401) {
         // Clear token on auth failure
