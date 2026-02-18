@@ -7,6 +7,10 @@ import { SyncLevel } from '@idpass/data-collect-core'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { ScannerService } from '@/scanner/ScannerService'
+import { matchEntities } from '@/scanner/matchEntities'
+import type { ScannedIdentity, MatchResult, ScannerMatchConfig } from '@/scanner/types'
+import ScanMatchResults from '@/components/ScanMatchResults.vue'
 
 type SubmissionSnapshot = {
   lastUpdated: string
@@ -33,6 +37,10 @@ const submissions = ref<SubmissionRecord[]>([])
 const { isOffline } = useNetworkStatus()
 
 const searchTerm = ref('')
+const isEntityListLoaded = ref(false)
+const showMatchResults = ref(false)
+const matchResults = ref<MatchResult[]>([])
+const lastScannedIdentity = ref<ScannedIdentity | null>(null)
 
 const props = defineProps<{
   id: string
@@ -107,11 +115,11 @@ onMounted(async () => {
     store.getAllEntities(),
     store.getAllEvents()
   ])
-  
+
   const entityList = allEntities.filter((entity) => {
     const entityName = entity.modified.data.entityName as string | undefined
     const formName = entityForm.value?.name
-    
+
     // Match entities that either:
     // 1. Have matching entityName (exact match)
     // 2. Have entityName that matches form name (case-insensitive)
@@ -122,11 +130,11 @@ onMounted(async () => {
       // Check if entityName is a substring of form name or vice versa
       (formName && (entityName.includes(formName) || formName.includes(entityName)))
     )
-    
+
     // Check parentGuid filter
-    const matchesParent = !entity.modified.data.parentGuid || 
+    const matchesParent = !entity.modified.data.parentGuid ||
       entity.modified.data.parentGuid === props.parentGuid
-    
+
     // Include if matches entityName OR (no entityName filter but matches parent)
     return (matchesEntityName || (!entityName && matchesParent)) && matchesParent
   })
@@ -163,6 +171,8 @@ onMounted(async () => {
       status: resolveStatusSync(base, entity.modified.guid, entityEventsMap.get(entity.modified.guid))
     }
   })
+
+  isEntityListLoaded.value = true
 })
 
 const onBack = () => {
@@ -217,6 +227,68 @@ const formatTimestamp = (timestamp: string) => {
   }
   return date.toLocaleString()
 }
+
+const hasScanners = computed(() => {
+  return (entityForm.value?.scanners?.length ?? 0) > 0
+})
+
+const handleScan = async () => {
+  if (!entityForm.value?.scanners || !isEntityListLoaded.value) return
+
+  const result = await ScannerService.scan(entityForm.value.scanners)
+  if (!result) return
+
+  lastScannedIdentity.value = result
+
+  // Get match config from the first scanner config that has one
+  const matchConfig: ScannerMatchConfig | undefined = entityForm.value.scanners.find(
+    (s) => s.match
+  )?.match
+
+  // Match against current entity list
+  const entityList = submissions.value.map((s) => ({
+    guid: s.guid,
+    data: s.modified.data,
+    name: (s.modified.data.name as string | undefined) ?? s.modified.name
+  }))
+  const matches = matchEntities(result, entityList, matchConfig)
+
+  if (matches.length === 1 && matches[0].score >= 0.8) {
+    // Single high-confidence match: navigate directly
+    router.push(route.path + '/' + matches[0].entity.guid + '/detail')
+  } else if (matches.length > 1) {
+    // Multiple matches: show picker
+    matchResults.value = matches
+    showMatchResults.value = true
+  } else {
+    // No match: offer to create new
+    if (confirm('No matching entity found. Create new?')) {
+      router.push({
+        path: route.path + '/new',
+        state: { scannedIdentity: JSON.parse(JSON.stringify(result)) }
+      })
+    }
+  }
+}
+
+const handleMatchSelect = (match: MatchResult) => {
+  showMatchResults.value = false
+  router.push(route.path + '/' + match.entity.guid + '/detail')
+}
+
+const handleMatchCreateNew = () => {
+  showMatchResults.value = false
+  if (lastScannedIdentity.value) {
+    router.push({
+      path: route.path + '/new',
+      state: { scannedIdentity: JSON.parse(JSON.stringify(lastScannedIdentity.value)) }
+    })
+  }
+}
+
+const handleMatchClose = () => {
+  showMatchResults.value = false
+}
 </script>
 
 <template>
@@ -242,15 +314,27 @@ const formatTimestamp = (timestamp: string) => {
         <h1>{{ entityForm?.title }}</h1>
         <p>{{ entityForm?.description || 'View saved submissions and continue data collection.' }}</p>
       </div>
-      <button
-        class="pill-button"
-        type="button"
-        @click="router.push(route.path + '/new')"
-      >
-        <svg viewBox="0 0 24 24" focusable="false">
-          <path d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z" fill="currentColor" />
-        </svg>
-      </button>
+      <div class="entity-header__actions">
+        <button
+          v-if="hasScanners"
+          class="pill-button pill-button--scan"
+          type="button"
+          @click="handleScan"
+        >
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M9.5 6.5v3h-3v-3h3M11 5H5v6h6V5zm-1.5 9.5v3h-3v-3h3M11 13H5v6h6v-6zm6.5-6.5v3h-3v-3h3M19 5h-6v6h6V5zm-6 8h1.5v1.5H13V13zm1.5 1.5H16V16h-1.5v-1.5zM16 13h1.5v1.5H16V13zm-3 3h1.5v1.5H13V16zm1.5 1.5H16V19h-1.5v-1.5zM16 16h1.5v1.5H16V16zm1.5-1.5H19V16h-1.5v-1.5zm0 3H19V19h-1.5v-1.5zM19 13v1.5h-1.5V13H19z" fill="currentColor" />
+          </svg>
+        </button>
+        <button
+          class="pill-button"
+          type="button"
+          @click="router.push(route.path + '/new')"
+        >
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z" fill="currentColor" />
+          </svg>
+        </button>
+      </div>
     </header>
 
     <section class="submissions-panel" aria-labelledby="submissions-heading">
@@ -322,6 +406,14 @@ const formatTimestamp = (timestamp: string) => {
         </li>
       </ul>
     </section>
+
+    <ScanMatchResults
+      :matches="matchResults"
+      :visible="showMatchResults"
+      @select="handleMatchSelect"
+      @create-new="handleMatchCreateNew"
+      @close="handleMatchClose"
+    />
   </div>
 </template>
 
@@ -399,6 +491,12 @@ const formatTimestamp = (timestamp: string) => {
   font-size: 0.95rem;
 }
 
+.entity-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .pill-button {
   display: inline-flex;
   align-items: center;
@@ -414,6 +512,16 @@ const formatTimestamp = (timestamp: string) => {
 .pill-button svg {
   width: 18px;
   height: 18px;
+}
+
+.pill-button--scan {
+  background: rgba(15, 23, 42, 0.08);
+  color: #374151;
+  box-shadow: none;
+}
+
+.pill-button--scan:active {
+  background: rgba(15, 23, 42, 0.15);
 }
 
 .submissions-panel {

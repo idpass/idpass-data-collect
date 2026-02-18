@@ -67,6 +67,7 @@ export interface EntityForm {
   description?: string
   dependsOn?: string
   formio?: unknown
+  scanners?: import('@/scanner/types').ScannerConfig[]
 }
 
 export interface EntityData {

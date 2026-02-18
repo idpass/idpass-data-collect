@@ -37,9 +37,11 @@ import { useAuthManagerStore } from './store/authManager'
 
 import { createPinia } from 'pinia'
 import { registerCustomComponents } from './formio'
+import { registerDecoders } from './scanner'
 
 async function initApp() {
   registerCustomComponents()
+  registerDecoders()
   const isFeatureDynamicTurnedOn = import.meta.env.VITE_FEATURE_DYNAMIC
   const AppComponent = isFeatureDynamicTurnedOn ? DyApp : App
   const pinia = createPinia()

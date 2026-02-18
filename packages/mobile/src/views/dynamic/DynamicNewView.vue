@@ -6,9 +6,10 @@ import { EntityForm } from '@/utils/dynamicFormIoUtils'
 import { Form as FormIO } from '@formio/vue/lib/index'
 import { SyncLevel } from '@idpass/data-collect-core'
 import { v4 as uuidv4 } from 'uuid'
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import type { ScannedIdentity } from '@/scanner/types'
 
 const props = defineProps<{
   id: string
@@ -25,6 +26,8 @@ const formio = ref<unknown>()
 const isGroup = ref(false)
 const submissionCount = ref(0)
 const { isOffline } = useNetworkStatus()
+const formioInstance = ref<{ submission: { data: Record<string, unknown> } } | null>(null)
+const scannedData = ref<ScannedIdentity | null>(null)
 
 type FormSubmissionEvent = {
   data: Record<string, unknown>
@@ -50,6 +53,12 @@ onMounted(async () => {
 
   const entities = await store.searchEntities([{ entityName: entityForm.value?.name }])
   submissionCount.value = entities.length
+
+  // Check for scanned identity data passed via router state for pre-filling
+  const stateData = history.state?.scannedIdentity as ScannedIdentity | undefined
+  if (stateData) {
+    scannedData.value = stateData
+  }
 })
 
 const onSubmit = async (submission: FormSubmissionEvent) => {
@@ -69,6 +78,32 @@ const onSubmit = async (submission: FormSubmissionEvent) => {
     syncLevel: SyncLevel.LOCAL
   })
   router.go(-1)
+}
+
+/**
+ * Pre-fill the form with scanned identity data when the Form.io instance is ready.
+ * Maps ScannedIdentity fields to form field keys.
+ */
+const onFormReady = (form: { submission: { data: Record<string, unknown> } }) => {
+  formioInstance.value = form
+  if (scannedData.value) {
+    const prefillData: Record<string, unknown> = {}
+    const s = scannedData.value
+    if (s.fullName) prefillData.name = s.fullName
+    if (s.firstName) prefillData.firstName = s.firstName
+    if (s.middleName) prefillData.middleName = s.middleName
+    if (s.lastName) prefillData.lastName = s.lastName
+    if (s.dateOfBirth) prefillData.dateOfBirth = s.dateOfBirth
+    if (s.gender) prefillData.gender = s.gender
+    if (s.nationality) prefillData.nationality = s.nationality
+    if (s.address) prefillData.address = s.address
+    if (s.phone) prefillData.phone = s.phone
+    if (s.email) prefillData.email = s.email
+    if (s.photo) prefillData.photo = s.photo
+    if (s.primaryId) prefillData.externalId = s.primaryId
+
+    form.submission = { data: { ...form.submission.data, ...prefillData } }
+  }
 }
 
 const onBack = () => {
@@ -102,7 +137,7 @@ const onBack = () => {
     </header>
 
     <section class="form-wrapper">
-      <FormIO :form="formio" @submit="onSubmit" />
+      <FormIO :form="formio" @submit="onSubmit" @formReady="onFormReady" />
     </section>
   </div>
 </template>

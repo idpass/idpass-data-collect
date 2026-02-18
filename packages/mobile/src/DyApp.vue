@@ -2,7 +2,7 @@
 
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
-import Claim169ScannerOverlay from '@/components/Claim169ScannerOverlay.vue'
+import ScannerOverlay from '@/components/ScannerOverlay.vue'
 </script>
 
 <template>
@@ -16,7 +16,7 @@ import Claim169ScannerOverlay from '@/components/Claim169ScannerOverlay.vue'
       <RouterView />
     </div>
   </main>
-  <Claim169ScannerOverlay />
+  <ScannerOverlay />
 </template>
 
 <style scoped>

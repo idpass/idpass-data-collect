@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
-import Claim169ScannerOverlay from '@/components/Claim169ScannerOverlay.vue'
+import ScannerOverlay from '@/components/ScannerOverlay.vue'
 
 const { isOffline } = useNetworkStatus()
 </script>
@@ -20,7 +20,7 @@ const { isOffline } = useNetworkStatus()
     <main class="app-content disable-scrollbars">
       <RouterView />
     </main>
-    <Claim169ScannerOverlay />
+    <ScannerOverlay />
   </div>
 </template>
 

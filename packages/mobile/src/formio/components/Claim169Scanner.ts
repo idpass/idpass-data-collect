@@ -18,8 +18,10 @@
  */
 
 import Formio from 'formiojs';
-import { Claim169ScannerService } from '../../services/Claim169ScannerService';
-import { registerIssuerKey, Claim169IdentityData, VerifiedIdentity, genderToString, imageFormatToMimeType } from '../../services/claim169Service';
+import { ScannerService } from '../../scanner/ScannerService';
+import { registerIssuerKey, genderToString, imageFormatToMimeType } from '../../services/claim169Service';
+import type { Claim169IdentityData, VerifiedIdentity } from '../../services/claim169Service';
+import type { ScannedIdentity } from '../../scanner/types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const Field = (Formio as { Components: { components: { field: unknown } } }).Components.components.field as any;
@@ -53,6 +55,7 @@ export default class Claim169Scanner extends Field {
       unique: false,
       persistent: true,
       // Custom properties
+      scannerType: 'claim169',
       trustedIssuers: [],
       fieldMappings: [],
       storeOriginalData: true,
@@ -185,12 +188,13 @@ export default class Claim169Scanner extends Field {
       });
     }
 
+    const decoderId = this.component.scannerType ?? 'claim169';
+
     try {
-      const result = await Claim169ScannerService.scan({
-        title: this.component.label,
-        description: this.component.description || 'Scan Claim-169 QR Code',
-        trustedIssuers
-      });
+      const result = await ScannerService.scan([{
+        decoderId,
+        config: { trustedIssuers }
+      }]);
 
       if (result) {
         this.handleScanResult(result);
@@ -200,12 +204,12 @@ export default class Claim169Scanner extends Field {
     }
   }
 
-  handleScanResult(result: VerifiedIdentity) {
+  handleScanResult(scanned: ScannedIdentity) {
     // 1. Map fields to form components
     if (this.component.fieldMappings && Array.isArray(this.component.fieldMappings)) {
       this.component.fieldMappings.forEach((mapping: FieldMapping) => {
         if (mapping.claimField && mapping.formField) {
-          const value = this.getClaimValue(result.identity, mapping.claimField);
+          const value = this.getScannedValue(scanned, mapping.claimField);
           if (value !== undefined) {
             const component = this.root.getComponent(mapping.formField);
             if (component) {
@@ -220,54 +224,50 @@ export default class Claim169Scanner extends Field {
 
     // 2. Store original data if configured
     if (this.component.storeOriginalData) {
-      this.setValue(result);
+      // Store the decoder-specific raw data (for claim169, this is the VerifiedIdentity)
+      this.setValue(scanned.rawData);
     } else {
-      // If not storing original data, we just store minimal status metadata
+      // Store minimal status metadata
       this.setValue({
-        isVerified: result.isVerified,
-        isExpired: result.isExpired,
-        cwt: result.cwt,
-        // We might want to store minimal identity info for display if needed, 
-        // but if storeOriginalData is false, user usually wants to avoid storing PII in this field
+        isVerified: scanned.verification.isVerified,
+        isExpired: scanned.verification.isExpired,
+        cwt: {
+          issuer: scanned.verification.issuer,
+          issuedAt: scanned.verification.issuedAt,
+          expiresAt: scanned.verification.expiresAt
+        },
         identity: {
-          id: result.identity.id,
-          fullName: result.identity.fullName // Minimal display info
+          id: scanned.primaryId,
+          fullName: scanned.fullName
         }
       });
     }
-    
+
     this.redraw();
   }
 
-  getClaimValue(identity: Claim169IdentityData, fieldPath: string): unknown {
-    const parts = fieldPath.split('.');
-    let current: any = identity; // eslint-disable-line @typescript-eslint/no-explicit-any
-    
+  /**
+   * Get a value from ScannedIdentity by field path.
+   * Supports direct field names and dot-notation for nested paths.
+   * ScannedIdentity fields like gender and photo are already in the right format
+   * (gender is a string, photo is a data URI).
+   */
+  getScannedValue(scanned: ScannedIdentity, fieldPath: string): unknown {
+    // Map common claim169 field paths to ScannedIdentity fields
+    const fieldMap: Record<string, string> = {
+      'identity.id': 'primaryId',
+      'id': 'primaryId',
+      'isVerified': 'verification.isVerified'
+    };
+
+    const mappedPath = fieldMap[fieldPath] ?? fieldPath;
+
+    const parts = mappedPath.split('.');
+    let current: any = scanned; // eslint-disable-line @typescript-eslint/no-explicit-any
+
     for (const part of parts) {
       if (current === undefined || current === null) return undefined;
       current = current[part];
-    }
-    
-    // Special handling for specific fields to match Form.io expected formats
-    if (fieldPath === 'gender') {
-        return genderToString(current as number);
-    }
-    
-    if (fieldPath === 'dateOfBirth') {
-        return current as string;
-    }
-
-    if (fieldPath === 'photo' && current) {
-         const mimeType = imageFormatToMimeType(identity.photoFormat);
-         // Convert Uint8Array to base64 for image components
-         let base64 = '';
-         const bytes = current instanceof Uint8Array ? current : new Uint8Array(Object.values(current as object));
-         for (let i = 0; i < bytes.length; i++) {
-            base64 += String.fromCharCode(bytes[i]);
-         }
-         // Many Form.io image components expect base64 string directly or data URI
-         const b64 = btoa(base64);
-         return `data:${mimeType};base64,${b64}`;
     }
 
     return current;
