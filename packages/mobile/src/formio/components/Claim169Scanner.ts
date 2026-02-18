@@ -19,8 +19,8 @@
 
 import Formio from 'formiojs';
 import { ScannerService } from '../../scanner/ScannerService';
-import { registerIssuerKey, genderToString, imageFormatToMimeType } from '../../services/claim169Service';
-import type { Claim169IdentityData, VerifiedIdentity } from '../../services/claim169Service';
+import { registerIssuerKey, imageFormatToMimeType } from '../../services/claim169Service';
+import type { VerifiedIdentity } from '../../services/claim169Service';
 import type { ScannedIdentity } from '../../scanner/types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

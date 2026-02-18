@@ -282,7 +282,7 @@ const handleMatchSelect = (match: MatchResult) => {
 const handleMatchCreateNew = () => {
   showMatchResults.value = false
   if (lastScannedIdentity.value) {
-    const { rawData, ...serializableData } = lastScannedIdentity.value
+    const { rawData: _rawData, ...serializableData } = lastScannedIdentity.value
     router.push({
       path: route.path + '/new',
       state: { scannedIdentity: JSON.parse(JSON.stringify(serializableData)) }
@@ -297,7 +297,7 @@ const handleMatchClose = () => {
 const handleNoMatchConfirm = () => {
   showNoMatchConfirm.value = false
   if (lastScannedIdentity.value) {
-    const { rawData, ...serializableData } = lastScannedIdentity.value
+    const { rawData: _rawData, ...serializableData } = lastScannedIdentity.value
     router.push({
       path: route.path + '/new',
       state: { scannedIdentity: JSON.parse(JSON.stringify(serializableData)) }
