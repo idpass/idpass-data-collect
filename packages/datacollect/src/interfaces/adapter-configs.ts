@@ -61,8 +61,8 @@ export interface AdapterConfigSchema {
  */
 export const OpenSppV1AdapterConfig: AdapterConfigSchema = {
   adapterType: "openspp-v1-adapter",
-  displayName: "OpenSPP V1 (Legacy)",
-  description: "Connect to OpenSPP using the legacy JSON-RPC/Odoo API",
+  displayName: "OpenSPP V1",
+  description: "Connect to OpenSPP using the JSON-RPC/Odoo API",
   fields: [
     {
       name: "database",
@@ -242,7 +242,7 @@ export const MockSyncServerAdapterConfig: AdapterConfigSchema = {
  */
 export const ADAPTER_CONFIGS: Record<string, AdapterConfigSchema> = {
   "openspp-v1-adapter": OpenSppV1AdapterConfig,
-  "openspp-adapter": OpenSppV1AdapterConfig, // Legacy alias for backwards compatibility
+  "openspp-adapter": OpenSppV1AdapterConfig, // Alias for backwards compatibility
   "openspp-v2-adapter": OpenSppV2AdapterConfig,
   "openfn-adapter": OpenFnAdapterConfig,
   "mock-sync-server": MockSyncServerAdapterConfig,

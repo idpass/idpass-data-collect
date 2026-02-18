@@ -18,8 +18,9 @@ onMounted(() => {
 const validationResults = computed(() => {
   return {
     general: draftStore.stepValidation.general,
+    integration: draftStore.stepValidation.integration,
     forms: draftStore.stepValidation.forms,
-    sync: draftStore.stepValidation.sync,
+    mapping: draftStore.stepValidation.mapping,
     auth: draftStore.stepValidation.auth,
   }
 })
@@ -27,8 +28,9 @@ const validationResults = computed(() => {
 const allValid = computed(() => {
   return (
     validationResults.value.general &&
+    validationResults.value.integration &&
     validationResults.value.forms &&
-    validationResults.value.sync &&
+    validationResults.value.mapping &&
     validationResults.value.auth
   )
 })
@@ -36,7 +38,7 @@ const allValid = computed(() => {
 const syncTypeLabel = computed(() => {
   const typeMap: Record<string, string> = {
     'mock-sync-server': 'Mock Sync Server',
-    'openspp-v1-adapter': 'OpenSPP V1 (Legacy)',
+    'openspp-v1-adapter': 'OpenSPP V1',
     'openspp-v2-adapter': 'OpenSPP V2',
     'openfn-adapter': 'OpenFn',
   }
@@ -109,7 +111,7 @@ const submitProgram = async () => {
             size="20"
           />
           <span class="validation-item__label">
-            {{ step === 'general' ? 'General Info' : step === 'forms' ? 'Entity Forms' : step === 'sync' ? 'External Sync' : 'Authentication' }}
+            {{ step === 'general' ? 'General Info' : step === 'integration' ? 'Integration' : step === 'forms' ? 'Entity Forms' : step === 'mapping' ? 'Field Mapping' : 'Authentication' }}
           </span>
           <v-icon icon="mdi-chevron-right" size="16" color="grey" />
         </div>
@@ -180,24 +182,42 @@ const submitProgram = async () => {
         </div>
       </v-card>
 
-      <!-- External Sync -->
+      <!-- Integration -->
       <v-card class="summary-card" variant="outlined">
-        <div class="summary-card__header" @click="goToStep('sync')">
-          <h3>External Sync</h3>
+        <div class="summary-card__header" @click="goToStep('integration')">
+          <h3>Integration</h3>
           <v-btn icon="mdi-pencil" variant="text" size="small" />
         </div>
         <v-divider />
         <div class="summary-card__body">
           <div class="summary-field">
-            <span class="summary-field__label">Sync Type</span>
+            <span class="summary-field__label">Integration Type</span>
             <span class="summary-field__value">{{ syncTypeLabel }}</span>
           </div>
           <div class="summary-field">
-            <span class="summary-field__label">URL</span>
+            <span class="summary-field__label">API URL</span>
             <span class="summary-field__value">{{ draftStore.draft.externalSync.url || '-' }}</span>
           </div>
-          <div v-if="draftStore.draft.externalSync.fieldMappings?.length" class="summary-field">
-            <span class="summary-field__label">Field Mappings</span>
+        </div>
+      </v-card>
+
+      <!-- Field Mapping -->
+      <v-card class="summary-card" variant="outlined">
+        <div class="summary-card__header" @click="goToStep('mapping')">
+          <h3>Field Mapping</h3>
+          <v-chip size="small" color="primary" variant="tonal">
+            {{ draftStore.draft.externalSync.fieldMappings?.length || 0 }}
+          </v-chip>
+          <v-spacer />
+          <v-btn icon="mdi-pencil" variant="text" size="small" />
+        </div>
+        <v-divider />
+        <div class="summary-card__body">
+          <div v-if="!draftStore.draft.externalSync.fieldMappings?.length" class="summary-empty">
+            No field mappings configured (optional)
+          </div>
+          <div v-else class="summary-field">
+            <span class="summary-field__label">Configured Mappings</span>
             <span class="summary-field__value">
               {{ draftStore.draft.externalSync.fieldMappings.length }} mapping(s)
             </span>

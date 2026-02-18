@@ -24,11 +24,12 @@
  * including the ADR-019 response format (type discriminator, SearchResult envelope).
  *
  * Prerequisites:
- * - OpenSPP V2 running at http://localhost:8069
- * - API client configured with the credentials below and appropriate scopes
+ * - OpenSPP V2 running (default: http://localhost:8069, configurable via OPENSPP_URL)
+ * - API client configured (OPENSPP_CLIENT_ID, OPENSPP_CLIENT_SECRET) with appropriate scopes
  *
  * These tests are automatically skipped when the server is unreachable.
- * Run specifically with: npx jest --testPathPattern integration --testPathIgnorePatterns=/node_modules/
+ * Run with: npx jest --testPathPattern integration
+ * Custom instance: OPENSPP_URL=https://staging.example.com npm test -- --testPathPattern integration
  */
 
 import axios from "axios";
@@ -39,10 +40,13 @@ import type {
   SearchResult,
 } from "../components/openspp-v2/types";
 
-const BASE_URL = "http://localhost:8069";
-const CLIENT_ID = "client_9wPoIAlhjWDfl4NnkEK5bw";
-const CLIENT_SECRET = "tXwWLiS0ycIGcvUIBtw_g_5Kd01j7S3tel_7ln54Tz8";
-const ID_NAMESPACE = "urn:datacollect:integration-test";
+const BASE_URL = process.env.OPENSPP_URL || "http://localhost:8069";
+const CLIENT_ID = process.env.OPENSPP_CLIENT_ID || "client_9wPoIAlhjWDfl4NnkEK5bw";
+const CLIENT_SECRET =
+  process.env.OPENSPP_CLIENT_SECRET ||
+  "tXwWLiS0ycIGcvUIBtw_g_5Kd01j7S3tel_7ln54Tz8";
+const ID_NAMESPACE =
+  process.env.OPENSPP_ID_NAMESPACE || "urn:datacollect:integration-test";
 
 const testRunId = Date.now().toString(36);
 
@@ -62,7 +66,7 @@ beforeAll(async () => {
     serverAvailable = true;
   } catch {
     console.warn(
-      "OpenSPP V2 server not available at localhost:8069 - skipping integration tests",
+      `OpenSPP V2 server not available at ${BASE_URL} - skipping integration tests`,
     );
     serverAvailable = false;
   }

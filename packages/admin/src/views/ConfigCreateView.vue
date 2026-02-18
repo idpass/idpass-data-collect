@@ -900,7 +900,7 @@ const goBack = () => {
               v-model="form.externalSync.type"
               :items="[
                 { title: 'Mock Sync Server', value: 'mock-sync-server' },
-                { title: 'OpenSPP V1 (Legacy)', value: 'openspp-v1-adapter' },
+                { title: 'OpenSPP V1', value: 'openspp-v1-adapter' },
                 { title: 'OpenSPP V2', value: 'openspp-v2-adapter' },
                 { title: 'OpenFn', value: 'openfn-adapter' },
               ]"

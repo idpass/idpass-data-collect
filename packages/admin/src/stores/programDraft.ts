@@ -20,6 +20,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import { getApp, createApp as createAppApi, updateApp as updateAppApi, type FieldMapping } from '@/api'
+import type { OpenSppV2Field } from '@/api/opensppV2'
 import type { ExternalSyncField } from '@idpass/data-collect-core'
 
 // Types
@@ -53,12 +54,15 @@ export interface ProgramDraft {
   entityForms: EntityForm[]
   externalSync: ExternalSync
   authConfigs: AuthConfig[]
+  /** Cached OpenSPP V2 fields for mapping UI */
+  opensppV2Fields?: OpenSppV2Field[]
 }
 
 export interface StepValidation {
   general: boolean
+  integration: boolean
   forms: boolean
-  sync: boolean
+  mapping: boolean
   auth: boolean
 }
 
@@ -68,14 +72,17 @@ export interface StepErrors {
     description?: string
     version?: string
   }
+  integration: {
+    type?: string
+    url?: string
+  }
   forms: {
     global?: string
     items: Record<string, { name?: string; title?: string; formio?: string }>
     circularDep?: boolean
   }
-  sync: {
-    type?: string
-    url?: string
+  mapping: {
+    global?: string
   }
   auth: Record<string, { type?: string; fieldsError?: string; fields?: Record<string, string> }>
 }
@@ -102,12 +109,14 @@ const getEmptyDraft = (): ProgramDraft => ({
     adapterConfig: {},
   },
   authConfigs: [],
+  opensppV2Fields: [],
 })
 
 const getEmptyErrors = (): StepErrors => ({
   general: {},
+  integration: {},
   forms: { items: {} },
-  sync: {},
+  mapping: {},
   auth: {},
 })
 
@@ -121,17 +130,25 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
   const lastSavedAt = ref<Date | null>(null)
   const mode = ref<'create' | 'edit' | 'copy'>('create')
   const editingId = ref<string | null>(null)
+  const pendingRecovery = ref(false)
 
   // Computed
   const stepValidation = computed<StepValidation>(() => ({
     general: !errors.value.general.name && !errors.value.general.description && !errors.value.general.version,
+    integration: !errors.value.integration.type && !errors.value.integration.url,
     forms: !errors.value.forms.global && Object.keys(errors.value.forms.items).length === 0 && !errors.value.forms.circularDep,
-    sync: !errors.value.sync.type && !errors.value.sync.url,
+    mapping: !errors.value.mapping.global,
     auth: Object.keys(errors.value.auth).length === 0,
   }))
 
   const isValid = computed(() => {
-    return stepValidation.value.general && stepValidation.value.forms && stepValidation.value.sync && stepValidation.value.auth
+    return (
+      stepValidation.value.general &&
+      stepValidation.value.integration &&
+      stepValidation.value.forms &&
+      stepValidation.value.mapping &&
+      stepValidation.value.auth
+    )
   })
 
   const hasRecoverableDraft = computed(() => {
@@ -148,6 +165,7 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
     draft,
     () => {
       isDirty.value = true
+      if (pendingRecovery.value) return
       saveDraftToStorage()
     },
     { deep: true }
@@ -180,6 +198,7 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
         mode.value = meta.mode
         lastSavedAt.value = new Date(meta.lastSaved)
         isDirty.value = false
+        pendingRecovery.value = false
         return true
       }
       return false
@@ -187,6 +206,10 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
       console.error('Failed to load draft from localStorage:', e)
       return false
     }
+  }
+
+  const clearPendingRecovery = () => {
+    pendingRecovery.value = false
   }
 
   const clearDraftFromStorage = () => {
@@ -204,9 +227,21 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
     mode.value = 'create'
     editingId.value = null
     isDirty.value = false
-    lastSavedAt.value = null
     if (clearStorage) {
+      lastSavedAt.value = null
       clearDraftFromStorage()
+    } else {
+      try {
+        const metaStored = localStorage.getItem(DRAFT_META_KEY)
+        if (metaStored) {
+          const meta: DraftMeta = JSON.parse(metaStored)
+          lastSavedAt.value = new Date(meta.lastSaved)
+        } else {
+          lastSavedAt.value = null
+        }
+      } catch {
+        lastSavedAt.value = null
+      }
     }
   }
 
@@ -364,20 +399,32 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
     return false
   }
 
-  const validateSync = (): boolean => {
-    errors.value.sync = {}
+  const validateIntegration = (): boolean => {
+    errors.value.integration = {}
     let valid = true
 
     if (!draft.value.externalSync.type) {
-      errors.value.sync.type = 'Sync type is required'
+      errors.value.integration.type = 'Integration type is required'
       valid = false
     }
     if (!draft.value.externalSync.url.trim()) {
-      errors.value.sync.url = 'Sync URL is required'
+      errors.value.integration.url = 'API URL is required'
       valid = false
     }
 
     return valid
+  }
+
+  const validateMapping = (): boolean => {
+    errors.value.mapping = {}
+    // Mapping is optional, so always return true
+    // Could add validation for required mappings in the future
+    return true
+  }
+
+  // Legacy alias for backward compatibility
+  const validateSync = (): boolean => {
+    return validateIntegration()
   }
 
   const validateAuth = (): boolean => {
@@ -421,10 +468,16 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
 
   const validateAll = (): boolean => {
     const generalValid = validateGeneral()
+    const integrationValid = validateIntegration()
     const formsValid = validateForms()
-    const syncValid = validateSync()
+    const mappingValid = validateMapping()
     const authValid = validateAuth()
-    return generalValid && formsValid && syncValid && authValid
+    return generalValid && integrationValid && formsValid && mappingValid && authValid
+  }
+
+  // OpenSPP V2 Fields Management
+  const setOpenSppV2Fields = (fields: OpenSppV2Field[]) => {
+    draft.value.opensppV2Fields = fields
   }
 
   // Entity Form Actions
@@ -551,6 +604,7 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
     lastSavedAt,
     mode,
     editingId,
+    pendingRecovery,
 
     // Computed
     stepValidation,
@@ -563,14 +617,20 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
     initCopyDraft,
     loadDraftFromStorage,
     clearDraftFromStorage,
+    clearPendingRecovery,
     saveDraftToStorage,
 
     // Validation
     validateGeneral,
+    validateIntegration,
     validateForms,
+    validateMapping,
     validateSync,
     validateAuth,
     validateAll,
+
+    // OpenSPP V2 Fields
+    setOpenSppV2Fields,
 
     // Entity Form Actions
     addEntityForm,

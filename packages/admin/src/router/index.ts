@@ -75,6 +75,7 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     // New Wizard Routes
+    // Flow: General -> Integration -> Forms -> Mapping -> Auth -> Review
     {
       path: '/programs/wizard',
       component: () => import('../layouts/WizardLayout.vue'),
@@ -90,6 +91,11 @@ const router = createRouter({
           component: () => import('../views/wizard/GeneralStep.vue'),
         },
         {
+          path: 'integration',
+          name: 'wizard-integration',
+          component: () => import('../views/wizard/IntegrationStep.vue'),
+        },
+        {
           path: 'forms',
           name: 'wizard-forms',
           component: () => import('../views/wizard/FormsStep.vue'),
@@ -100,12 +106,7 @@ const router = createRouter({
           component: () => import('../views/wizard/FormDesigner.vue'),
         },
         {
-          path: 'sync',
-          name: 'wizard-sync',
-          component: () => import('../views/wizard/SyncStep.vue'),
-        },
-        {
-          path: 'sync/mapping',
+          path: 'mapping',
           name: 'wizard-mapping',
           component: () => import('../views/wizard/MappingStep.vue'),
         },
@@ -150,7 +151,9 @@ router.beforeEach(async (to, from, next) => {
         } else if (mode === 'copy' && id) {
           await draftStore.initCopyDraft(id)
         } else {
-          // Initialize empty draft but preserve storage so WizardLayout can check for recovery
+          if (draftStore.hasRecoverableDraft) {
+            draftStore.pendingRecovery = true
+          }
           draftStore.initNewDraft(false)
         }
       } catch {

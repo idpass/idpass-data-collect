@@ -27,6 +27,7 @@ const recoverDraft = () => {
 }
 
 const discardDraft = () => {
+  draftStore.clearPendingRecovery()
   draftStore.clearDraftFromStorage()
   draftStore.initNewDraft()
   showRecoveryDialog.value = false
@@ -49,6 +50,13 @@ const steps = computed<StepDef[]>(() => [
     validate: () => draftStore.stepValidation.general,
   },
   {
+    id: 'integration',
+    title: 'Integration',
+    icon: 'mdi-connection',
+    route: 'wizard-integration',
+    validate: () => draftStore.stepValidation.integration,
+  },
+  {
     id: 'forms',
     title: 'Entity Forms',
     icon: 'mdi-form-select',
@@ -56,11 +64,11 @@ const steps = computed<StepDef[]>(() => [
     validate: () => draftStore.stepValidation.forms,
   },
   {
-    id: 'sync',
-    title: 'External Sync',
-    icon: 'mdi-sync',
-    route: 'wizard-sync',
-    validate: () => draftStore.stepValidation.sync,
+    id: 'mapping',
+    title: 'Field Mapping',
+    icon: 'mdi-link-variant',
+    route: 'wizard-mapping',
+    validate: () => draftStore.stepValidation.mapping,
   },
   {
     id: 'auth',
@@ -83,9 +91,6 @@ const currentStepIndex = computed(() => {
   // Handle sub-routes like wizard-form-design
   if (currentRouteName.startsWith('wizard-form')) {
     return steps.value.findIndex((s) => s.id === 'forms')
-  }
-  if (currentRouteName.startsWith('wizard-mapping')) {
-    return steps.value.findIndex((s) => s.id === 'sync')
   }
   return steps.value.findIndex((s) => s.route === currentRouteName)
 })
@@ -129,10 +134,12 @@ const goToNextStep = () => {
 
   if (step.id === 'general') {
     isValid = draftStore.validateGeneral()
+  } else if (step.id === 'integration') {
+    isValid = draftStore.validateIntegration()
   } else if (step.id === 'forms') {
     isValid = draftStore.validateForms()
-  } else if (step.id === 'sync') {
-    isValid = draftStore.validateSync()
+  } else if (step.id === 'mapping') {
+    isValid = draftStore.validateMapping()
   } else if (step.id === 'auth') {
     isValid = draftStore.validateAuth()
   }

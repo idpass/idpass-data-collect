@@ -80,6 +80,11 @@ services:
     restart: unless-stopped
     environment:
       - VITE_API_URL=${ADMIN_API_URL:-http://localhost:3000}
+      # Proxy target for OpenSPP API calls (use host.docker.internal to reach host-exposed services)
+      - OPENSPP_PROXY_TARGET=${OPENSPP_PROXY_TARGET:-http://host.docker.internal:8069}
+    # Required for host.docker.internal to work on Linux
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "5173:5173"
     depends_on:

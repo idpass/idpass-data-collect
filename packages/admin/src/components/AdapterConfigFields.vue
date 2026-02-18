@@ -33,8 +33,8 @@ interface AdapterConfigSchema {
 const ADAPTER_CONFIGS: Record<string, AdapterConfigSchema> = {
   'openspp-v1-adapter': {
     adapterType: 'openspp-v1-adapter',
-    displayName: 'OpenSPP V1 (Legacy)',
-    description: 'Connect to OpenSPP using the legacy JSON-RPC/Odoo API',
+    displayName: 'OpenSPP V1 (Odoo 17.0)',
+    description: 'Connect to OpenSPP using the JSON-RPC/Odoo API',
     fields: [
       {
         name: 'database',
@@ -94,8 +94,8 @@ const ADAPTER_CONFIGS: Record<string, AdapterConfigSchema> = {
   },
   'openspp-adapter': {
     adapterType: 'openspp-adapter',
-    displayName: 'OpenSPP V1 (Legacy)',
-    description: 'Connect to OpenSPP using the legacy JSON-RPC/Odoo API',
+    displayName: 'OpenSPP V1',
+    description: 'Connect to OpenSPP using the JSON-RPC/Odoo API',
     fields: [
       {
         name: 'database',
@@ -139,7 +139,7 @@ const ADAPTER_CONFIGS: Record<string, AdapterConfigSchema> = {
   },
   'openspp-v2-adapter': {
     adapterType: 'openspp-v2-adapter',
-    displayName: 'OpenSPP V2',
+    displayName: 'OpenSPP V2 (Odoo 19.0)',
     description: 'Connect to OpenSPP using the modern REST API with OAuth2 authentication',
     fields: [
       {

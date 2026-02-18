@@ -31,7 +31,7 @@ describe("adapter-configs", () => {
   describe("ADAPTER_CONFIGS registry", () => {
     it("contains all expected adapter types", () => {
       expect(ADAPTER_CONFIGS).toHaveProperty("openspp-v1-adapter");
-      expect(ADAPTER_CONFIGS).toHaveProperty("openspp-adapter"); // legacy alias
+      expect(ADAPTER_CONFIGS).toHaveProperty("openspp-adapter"); // alias
       expect(ADAPTER_CONFIGS).toHaveProperty("openspp-v2-adapter");
       expect(ADAPTER_CONFIGS).toHaveProperty("openfn-adapter");
       expect(ADAPTER_CONFIGS).toHaveProperty("mock-sync-server");

@@ -231,7 +231,7 @@ export * from "./components/AuthManager";
 export * from "./storage/IndexedDbAuthStorageAdapter";
 export * from "./services/SingleAuthStorageImpl";
 
-// OpenSPP/Odoo Components (V1 - Legacy)
+// OpenSPP/Odoo Components (V1)
 export * from "./components/openspp";
 
 // OpenSPP V2 Components
