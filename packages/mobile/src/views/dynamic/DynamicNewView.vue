@@ -28,6 +28,16 @@ const submissionCount = ref(0)
 const { isOffline } = useNetworkStatus()
 const formioInstance = ref<{ submission: { data: Record<string, unknown> } } | null>(null)
 const scannedData = ref<ScannedIdentity | null>(null)
+const showPrefillBanner = ref(false)
+
+function isValidScannedIdentity(data: unknown): data is ScannedIdentity {
+  if (!data || typeof data !== 'object') return false
+  const obj = data as Record<string, unknown>
+  // Must have decoderId string and verification object
+  if (typeof obj.decoderId !== 'string') return false
+  if (!obj.verification || typeof obj.verification !== 'object') return false
+  return true
+}
 
 type FormSubmissionEvent = {
   data: Record<string, unknown>
@@ -55,8 +65,8 @@ onMounted(async () => {
   submissionCount.value = entities.length
 
   // Check for scanned identity data passed via router state for pre-filling
-  const stateData = history.state?.scannedIdentity as ScannedIdentity | undefined
-  if (stateData) {
+  const stateData = history.state?.scannedIdentity
+  if (isValidScannedIdentity(stateData)) {
     scannedData.value = stateData
   }
 })
@@ -103,6 +113,7 @@ const onFormReady = (form: { submission: { data: Record<string, unknown> } }) =>
     if (s.primaryId) prefillData.externalId = s.primaryId
 
     form.submission = { data: { ...form.submission.data, ...prefillData } }
+    showPrefillBanner.value = true
   }
 }
 
@@ -137,6 +148,19 @@ const onBack = () => {
     </header>
 
     <section class="form-wrapper">
+      <div v-if="showPrefillBanner" class="prefill-banner" role="status">
+        <div class="prefill-banner__content">
+          <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h2v2h-2v-2zm0-8h2v6h-2V9z" fill="currentColor" />
+          </svg>
+          <span>Fields pre-filled from scanned identity. Please review before submitting.</span>
+        </div>
+        <button type="button" class="prefill-banner__close" aria-label="Dismiss" @click="showPrefillBanner = false">
+          <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+            <path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor" />
+          </svg>
+        </button>
+      </div>
       <FormIO :form="formio" @submit="onSubmit" @formReady="onFormReady" />
     </section>
   </div>
@@ -159,12 +183,12 @@ const onBack = () => {
 .icon-button {
   width: 44px;
   height: 44px;
-  border-radius: 14px;
+  border-radius: var(--radius-xl);
   border: none;
   background: rgba(15, 23, 42, 0.08);
   display: grid;
   place-items: center;
-  color: #1f2937;
+  color: var(--text-main);
 }
 
 .top-bar__actions {
@@ -177,7 +201,7 @@ const onBack = () => {
   display: inline-flex;
   align-items: center;
   padding: 0.25rem 0.5rem;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: rgba(234, 179, 8, 0.15);
   color: #92400e;
 }
@@ -192,10 +216,10 @@ const onBack = () => {
   align-items: center;
   gap: 0.5rem;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   padding: 0.55rem 1.25rem;
-  background: linear-gradient(135deg, #2563eb 0%, #9333ea 100%);
-  color: white;
+  background: var(--brand);
+  color: var(--text-inverted);
   font-weight: 600;
 }
 
@@ -212,7 +236,7 @@ const onBack = () => {
   display: inline-flex;
   align-items: center;
   padding: 0.3rem 0.75rem;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: #e0f2fe;
   color: #0369a1;
   font-size: 0.75rem;
@@ -222,10 +246,10 @@ const onBack = () => {
 }
 
 .entry-header {
-  background: #ffffff;
-  border-radius: 20px;
+  background: var(--surface);
+  border-radius: var(--radius-xl);
   padding: 1.5rem;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--shadow-card);
   border: 1px solid rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
@@ -235,24 +259,24 @@ const onBack = () => {
 .entry-header h1 {
   font-size: 1.4rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .entry-header p {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.95rem;
 }
 
 .breadcrumb {
   font-size: 0.8rem;
-  color: #9ca3af;
+  color: var(--neutral-300);
 }
 
 .form-wrapper {
-  background: #ffffff;
-  border-radius: 20px;
+  background: var(--surface);
+  border-radius: var(--radius-xl);
   padding: 1.5rem;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--shadow-card);
   border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
@@ -263,15 +287,59 @@ const onBack = () => {
   justify-content: center;
   width: 100%;
   padding: 0.9rem 1rem;
-  border-radius: 14px;
+  border-radius: var(--radius-xl);
   border: none;
-  background: #f3f4f6;
-  color: #1f2937;
+  background: var(--neutral-50);
+  color: var(--text-main);
   font-weight: 600;
 }
 
 .submissions-button svg {
   width: 20px;
   height: 20px;
+}
+
+.prefill-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  background: var(--status-info-light, #DBEAFE);
+  border: 1px solid var(--status-info, #3B82F6);
+  border-radius: var(--radius-lg);
+  color: var(--status-info-dark, #2563eb);
+  font-size: var(--font-size-sm);
+}
+
+.prefill-banner__content {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.prefill-banner__content svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.prefill-banner__close {
+  background: transparent;
+  border: none;
+  color: var(--status-info-dark, #2563eb);
+  cursor: pointer;
+  min-width: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-default);
+  flex-shrink: 0;
+}
+
+.prefill-banner__close svg {
+  width: 18px;
+  height: 18px;
 }
 </style>

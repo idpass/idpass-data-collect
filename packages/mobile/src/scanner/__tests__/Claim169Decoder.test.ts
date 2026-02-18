@@ -239,7 +239,59 @@ describe('Claim169Decoder', () => {
       expect(result!.identifiers).toEqual([])
     })
 
-    it('should register trusted issuers from config', async () => {
+    it('should return null when content is not Claim-169 format (CBOR error)', async () => {
+      MockDecoder.mockImplementation(() => {
+        throw new Error('CBOR decode failed')
+      })
+
+      const result = await Claim169Decoder.decode('not-a-claim169-qr', {})
+      expect(result).toBeNull()
+    })
+
+    it('should return null when content causes a generic decode error', async () => {
+      mockDecode.mockImplementation(() => {
+        throw new Error('Failed to decode protobuf payload')
+      })
+
+      const result = await Claim169Decoder.decode('bad-content', {})
+      expect(result).toBeNull()
+    })
+
+    it('should return null when content causes an Unexpected error', async () => {
+      mockDecode.mockImplementation(() => {
+        throw new Error('Unexpected token in input')
+      })
+
+      const result = await Claim169Decoder.decode('random-string', {})
+      expect(result).toBeNull()
+    })
+
+    it('should re-throw verification failures', async () => {
+      mockDecode.mockImplementation(() => {
+        throw new Error('Issuer not trusted')
+      })
+
+      await expect(Claim169Decoder.decode('valid-claim169', {})).rejects.toThrow(
+        'Issuer not trusted'
+      )
+    })
+
+    it('should re-throw signature verification failures', async () => {
+      mockDecode.mockImplementation(() => {
+        throw new Error('Signature verification failed')
+      })
+
+      await expect(Claim169Decoder.decode('valid-claim169', {})).rejects.toThrow(
+        'Signature verification failed'
+      )
+    })
+
+    it('should not call registerIssuerKey', async () => {
+      const registerSpy = vi.spyOn(
+        await import('../../services/claim169Service'),
+        'registerIssuerKey'
+      )
+
       await Claim169Decoder.decode('test-qr', {
         trustedIssuers: [
           {
@@ -249,8 +301,86 @@ describe('Claim169Decoder', () => {
         ]
       })
 
-      // The decode should have been called (trustedIssuers registered before decode)
-      expect(mockDecode).toHaveBeenCalled()
+      expect(registerSpy).not.toHaveBeenCalled()
+      registerSpy.mockRestore()
+    })
+  })
+
+  describe('configure', () => {
+    it('should register trusted issuers from config', async () => {
+      const registerSpy = vi.spyOn(
+        await import('../../services/claim169Service'),
+        'registerIssuerKey'
+      )
+
+      Claim169Decoder.configure!({
+        trustedIssuers: [
+          {
+            issuerId: 'config-issuer',
+            ed25519Key: btoa(String.fromCharCode(...new Uint8Array(32)))
+          }
+        ]
+      })
+
+      expect(registerSpy).toHaveBeenCalledWith('config-issuer', {
+        ed25519: btoa(String.fromCharCode(...new Uint8Array(32))),
+        es256: undefined
+      })
+      registerSpy.mockRestore()
+    })
+
+    it('should register multiple trusted issuers', async () => {
+      const registerSpy = vi.spyOn(
+        await import('../../services/claim169Service'),
+        'registerIssuerKey'
+      )
+
+      const ed25519Key = btoa(String.fromCharCode(...new Uint8Array(32)))
+      const es256Key = btoa(String.fromCharCode(...new Uint8Array(32)))
+
+      Claim169Decoder.configure!({
+        trustedIssuers: [
+          { issuerId: 'issuer-1', ed25519Key },
+          { issuerId: 'issuer-2', es256Key }
+        ]
+      })
+
+      expect(registerSpy).toHaveBeenCalledTimes(2)
+      expect(registerSpy).toHaveBeenCalledWith('issuer-1', {
+        ed25519: ed25519Key,
+        es256: undefined
+      })
+      expect(registerSpy).toHaveBeenCalledWith('issuer-2', {
+        ed25519: undefined,
+        es256: es256Key
+      })
+      registerSpy.mockRestore()
+    })
+
+    it('should skip issuers with no issuerId', async () => {
+      const registerSpy = vi.spyOn(
+        await import('../../services/claim169Service'),
+        'registerIssuerKey'
+      )
+
+      Claim169Decoder.configure!({
+        trustedIssuers: [{ issuerId: '', ed25519Key: 'some-key' }]
+      })
+
+      expect(registerSpy).not.toHaveBeenCalled()
+      registerSpy.mockRestore()
+    })
+
+    it('should handle config with no trustedIssuers', async () => {
+      const registerSpy = vi.spyOn(
+        await import('../../services/claim169Service'),
+        'registerIssuerKey'
+      )
+
+      Claim169Decoder.configure!({})
+
+      expect(registerSpy).not.toHaveBeenCalled()
+      registerSpy.mockRestore()
     })
   })
 })

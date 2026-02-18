@@ -56,7 +56,8 @@ export function matchEntities(
   }
 
   for (const entity of entities) {
-    const entityIdValue = String(entity.data[identifierField] ?? '')
+    const rawIdValue = entity.data[identifierField]
+    const entityIdValue = typeof rawIdValue === 'string' ? rawIdValue : ''
 
     // 1. Exact identifier match
     if (entityIdValue) {

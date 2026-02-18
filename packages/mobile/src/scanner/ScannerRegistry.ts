@@ -32,3 +32,7 @@ export function getDecoder(id: string): DecoderPlugin | undefined {
 export function getAllDecoders(): DecoderPlugin[] {
   return Array.from(decoders.values())
 }
+
+export function clearDecoders(): void {
+  decoders.clear()
+}

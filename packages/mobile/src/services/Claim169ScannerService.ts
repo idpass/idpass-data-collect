@@ -20,6 +20,7 @@
 import { ref, watch } from 'vue'
 import type { VerifiedIdentity } from './claim169Service'
 import { ScannerService } from '@/scanner/ScannerService'
+import { mapVerifiedIdentityToScanned } from '@/scanner/decoders/Claim169Decoder'
 import type { ScannedIdentity, ScannerConfig } from '@/scanner/types'
 
 // Trusted issuer configuration
@@ -100,23 +101,7 @@ export const Claim169ScannerService = {
    * before delegating to ScannerService.
    */
   complete(result: VerifiedIdentity) {
-    const scanned: ScannedIdentity = {
-      decoderId: 'claim169',
-      primaryId: result.identity?.id,
-      fullName: result.identity?.fullName,
-      identifiers: result.identity?.id
-        ? [{ type: 'claim169_id', value: result.identity.id }]
-        : [],
-      verification: {
-        isVerified: result.isVerified,
-        isExpired: result.isExpired,
-        issuer: result.cwt?.issuer,
-        issuedAt: result.cwt?.issuedAt,
-        expiresAt: result.cwt?.expiresAt
-      },
-      rawData: result,
-      extra: {}
-    }
+    const scanned = mapVerifiedIdentityToScanned(result)
     ScannerService.complete(scanned)
   },
 

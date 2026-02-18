@@ -27,12 +27,23 @@ import { ScannerService } from '@/scanner/ScannerService'
 import { getDecoder } from '@/scanner/ScannerRegistry'
 
 const isMobile = ref(['android', 'ios'].includes(Capacitor.getPlatform()))
+const isPermissionDenied = ref(false)
 
 let activeListener: { remove: () => Promise<void> } | null = null
 
 const requestPermissions = async (): Promise<boolean> => {
   const { camera } = await Camera.requestPermissions()
   return camera === 'granted' || camera === 'limited'
+}
+
+const openAppSettings = async () => {
+  try {
+    await BarcodeScanner.openSettings()
+  } catch {
+    // Fallback: just inform the user
+    ScannerService.lastError.value =
+      'Please open your device settings and grant camera permission to this app.'
+  }
 }
 
 const cleanup = async () => {
@@ -78,6 +89,7 @@ const startScan = async () => {
   try {
     const granted = await requestPermissions()
     if (!granted) {
+      isPermissionDenied.value = true
       ScannerService.lastError.value = 'Camera permission is required to scan QR codes'
       return
     }
@@ -99,7 +111,15 @@ const startScan = async () => {
 
 const handleClose = async () => {
   await cleanup()
+  isPermissionDenied.value = false
   ScannerService.cancel()
+}
+
+const handleBackToPicker = async () => {
+  await cleanup()
+  ScannerService.activeDecoder.value = null
+  ScannerService.activeConfig.value = {}
+  ScannerService.state.value = 'picker'
 }
 
 // Computed header title: use active decoder label when scanning/decoding, otherwise generic title
@@ -110,6 +130,19 @@ const headerTitle = computed(() => {
   return 'Scan Identity'
 })
 
+// Pre-resolve decoder metadata for each available decoder to avoid repeated getDecoder() calls in the template
+const resolvedDecoders = computed(() => {
+  return ScannerService.availableDecoders.value.map((config) => {
+    const decoder = getDecoder(config.decoderId)
+    return {
+      decoderId: config.decoderId,
+      icon: decoder?.meta.icon ?? '',
+      label: decoder?.meta.label ?? config.decoderId,
+      description: decoder?.meta.description ?? ''
+    }
+  })
+})
+
 // Watch for transition into 'scanning' state to auto-start on mobile
 watch(
   () => ScannerService.state.value,
@@ -117,6 +150,9 @@ watch(
     if (newState === 'scanning' && oldState !== 'scanning') {
       ScannerService.lastError.value = ''
       if (isMobile.value) {
+        // Delay camera start to allow the native WebView to render the scanning overlay.
+        // Without this, the Capacitor barcode scanner native layer may activate before
+        // the DOM has updated, causing a brief visual flash.
         setTimeout(() => startScan(), 100)
       }
     }
@@ -133,10 +169,21 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="ScannerService.state.value !== 'closed'" class="scanner-overlay">
+  <div
+    v-if="ScannerService.state.value !== 'closed'"
+    class="scanner-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Scanner"
+  >
     <div class="scanner-screen">
       <!-- Error banner driven by ScannerService.lastError -->
-      <div v-if="ScannerService.lastError.value" class="error-banner">
+      <div
+        v-if="ScannerService.lastError.value"
+        class="error-banner"
+        aria-live="assertive"
+        role="alert"
+      >
         <svg class="error-icon" viewBox="0 0 24 24" focusable="false">
           <path
             d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
@@ -144,6 +191,14 @@ onUnmounted(() => {
           />
         </svg>
         <span>{{ ScannerService.lastError.value }}</span>
+        <button
+          v-if="isPermissionDenied"
+          class="open-settings-button"
+          type="button"
+          @click="openAppSettings"
+        >
+          Open Settings
+        </button>
         <button
           class="error-close"
           type="button"
@@ -174,34 +229,29 @@ onUnmounted(() => {
 
       <!-- Main content area, rendered based on ScannerService.state -->
       <div class="scanner-content">
-
         <!-- picker state: bottom sheet listing available decoders -->
         <div v-if="ScannerService.state.value === 'picker'" class="picker-sheet">
           <p class="picker-heading">Choose a scanner type</p>
           <ul class="picker-list">
             <li
-              v-for="scannerConfig in ScannerService.availableDecoders.value"
-              :key="scannerConfig.decoderId"
+              v-for="resolved in resolvedDecoders"
+              :key="resolved.decoderId"
               class="picker-item"
-              @click="ScannerService.selectDecoder(scannerConfig.decoderId)"
+              role="button"
+              tabindex="0"
+              @click="ScannerService.selectDecoder(resolved.decoderId)"
+              @keydown.enter="ScannerService.selectDecoder(resolved.decoderId)"
+              @keydown.space.prevent="ScannerService.selectDecoder(resolved.decoderId)"
             >
               <div class="picker-item-icon">
                 <svg viewBox="0 0 24 24" focusable="false">
-                  <path
-                    :d="getDecoder(scannerConfig.decoderId)?.meta.icon ?? ''"
-                    fill="currentColor"
-                  />
+                  <path :d="resolved.icon" fill="currentColor" />
                 </svg>
               </div>
               <div class="picker-item-text">
-                <span class="picker-item-label">{{
-                  getDecoder(scannerConfig.decoderId)?.meta.label ?? scannerConfig.decoderId
-                }}</span>
-                <span
-                  v-if="getDecoder(scannerConfig.decoderId)?.meta.description"
-                  class="picker-item-description"
-                >
-                  {{ getDecoder(scannerConfig.decoderId)?.meta.description }}
+                <span class="picker-item-label">{{ resolved.label }}</span>
+                <span v-if="resolved.description" class="picker-item-description">
+                  {{ resolved.description }}
                 </span>
               </div>
               <svg class="picker-item-chevron" viewBox="0 0 24 24" focusable="false">
@@ -221,7 +271,17 @@ onUnmounted(() => {
             <div class="scan-line"></div>
           </div>
           <p class="scan-hint">Align QR code within frame</p>
-          <button class="cancel-button" type="button" @click="handleClose">Cancel</button>
+          <div class="scanning-actions">
+            <button
+              v-if="ScannerService.availableDecoders.value.length > 1"
+              class="cancel-button"
+              type="button"
+              @click="handleBackToPicker"
+            >
+              Back
+            </button>
+            <button class="cancel-button" type="button" @click="handleClose">Cancel</button>
+          </div>
 
           <!-- Desktop notice shown when not on mobile -->
           <div v-if="!isMobile" class="desktop-notice desktop-notice--scanning">
@@ -236,18 +296,19 @@ onUnmounted(() => {
         </div>
 
         <!-- decoding state: processing spinner -->
-        <div v-else-if="ScannerService.state.value === 'decoding'" class="processing-overlay">
+        <div
+          v-else-if="ScannerService.state.value === 'decoding'"
+          class="processing-overlay"
+          role="status"
+          aria-live="polite"
+        >
           <div class="spinner"></div>
           <p>Processing identity data...</p>
         </div>
-
       </div>
 
       <!-- Desktop notice for picker/decoding states -->
-      <div
-        v-if="!isMobile && ScannerService.state.value !== 'scanning'"
-        class="desktop-notice"
-      >
+      <div v-if="!isMobile && ScannerService.state.value !== 'scanning'" class="desktop-notice">
         <svg viewBox="0 0 24 24" focusable="false">
           <path
             d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h2v2h-2v-2zm0-8h2v6h-2V9z"
@@ -264,19 +325,16 @@ onUnmounted(() => {
 <style scoped>
 .scanner-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  inset: 0;
   z-index: 9999;
-  background: #f9fafb;
+  background: var(--background);
 }
 
 .scanner-screen {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: #f9fafb;
+  background: var(--background);
 }
 
 .error-banner {
@@ -284,9 +342,9 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.75rem;
   padding: 1rem 1.25rem;
-  background: #fee2e2;
+  background: var(--status-danger-light);
   border-bottom: 1px solid #fecaca;
-  color: #991b1b;
+  color: var(--status-danger-dark);
   font-size: 0.95rem;
 }
 
@@ -294,7 +352,7 @@ onUnmounted(() => {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
-  color: #dc2626;
+  color: var(--status-danger);
 }
 
 .error-banner span {
@@ -304,9 +362,11 @@ onUnmounted(() => {
 .error-close {
   background: transparent;
   border: none;
-  padding: 0.25rem;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.5rem;
   cursor: pointer;
-  color: #991b1b;
+  color: var(--status-danger-dark);
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -318,13 +378,27 @@ onUnmounted(() => {
   height: 18px;
 }
 
+.open-settings-button {
+  background: transparent;
+  border: 1px solid var(--status-danger-dark);
+  color: var(--status-danger-dark);
+  padding: 0.375rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .scanner-header {
   display: flex;
   align-items: center;
   gap: 1rem;
   padding: 1rem 1.25rem;
-  background: #ffffff;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  padding-top: max(1rem, env(safe-area-inset-top));
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .back-button {
@@ -332,14 +406,14 @@ onUnmounted(() => {
   border: none;
   padding: 0.5rem;
   cursor: pointer;
-  color: #374151;
+  color: var(--neutral-500);
   display: grid;
   place-items: center;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .back-button:active {
-  background: #f3f4f6;
+  background: var(--neutral-50);
 }
 
 .back-button svg {
@@ -350,7 +424,7 @@ onUnmounted(() => {
 .scanner-header h1 {
   font-size: 1.25rem;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--text-main);
 }
 
 .scanner-content {
@@ -372,7 +446,7 @@ onUnmounted(() => {
 .picker-heading {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.75rem;
@@ -382,10 +456,10 @@ onUnmounted(() => {
   list-style: none;
   padding: 0;
   margin: 0;
-  background: #ffffff;
-  border-radius: 14px;
+  background: var(--surface);
+  border-radius: var(--radius-xl);
   overflow: hidden;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-subtle);
 }
 
 .picker-item {
@@ -403,13 +477,13 @@ onUnmounted(() => {
 }
 
 .picker-item:active {
-  background: #f3f4f6;
+  background: var(--neutral-50);
 }
 
 .picker-item-icon {
   width: 44px;
   height: 44px;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   background: rgba(59, 130, 246, 0.1);
   display: grid;
   place-items: center;
@@ -419,7 +493,7 @@ onUnmounted(() => {
 .picker-item-icon svg {
   width: 26px;
   height: 26px;
-  color: #2563eb;
+  color: var(--status-info-dark);
 }
 
 .picker-item-text {
@@ -432,19 +506,19 @@ onUnmounted(() => {
 .picker-item-label {
   font-size: 1rem;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-main);
 }
 
 .picker-item-description {
   font-size: 0.85rem;
-  color: #6b7280;
+  color: var(--text-muted);
   line-height: 1.4;
 }
 
 .picker-item-chevron {
   width: 20px;
   height: 20px;
-  color: #9ca3af;
+  color: var(--neutral-300);
   flex-shrink: 0;
 }
 
@@ -471,7 +545,7 @@ onUnmounted(() => {
   position: absolute;
   width: 40px;
   height: 40px;
-  border: 4px solid #2563eb;
+  border: 4px solid var(--status-info-dark);
 }
 
 .corner.top-left {
@@ -479,7 +553,7 @@ onUnmounted(() => {
   left: 0;
   border-right: none;
   border-bottom: none;
-  border-radius: 8px 0 0 0;
+  border-radius: var(--radius-lg) 0 0 0;
 }
 
 .corner.top-right {
@@ -487,7 +561,7 @@ onUnmounted(() => {
   right: 0;
   border-left: none;
   border-bottom: none;
-  border-radius: 0 8px 0 0;
+  border-radius: 0 var(--radius-lg) 0 0;
 }
 
 .corner.bottom-left {
@@ -495,7 +569,7 @@ onUnmounted(() => {
   left: 0;
   border-right: none;
   border-top: none;
-  border-radius: 0 0 0 8px;
+  border-radius: 0 0 0 var(--radius-lg);
 }
 
 .corner.bottom-right {
@@ -503,24 +577,27 @@ onUnmounted(() => {
   right: 0;
   border-left: none;
   border-top: none;
-  border-radius: 0 0 8px 0;
+  border-radius: 0 0 var(--radius-lg) 0;
 }
 
 .scan-line {
   position: absolute;
+  top: 10px;
   left: 10px;
   right: 10px;
   height: 2px;
-  background: linear-gradient(90deg, transparent, #2563eb, transparent);
+  background: linear-gradient(90deg, transparent, var(--status-info-dark), transparent);
   animation: scan 2s ease-in-out infinite;
+  will-change: transform;
 }
 
 @keyframes scan {
-  0%, 100% {
-    top: 10px;
+  0%,
+  100% {
+    transform: translateY(0);
   }
   50% {
-    top: calc(100% - 10px);
+    transform: translateY(260px);
   }
 }
 
@@ -530,13 +607,19 @@ onUnmounted(() => {
   margin-top: 2rem;
 }
 
-.cancel-button {
+.scanning-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 1rem;
   margin-top: 2rem;
+}
+
+.cancel-button {
   padding: 0.75rem 2rem;
   background: rgba(255, 255, 255, 0.1);
   color: white;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   font-size: 1rem;
   cursor: pointer;
 }
@@ -553,8 +636,8 @@ onUnmounted(() => {
 .spinner {
   width: 48px;
   height: 48px;
-  border: 4px solid #e5e7eb;
-  border-top-color: #2563eb;
+  border: 4px solid var(--neutral-100);
+  border-top-color: var(--status-info-dark);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -566,7 +649,7 @@ onUnmounted(() => {
 }
 
 .processing-overlay p {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 1rem;
 }
 
@@ -584,12 +667,12 @@ onUnmounted(() => {
 .desktop-notice svg {
   width: 48px;
   height: 48px;
-  color: #f59e0b;
+  color: var(--status-warning);
   margin-bottom: 1rem;
 }
 
 .desktop-notice p {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.95rem;
   margin-bottom: 1.5rem;
 }
@@ -599,7 +682,7 @@ onUnmounted(() => {
   position: absolute;
   bottom: 6rem;
   background: rgba(0, 0, 0, 0.6);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
 }
 
 .desktop-notice--scanning p {
@@ -607,13 +690,13 @@ onUnmounted(() => {
 }
 
 .desktop-notice--scanning svg {
-  color: #f59e0b;
+  color: var(--status-warning);
 }
 
 .back-link {
   background: transparent;
   border: none;
-  color: #2563eb;
+  color: var(--status-info-dark);
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;

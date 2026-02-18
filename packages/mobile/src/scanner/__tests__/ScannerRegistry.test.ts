@@ -17,7 +17,7 @@
  * under the License.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { registerDecoder, getDecoder, getAllDecoders } from '../ScannerRegistry'
 import type { DecoderPlugin } from '../types'
 

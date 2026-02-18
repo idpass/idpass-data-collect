@@ -32,6 +32,7 @@ const availableDecoders: Ref<ScannerConfig[]> = ref([])
 const lastError: Ref<string> = ref('')
 
 let resolveScan: ((value: ScannedIdentity | null) => void) | null = null
+let scanGeneration = 0
 
 export const ScannerService = {
   // Observable state
@@ -53,6 +54,7 @@ export const ScannerService = {
         resolveScan(null)
       }
 
+      scanGeneration++
       lastError.value = ''
       availableDecoders.value = scanners
       resolveScan = resolve
@@ -66,7 +68,7 @@ export const ScannerService = {
           activeConfig.value = config.config ?? {}
           state.value = 'scanning'
         } else {
-          lastError.value = `Decoder "${config.decoderId}" not found`
+          lastError.value = 'Scanner type is not available. Please contact your administrator.'
           resolveScan(null)
           resolveScan = null
         }
@@ -106,18 +108,22 @@ export const ScannerService = {
   async handleRawCapture(rawContent: string): Promise<void> {
     if (!activeDecoder.value) return
 
+    const generation = scanGeneration
     state.value = 'decoding'
     lastError.value = ''
 
     try {
+      activeDecoder.value.configure?.(activeConfig.value)
       const result = await activeDecoder.value.decode(rawContent, activeConfig.value)
+      if (generation !== scanGeneration) return // stale, discard
       if (result) {
         ScannerService.complete(result)
       } else {
-        lastError.value = 'Decoder could not process the scanned content'
+        lastError.value = 'The scanned code could not be read. Please try again with a clear QR code.'
         state.value = 'scanning'
       }
     } catch (error) {
+      if (generation !== scanGeneration) return // stale, discard
       lastError.value =
         error instanceof Error ? error.message : 'Failed to decode scanned content'
       state.value = 'scanning'
@@ -150,4 +156,18 @@ export const ScannerService = {
     lastError.value = ''
     state.value = 'closed'
   }
+}
+
+/**
+ * Reset all module-level state back to initial values.
+ * Only intended for use in tests to ensure clean isolation between test cases.
+ */
+export function _resetForTesting(): void {
+  state.value = 'closed'
+  activeDecoder.value = null
+  activeConfig.value = {}
+  availableDecoders.value = []
+  lastError.value = ''
+  resolveScan = null
+  scanGeneration = 0
 }

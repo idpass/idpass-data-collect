@@ -66,6 +66,12 @@ export interface DecoderPluginMeta {
 export interface DecoderPlugin {
   meta: DecoderPluginMeta
   /**
+   * Optional one-time configuration hook called before decode().
+   * Use this for side effects like registering trusted issuers,
+   * so that decode() remains a pure transformation.
+   */
+  configure?(config: Record<string, unknown>): void
+  /**
    * Attempt to decode raw captured content into a ScannedIdentity.
    * Returns null if this decoder cannot handle the content.
    * Throws on decode errors (malformed data, verification failure, etc.)

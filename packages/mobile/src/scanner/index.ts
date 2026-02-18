@@ -27,9 +27,9 @@ export type {
   ScannerConfig
 } from './types'
 
-export { registerDecoder, getDecoder, getAllDecoders } from './ScannerRegistry'
+export { registerDecoder, getDecoder, getAllDecoders, clearDecoders } from './ScannerRegistry'
 export { matchEntities } from './matchEntities'
-export { ScannerService } from './ScannerService'
+export { ScannerService, _resetForTesting } from './ScannerService'
 
 import { registerDecoder } from './ScannerRegistry'
 import { Claim169Decoder } from './decoders/Claim169Decoder'

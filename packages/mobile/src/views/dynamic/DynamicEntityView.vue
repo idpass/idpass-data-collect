@@ -11,6 +11,7 @@ import { ScannerService } from '@/scanner/ScannerService'
 import { matchEntities } from '@/scanner/matchEntities'
 import type { ScannedIdentity, MatchResult, ScannerMatchConfig } from '@/scanner/types'
 import ScanMatchResults from '@/components/ScanMatchResults.vue'
+import ConfirmSheet from '@/components/ConfirmSheet.vue'
 
 type SubmissionSnapshot = {
   lastUpdated: string
@@ -41,6 +42,7 @@ const isEntityListLoaded = ref(false)
 const showMatchResults = ref(false)
 const matchResults = ref<MatchResult[]>([])
 const lastScannedIdentity = ref<ScannedIdentity | null>(null)
+const showNoMatchConfirm = ref(false)
 
 const props = defineProps<{
   id: string
@@ -233,7 +235,13 @@ const hasScanners = computed(() => {
 })
 
 const handleScan = async () => {
-  if (!entityForm.value?.scanners || !isEntityListLoaded.value) return
+  if (!entityForm.value?.scanners?.length) {
+    // Should not happen since scan button is hidden, but guard anyway
+    return
+  }
+  if (!isEntityListLoaded.value) {
+    return
+  }
 
   const result = await ScannerService.scan(entityForm.value.scanners)
   if (!result) return
@@ -253,7 +261,7 @@ const handleScan = async () => {
   }))
   const matches = matchEntities(result, entityList, matchConfig)
 
-  if (matches.length === 1 && matches[0].score >= 0.8) {
+  if (matches.length === 1 && matches[0].score >= 1.0) {
     // Single high-confidence match: navigate directly
     router.push(route.path + '/' + matches[0].entity.guid + '/detail')
   } else if (matches.length > 1) {
@@ -261,13 +269,8 @@ const handleScan = async () => {
     matchResults.value = matches
     showMatchResults.value = true
   } else {
-    // No match: offer to create new
-    if (confirm('No matching entity found. Create new?')) {
-      router.push({
-        path: route.path + '/new',
-        state: { scannedIdentity: JSON.parse(JSON.stringify(result)) }
-      })
-    }
+    // No match: show confirmation dialog
+    showNoMatchConfirm.value = true
   }
 }
 
@@ -279,15 +282,31 @@ const handleMatchSelect = (match: MatchResult) => {
 const handleMatchCreateNew = () => {
   showMatchResults.value = false
   if (lastScannedIdentity.value) {
+    const { rawData, ...serializableData } = lastScannedIdentity.value
     router.push({
       path: route.path + '/new',
-      state: { scannedIdentity: JSON.parse(JSON.stringify(lastScannedIdentity.value)) }
+      state: { scannedIdentity: JSON.parse(JSON.stringify(serializableData)) }
     })
   }
 }
 
 const handleMatchClose = () => {
   showMatchResults.value = false
+}
+
+const handleNoMatchConfirm = () => {
+  showNoMatchConfirm.value = false
+  if (lastScannedIdentity.value) {
+    const { rawData, ...serializableData } = lastScannedIdentity.value
+    router.push({
+      path: route.path + '/new',
+      state: { scannedIdentity: JSON.parse(JSON.stringify(serializableData)) }
+    })
+  }
+}
+
+const handleNoMatchCancel = () => {
+  showNoMatchConfirm.value = false
 }
 </script>
 
@@ -319,6 +338,7 @@ const handleMatchClose = () => {
           v-if="hasScanners"
           class="pill-button pill-button--scan"
           type="button"
+          aria-label="Scan identity"
           @click="handleScan"
         >
           <svg viewBox="0 0 24 24" focusable="false">
@@ -328,6 +348,7 @@ const handleMatchClose = () => {
         <button
           class="pill-button"
           type="button"
+          aria-label="Add new entity"
           @click="router.push(route.path + '/new')"
         >
           <svg viewBox="0 0 24 24" focusable="false">
@@ -361,7 +382,11 @@ const handleMatchClose = () => {
           v-for="submission in filteredSubmissions"
           :key="submission.guid"
           class="submission-card"
+          role="button"
+          tabindex="0"
           @click="router.push(route.path + '/' + submission.guid + '/detail')"
+          @keydown.enter="router.push(route.path + '/' + submission.guid + '/detail')"
+          @keydown.space.prevent="router.push(route.path + '/' + submission.guid + '/detail')"
         >
           <div class="submission-body">
             <div class="submission-header">
@@ -414,6 +439,16 @@ const handleMatchClose = () => {
       @create-new="handleMatchCreateNew"
       @close="handleMatchClose"
     />
+
+    <ConfirmSheet
+      :visible="showNoMatchConfirm"
+      title="No Match Found"
+      message="No matching entity was found for the scanned identity. Would you like to create a new entry with the scanned data?"
+      confirm-label="Create New"
+      cancel-label="Go Back"
+      @confirm="handleNoMatchConfirm"
+      @cancel="handleNoMatchCancel"
+    />
   </div>
 </template>
 
@@ -433,12 +468,12 @@ const handleMatchClose = () => {
 .icon-button {
   width: 44px;
   height: 44px;
-  border-radius: 14px;
+  border-radius: var(--radius-xl);
   border: none;
   background: rgba(15, 23, 42, 0.08);
   display: grid;
   place-items: center;
-  color: #1f2937;
+  color: var(--text-main);
 }
 
 .top-bar__meta {
@@ -452,7 +487,7 @@ const handleMatchClose = () => {
   display: inline-flex;
   align-items: center;
   padding: 0.25rem 0.5rem;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: rgba(234, 179, 8, 0.15);
   color: #92400e;
 }
@@ -464,14 +499,14 @@ const handleMatchClose = () => {
 
 .breadcrumb {
   font-size: 0.8rem;
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .entity-header {
-  background: #ffffff;
-  border-radius: 20px;
+  background: var(--surface);
+  border-radius: var(--radius-xl);
   padding: 1.5rem;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--shadow-card);
   border: 1px solid rgba(0, 0, 0, 0.08);
   display: flex;
   align-items: flex-start;
@@ -482,12 +517,12 @@ const handleMatchClose = () => {
 .entity-header h1 {
   font-size: 1.4rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .entity-header p {
   margin-top: 0.35rem;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.95rem;
 }
 
@@ -502,10 +537,10 @@ const handleMatchClose = () => {
   align-items: center;
   gap: 0.5rem;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   padding: 0.55rem 1.25rem;
-  background: linear-gradient(135deg, #2563eb 0%, #9333ea 100%);
-  color: white;
+  background: var(--brand);
+  color: var(--text-inverted);
   font-weight: 600;
 }
 
@@ -516,7 +551,7 @@ const handleMatchClose = () => {
 
 .pill-button--scan {
   background: rgba(15, 23, 42, 0.08);
-  color: #374151;
+  color: var(--neutral-500);
   box-shadow: none;
 }
 
@@ -525,10 +560,10 @@ const handleMatchClose = () => {
 }
 
 .submissions-panel {
-  background: #ffffff;
-  border-radius: 20px;
+  background: var(--surface);
+  border-radius: var(--radius-xl);
   padding: 1.5rem;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--shadow-card);
   border: 1px solid rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
@@ -544,11 +579,11 @@ const handleMatchClose = () => {
 .submissions-header h2 {
   font-size: 1.2rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .submissions-header p {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.9rem;
 }
 
@@ -556,8 +591,8 @@ const handleMatchClose = () => {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  background: #f9fafb;
-  border-radius: 14px;
+  background: var(--background);
+  border-radius: var(--radius-xl);
   padding: 0.65rem 1rem;
 }
 
@@ -567,13 +602,13 @@ const handleMatchClose = () => {
   outline: none;
   background: transparent;
   font-size: 0.95rem;
-  color: #1f2937;
+  color: var(--text-main);
 }
 
 .icon {
   width: 1.25rem;
   height: 1.25rem;
-  color: #9ca3af;
+  color: var(--neutral-300);
 }
 
 .submission-list {
@@ -591,8 +626,8 @@ const handleMatchClose = () => {
   gap: 0.75rem;
   align-items: center;
   padding: 0.875rem 1rem;
-  background: #f9fafb;
-  border-radius: 14px;
+  background: var(--background);
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(0, 0, 0, 0.08);
   cursor: pointer;
   transition: transform 0.2s ease;
@@ -619,26 +654,26 @@ const handleMatchClose = () => {
 .status-icon {
   width: 24px;
   height: 24px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   display: grid;
   place-items: center;
   background: rgba(59, 130, 246, 0.1);
-  color: #2563eb;
+  color: var(--status-info-dark);
 }
 
 .status-synced .status-icon {
   background: rgba(16, 185, 129, 0.12);
-  color: #059669;
+  color: var(--status-success);
 }
 
 .status-pending .status-icon {
   background: rgba(59, 130, 246, 0.12);
-  color: #2563eb;
+  color: var(--status-info-dark);
 }
 
 .status-draft .status-icon {
   background: rgba(234, 179, 8, 0.15);
-  color: #b45309;
+  color: var(--status-warning-dark);
 }
 
 .status-unknown .status-icon {
@@ -657,7 +692,7 @@ const handleMatchClose = () => {
 .submission-body h3 {
   font-size: 1rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-main);
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -666,29 +701,38 @@ const handleMatchClose = () => {
 
 .submission-meta {
   font-size: 0.8rem;
-  color: #6b7280;
+  color: var(--text-muted);
   margin: 0;
 }
 
 .submission-details {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: var(--neutral-300);
   margin: 0;
 }
 
 .chevron {
   width: 20px;
   height: 20px;
-  color: #9ca3af;
+  color: var(--neutral-300);
 }
 
 .empty-state {
   text-align: center;
   padding: 2rem 1.5rem;
-  background: #f9fafb;
-  border-radius: 18px;
+  background: var(--background);
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(0, 0, 0, 0.08);
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.95rem;
+}
+
+.submission-status-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  margin: 0;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 </style>

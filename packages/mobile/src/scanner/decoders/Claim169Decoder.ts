@@ -41,7 +41,7 @@ function photoToDataUri(photo: Uint8Array, photoFormat?: number): string {
   return `data:${mimeType};base64,${btoa(binary)}`
 }
 
-function mapVerifiedIdentityToScanned(
+export function mapVerifiedIdentityToScanned(
   verified: VerifiedIdentity
 ): ScannedIdentity {
   const { identity, cwt } = verified
@@ -112,10 +112,7 @@ export const Claim169Decoder: DecoderPlugin = {
     inputType: 'qr'
   },
 
-  async decode(
-    rawContent: string,
-    config: Record<string, unknown>
-  ): Promise<ScannedIdentity | null> {
+  configure(config: Record<string, unknown>): void {
     // Register trusted issuers from config if provided
     const trustedIssuers = config.trustedIssuers as
       | TrustedIssuerConfig[]
@@ -130,8 +127,27 @@ export const Claim169Decoder: DecoderPlugin = {
         }
       }
     }
+  },
 
-    const verified = await decodeAndVerifyClaim169(rawContent)
-    return mapVerifiedIdentityToScanned(verified)
+  async decode(
+    rawContent: string,
+    _config: Record<string, unknown>
+  ): Promise<ScannedIdentity | null> {
+    try {
+      const verified = await decodeAndVerifyClaim169(rawContent)
+      return mapVerifiedIdentityToScanned(verified)
+    } catch (error) {
+      // If the content couldn't be decoded at all, it's not a Claim-169 QR code
+      const message = error instanceof Error ? error.message : String(error)
+      const isFormatError =
+        message.includes('CBOR') ||
+        message.includes('decode') ||
+        message.includes('protobuf') ||
+        message.includes('Unexpected')
+      if (isFormatError) {
+        return null // Not our format, let another decoder try
+      }
+      throw error // Verification failure, propagate
+    }
   }
 }

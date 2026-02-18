@@ -139,20 +139,46 @@ export default class Claim169Scanner extends Field {
   renderPhoto(value: VerifiedIdentity) {
     if (value.identity && value.identity.photo && value.identity.photo.length > 0) {
       // Photo is Uint8Array (or array if deserialized from JSON), need to convert to base64
-      let base64 = '';
       const photo = value.identity.photo;
-      
-      // Handle both Uint8Array and regular array (from JSON)
-      const bytes = photo instanceof Uint8Array ? photo : new Uint8Array(Object.values(photo));
-      
-      for (let i = 0; i < bytes.length; i++) {
-        base64 += String.fromCharCode(bytes[i]);
+
+      // Type guard: ensure photo is byte-like before constructing data URI
+      let bytes: Uint8Array | null = null;
+      if (photo instanceof Uint8Array) {
+        bytes = photo;
+      } else if (Array.isArray(photo) || (typeof photo === 'object' && photo !== null)) {
+        // Filter to only numeric values to avoid non-byte data being encoded
+        const numericValues = Object.values(photo).filter((v): v is number => typeof v === 'number');
+        bytes = numericValues.length > 0 ? new Uint8Array(numericValues) : null;
       }
-      const b64 = btoa(base64);
+
+      if (!bytes || bytes.length === 0) {
+        return this.renderPhotoPlaceholder();
+      }
+
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+
+      const b64 = btoa(binary);
+
+      // Validate that btoa produced a valid base64 string
+      if (!/^[A-Za-z0-9+/]+=*$/.test(b64)) {
+        return this.renderPhotoPlaceholder();
+      }
+
       const mimeType = imageFormatToMimeType(value.identity.photoFormat);
-      
-      return `<img src="data:${mimeType};base64,${b64}" class="rounded-circle" style="width: 48px; height: 48px; object-fit: cover;" alt="Identity Photo">`;
+
+      // Validate mime type against the expected set to prevent unexpected content types
+      const allowedMimeTypes = ['image/jpeg', 'image/jp2', 'image/avif', 'image/webp'];
+      const safeMimeType = allowedMimeTypes.includes(mimeType) ? mimeType : 'image/jpeg';
+
+      return `<img src="data:${safeMimeType};base64,${b64}" class="rounded-circle" style="width: 48px; height: 48px; object-fit: cover;" alt="Identity Photo">`;
     }
+    return this.renderPhotoPlaceholder();
+  }
+
+  renderPhotoPlaceholder() {
     return '<div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center text-white" style="width: 48px; height: 48px;"><i class="fa fa-user"></i></div>';
   }
 

@@ -50,13 +50,16 @@ const scoreIndicatorClass = (score: number): string => {
 </script>
 
 <template>
-  <div v-if="props.visible" class="match-results-overlay" role="dialog" aria-modal="true" aria-label="Match Results">
+  <div
+    v-if="props.visible"
+    class="match-results-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Match Results"
+  >
     <div class="match-results-backdrop" @click="emit('close')"></div>
 
     <div class="match-results-sheet">
-      <!-- Drag handle -->
-      <div class="sheet-handle" aria-hidden="true"></div>
-
       <!-- Header -->
       <header class="sheet-header">
         <h2 class="sheet-title">Match Results</h2>
@@ -81,15 +84,31 @@ const scoreIndicatorClass = (score: number): string => {
           v-for="match in props.matches"
           :key="match.entity.guid"
           class="match-card"
+          role="button"
+          tabindex="0"
           @click="emit('select', match)"
+          @keydown.enter="emit('select', match)"
+          @keydown.space.prevent="emit('select', match)"
         >
           <div class="match-card__body">
             <div class="match-card__top">
-              <span class="score-dot" :class="scoreIndicatorClass(match.score)" aria-hidden="true"></span>
+              <span
+                class="score-dot"
+                :class="scoreIndicatorClass(match.score)"
+                aria-hidden="true"
+              ></span>
+              <span class="visually-hidden">{{
+                match.score >= 0.9
+                  ? 'High confidence'
+                  : match.score >= 0.7
+                    ? 'Medium confidence'
+                    : 'Low confidence'
+              }}</span>
               <span class="match-card__name">{{ resolveEntityName(match) }}</span>
             </div>
             <p class="match-card__detail">
-              <span class="match-card__field">{{ match.matchedField }}</span>:
+              <span class="match-card__field">{{ match.matchedField }}</span
+              >:
               <span class="match-card__value">{{ match.matchedValue }}</span>
             </p>
           </div>
@@ -109,11 +128,7 @@ const scoreIndicatorClass = (score: number): string => {
 
       <!-- Create new button -->
       <div class="sheet-footer">
-        <button
-          class="create-new-button"
-          type="button"
-          @click="emit('create-new')"
-        >
+        <button class="create-new-button" type="button" @click="emit('create-new')">
           <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
             <path d="M19 11h-6V5h-2v6H5v2h6v6h2v-6h6z" fill="currentColor" />
           </svg>
@@ -145,23 +160,13 @@ const scoreIndicatorClass = (score: number): string => {
   width: min(480px, 100%);
   max-height: 85vh;
   overflow-y: auto;
-  background: #ffffff;
-  border-radius: 20px 20px 0 0;
-  padding: 0.75rem 1.25rem 1.5rem;
-  box-shadow: 0 -8px 40px rgba(15, 23, 42, 0.15);
+  background: var(--surface);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  padding: 0.75rem 1.25rem max(1.5rem, env(safe-area-inset-bottom));
+  box-shadow: var(--shadow-modal);
   display: flex;
   flex-direction: column;
   gap: 1rem;
-}
-
-.sheet-handle {
-  width: 36px;
-  height: 4px;
-  border-radius: 2px;
-  background: #e5e7eb;
-  align-self: center;
-  margin-bottom: 0.25rem;
-  flex-shrink: 0;
 }
 
 .sheet-header {
@@ -174,25 +179,25 @@ const scoreIndicatorClass = (score: number): string => {
 .sheet-title {
   font-size: 1.2rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .close-button {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   border: none;
-  background: #f3f4f6;
+  background: var(--neutral-50);
   display: grid;
   place-items: center;
   cursor: pointer;
-  color: #374151;
+  color: var(--neutral-500);
   flex-shrink: 0;
   transition: background 0.15s ease;
 }
 
 .close-button:active {
-  background: #e5e7eb;
+  background: var(--neutral-100);
 }
 
 .close-button svg {
@@ -215,8 +220,8 @@ const scoreIndicatorClass = (score: number): string => {
   gap: 0.75rem;
   align-items: center;
   padding: 0.875rem 1rem;
-  background: #f9fafb;
-  border-radius: 14px;
+  background: var(--background);
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(0, 0, 0, 0.08);
   cursor: pointer;
   transition: transform 0.15s ease;
@@ -247,21 +252,21 @@ const scoreIndicatorClass = (score: number): string => {
 }
 
 .score-dot--high {
-  background: #10b981;
+  background: var(--status-success);
 }
 
 .score-dot--medium {
-  background: #f59e0b;
+  background: var(--status-warning);
 }
 
 .score-dot--low {
-  background: #9ca3af;
+  background: var(--neutral-300);
 }
 
 .match-card__name {
   font-size: 1rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-main);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -269,7 +274,7 @@ const scoreIndicatorClass = (score: number): string => {
 
 .match-card__detail {
   font-size: 0.8rem;
-  color: #6b7280;
+  color: var(--text-muted);
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -287,17 +292,17 @@ const scoreIndicatorClass = (score: number): string => {
 .match-card__chevron {
   width: 20px;
   height: 20px;
-  color: #9ca3af;
+  color: var(--neutral-300);
   flex-shrink: 0;
 }
 
 .match-empty {
   text-align: center;
   padding: 2rem 1.5rem;
-  background: #f9fafb;
-  border-radius: 14px;
+  background: var(--background);
+  border-radius: var(--radius-xl);
   border: 1px solid rgba(0, 0, 0, 0.08);
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 0.95rem;
 }
 
@@ -316,14 +321,14 @@ const scoreIndicatorClass = (score: number): string => {
   gap: 0.625rem;
   width: 100%;
   padding: 0.875rem 1.5rem;
-  background: linear-gradient(135deg, #2563eb 0%, #9333ea 100%);
-  color: #ffffff;
+  background: var(--brand);
+  color: var(--text-inverted);
   border: none;
-  border-radius: 14px;
+  border-radius: var(--radius-xl);
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 10px 30px rgba(79, 70, 229, 0.3);
+  box-shadow: var(--shadow-floating);
   transition: opacity 0.15s ease;
 }
 
@@ -334,5 +339,17 @@ const scoreIndicatorClass = (score: number): string => {
 .create-new-button svg {
   width: 20px;
   height: 20px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 </style>
