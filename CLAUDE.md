@@ -59,9 +59,24 @@ npm test              # Run all tests across modules
 
 ## Testing
 
+### Running All Tests Locally
+
+```bash
+# One command: starts PostgreSQL via Docker, runs all tests, cleans up
+pnpm run test:all
+
+# If you already have PostgreSQL running:
+export POSTGRES_TEST=postgresql://user:pass@localhost:5432/test
+pnpm test
+```
+
+`pnpm run test:all` requires Docker (Compose v2.1.1+). It spins up an ephemeral PostgreSQL on port 5433, sets `POSTGRES_TEST`, runs the full suite, and tears down the container on exit. Backend tests silently skip when `POSTGRES_TEST` is not set, so `pnpm test` alone only runs datacollect, admin, and mobile tests.
+
+### Test Suites
+
 Each module has its own test suite:
 - DataCollect: Uses Jest with fake-indexeddb for IndexedDB testing
-- Backend: Uses Jest with supertest for API testing
+- Backend: Uses Jest with supertest for API testing (requires PostgreSQL)
 - Admin: Uses Vitest for Vue component testing
 
 To run a single test file:

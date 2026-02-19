@@ -11,6 +11,7 @@
     "reinstall": "pnpm run clean && pnpm -r install",
     "clean": "pnpm -r --if-present run clean && rm -rf **/*/node_modules",
     "test": "pnpm -r --if-present run test",
+    "test:all": "./scripts/test.sh",
     "test:datacollect": "pnpm --filter @idpass/data-collect-core test",
     "test:backend": "pnpm --filter @idpass/data-collect-backend test",
     "test:admin": "pnpm --filter @idpass/data-collect-admin test:unit",
