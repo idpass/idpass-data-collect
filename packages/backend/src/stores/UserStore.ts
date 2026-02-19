@@ -32,15 +32,19 @@ export class UserStoreImpl implements UserStore {
   async initialize(): Promise<void> {
     const client = await this.pool.connect();
     try {
-      const query = `
+      await client.query(`
         CREATE TABLE IF NOT EXISTS users (
           id SERIAL PRIMARY KEY,
           email TEXT UNIQUE NOT NULL,
           password_hash TEXT NOT NULL,
-          role TEXT NOT NULL
+          role TEXT NOT NULL,
+          tenant_ids TEXT[] NOT NULL DEFAULT '{}'
         )
-      `;
-      await client.query(query);
+      `);
+      // Add tenant_ids column to existing tables that were created before this migration
+      await client.query(`
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS tenant_ids TEXT[] NOT NULL DEFAULT '{}'
+      `);
     } finally {
       client.release();
     }
@@ -49,10 +53,10 @@ export class UserStoreImpl implements UserStore {
   async saveUser(user: Omit<UserWithPasswordHash, "id">): Promise<void> {
     const client = await this.pool.connect();
     try {
-      const { email, passwordHash, role } = user;
+      const { email, passwordHash, role, tenantIds = [] } = user;
       const query = {
-        text: "INSERT INTO users (email, password_hash, role) VALUES ($1, $2, $3) RETURNING id",
-        values: [email, passwordHash, role],
+        text: "INSERT INTO users (email, password_hash, role, tenant_ids) VALUES ($1, $2, $3, $4) RETURNING id",
+        values: [email, passwordHash, role, tenantIds],
       };
 
       const { rows } = await client.query(query);
@@ -76,8 +80,14 @@ export class UserStoreImpl implements UserStore {
         return null;
       }
 
-      const { id, email, password_hash, role } = rows[0];
-      return { id, email, passwordHash: password_hash, role: Role[role as keyof typeof Role] as Role };
+      const { id, email, password_hash, role, tenant_ids } = rows[0];
+      return {
+        id,
+        email,
+        passwordHash: password_hash,
+        role: Role[role as keyof typeof Role] as Role,
+        tenantIds: tenant_ids ?? [],
+      };
     } finally {
       client.release();
     }
@@ -86,10 +96,10 @@ export class UserStoreImpl implements UserStore {
   async updateUser(user: UserWithPasswordHash): Promise<void> {
     const client = await this.pool.connect();
     try {
-      const { id, email, passwordHash, role } = user;
+      const { id, email, passwordHash, role, tenantIds = [] } = user;
       const query = {
-        text: "UPDATE users SET password_hash = $3, role = $4 WHERE id = $1 AND email = $2",
-        values: [id, email, passwordHash, role],
+        text: "UPDATE users SET password_hash = $3, role = $4, tenant_ids = $5 WHERE id = $1 AND email = $2",
+        values: [id, email, passwordHash, role, tenantIds],
       };
 
       await client.query(query);
@@ -142,7 +152,7 @@ export class UserStoreImpl implements UserStore {
     const client = await this.pool.connect();
     try {
       const query = {
-        text: "SELECT id, email, password_hash, role FROM users",
+        text: "SELECT id, email, password_hash, role, tenant_ids FROM users",
       };
 
       const { rows } = await client.query(query);
@@ -150,6 +160,7 @@ export class UserStoreImpl implements UserStore {
         id: row.id,
         email: row.email,
         role: Role[row.role as keyof typeof Role],
+        tenantIds: row.tenant_ids ?? [],
       }));
     } finally {
       client.release();
@@ -160,7 +171,7 @@ export class UserStoreImpl implements UserStore {
     const client = await this.pool.connect();
     try {
       const query = {
-        text: "SELECT id, email, password_hash, role FROM users WHERE id = $1 LIMIT 1",
+        text: "SELECT id, email, password_hash, role, tenant_ids FROM users WHERE id = $1 LIMIT 1",
         values: [id],
       };
 
@@ -170,6 +181,7 @@ export class UserStoreImpl implements UserStore {
         passwordHash: row.password_hash,
         email: row.email,
         role: Role[row.role as keyof typeof Role],
+        tenantIds: row.tenant_ids ?? [],
       }))[0];
     } finally {
       client.release();

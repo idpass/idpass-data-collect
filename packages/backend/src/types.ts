@@ -45,6 +45,7 @@ export interface User {
   id: number;
   email: string;
   role: Role;
+  tenantIds: string[];
 }
 
 export interface UserWithPasswordHash extends User {

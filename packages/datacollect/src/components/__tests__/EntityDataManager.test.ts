@@ -1438,6 +1438,12 @@ describe("EntityDataManager", () => {
     await manager.submitForm(formData);
     await manager.submitForm({ ...formData, guid: uuidv4(), entityGuid: entityGuid2 });
 
+    // Duplicate detection is async (fire-and-forget via setTimeout). Directly
+    // invoke checkForDuplicates on the service to test the detection logic
+    // without relying on setTimeout timing in the test environment.
+    const dupService = eventApplierService.getDuplicateDetectionService();
+    await dupService.checkForDuplicates(entityGuid2, formData.guid);
+
     const potentialDuplicates = await manager.getPotentialDuplicates();
     expect(potentialDuplicates).toHaveLength(1);
     expect(potentialDuplicates).toEqual([{ duplicateGuid: entityGuid1, entityGuid: entityGuid2 }]);
@@ -1594,6 +1600,87 @@ describe("EntityDataManager", () => {
     it("should not sync if unauthenticated", async () => {
       await manager.logout();
       await expect(manager.syncWithSyncServer()).rejects.toThrow("Unauthorized");
+    });
+  });
+
+  describe("submitFormBatch", () => {
+    it("should process all events and return success with applied count", async () => {
+      const events: FormSubmission[] = [
+        {
+          guid: uuidv4(),
+          entityGuid: uuidv4(),
+          type: "create-individual",
+          data: { name: "Alice" },
+          timestamp: new Date().toISOString(),
+          userId: "user-1",
+          syncLevel: SyncLevel.LOCAL,
+        },
+        {
+          guid: uuidv4(),
+          entityGuid: uuidv4(),
+          type: "create-individual",
+          data: { name: "Bob" },
+          timestamp: new Date().toISOString(),
+          userId: "user-1",
+          syncLevel: SyncLevel.LOCAL,
+        },
+      ];
+
+      const result = await manager.submitFormBatch(events);
+
+      expect(result.success).toBe(true);
+      expect(result.applied).toBe(2);
+      expect(result.failed).toEqual([]);
+      expect(result.errors).toEqual([]);
+
+      const entities = await entityStore.getAllEntities();
+      expect(entities).toHaveLength(2);
+      const names = entities.map((e) => e.modified.data.name).sort();
+      expect(names).toEqual(["Alice", "Bob"]);
+    });
+
+    it("should process an empty batch and return success with zero applied", async () => {
+      const result = await manager.submitFormBatch([]);
+
+      expect(result.success).toBe(true);
+      expect(result.applied).toBe(0);
+      expect(result.failed).toEqual([]);
+      expect(result.errors).toEqual([]);
+    });
+
+    it("should throw when an event in the batch is invalid, stopping processing", async () => {
+      const events: FormSubmission[] = [
+        {
+          guid: uuidv4(),
+          entityGuid: uuidv4(),
+          type: "create-individual",
+          data: { name: "Alice" },
+          timestamp: new Date().toISOString(),
+          userId: "user-1",
+          syncLevel: SyncLevel.LOCAL,
+        },
+        {
+          // Missing required fields to trigger a validation error
+          guid: uuidv4(),
+          entityGuid: "",
+          type: "create-individual",
+          data: { name: "BadEvent" },
+          timestamp: new Date().toISOString(),
+          userId: "user-1",
+          syncLevel: SyncLevel.LOCAL,
+        },
+        {
+          guid: uuidv4(),
+          entityGuid: uuidv4(),
+          type: "create-individual",
+          data: { name: "Charlie" },
+          timestamp: new Date().toISOString(),
+          userId: "user-1",
+          syncLevel: SyncLevel.LOCAL,
+        },
+      ];
+
+      await expect(manager.submitFormBatch(events)).rejects.toThrow();
     });
   });
 });

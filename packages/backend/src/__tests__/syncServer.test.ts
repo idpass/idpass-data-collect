@@ -275,7 +275,7 @@ describeIfPostgres("Sync Server", () => {
       const pushedEvents = await manager?.getAllEvents();
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({ status: "success" });
+      expect(response.body).toMatchObject({ status: "success" });
       expect(pushedEntities).toEqual([
         {
           guid: expect.any(String),

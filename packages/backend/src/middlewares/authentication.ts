@@ -24,6 +24,8 @@ import { AppInstanceStore, Role, UserStore } from "../types";
 export interface DecodedPayload {
   id: string;
   email: string;
+  role?: Role;
+  tenantIds?: string[];
 }
 
 export interface AuthenticatedRequest extends Request {
@@ -139,4 +141,36 @@ export function createAuthAdminMiddleware(userStore: UserStore) {
       res.status(401).json({ error: "Invalid token" });
     }
   };
+}
+
+export function validateTenantAccess(req: Request, res: Response, next: NextFunction): void {
+  const user = (req as AuthenticatedRequest).user;
+
+  // Non-JWT authenticated requests (e.g. basic auth for external sync clients)
+  // are validated by the upstream auth middleware, not by tenant access
+  if (!user) {
+    next();
+    return;
+  }
+
+  // Admin users bypass tenant checks entirely
+  if (user.role === Role.ADMIN) {
+    next();
+    return;
+  }
+
+  const configId = (req.query.configId as string) || ((req.body as Record<string, unknown>)?.configId as string);
+
+  if (!configId) {
+    res.status(400).json({ error: "Missing configId" });
+    return;
+  }
+
+  const tenantIds = user.tenantIds ?? [];
+  if (!tenantIds.includes(configId)) {
+    res.status(403).json({ error: "Forbidden: No access to this tenant" });
+    return;
+  }
+
+  next();
 }

@@ -169,6 +169,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
       email: config.adminEmail,
       passwordHash: hashedPassword,
       role: Role.ADMIN,
+      tenantIds: [] as string[],
     };
     await userStore.saveUser(initialAdmin);
     console.log("Initial admin user " + initialAdmin.email + " created");

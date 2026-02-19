@@ -51,8 +51,12 @@ export function createUserRoutes(userStore: UserStore): Router {
         return res.status(401).json({ message: "Invalid email or password" });
       }
 
-      // generate JWT token with id and email
-      const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET!, {});
+      // generate JWT token with id, email, role, and tenantIds
+      const token = jwt.sign(
+        { id: user.id, email: user.email, role: user.role, tenantIds: user.tenantIds },
+        process.env.JWT_SECRET!,
+        {},
+      );
       res.json({ token, userId: user.id });
     }),
   );
@@ -81,10 +85,10 @@ export function createUserRoutes(userStore: UserStore): Router {
     "/",
     createAuthAdminMiddleware(userStore),
     asyncHandler(async (req, res) => {
-      const { email, password, role } = req.body;
+      const { email, password, role, tenantIds = [] } = req.body;
       const saltRounds = 10;
       const passwordHash = await bcrypt.hash(password, saltRounds);
-      const newUser = { email, passwordHash, role };
+      const newUser = { email, passwordHash, role, tenantIds };
       await userStore.saveUser(newUser);
       res.status(201).json({ message: "User created successfully" });
     }),
@@ -96,14 +100,15 @@ export function createUserRoutes(userStore: UserStore): Router {
     createAuthAdminMiddleware(userStore),
     asyncHandler(async (req, res) => {
       const { id } = req.params;
-      const { email, password, role } = req.body;
+      const { email, password, role, tenantIds } = req.body;
       const saltRounds = 10;
       const passwordHash = await bcrypt.hash(password, saltRounds);
       const user = await userStore.getUserById(parseInt(id));
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
-      const updatedUser = { id: user.id, email, passwordHash, role };
+      // Preserve existing tenantIds if not provided in the request body
+      const updatedUser = { id: user.id, email, passwordHash, role, tenantIds: tenantIds ?? user.tenantIds };
       await userStore.updateUser(updatedUser);
       res.json({ message: "User updated successfully" });
     }),

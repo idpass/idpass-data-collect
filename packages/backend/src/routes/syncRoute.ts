@@ -21,7 +21,7 @@ import { Router } from "express";
 import bodyParser from "body-parser";
 import { AuditLogEntry, ExternalSyncCredentials } from "@idpass/data-collect-core";
 import { z } from "zod";
-import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware } from "../middlewares/authentication";
+import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware, validateTenantAccess } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { AppInstanceStore } from "../types";
 
@@ -48,6 +48,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
   router.get(
     "/pull",
     createDynamicAuthMiddleware(appInstanceStore),
+    validateTenantAccess,
     asyncHandler(async (req, res) => {
       // get param timestamp
       const { since, configId = "default" } = req.query;
@@ -75,6 +76,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
   router.get(
     "/pull/callback",
     createDynamicAuthMiddleware(appInstanceStore),
+    validateTenantAccess,
     asyncHandler(async (req, res) => {
       const { configId = "default" } = req.query;
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
@@ -90,6 +92,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
   router.post(
     "/push",
     createDynamicAuthMiddleware(appInstanceStore),
+    validateTenantAccess,
     asyncHandler(async (req, res) => {
       const parseResult = SyncPushPayloadSchema.safeParse(req.body);
       if (!parseResult.success) {
@@ -105,23 +108,27 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
       }
       const edm = appInstance.edm;
 
-      for (const event of sorted) {
-        event.syncLevel = 1;
-        try {
-          await edm.submitForm(event);
-        } catch (error) {
-          console.error(error);
-          // ignore errors
-        }
-      }
+      const batchEvents = sorted.map((event) => ({ ...event, syncLevel: 1 }));
 
-      res.json({ status: "success" });
+      try {
+        const result = await edm.submitFormBatch(batchEvents);
+        res.json({ status: "success", applied: result.applied, failed: result.failed, errors: result.errors });
+      } catch (error) {
+        console.error(error);
+        const message = error instanceof Error ? error.message : String(error);
+        res.status(422).json({
+          status: "error",
+          message: "Batch push failed; no events were applied",
+          errors: [message],
+        });
+      }
     }),
   );
 
   router.post(
     "/push/audit-logs",
     authenticateJWT,
+    validateTenantAccess,
     asyncHandler(async (req, res) => {
       const auditLogs: AuditLogEntry[] = req.body.auditLogs;
       const configId = req.body.configId;
@@ -150,6 +157,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
   router.get(
     "/pull/audit-logs",
     authenticateJWT,
+    validateTenantAccess,
     asyncHandler(async (req, res) => {
       // get param timestamp
       const { since, configId = "default" } = req.query;
@@ -167,6 +175,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
   router.post(
     "/external",
     authenticateJWT,
+    validateTenantAccess,
     asyncHandler(async (req, res) => {
       const { configId = "default", credentials } = req.body;
       const appInstance = await appInstanceStore.getAppInstance(configId as string);

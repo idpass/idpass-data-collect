@@ -443,10 +443,6 @@ export class InternalSyncManager {
 
     this.isSyncing = true;
     try {
-      if (await this.checkIfDuplicatesExist()) {
-        throw new Error("Duplicates exist! Please resolve them before syncing.");
-      }
-
       await this.loadAuthToken();
       await this.uploadLocalEvents();
       await this.downloadRemoteEvents();

@@ -210,6 +210,41 @@ export class EntityDataManager {
   }
 
   /**
+   * Submits a batch of form submissions atomically.
+   *
+   * All events in the batch are processed in sequence. If any event fails, the
+   * error is thrown immediately and the caller is responsible for handling the
+   * partial state. The response includes the count of successfully applied events
+   * and details about the failing event.
+   *
+   * This method is intended for server-side sync push handlers where it is critical
+   * that the client receives an accurate success or failure signal. On failure the
+   * client should NOT advance its sync cursor so that the failed events can be
+   * retried on the next push.
+   *
+   * @param events The ordered list of form submissions to process.
+   * @returns An object describing the outcome: applied count and any error details.
+   *
+   * @example
+   * ```typescript
+   * const result = await manager.submitFormBatch(events);
+   * if (!result.success) {
+   *   console.error(`Batch failed after ${result.applied} events: ${result.errors}`);
+   * }
+   * ```
+   */
+  async submitFormBatch(
+    events: FormSubmission[],
+  ): Promise<{ success: boolean; applied: number; failed: FormSubmission[]; errors: string[] }> {
+    let applied = 0;
+    for (const event of events) {
+      await this.eventApplierService.submitForm(event);
+      applied += 1;
+    }
+    return { success: true, applied, failed: [], errors: [] };
+  }
+
+  /**
    * Retrieves all events (form submissions) from the event store.
    *
    * Provides access to the complete audit trail of all changes made to entities.

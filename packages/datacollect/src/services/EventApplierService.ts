@@ -36,6 +36,7 @@ import {
 import { AppError } from "../utils/AppError";
 
 import { validateFormSubmission } from "../utils/formValidation";
+import { DuplicateDetectionService } from "./DuplicateDetectionService";
 
 type ConflictResolutionResult =
   | { resolution: "no-conflict"; baseEntity?: EntityDoc }
@@ -148,17 +149,32 @@ export class EventApplierService {
   private logger = console;
   /** Registry of custom event appliers mapped by event type */
   private eventAppliers: Map<string, EventApplier> = new Map();
+  /** Service that performs duplicate detection asynchronously off the write path */
+  private duplicateDetectionService: DuplicateDetectionService;
 
   /**
    * Creates a new EventApplierService instance.
    *
    * @param eventStore Store for managing events and audit logs.
    * @param entityStore Store for managing current entity state.
+   * @param duplicateDetectionService Optional service for async duplicate detection. A default instance is created if not provided.
    */
   constructor(
     private eventStore: EventStore,
     private entityStore: EntityStore,
-  ) {}
+    duplicateDetectionService?: DuplicateDetectionService,
+  ) {
+    this.duplicateDetectionService =
+      duplicateDetectionService ?? new DuplicateDetectionService(entityStore, eventStore);
+  }
+
+  /**
+   * Returns the duplicate detection service instance, primarily for testing
+   * purposes (e.g., calling `flush()` to wait for async processing).
+   */
+  getDuplicateDetectionService(): DuplicateDetectionService {
+    return this.duplicateDetectionService;
+  }
 
   /**
    * Registers a custom event applier for a specific event type.
@@ -373,8 +389,10 @@ export class EventApplierService {
 
       // this.logger.debug(`Updated entity: ${JSON.stringify(updatedEntity)}`);
 
+      // Enqueue the entity for asynchronous duplicate detection so the write
+      // path is never blocked by the O(n) entity scan.
       if (updatedEntity?.guid) {
-        await this.flagPotentialDuplicate(updatedEntity.guid, eventGuid);
+        this.duplicateDetectionService.enqueue(updatedEntity.guid, eventGuid);
       }
 
       return updatedEntity;
@@ -825,88 +843,4 @@ export class EventApplierService {
     return await this.entityStore.searchEntities(criteria);
   }
 
-  /**
-   * Automatically flags potential duplicate entities based on data similarity.
-   *
-   * @param entityGuid GUID of the entity to check for duplicates.
-   * @param eventGuid GUID of the event that created/updated the entity.
-   *
-   * @private
-   */
-  private async flagPotentialDuplicate(entityGuid: string, eventGuid: string): Promise<void> {
-    const entity = await this.entityStore.getEntity(entityGuid);
-    if (!entity) {
-      throw new AppError("ENTITY_NOT_FOUND", `Entity with GUID ${entityGuid} not found`);
-    }
-
-    if (!entity.modified.data) {
-      this.logger.warn(`Entity ${entityGuid} has no data property, skipping duplicate check`);
-      return;
-    }
-
-    // Flatten the nested data structure and extract searchable fields
-    const searchableFields = this.extractSearchableFields(entity.modified.data);
-    if (Object.keys(searchableFields).length === 0) {
-      this.logger.warn(`No searchable fields found for entity ${entityGuid}, skipping duplicate check`);
-      return;
-    }
-
-    const searchCriteria = Object.entries(searchableFields)
-       
-      .filter(([_, value]) => value !== null && value !== undefined && value !== "")
-      .map(([key, value]) => ({ [key]: value }));
-
-    const potentialDuplicates = await this.searchEntities(searchCriteria);
-
-    for (const duplicate of potentialDuplicates) {
-      if (duplicate.modified.guid !== entityGuid) {
-        await this.entityStore.savePotentialDuplicates([{ entityGuid, duplicateGuid: duplicate.modified.guid }]);
-        this.logger.info(`Flagging potential duplicate: ${duplicate.modified.guid}`);
-        await this.logAudit("system", "flag-potential-duplicate", eventGuid, entityGuid, {
-          entityId: entityGuid,
-          duplicateId: duplicate.modified.guid,
-        });
-      }
-    }
-  }
-
-  /**
-   * Extracts searchable fields from entity data for duplicate detection.
-   *
-   * @param data The entity data object to process.
-   * @returns Flattened object with searchable field paths and values.
-   *
-   * @private
-   *
-   * @example
-   * Input: { name: "John", address: { street: "123 Main", city: "Boston" } }
-   * Output: { name: "John", "address.street": "123 Main", "address.city": "Boston" }
-   */
-  private extractSearchableFields(data: Record<string, unknown>): Record<string, unknown> {
-    const result: Record<string, unknown> = {};
-
-    // Helper function to recursively extract primitive values
-    const extractFields = (obj: unknown, prefix = ""): void => {
-      if (!obj || typeof obj !== "object") {
-        return;
-      }
-
-      Object.entries(obj as Record<string, unknown>).forEach(([key, value]) => {
-        const fieldPath = prefix ? `${prefix}.${key}` : key;
-
-        if (value !== null && value !== undefined && value !== "") {
-          if (typeof value === "object" && !Array.isArray(value)) {
-            // Recursively process nested objects
-            extractFields(value, fieldPath);
-          } else if (!Array.isArray(value)) {
-            // Only include primitive values (excluding arrays)
-            result[fieldPath] = value;
-          }
-        }
-      });
-    };
-
-    extractFields(data);
-    return result;
-  }
 }
