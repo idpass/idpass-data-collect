@@ -29,6 +29,7 @@ import { errorHandler, notFoundHandler, setupUncaughtHandlers } from "./middlewa
 import { createAppConfigRoutes } from "./routes/appConfigRoutes";
 import { createEntitiesRouter } from "./routes/entitiesRoute";
 import { createPotentialDuplicatesRoute } from "./routes/potentialDuplicatesRoute";
+import { createRedemptionRouter } from "./routes/redemptionRoute";
 import { createSyncRouter } from "./routes/syncRoute";
 import { createUserRoutes } from "./routes/userRoutes";
 import { AppConfigStoreImpl } from "./stores/AppConfigStore";
@@ -87,6 +88,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   app.use("/api/sync", createSyncRouter(appInstanceStore));
   app.use("/api/users", createUserRoutes(userStore));
   app.use("/api/potential-duplicates", createPotentialDuplicatesRoute(appInstanceStore));
+  app.use("/api/redemption", createRedemptionRouter(appInstanceStore));
 
   app.get("/artifacts/:artifactId.json", async (req, res, next) => {
     try {

@@ -1,0 +1,43 @@
+{
+  "id": "attendance-tracker",
+  "name": "Attendance Tracker",
+  "description": "Track attendance for training sessions, classes, and check-ins",
+  "version": "1.0.0",
+  "customEventTypes": ["record-attendance"],
+  "attendanceConfig": {
+    "modes": ["check-in", "roll-call"],
+    "defaultMode": "check-in",
+    "scanners": [
+      { "decoderId": "claim169", "config": {}, "match": { "field": "externalId" } }
+    ]
+  },
+  "entityForms": [
+    {
+      "id": "individual-registration",
+      "name": "individual",
+      "title": "Beneficiary Registration",
+      "formio": {}
+    },
+    {
+      "id": "group-registration",
+      "name": "group",
+      "title": "Class / Cohort Registration",
+      "formio": {}
+    }
+  ],
+  "entityData": [
+    {
+      "name": "attendanceStatuses",
+      "data": [
+        { "id": "present", "name": "Present" },
+        { "id": "absent", "name": "Absent" },
+        { "id": "excused", "name": "Excused" },
+        { "id": "late", "name": "Late" }
+      ]
+    },
+    {
+      "name": "programs",
+      "data": []
+    }
+  ]
+}

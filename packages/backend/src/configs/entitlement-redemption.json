@@ -1,0 +1,44 @@
+{
+  "id": "entitlement-redemption",
+  "name": "Entitlement Redemption",
+  "description": "Offline/online entitlement redemption POS",
+  "version": "1.0.0",
+  "customEventTypes": ["grant-entitlement", "redeem-entitlement", "void-redemption"],
+  "redemptionConfig": {
+    "identityConfirmation": {
+      "enabled": true,
+      "fields": ["photo", "name", "dateOfBirth", "householdId"]
+    },
+    "scanners": [
+      { "decoderId": "claim169", "config": {}, "match": { "field": "externalId" } }
+    ],
+    "duplicateDetection": "session"
+  },
+  "entityForms": [
+    {
+      "id": "individual-registration",
+      "name": "individual",
+      "title": "Beneficiary",
+      "formio": {}
+    },
+    {
+      "id": "group-registration",
+      "name": "group",
+      "title": "Group",
+      "formio": {}
+    }
+  ],
+  "entityData": [
+    {
+      "name": "servicePoints",
+      "data": []
+    },
+    {
+      "name": "entitlementTypes",
+      "data": [
+        { "id": "quantity", "name": "Quantity-based (items)" },
+        { "id": "monetary", "name": "Monetary (credit)" }
+      ]
+    }
+  ]
+}

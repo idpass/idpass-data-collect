@@ -5,5 +5,6 @@ module.exports = {
   setupFilesAfterEnv: ["jest-fetch-mock"],
   moduleNameMapper: {
     "^@idpass/data-collect-core$": "<rootDir>/../datacollect/src",
+    "^@idpass/data-collect-core/(.*)$": "<rootDir>/../datacollect/src/$1",
   },
 };
