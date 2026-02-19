@@ -1,0 +1,16 @@
+:root {
+  --portal-font-size-base: 18px;
+  --portal-font-size-sm: 16px;
+  --portal-font-size-lg: 20px;
+  --portal-font-size-xl: 24px;
+  --portal-font-size-heading: 28px;
+  --portal-line-height: 1.6;
+  --portal-touch-target-min: 48px;
+  --portal-spacing-xs: 8px;
+  --portal-spacing-sm: 12px;
+  --portal-spacing-md: 16px;
+  --portal-spacing-lg: 24px;
+  --portal-spacing-xl: 32px;
+  --portal-border-radius: 12px;
+  --portal-max-content-width: 720px;
+}

@@ -34,7 +34,7 @@ export const asyncHandler = (fn: AsyncRequestHandler) => {
   };
 };
 
-export const errorHandler = (err: CustomError, req: Request, res: Response): void => {
+export const errorHandler = (err: CustomError, req: Request, res: Response, _next: NextFunction): void => {
   console.error("Error:", err);
 
   const statusCode = err.statusCode || 500;

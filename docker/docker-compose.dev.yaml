@@ -32,9 +32,18 @@ services:
       dockerfile: docker/Dockerfile
       target: backend
     env_file: ./.env
+    environment:
+      - PORTAL_ENABLED=true
+      - PORTAL_KEYCLOAK_ISSUER=http://keycloak:8180/realms/datacollect
+      - PORTAL_KEYCLOAK_CLIENT_ID=datacollect-portal
+      - PORTAL_OPENSPP_URL=http://openspp:8069
+      - PORTAL_OPENSPP_CLIENT_ID=datacollect-portal-service
+      - PORTAL_OPENSPP_CLIENT_SECRET=changeme
+      - PORTAL_OPENSPP_IDENTIFIER_NAMESPACE=urn:openspp:registrant
+      - PORTAL_DRAFT_TTL_DAYS=30
     ports:
       - "${SYNC_SERVER_PORT:-3000}:3000"
-      - "9229:9229" # Node.js debugger port
+      - "9229:9229"
     restart: unless-stopped
     depends_on:
       - postgres
@@ -75,20 +84,40 @@ services:
     networks:
       - datacollect-network-dev
 
-  # keycloak:
-  #   image: quay.io/keycloak/keycloak:23.0.0
-  #   container_name: keycloak
-  #   environment:
-  #     - KEYCLOAK_ADMIN=admin
-  #     - KEYCLOAK_ADMIN_PASSWORD=admin
-  #   command:
-  #     - start-dev
-  #   ports:
-  #     - "9090:8080"
-  #   depends_on:
-  #     - postgres
-  #   networks:
-  #     - datacollect-network-dev
+  # Beneficiary Portal - Development mode
+  portal-ui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: portal
+    restart: unless-stopped
+    environment:
+      - VITE_API_URL=http://localhost:3000
+      - VITE_KEYCLOAK_ISSUER=http://localhost:8180/realms/datacollect
+      - VITE_KEYCLOAK_CLIENT_ID=datacollect-portal
+      - VITE_KEYCLOAK_REDIRECT_URI=http://localhost:5174/callback
+      - VITE_KEYCLOAK_POST_LOGOUT_URI=http://localhost:5174
+    ports:
+      - "5174:5174"
+    depends_on:
+      - sync-server
+      - keycloak
+    networks:
+      - datacollect-network-dev
+
+  # Keycloak Identity Provider (for portal authentication)
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+    command:
+      - start-dev
+      - --http-port=8180
+    ports:
+      - "8180:8180"
+    networks:
+      - datacollect-network-dev
 
 volumes:
   postgres-data-dev:

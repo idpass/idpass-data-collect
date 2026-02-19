@@ -1,0 +1,24 @@
+@import './design-tokens.css';
+
+body {
+  font-size: var(--portal-font-size-base);
+  line-height: var(--portal-line-height);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.portal-content {
+  max-width: var(--portal-max-content-width);
+  margin: 0 auto;
+  padding: var(--portal-spacing-md);
+}
+
+.v-btn {
+  min-height: var(--portal-touch-target-min) !important;
+  font-size: var(--portal-font-size-base) !important;
+}
+
+.v-field__input {
+  font-size: var(--portal-font-size-base) !important;
+  min-height: var(--portal-touch-target-min) !important;
+}

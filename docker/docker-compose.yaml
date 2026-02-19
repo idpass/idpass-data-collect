@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # Nginx reverse proxy
   nginx:
@@ -11,6 +9,7 @@ services:
     depends_on:
       - sync-server
       - admin-ui
+      - portal-ui
     networks:
       - hdm-network
 
@@ -51,6 +50,24 @@ services:
         - VITE_API_URL=/sync
     depends_on:
       - sync-server
+    networks:
+      - hdm-network
+
+  # Portal UI (Vue.js beneficiary portal)
+  portal-ui:
+    image: "hdm-portal-ui:latest"
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.portal
+    environment:
+      - KEYCLOAK_ORIGIN=${KEYCLOAK_ORIGIN:-https://keycloak.example.com}
+    depends_on:
+      - sync-server
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     networks:
       - hdm-network
 
