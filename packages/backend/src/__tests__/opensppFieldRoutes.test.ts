@@ -33,7 +33,7 @@ const getConnectionString = () => {
   if (!url) return "";
   const parsed = new URL(url.replace(/ /g, "%20"));
   const baseName = parsed.pathname.replace(/^\//, "");
-  const dbName = baseName ? `${baseName}_sync_server` : "datacollect_sync_server";
+  const dbName = baseName ? `${baseName}_openspp_fields` : "datacollect_openspp_fields";
   parsed.pathname = `/${dbName}`;
   return parsed.toString();
 };

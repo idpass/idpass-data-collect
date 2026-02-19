@@ -1,0 +1,220 @@
+{
+  "id": "demo-household-registry",
+  "name": "Demo Household Registry",
+  "description": "Demo app configuration with households and individuals for development and testing.",
+  "version": "1.0.0",
+  "entityForms": [
+    {
+      "id": "household",
+      "name": "household",
+      "title": "Household",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "name",
+            "type": "textfield",
+            "input": true,
+            "label": "Household Name",
+            "validate": { "required": true }
+          },
+          {
+            "key": "address",
+            "type": "textarea",
+            "input": true,
+            "label": "Address",
+            "rows": 3
+          },
+          {
+            "key": "phone",
+            "type": "phoneNumber",
+            "input": true,
+            "label": "Phone Number"
+          },
+          {
+            "key": "district",
+            "type": "select",
+            "input": true,
+            "label": "District",
+            "data": {
+              "values": [
+                { "label": "Chanthabuly", "value": "chanthabuly" },
+                { "label": "Sikhottabong", "value": "sikhottabong" },
+                { "label": "Xaysetha", "value": "xaysetha" },
+                { "label": "Sisattanak", "value": "sisattanak" },
+                { "label": "Hadxaifong", "value": "hadxaifong" }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "individual",
+      "name": "individual",
+      "title": "Individual",
+      "dependsOn": "household",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "first_name",
+            "type": "textfield",
+            "input": true,
+            "label": "First Name",
+            "validate": { "required": true }
+          },
+          {
+            "key": "last_name",
+            "type": "textfield",
+            "input": true,
+            "label": "Last Name",
+            "validate": { "required": true }
+          },
+          {
+            "key": "date_of_birth",
+            "type": "datetime",
+            "input": true,
+            "label": "Date of Birth",
+            "format": "yyyy-MM-dd",
+            "enableTime": false,
+            "enableDate": true
+          },
+          {
+            "key": "gender",
+            "type": "select",
+            "input": true,
+            "label": "Gender",
+            "data": {
+              "values": [
+                { "label": "Male", "value": "male" },
+                { "label": "Female", "value": "female" },
+                { "label": "Other", "value": "other" }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "entityData": [
+    {
+      "name": "household",
+      "data": [
+        {
+          "id": "hh-001",
+          "name": "Nguyen Family",
+          "address": "123 Main Street, Vientiane",
+          "phone": "+856-20-1234567",
+          "district": "chanthabuly"
+        },
+        {
+          "id": "hh-002",
+          "name": "Santos Household",
+          "address": "456 River Road, Phnom Penh",
+          "phone": "+855-12-9876543",
+          "district": "sikhottabong"
+        },
+        {
+          "id": "hh-003",
+          "name": "Sithong Family",
+          "address": "789 Market Lane, Luang Prabang",
+          "phone": "+856-20-5551234",
+          "district": "xaysetha"
+        },
+        {
+          "id": "hh-004",
+          "name": "Rivera-Lopez Household",
+          "address": "12 Riverside Drive",
+          "district": "sisattanak"
+        }
+      ]
+    },
+    {
+      "name": "individual",
+      "data": [
+        {
+          "id": "ind-001",
+          "name": "Nguyen Van Anh",
+          "first_name": "Van Anh",
+          "last_name": "Nguyen",
+          "date_of_birth": "1985-03-15",
+          "gender": "male",
+          "parentId": "hh-001"
+        },
+        {
+          "id": "ind-002",
+          "name": "Nguyen Thi Mai",
+          "first_name": "Thi Mai",
+          "last_name": "Nguyen",
+          "date_of_birth": "1988-07-22",
+          "gender": "female",
+          "parentId": "hh-001"
+        },
+        {
+          "id": "ind-003",
+          "name": "Nguyen Van Duc",
+          "first_name": "Van Duc",
+          "last_name": "Nguyen",
+          "date_of_birth": "2010-01-10",
+          "gender": "male",
+          "parentId": "hh-001"
+        },
+        {
+          "id": "ind-004",
+          "name": "Maria Santos",
+          "first_name": "Maria",
+          "last_name": "Santos",
+          "date_of_birth": "1990-11-05",
+          "gender": "female",
+          "parentId": "hh-002"
+        },
+        {
+          "id": "ind-005",
+          "name": "Carlos Santos",
+          "first_name": "Carlos",
+          "last_name": "Santos",
+          "date_of_birth": "1992-04-18",
+          "gender": "male",
+          "parentId": "hh-002"
+        },
+        {
+          "id": "ind-006",
+          "name": "Kham Sithong",
+          "first_name": "Kham",
+          "last_name": "Sithong",
+          "date_of_birth": "1978-09-30",
+          "gender": "male",
+          "parentId": "hh-003"
+        },
+        {
+          "id": "ind-007",
+          "name": "Dao Sithong",
+          "first_name": "Dao",
+          "last_name": "Sithong",
+          "date_of_birth": "1982-06-12",
+          "gender": "female",
+          "parentId": "hh-003"
+        },
+        {
+          "id": "ind-008",
+          "name": "Somchai Sithong",
+          "first_name": "Somchai",
+          "last_name": "Sithong",
+          "date_of_birth": "2005-12-25",
+          "gender": "male",
+          "parentId": "hh-003"
+        },
+        {
+          "id": "ind-009",
+          "name": "Maria Santos",
+          "first_name": "Maria",
+          "last_name": "Santos",
+          "date_of_birth": "1990-11-05",
+          "gender": "female",
+          "parentId": "hh-003"
+        }
+      ]
+    }
+  ]
+}
