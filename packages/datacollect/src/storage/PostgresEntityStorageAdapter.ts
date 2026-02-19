@@ -19,6 +19,7 @@
 
 import { Pool } from "pg";
 import { EntityPair, EntityStorageAdapter, SearchCriteria } from "../interfaces/types";
+import { AppError } from "../utils/AppError";
 
 /**
  * PostgreSQL implementation of the EntityStorageAdapter for server-side entity persistence.
@@ -362,11 +363,34 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
     const client = await this.pool.connect();
     try {
       const guid = entity.initial.guid || entity.modified.guid;
-      await client.query(
-        "INSERT INTO entities (id, guid, initial, modified, last_updated, tenant_id) VALUES ($1, $2, $3, $4, $5, $6) " +
-          "ON CONFLICT (guid, tenant_id) DO UPDATE SET initial = $3, modified = $4, last_updated = $5",
-        [guid, guid, entity.initial, entity.modified, entity.modified.lastUpdated, this.tenantId],
-      );
+      const initialVersion = entity.initial.version;
+
+      let result: { rowCount: number | null };
+      try {
+        result = await client.query(
+          "INSERT INTO entities (id, guid, initial, modified, last_updated, tenant_id) VALUES ($1, $2, $3, $4, $5, $6) " +
+            "ON CONFLICT (guid, tenant_id) DO UPDATE SET initial = $3, modified = $4, last_updated = $5 " +
+            "WHERE entities.modified->>'version' = $7",
+          [guid, guid, entity.initial, entity.modified, entity.modified.lastUpdated, this.tenantId, String(initialVersion)],
+        );
+      } catch (error: unknown) {
+        // A 23505 unique constraint violation means two concurrent processes both tried to INSERT
+        // the same entity simultaneously. Treat it as a concurrency conflict.
+        if ((error as { code?: string }).code === "23505") {
+          throw new AppError("CONCURRENCY_ERROR", `Concurrent insert detected for entity ${guid}`);
+        }
+        throw error;
+      }
+
+      // rowCount=0 (or null) means the WHERE clause on the version did not match, i.e. another
+      // process already updated the entity to a different version. The INSERT path always succeeds
+      // (rowCount=1) when no row exists, so rowCount=0 can only occur on a version mismatch.
+      if (!result.rowCount) {
+        throw new AppError(
+          "CONCURRENCY_ERROR",
+          `Version conflict for entity ${guid}: expected version ${initialVersion}`,
+        );
+      }
     } finally {
       client.release();
     }

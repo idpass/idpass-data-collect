@@ -26,6 +26,7 @@ export interface Config {
   entityForms: EntityForm[]
   entityData: EntityData[]
   syncServerUrl: string
+  customEventTypes?: string[]
 }
 
 export interface EntityForm {

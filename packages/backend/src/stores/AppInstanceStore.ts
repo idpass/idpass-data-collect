@@ -27,6 +27,7 @@ import {
   ExternalSyncManager,
   SyncLevel,
   AuthManager,
+  registerAppEventAppliers,
 } from "@idpass/data-collect-core";
 import { v4 as uuidv4 } from "uuid";
 import { AppConfigStore, AppInstance, AppInstanceStore } from "../types";
@@ -70,6 +71,12 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
     }
 
     const eventApplierService = new EventApplierService(eventStore, entityStore);
+
+    // Register custom event appliers based on app config
+    if (config.customEventTypes && config.customEventTypes.length > 0) {
+      registerAppEventAppliers(config.customEventTypes, eventApplierService);
+    }
+
     const externalSyncAdapter = new ExternalSyncManager(
       eventStore,
       eventApplierService,

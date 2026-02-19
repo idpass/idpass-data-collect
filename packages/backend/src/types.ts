@@ -100,6 +100,7 @@ export interface AppConfig {
   entityData?: EntityData[];
   externalSync?: ExternalSyncConfig;
   authConfigs?: AuthConfig[];
+  customEventTypes?: string[];
 }
 
 export interface AppConfigStore {

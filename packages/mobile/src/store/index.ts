@@ -28,7 +28,8 @@ import {
   IndexedDbEntityStorageAdapter,
   EventApplierService,
   InternalSyncManager,
-  IndexedDbAuthStorageAdapter
+  IndexedDbAuthStorageAdapter,
+  registerAppEventAppliers,
 } from '@idpass/data-collect-core'
 
 export let store: EntityDataManager
@@ -38,7 +39,8 @@ const storeCache = new Map<string, EntityDataManager>()
 export const initStore = async (
   appId: string = 'default',
   syncServerUrl: string = import.meta.env.VITE_SYNC_URL,
-  authConfigs: AuthConfig[] = []
+  authConfigs: AuthConfig[] = [],
+  customEventTypes: string[] = [],
 ) => {
   if (storeCache.has(appId)) {
     store = storeCache.get(appId)!
@@ -58,6 +60,12 @@ export const initStore = async (
   ])
 
   const eventApplierService = new EventApplierService(eventStore, entityStore)
+
+  // Register custom event appliers based on app config
+  if (customEventTypes.length > 0) {
+    registerAppEventAppliers(customEventTypes, eventApplierService)
+  }
+
   const internalSyncManager = new InternalSyncManager(
     eventStore,
     entityStore,

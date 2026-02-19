@@ -229,3 +229,12 @@ export * from "./interfaces/types";
 export * from "./components/AuthManager";
 export * from "./storage/IndexedDbAuthStorageAdapter";
 export * from "./services/SingleAuthStorageImpl";
+
+// Utilities
+export * from "./utils/AppError";
+export * from "./utils/receiptGenerator";
+
+// Custom Event Appliers
+export * from "./appliers/index";
+export * from "./appliers/AttendanceEventApplier";
+export * from "./appliers/RedemptionEventApplier";

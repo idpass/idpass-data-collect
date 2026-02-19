@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { newDb } from "pg-mem";
 import { Client } from "pg";
+import { AppError } from "../../utils/AppError";
 
 const shouldUseRealPostgres = Boolean(process.env.POSTGRES_TEST);
 
@@ -323,6 +324,80 @@ describeIfPostgres("PostgresEntityStorageAdapter", () => {
     expect(potentialDuplicatesAfter).toEqual([{ entityGuid: "3", duplicateGuid: "4" }]);
   });
 
+  describe("optimistic concurrency control", () => {
+    const makeEntity = (version: number, overrides?: Partial<EntityDoc>): EntityDoc => ({
+      id: "occ-test-1",
+      guid: "occ-test-1",
+      type: EntityType.Individual,
+      data: { name: "OCC Test Entity" },
+      version,
+      lastUpdated: "2023-05-01T10:00:00.000Z",
+      ...overrides,
+    });
+
+    beforeEach(async () => {
+      await adapter.clearStore();
+    });
+
+    test("saving a new entity succeeds (INSERT path)", async () => {
+      const entity = makeEntity(1);
+      await expect(adapter.saveEntity({ guid: entity.guid, initial: entity, modified: entity })).resolves.toBeUndefined();
+      const saved = await adapter.getEntity("occ-test-1");
+      expect(saved).not.toBeNull();
+      expect(saved!.modified.version).toBe(1);
+    });
+
+    test("updating an entity with the correct version succeeds (UPDATE path)", async () => {
+      const initial = makeEntity(1);
+      await adapter.saveEntity({ guid: initial.guid, initial, modified: initial });
+
+      const modified = makeEntity(2, { data: { name: "Updated OCC Entity" } });
+      await expect(adapter.saveEntity({ guid: initial.guid, initial, modified })).resolves.toBeUndefined();
+
+      const saved = await adapter.getEntity("occ-test-1");
+      expect(saved!.modified.version).toBe(2);
+      expect(saved!.modified.data.name).toBe("Updated OCC Entity");
+    });
+
+    test("updating an entity with a stale version throws CONCURRENCY_ERROR", async () => {
+      const v1 = makeEntity(1);
+      await adapter.saveEntity({ guid: v1.guid, initial: v1, modified: v1 });
+
+      // Another client updates to version 2
+      const v2 = makeEntity(2, { data: { name: "Updated by other client" } });
+      await adapter.saveEntity({ guid: v1.guid, initial: v1, modified: v2 });
+
+      // Our client still thinks version is 1, tries to update
+      const ourUpdate = makeEntity(2, { data: { name: "Our stale update" } });
+      await expect(adapter.saveEntity({ guid: v1.guid, initial: v1, modified: ourUpdate })).rejects.toMatchObject({
+        code: "CONCURRENCY_ERROR",
+      });
+    });
+
+    test("concurrency error message includes expected version and entity guid", async () => {
+      const v1 = makeEntity(1);
+      await adapter.saveEntity({ guid: v1.guid, initial: v1, modified: v1 });
+
+      // Advance the stored entity to version 2
+      const v2 = makeEntity(2);
+      await adapter.saveEntity({ guid: v1.guid, initial: v1, modified: v2 });
+
+      // Try to save with stale initial version (still 1), but DB now has version 2
+      const ourUpdate = makeEntity(3, { data: { name: "Conflict update" } });
+      let caught: AppError | null = null;
+      try {
+        await adapter.saveEntity({ guid: v1.guid, initial: v1, modified: ourUpdate });
+      } catch (err) {
+        caught = err as AppError;
+      }
+
+      expect(caught).not.toBeNull();
+      expect(caught).toBeInstanceOf(AppError);
+      expect(caught!.code).toBe("CONCURRENCY_ERROR");
+      expect(caught!.message).toContain("1"); // expected version (initial.version)
+    });
+  });
+
   describe("tenantId isolation", () => {
     let tenantAAdapter: PostgresEntityStorageAdapter;
     let tenantBAdapter: PostgresEntityStorageAdapter;
@@ -587,5 +662,117 @@ describeIfPostgres("PostgresEntityStorageAdapter", () => {
       await defaultAdapter.clearStore();
       await defaultAdapter.closeConnection();
     });
+  });
+});
+
+// ===========================================================================
+// Unit tests for OCC error handling (run without a real Postgres connection)
+// These tests mock the pg Pool client to simulate specific error conditions.
+// ===========================================================================
+
+describe("PostgresEntityStorageAdapter – OCC error handling (unit)", () => {
+  const makeEntityDoc = (version: number): EntityDoc => ({
+    id: "test-guid",
+    guid: "test-guid",
+    type: EntityType.Individual,
+    data: { name: "Test" },
+    version,
+    lastUpdated: "2024-01-01T00:00:00Z",
+  });
+
+  function makeAdapterWithMockedClient(
+    queryImpl: (sql: string, params?: unknown[]) => Promise<{ rowCount: number; rows: unknown[] }>,
+  ) {
+    // Import the actual class (already imported above)
+    const adapter = new PostgresEntityStorageAdapter("postgresql://fake:5432/fake");
+
+    // Replace internal pool with a stub that returns a client whose query is mocked
+    const mockClient = {
+      query: jest.fn().mockImplementation(queryImpl),
+      release: jest.fn(),
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (adapter as any).pool = {
+      connect: jest.fn().mockResolvedValue(mockClient),
+      end: jest.fn().mockResolvedValue(undefined),
+    };
+
+    return { adapter, mockClient };
+  }
+
+  test("Issue #1: concurrent INSERT (error code 23505) is converted to AppError CONCURRENCY_ERROR", async () => {
+    const pgUniqueViolationError = Object.assign(new Error("duplicate key value violates unique constraint"), {
+      code: "23505",
+    });
+
+    const { adapter } = makeAdapterWithMockedClient(async () => {
+      throw pgUniqueViolationError;
+    });
+
+    const entity = makeEntityDoc(1);
+
+    await expect(
+      adapter.saveEntity({ guid: entity.guid, initial: entity, modified: entity }),
+    ).rejects.toMatchObject({
+      code: "CONCURRENCY_ERROR",
+    });
+  });
+
+  test("Issue #1: concurrent INSERT error is an AppError instance with descriptive message", async () => {
+    const pgUniqueViolationError = Object.assign(new Error("duplicate key value"), { code: "23505" });
+
+    const { adapter } = makeAdapterWithMockedClient(async () => {
+      throw pgUniqueViolationError;
+    });
+
+    const entity = makeEntityDoc(1);
+
+    let caught: unknown;
+    try {
+      await adapter.saveEntity({ guid: entity.guid, initial: entity, modified: entity });
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(AppError);
+    expect((caught as AppError).code).toBe("CONCURRENCY_ERROR");
+    expect((caught as AppError).message).toContain("test-guid");
+  });
+
+  test("Issue #1: non-23505 pg errors are re-thrown unchanged", async () => {
+    const pgOtherError = Object.assign(new Error("connection refused"), { code: "08006" });
+
+    const { adapter } = makeAdapterWithMockedClient(async () => {
+      throw pgOtherError;
+    });
+
+    const entity = makeEntityDoc(1);
+
+    await expect(
+      adapter.saveEntity({ guid: entity.guid, initial: entity, modified: entity }),
+    ).rejects.toBe(pgOtherError);
+  });
+
+  test("Issue #10: rowCount=0 on UPDATE path throws CONCURRENCY_ERROR directly without a second SELECT", async () => {
+    let queryCallCount = 0;
+    const { adapter, mockClient } = makeAdapterWithMockedClient(async () => {
+      queryCallCount += 1;
+      // Return rowCount=0 to simulate version mismatch (OCC conflict)
+      return { rowCount: 0, rows: [] };
+    });
+
+    const initial = makeEntityDoc(1);
+    const modified = makeEntityDoc(2);
+
+    await expect(
+      adapter.saveEntity({ guid: initial.guid, initial, modified }),
+    ).rejects.toMatchObject({
+      code: "CONCURRENCY_ERROR",
+    });
+
+    // Only ONE query should be issued — the combined INSERT/UPDATE.
+    // The old code issued a second SELECT after rowCount=0; the fix removes it.
+    expect(queryCallCount).toBe(1);
+    expect(mockClient.query).toHaveBeenCalledTimes(1);
   });
 });

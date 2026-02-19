@@ -21,6 +21,7 @@ import { extractParentUUIDInPath } from '@/utils/dynamicFormIoUtils'
 import { createRouter, createWebHistory } from 'vue-router'
 import DynamicHome from '@/views/dynamic/DyHome.vue'
 import { useAuthManagerStore } from '@/store/authManager'
+import { useTenantStore } from '@/store/tenant'
 
 const dynamicRouter = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -31,6 +32,117 @@ const dynamicRouter = createRouter({
       name: 'login',
       component: () => import('@/views/dynamic/DynamicLoginView.vue')
     },
+    // Attendance routes — must appear before generic /app/:id route
+    {
+      path: '/app/:id/attendance',
+      name: 'attendance-dashboard',
+      component: () => import('@/views/attendance/AttendanceDashboardView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/:id/attendance/session/new',
+      name: 'attendance-session-new',
+      component: () => import('@/views/attendance/AttendanceSessionView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/:id/attendance/session/:sessionId',
+      name: 'attendance-session',
+      component: () => import('@/views/attendance/AttendanceSessionView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/:id/attendance/session/:sessionId/summary',
+      name: 'attendance-session-summary',
+      component: () => import('@/views/attendance/AttendanceSessionSummaryView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/:id/attendance/group/:groupGuid',
+      name: 'attendance-group',
+      component: () => import('@/views/attendance/AttendanceGroupView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/:id/attendance/group/:groupGuid/session',
+      name: 'attendance-group-session-new',
+      component: () => import('@/views/attendance/AttendanceSessionView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/:id/attendance/group/:groupGuid/session/:sessionId',
+      name: 'attendance-group-session',
+      component: () => import('@/views/attendance/AttendanceSessionView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/:id/attendance/group/:groupGuid/session/:sessionId/summary',
+      name: 'attendance-group-session-summary',
+      component: () => import('@/views/attendance/AttendanceSessionSummaryView.vue'),
+      meta: { requiresAuth: true }
+    },
+    // Redemption routes — must appear before generic /app/:id route
+    {
+      path: '/app/:id/redemption',
+      name: 'redemption-dashboard',
+      component: () => import('@/views/redemption/RedemptionDashboardView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/:id/redemption/setup',
+      name: 'redemption-setup',
+      component: () => import('@/views/redemption/DistributionPointSetupView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/:id/redemption/lookup',
+      name: 'redemption-lookup',
+      component: () => import('@/views/redemption/BeneficiaryLookupView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/:id/redemption/beneficiary/:entityGuid/confirm',
+      name: 'redemption-identity-confirm',
+      component: () => import('@/views/redemption/IdentityConfirmationView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/:id/redemption/beneficiary/:entityGuid/entitlements',
+      name: 'redemption-entitlements',
+      component: () => import('@/views/redemption/EntitlementListView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/:id/redemption/beneficiary/:entityGuid/redeem/:entitlementId',
+      name: 'redemption-redeem',
+      component: () => import('@/views/redemption/RedeemFormView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/:id/redemption/beneficiary/:entityGuid/receipt/:receiptNumber',
+      name: 'redemption-receipt',
+      component: () => import('@/views/redemption/ReceiptView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/:id/redemption/beneficiary/:entityGuid/history',
+      name: 'redemption-history',
+      component: () => import('@/views/redemption/RedemptionHistoryView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/:id/redemption/beneficiary/:entityGuid/void/:redemptionGuid',
+      name: 'redemption-void',
+      component: () => import('@/views/redemption/VoidFormView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/app/:id/redemption/summary',
+      name: 'redemption-summary',
+      component: () => import('@/views/redemption/EndOfDaySummaryView.vue'),
+      meta: { requiresAuth: true }
+    },
+    // Generic app route — must appear after specific prefixed routes
     {
       path: '/app/:id',
       name: 'app',
@@ -109,6 +221,9 @@ const dynamicRouter = createRouter({
  * 1. Use AuthManager to check authentication status
  * 2. If not authenticated, redirect to app-specific login
  * 3. Initialize authManager with proper configuration
+ *
+ * For the generic app route, also checks customEventTypes in tenant config
+ * to redirect attendance and redemption apps to their specific dashboards.
  */
 dynamicRouter.beforeEach(async (to, _from, next) => {
   const authManagerStore = useAuthManagerStore()
@@ -158,6 +273,27 @@ dynamicRouter.beforeEach(async (to, _from, next) => {
         next({ name: 'app-login', params: { id: appId } })
         return
       }
+
+      // For the generic app route, check customEventTypes to redirect to
+      // the appropriate app-specific dashboard
+      if (to.name === 'app' && appId) {
+        try {
+          const tenantStore = useTenantStore()
+          const config = await tenantStore.getTenant(appId)
+          const customEventTypes = (config as any)?.customEventTypes || []
+          if (customEventTypes.includes('record-attendance')) {
+            next({ path: `/app/${appId}/attendance` })
+            return
+          }
+          if (customEventTypes.includes('redeem-entitlement')) {
+            next({ path: `/app/${appId}/redemption` })
+            return
+          }
+        } catch (error) {
+          console.warn('Failed to check app type for routing:', error)
+        }
+      }
+
       // User is authenticated, proceed to the route
       next()
     } catch (error) {
