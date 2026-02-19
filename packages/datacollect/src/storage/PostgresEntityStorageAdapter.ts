@@ -18,8 +18,11 @@
  */
 
 import { Pool } from "pg";
+import { and, eq, gt, or, sql } from "drizzle-orm";
 import { EntityPair, EntityStorageAdapter, SearchCriteria } from "../interfaces/types";
 import { createLogger } from "../utils/logger";
+import { createDrizzleFromPool, DrizzleDatabase } from "../db/connection";
+import { entities, potentialDuplicates } from "../db/schema";
 
 const log = createLogger("PostgresEntityStorageAdapter");
 
@@ -143,6 +146,7 @@ const log = createLogger("PostgresEntityStorageAdapter");
  */
 export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
   private pool: Pool;
+  private db: DrizzleDatabase;
   private tenantId: string;
 
   /**
@@ -169,6 +173,7 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
     this.pool = new Pool({
       connectionString,
     });
+    this.db = createDrizzleFromPool(this.pool);
     this.tenantId = tenantId || "default";
   }
 
@@ -253,19 +258,20 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database query fails.
    */
   async getAllEntities(): Promise<EntityPair[]> {
-    const client = await this.pool.connect();
-    try {
-      const result = await client.query("SELECT guid, initial, modified FROM entities WHERE tenant_id = $1", [
-        this.tenantId,
-      ]);
-      return result.rows.map((row) => ({
-        guid: row.guid,
-        initial: row.initial,
-        modified: row.modified,
-      }));
-    } finally {
-      client.release();
-    }
+    const result = await this.db
+      .select({
+        guid: entities.guid,
+        initial: entities.initial,
+        modified: entities.modified,
+      })
+      .from(entities)
+      .where(eq(entities.tenantId, this.tenantId));
+
+    return result.map((row) => ({
+      guid: row.guid,
+      initial: row.initial as EntityPair["initial"],
+      modified: row.modified as EntityPair["modified"],
+    }));
   }
 
   /**
@@ -305,51 +311,55 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * ```
    */
   async searchEntities(criteria: SearchCriteria): Promise<EntityPair[]> {
-    const client = await this.pool.connect();
-    try {
-      const conditions = criteria.map((criterion) => {
-        const key = Object.keys(criterion)[0];
-        const value = criterion[key];
-        if (typeof value === "object") {
-          const operator = Object.keys(value)[0];
-          const operandValue = value[operator];
-          switch (operator) {
-            case "$gt":
-              return `((initial->'data'->>'${key}')::numeric > ${operandValue} OR (modified->'data'->>'${key}')::numeric > ${operandValue})`;
-            case "$lt":
-              return `((initial->'data'->>'${key}')::numeric < ${operandValue} OR (modified->'data'->>'${key}')::numeric < ${operandValue})`;
-            case "$eq":
-              return `((initial->'data'->>'${key}')::numeric = ${operandValue} OR (modified->'data'->>'${key}')::numeric = ${operandValue})`;
-            case "$gte":
-              return `((initial->'data'->>'${key}')::numeric >= ${operandValue} OR (modified->'data'->>'${key}')::numeric >= ${operandValue})`;
-            case "$lte":
-              return `((initial->'data'->>'${key}')::numeric <= ${operandValue} OR (modified->'data'->>'${key}')::numeric <= ${operandValue})`;
-            case "$regex":
-              return `((initial->'data'->>'${key}') ~* '${operandValue}' OR (modified->'data'->>'${key}') ~* '${operandValue}')`;
-            default:
-              return "false";
-          }
-        } else if (typeof value === "boolean") {
-          return `((initial->'data'->>'${key}')::boolean = ${value} OR (modified->'data'->>'${key}')::boolean = ${value})`;
-        } else if (typeof value === "number") {
-          return `((initial->'data'->>'${key}')::numeric = ${value} OR (modified->'data'->>'${key}')::numeric = ${value})`;
-        } else if (typeof value === "string") {
-          return `(LOWER(initial->'data'->>'${key}') = LOWER('${value}') OR LOWER(modified->'data'->>'${key}') = LOWER('${value}'))`;
-        } else {
-          return `(LOWER(initial->'data'->>'${key}') = LOWER('${value}') OR LOWER(modified->'data'->>'${key}') = LOWER('${value}'))`;
+    // Build raw SQL conditions for JSONB search (Drizzle does not natively support
+    // all JSONB operators like ~* or casting to ::numeric)
+    const conditions = criteria.map((criterion) => {
+      const key = Object.keys(criterion)[0];
+      const value = criterion[key];
+      if (typeof value === "object") {
+        const operator = Object.keys(value)[0];
+        const operandValue = value[operator];
+        switch (operator) {
+          case "$gt":
+            return `((initial->'data'->>'${key}')::numeric > ${operandValue} OR (modified->'data'->>'${key}')::numeric > ${operandValue})`;
+          case "$lt":
+            return `((initial->'data'->>'${key}')::numeric < ${operandValue} OR (modified->'data'->>'${key}')::numeric < ${operandValue})`;
+          case "$eq":
+            return `((initial->'data'->>'${key}')::numeric = ${operandValue} OR (modified->'data'->>'${key}')::numeric = ${operandValue})`;
+          case "$gte":
+            return `((initial->'data'->>'${key}')::numeric >= ${operandValue} OR (modified->'data'->>'${key}')::numeric >= ${operandValue})`;
+          case "$lte":
+            return `((initial->'data'->>'${key}')::numeric <= ${operandValue} OR (modified->'data'->>'${key}')::numeric <= ${operandValue})`;
+          case "$regex":
+            return `((initial->'data'->>'${key}') ~* '${operandValue}' OR (modified->'data'->>'${key}') ~* '${operandValue}')`;
+          default:
+            return "false";
         }
-      });
+      } else if (typeof value === "boolean") {
+        return `((initial->'data'->>'${key}')::boolean = ${value} OR (modified->'data'->>'${key}')::boolean = ${value})`;
+      } else if (typeof value === "number") {
+        return `((initial->'data'->>'${key}')::numeric = ${value} OR (modified->'data'->>'${key}')::numeric = ${value})`;
+      } else if (typeof value === "string") {
+        return `(LOWER(initial->'data'->>'${key}') = LOWER('${value}') OR LOWER(modified->'data'->>'${key}') = LOWER('${value}'))`;
+      } else {
+        return `(LOWER(initial->'data'->>'${key}') = LOWER('${value}') OR LOWER(modified->'data'->>'${key}') = LOWER('${value}'))`;
+      }
+    });
 
-      const query = `SELECT guid, initial, modified FROM entities WHERE tenant_id = $1 AND ${conditions.join(" AND ")}`;
-      const result = await client.query(query, [this.tenantId]);
-      return result.rows.map((row) => ({
-        guid: row.guid,
-        initial: row.initial,
-        modified: row.modified,
-      }));
-    } finally {
-      client.release();
-    }
+    const result = await this.db
+      .select({
+        guid: entities.guid,
+        initial: entities.initial,
+        modified: entities.modified,
+      })
+      .from(entities)
+      .where(and(eq(entities.tenantId, this.tenantId), sql.raw(conditions.join(" AND "))));
+
+    return result.map((row) => ({
+      guid: row.guid,
+      initial: row.initial as EntityPair["initial"],
+      modified: row.modified as EntityPair["modified"],
+    }));
   }
 
   /**
@@ -362,17 +372,25 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database operation fails.
    */
   async saveEntity(entity: EntityPair): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      const guid = entity.initial?.guid || entity.modified.guid;
-      await client.query(
-        "INSERT INTO entities (id, guid, initial, modified, last_updated, tenant_id) VALUES ($1, $2, $3, $4, $5, $6) " +
-          "ON CONFLICT (guid, tenant_id) DO UPDATE SET initial = $3, modified = $4, last_updated = $5",
-        [guid, guid, entity.initial ?? null, entity.modified, entity.modified.lastUpdated, this.tenantId],
-      );
-    } finally {
-      client.release();
-    }
+    const guid = entity.initial?.guid || entity.modified.guid;
+    await this.db
+      .insert(entities)
+      .values({
+        id: guid,
+        guid: guid,
+        initial: entity.initial ?? null,
+        modified: entity.modified,
+        lastUpdated: entity.modified.lastUpdated ? new Date(entity.modified.lastUpdated) : null,
+        tenantId: this.tenantId,
+      })
+      .onConflictDoUpdate({
+        target: [entities.guid, entities.tenantId],
+        set: {
+          initial: entity.initial ?? null,
+          modified: entity.modified,
+          lastUpdated: entity.modified.lastUpdated ? new Date(entity.modified.lastUpdated) : null,
+        },
+      });
   }
 
   /**
@@ -383,24 +401,24 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database query fails.
    */
   async getEntity(id: string): Promise<EntityPair | null> {
-    const client = await this.pool.connect();
-    try {
-      const result = await client.query(
-        "SELECT guid, initial, modified FROM entities WHERE id = $1 AND tenant_id = $2",
-        [id, this.tenantId],
-      );
-      if (result.rows.length === 0) {
-        return null;
-      }
-      const row = result.rows[0];
-      return {
-        guid: row.guid,
-        initial: row.initial,
-        modified: row.modified,
-      };
-    } finally {
-      client.release();
+    const result = await this.db
+      .select({
+        guid: entities.guid,
+        initial: entities.initial,
+        modified: entities.modified,
+      })
+      .from(entities)
+      .where(and(eq(entities.id, id), eq(entities.tenantId, this.tenantId)));
+
+    if (result.length === 0) {
+      return null;
     }
+    const row = result[0];
+    return {
+      guid: row.guid,
+      initial: row.initial as EntityPair["initial"],
+      modified: row.modified as EntityPair["modified"],
+    };
   }
 
   /**
@@ -421,20 +439,20 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database query fails.
    */
   async getModifiedEntitiesSince(timestamp: string): Promise<EntityPair[]> {
-    const client = await this.pool.connect();
-    try {
-      const result = await client.query(
-        "SELECT guid, initial, modified FROM entities WHERE tenant_id = $1 AND last_updated > $2",
-        [this.tenantId, timestamp],
-      );
-      return result.rows.map((row) => ({
-        guid: row.guid,
-        initial: row.initial,
-        modified: row.modified,
-      }));
-    } finally {
-      client.release();
-    }
+    const result = await this.db
+      .select({
+        guid: entities.guid,
+        initial: entities.initial,
+        modified: entities.modified,
+      })
+      .from(entities)
+      .where(and(eq(entities.tenantId, this.tenantId), gt(entities.lastUpdated, new Date(timestamp))));
+
+    return result.map((row) => ({
+      guid: row.guid,
+      initial: row.initial as EntityPair["initial"],
+      modified: row.modified as EntityPair["modified"],
+    }));
   }
 
   /**
@@ -445,17 +463,13 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database update fails.
    */
   async markEntityAsSynced(id: string): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query("UPDATE entities SET sync_level = $1, last_updated = $2 WHERE id = $3 AND tenant_id = $4", [
-        "SYNCED",
-        new Date().toISOString(),
-        id,
-        this.tenantId,
-      ]);
-    } finally {
-      client.release();
-    }
+    await this.db
+      .update(entities)
+      .set({
+        syncLevel: "SYNCED",
+        lastUpdated: new Date(),
+      })
+      .where(and(eq(entities.id, id), eq(entities.tenantId, this.tenantId)));
   }
 
   /**
@@ -468,16 +482,15 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database deletion fails.
    */
   async deleteEntity(id: string): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query("DELETE FROM entities WHERE id = $1 AND tenant_id = $2", [id, this.tenantId]);
-      await client.query(
-        "DELETE FROM potential_duplicates WHERE (entity_guid = $1 OR duplicate_guid = $1) AND tenant_id = $2",
-        [id, this.tenantId],
+    await this.db.delete(entities).where(and(eq(entities.id, id), eq(entities.tenantId, this.tenantId)));
+    await this.db
+      .delete(potentialDuplicates)
+      .where(
+        and(
+          or(eq(potentialDuplicates.entityGuid, id), eq(potentialDuplicates.duplicateGuid, id)),
+          eq(potentialDuplicates.tenantId, this.tenantId),
+        ),
       );
-    } finally {
-      client.release();
-    }
   }
 
   /**
@@ -490,24 +503,32 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database query fails.
    */
   async getEntityByExternalId(externalId: string): Promise<EntityPair | null> {
-    const client = await this.pool.connect();
-    try {
-      const result = await client.query(
-        "SELECT guid, initial, modified FROM entities WHERE (initial->>'externalId' = $1 OR modified->>'externalId' = $1) AND tenant_id = $2",
-        [externalId, this.tenantId],
+    const result = await this.db
+      .select({
+        guid: entities.guid,
+        initial: entities.initial,
+        modified: entities.modified,
+      })
+      .from(entities)
+      .where(
+        and(
+          eq(entities.tenantId, this.tenantId),
+          or(
+            sql`${entities.initial}->>'externalId' = ${externalId}`,
+            sql`${entities.modified}->>'externalId' = ${externalId}`,
+          ),
+        ),
       );
-      if (result.rows.length === 0) {
-        return null;
-      }
-      const row = result.rows[0];
-      return {
-        guid: row.guid,
-        initial: row.initial,
-        modified: row.modified,
-      };
-    } finally {
-      client.release();
+
+    if (result.length === 0) {
+      return null;
     }
+    const row = result[0];
+    return {
+      guid: row.guid,
+      initial: row.initial as EntityPair["initial"],
+      modified: row.modified as EntityPair["modified"],
+    };
   }
 
   /**
@@ -521,18 +542,15 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database update fails.
    */
   async setExternalId(guid: string, externalId: string): Promise<void> {
-    const client = await this.pool.connect();
     try {
-      await client.query(
-        `UPDATE entities
-         SET modified = jsonb_set(modified, '{data,externalId}', to_jsonb($1), true)
-         WHERE guid = $2`,
-        [externalId, guid],
-      );
+      await this.db
+        .update(entities)
+        .set({
+          modified: sql`jsonb_set(${entities.modified}, '{data,externalId}', to_jsonb(${externalId}::text), true)`,
+        })
+        .where(eq(entities.guid, guid));
     } catch (error) {
       log.error({ err: error }, "Error setting externalId");
-    } finally {
-      client.release();
     }
   }
 
@@ -543,19 +561,18 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database query fails.
    */
   async getPotentialDuplicates(): Promise<Array<{ entityGuid: string; duplicateGuid: string }>> {
-    const client = await this.pool.connect();
-    try {
-      const result = await client.query(
-        "SELECT entity_guid, duplicate_guid FROM potential_duplicates WHERE tenant_id = $1",
-        [this.tenantId],
-      );
-      return result.rows.map((row) => ({
-        entityGuid: row.entity_guid,
-        duplicateGuid: row.duplicate_guid,
-      }));
-    } finally {
-      client.release();
-    }
+    const result = await this.db
+      .select({
+        entityGuid: potentialDuplicates.entityGuid,
+        duplicateGuid: potentialDuplicates.duplicateGuid,
+      })
+      .from(potentialDuplicates)
+      .where(eq(potentialDuplicates.tenantId, this.tenantId));
+
+    return result.map((row) => ({
+      entityGuid: row.entityGuid,
+      duplicateGuid: row.duplicateGuid,
+    }));
   }
 
   /**
@@ -568,22 +585,18 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database transaction fails.
    */
   async savePotentialDuplicates(duplicates: Array<{ entityGuid: string; duplicateGuid: string }>): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query("BEGIN");
+    await this.db.transaction(async (tx) => {
       for (const duplicate of duplicates) {
-        await client.query(
-          "INSERT INTO potential_duplicates (entity_guid, duplicate_guid, tenant_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
-          [duplicate.entityGuid, duplicate.duplicateGuid, this.tenantId],
-        );
+        await tx
+          .insert(potentialDuplicates)
+          .values({
+            entityGuid: duplicate.entityGuid,
+            duplicateGuid: duplicate.duplicateGuid,
+            tenantId: this.tenantId,
+          })
+          .onConflictDoNothing();
       }
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
   }
 
   /**
@@ -594,15 +607,15 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database deletion fails.
    */
   async resolvePotentialDuplicates(duplicates: Array<{ entityGuid: string; duplicateGuid: string }>): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query(
-        "DELETE FROM potential_duplicates WHERE entity_guid = $1 AND duplicate_guid = $2 AND tenant_id = $3",
-        [duplicates[0].entityGuid, duplicates[0].duplicateGuid, this.tenantId],
+    await this.db
+      .delete(potentialDuplicates)
+      .where(
+        and(
+          eq(potentialDuplicates.entityGuid, duplicates[0].entityGuid),
+          eq(potentialDuplicates.duplicateGuid, duplicates[0].duplicateGuid),
+          eq(potentialDuplicates.tenantId, this.tenantId),
+        ),
       );
-    } finally {
-      client.release();
-    }
   }
 
   /**
@@ -612,12 +625,7 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database deletion fails.
    */
   async clearStore(): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query("DELETE FROM entities WHERE tenant_id = $1", [this.tenantId]);
-      await client.query("DELETE FROM potential_duplicates WHERE tenant_id = $1", [this.tenantId]);
-    } finally {
-      client.release();
-    }
+    await this.db.delete(entities).where(eq(entities.tenantId, this.tenantId));
+    await this.db.delete(potentialDuplicates).where(eq(potentialDuplicates.tenantId, this.tenantId));
   }
 }

@@ -18,18 +18,25 @@
  */
 
 import { Pool } from "pg";
+import { eq, count, sql } from "drizzle-orm";
+import { drizzle, NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Role, User, UserStore, UserWithPasswordHash } from "../types";
 import { createLogger } from "../utils/logger";
+import { users } from "../db/schema";
 
 const log = createLogger("UserStore");
 
+type DrizzleDb = NodePgDatabase<Record<string, never>>;
+
 export class UserStoreImpl implements UserStore {
   private pool: Pool;
+  private db: DrizzleDb;
 
   constructor(connectionString: string) {
     this.pool = new Pool({
       connectionString,
     });
+    this.db = drizzle(this.pool);
   }
 
   async initialize(): Promise<void> {
@@ -54,141 +61,110 @@ export class UserStoreImpl implements UserStore {
   }
 
   async saveUser(user: Omit<UserWithPasswordHash, "id">): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      const { email, passwordHash, role, tenantIds = [] } = user;
-      const query = {
-        text: "INSERT INTO users (email, password_hash, role, tenant_ids) VALUES ($1, $2, $3, $4) RETURNING id",
-        values: [email, passwordHash, role, tenantIds],
-      };
+    const { email, passwordHash, role, tenantIds = [] } = user;
+    const result = await this.db
+      .insert(users)
+      .values({
+        email,
+        passwordHash,
+        role,
+        tenantIds,
+      })
+      .returning({ id: users.id });
 
-      const { rows } = await client.query(query);
-      const userId = rows[0].id;
-      log.info({ userId }, "New user created");
-    } finally {
-      client.release();
-    }
+    const userId = result[0].id;
+    log.info({ userId }, "New user created");
   }
 
   async getUser(emailParam: string): Promise<UserWithPasswordHash | null> {
-    const client = await this.pool.connect();
-    try {
-      const query = {
-        text: "SELECT * FROM users WHERE email = $1",
-        values: [emailParam],
-      };
+    const result = await this.db.select().from(users).where(eq(users.email, emailParam));
 
-      const { rows } = await client.query(query);
-      if (rows.length === 0) {
-        return null;
-      }
-
-      const { id, email, password_hash, role, tenant_ids } = rows[0];
-      return {
-        id,
-        email,
-        passwordHash: password_hash,
-        role: Role[role as keyof typeof Role] as Role,
-        tenantIds: tenant_ids ?? [],
-      };
-    } finally {
-      client.release();
+    if (result.length === 0) {
+      return null;
     }
+
+    const row = result[0];
+    return {
+      id: row.id,
+      email: row.email,
+      passwordHash: row.passwordHash,
+      role: Role[row.role as keyof typeof Role] as Role,
+      tenantIds: row.tenantIds ?? [],
+    };
   }
 
   async updateUser(user: UserWithPasswordHash): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      const { id, email, passwordHash, role, tenantIds = [] } = user;
-      const query = {
-        text: "UPDATE users SET password_hash = $3, role = $4, tenant_ids = $5 WHERE id = $1 AND email = $2",
-        values: [id, email, passwordHash, role, tenantIds],
-      };
-
-      await client.query(query);
-    } finally {
-      client.release();
-    }
+    const { id, email, passwordHash, role, tenantIds = [] } = user;
+    await this.db
+      .update(users)
+      .set({
+        passwordHash,
+        role,
+        tenantIds,
+      })
+      .where(eq(users.id, id));
   }
 
   async deleteUser(email: string): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      const query = {
-        text: "DELETE FROM users WHERE email = $1",
-        values: [email],
-      };
-
-      await client.query(query);
-    } finally {
-      client.release();
-    }
+    await this.db.delete(users).where(eq(users.email, email));
   }
 
   async clearStore(): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      const query = "TRUNCATE TABLE users";
-      await client.query(query);
-    } finally {
-      client.release();
-    }
+    await this.db.execute(sql`TRUNCATE TABLE users`);
   }
 
   async hasAtLeastOneAdmin(): Promise<boolean> {
-    const client = await this.pool.connect();
-    try {
-      const query = {
-        text: "SELECT COUNT(*) FROM users WHERE role = $1",
-        values: [Role.ADMIN],
-      };
+    const result = await this.db
+      .select({ value: count() })
+      .from(users)
+      .where(eq(users.role, Role.ADMIN));
 
-      const { rows } = await client.query(query);
-      const count = parseInt(rows[0].count, 10);
-      return count > 0;
-    } finally {
-      client.release();
-    }
+    return result[0].value > 0;
   }
 
   async getAllUsers(): Promise<User[]> {
-    const client = await this.pool.connect();
-    try {
-      const query = {
-        text: "SELECT id, email, password_hash, role, tenant_ids FROM users",
-      };
+    const result = await this.db
+      .select({
+        id: users.id,
+        email: users.email,
+        role: users.role,
+        tenantIds: users.tenantIds,
+      })
+      .from(users);
 
-      const { rows } = await client.query(query);
-      return rows.map((row) => ({
-        id: row.id,
-        email: row.email,
-        role: Role[row.role as keyof typeof Role],
-        tenantIds: row.tenant_ids ?? [],
-      }));
-    } finally {
-      client.release();
-    }
+    return result.map((row) => ({
+      id: row.id,
+      email: row.email,
+      role: Role[row.role as keyof typeof Role],
+      tenantIds: row.tenantIds ?? [],
+    }));
   }
 
   async getUserById(id: number): Promise<UserWithPasswordHash | null> {
-    const client = await this.pool.connect();
-    try {
-      const query = {
-        text: "SELECT id, email, password_hash, role, tenant_ids FROM users WHERE id = $1 LIMIT 1",
-        values: [id],
-      };
+    const result = await this.db
+      .select({
+        id: users.id,
+        email: users.email,
+        passwordHash: users.passwordHash,
+        role: users.role,
+        tenantIds: users.tenantIds,
+      })
+      .from(users)
+      .where(eq(users.id, id))
+      .limit(1);
 
-      const { rows } = await client.query(query);
-      return rows.map((row) => ({
-        id: row.id,
-        passwordHash: row.password_hash,
-        email: row.email,
-        role: Role[row.role as keyof typeof Role],
-        tenantIds: row.tenant_ids ?? [],
-      }))[0];
-    } finally {
-      client.release();
+    if (result.length === 0) {
+      return null;
     }
+
+    const row = result[0];
+    return {
+      id: row.id,
+      passwordHash: row.passwordHash,
+      email: row.email,
+      role: Role[row.role as keyof typeof Role],
+      tenantIds: row.tenantIds ?? [],
+    };
   }
 
   async closeConnection(): Promise<void> {

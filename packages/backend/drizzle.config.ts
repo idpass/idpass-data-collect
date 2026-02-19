@@ -17,7 +17,13 @@
  * under the License.
  */
 
-export { default as OpenFnSyncAdapter } from "./OpenFnSyncAdapter";
+import { defineConfig } from "drizzle-kit";
 
-// V2 Adapter Interface Implementation
-export { OpenFnSyncAdapterV2 } from "./OpenFnSyncAdapterV2";
+export default defineConfig({
+  schema: "./src/db/schema.ts",
+  out: "./drizzle",
+  dialect: "postgresql",
+  dbCredentials: {
+    url: process.env.POSTGRES || "postgresql://admin:admin@localhost:5432/postgres",
+  },
+});

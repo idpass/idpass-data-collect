@@ -224,6 +224,10 @@ export * from "./storage/IndexedDbEventStorageAdapter";
 export * from "./storage/PostgresEntityStorageAdapter";
 export * from "./storage/PostgresEventStorageAdapter";
 
+// Adapter Registry and V2 Adapter Interfaces
+export * from "./interfaces/adapter";
+export * from "./components/AdapterRegistry";
+
 // Type Definitions and Interfaces
 export * from "./interfaces/types";
 export * from "./interfaces/adapter-configs";
@@ -236,6 +240,10 @@ export * from "./services/SingleAuthStorageImpl";
 
 // Field Transformers
 export * from "./utils/fieldTransformers";
+
+// Database Schema and Connection (Drizzle ORM)
+export * from "./db/schema";
+export * from "./db/connection";
 
 // Utility functions
 export { normalizeLegacyRelationField, normalizeLegacyRelationFields } from "./utils/normalizeLegacyRelationFields";
