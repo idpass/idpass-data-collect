@@ -13,6 +13,11 @@ services:
     networks:
       - datacollect-network-dev
     command: ["postgres"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-admin}"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
 
   # # pgAdmin for database management (optional)
   # pgadmin:
@@ -55,7 +60,8 @@ services:
       - "9229:9229" # Node.js debugger port
     restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
       - datacollect-network-dev
 
