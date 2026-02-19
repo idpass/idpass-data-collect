@@ -72,6 +72,15 @@ pnpm test
 
 `pnpm run test:all` requires Docker (Compose v2.1.1+). It spins up an ephemeral PostgreSQL on port 5433, sets `POSTGRES_TEST`, runs the full suite, and tears down the container on exit. Backend tests silently skip when `POSTGRES_TEST` is not set, so `pnpm test` alone only runs datacollect, admin, and mobile tests.
 
+### Seed Data
+
+```bash
+# Populate the backend with a demo household registry and sample data
+pnpm run seed
+```
+
+Requires the backend to be running (default `http://localhost:3000`). Creates a "Demo Household Registry" config with 4 households, 9 individuals, and a field worker user. Safe to run multiple times (deletes and recreates). Override defaults with env vars: `BACKEND_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`.
+
 ### Test Suites
 
 Each module has its own test suite:
