@@ -239,15 +239,7 @@ describe("EntityDataManager", () => {
     const expectedEntities = [
       {
         guid: expect.any(String),
-        initial: {
-          id: expect.any(String),
-          guid: expect.any(String),
-          type: EntityType.Individual,
-          name: "John Doe",
-          version: 1,
-          data: { name: "John Doe" },
-          lastUpdated: expect.any(String),
-        },
+        initial: null,
         modified: {
           id: expect.any(String),
           guid: expect.any(String),
@@ -307,16 +299,7 @@ describe("EntityDataManager", () => {
     const expectedEntities = [
       {
         guid: expect.any(String),
-        initial: {
-          id: expect.any(String),
-          guid: expect.any(String),
-          type: EntityType.Group,
-          name: "Group A",
-          version: 1,
-          data: { name: "Group A" },
-          lastUpdated: expect.any(String),
-          memberIds: [],
-        },
+        initial: null,
         modified: {
           id: expect.any(String),
           guid: expect.any(String),
@@ -488,15 +471,7 @@ describe("EntityDataManager", () => {
     const expectedEntities = [
       {
         guid: expect.any(String),
-        initial: {
-          id: expect.any(String),
-          guid: expect.any(String),
-          type: EntityType.Individual,
-          name: "John Doe",
-          version: 1,
-          data: { name: "John Doe" },
-          lastUpdated: expect.any(String),
-        },
+        initial: null,
         modified: {
           id: expect.any(String),
           guid: expect.any(String),
@@ -509,18 +484,7 @@ describe("EntityDataManager", () => {
       },
       {
         guid: expect.any(String),
-        initial: {
-          id: "group-id",
-          guid: expect.any(String),
-          type: EntityType.Group,
-          name: "Group A",
-          version: 2,
-          data: {
-            name: "Group A",
-          },
-          lastUpdated: expect.any(String),
-          memberIds: [expect.any(String)],
-        },
+        initial: null,
         modified: {
           id: "group-id",
           guid: expect.any(String),
@@ -611,15 +575,7 @@ describe("EntityDataManager", () => {
 
     const expectedEntity1 = {
       guid: expect.any(String),
-      initial: {
-        id: expect.any(String),
-        guid: expect.any(String),
-        type: EntityType.Individual,
-        name: "Jimmy Doe",
-        version: 1,
-        data: { name: "Jimmy Doe", dateOfBirth: "2010-03-20", relationship: "Child" },
-        lastUpdated: expect.any(String),
-      },
+      initial: null,
       modified: {
         id: expect.any(String),
         guid: expect.any(String),
@@ -633,15 +589,7 @@ describe("EntityDataManager", () => {
 
     const expectedEntity2 = {
       guid: expect.any(String),
-      initial: {
-        id: expect.any(String),
-        guid: expect.any(String),
-        type: EntityType.Individual,
-        name: "Jane Doe",
-        version: 1,
-        data: { name: "Jane Doe", dateOfBirth: "1985-05-15", relationship: "Spouse" },
-        lastUpdated: expect.any(String),
-      },
+      initial: null,
       modified: {
         id: expect.any(String),
         guid: expect.any(String),
@@ -655,23 +603,7 @@ describe("EntityDataManager", () => {
 
     const expectedEntity3 = {
       guid: expect.any(String),
-      initial: {
-        id: expect.any(String),
-        guid: expect.any(String),
-        type: EntityType.Group,
-        name: "Test Family",
-        version: 1,
-        data: {
-          name: "Test Family",
-          headOfGroup: "John Doe",
-          address: "123 Test St",
-          phoneNumber: "555-1234",
-          email: "john@test.com",
-          income: 50000,
-        },
-        lastUpdated: expect.any(String),
-        memberIds: [expect.any(String), expect.any(String)],
-      },
+      initial: null,
       modified: {
         id: expect.any(String),
         guid: expect.any(String),

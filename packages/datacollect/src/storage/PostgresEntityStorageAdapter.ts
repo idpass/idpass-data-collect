@@ -361,11 +361,11 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
   async saveEntity(entity: EntityPair): Promise<void> {
     const client = await this.pool.connect();
     try {
-      const guid = entity.initial.guid || entity.modified.guid;
+      const guid = entity.initial?.guid || entity.modified.guid;
       await client.query(
         "INSERT INTO entities (id, guid, initial, modified, last_updated, tenant_id) VALUES ($1, $2, $3, $4, $5, $6) " +
           "ON CONFLICT (guid, tenant_id) DO UPDATE SET initial = $3, modified = $4, last_updated = $5",
-        [guid, guid, entity.initial, entity.modified, entity.modified.lastUpdated, this.tenantId],
+        [guid, guid, entity.initial ?? null, entity.modified, entity.modified.lastUpdated, this.tenantId],
       );
     } finally {
       client.release();

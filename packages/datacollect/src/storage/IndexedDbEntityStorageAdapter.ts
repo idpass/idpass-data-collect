@@ -322,7 +322,7 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
     const transaction = this.db.transaction([this.storeName], "readwrite");
     const objectStore = transaction.objectStore(this.storeName);
     try {
-      const guid = entity.initial.guid || entity.modified.guid;
+      const guid = entity.initial?.guid || entity.modified.guid;
       await objectStore.put({
         id: guid,
         guid,

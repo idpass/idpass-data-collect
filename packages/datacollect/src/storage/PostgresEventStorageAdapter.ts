@@ -24,15 +24,14 @@ import { AuditLogEntry, EventStorageAdapter, FormSubmission, SyncLevel } from ".
  * PostgreSQL implementation of the EventStorageAdapter for server-side event persistence.
  *
  * This adapter provides scalable, tamper-evident event storage using PostgreSQL.
- * It is designed for production server deployments requiring robust data persistence,
- * cryptographic integrity verification, and efficient event sourcing operations.
+ * It is designed for production server deployments requiring robust data persistence
+ * and efficient event sourcing operations.
  *
  * Key features:
  * - **ACID Transactions**: Full PostgreSQL transaction support for data consistency.
  * - **Multi-Tenant Support**: Complete tenant isolation using `tenant_id` partitioning.
  * - **Immutable Event Storage**: All events are stored as immutable records.
  * - **Audit Trail Management**: Comprehensive audit logging for compliance and debugging.
- * - **Merkle Root Storage**: Stores Merkle roots for cryptographic integrity verification of the event log.
  * - **Sync Timestamp Management**: Tracks timestamps for various synchronization operations (local, remote, external).
  * - **Scalable Architecture**: Designed for production workloads with proper indexing.
  *
@@ -45,9 +44,7 @@ import { AuditLogEntry, EventStorageAdapter, FormSubmission, SyncLevel } from ".
  * Database Schema Overview:
  * - `events`: Stores `FormSubmission` records with `guid` as primary key, `entity_guid`, `timestamp`, and `sync_level`.
  * - `audit_log`: Stores `AuditLogEntry` records with `id` as primary key, `entity_guid`, `event_guid`, and `timestamp`.
- * - `merkle_root`: Stores the latest Merkle root for event log integrity.
- * - `last_remote_sync_timestamp`, `last_local_sync_timestamp`, `last_push_external_sync_timestamp`,
- *   `last_pull_external_sync_timestamp`: Tables to store the timestamps of various synchronization operations.
+ * - `sync_metadata`: Key-value table for storing sync timestamps and other metadata, keyed by `(tenant_id, key)`.
  *
  * @example
  * Basic server setup:
@@ -110,13 +107,12 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
   }
 
   /**
-   * Initializes the PostgreSQL database with required tables and schemas for events, audit logs, and Merkle roots.
+   * Initializes the PostgreSQL database with required tables and schemas for events and audit logs.
    *
    * Creates:
    * - `events` table with `guid` as primary key and various indexes for efficient querying.
    * - `audit_log` table for storing audit trail entries.
-   * - `merkle_root` table for storing the latest Merkle root.
-   * - Timestamp tables for tracking different synchronization points.
+   * - `sync_metadata` table for tracking different synchronization timestamps.
    *
    * This method is idempotent and safe to call multiple times.
    *
@@ -153,47 +149,26 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
         )
       `);
       await client.query(`
-        CREATE TABLE IF NOT EXISTS merkle_root (
-          id SERIAL PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS sync_metadata (
           tenant_id TEXT NOT NULL DEFAULT 'default',
-          root TEXT
-        )
-      `);
-      await client.query(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_merkle_root_tenant_unique ON merkle_root(tenant_id)",
-      );
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS last_remote_sync_timestamp (
-          id SERIAL PRIMARY KEY,
-          tenant_id TEXT NOT NULL DEFAULT 'default',
-          timestamp TIMESTAMPTZ
-        )
-      `);
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS last_local_sync_timestamp (
-          id SERIAL PRIMARY KEY,
-          tenant_id TEXT NOT NULL DEFAULT 'default',
-          timestamp TIMESTAMPTZ
-        )
-      `);
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS last_push_external_sync_timestamp (
-          id SERIAL PRIMARY KEY,
-          tenant_id TEXT NOT NULL DEFAULT 'default',
-          timestamp TIMESTAMPTZ
-        )
-      `);
-      await client.query(`
-        CREATE TABLE IF NOT EXISTS last_pull_external_sync_timestamp (
-          id SERIAL PRIMARY KEY,
-          tenant_id TEXT NOT NULL DEFAULT 'default',
-          timestamp TIMESTAMPTZ
+          key TEXT NOT NULL,
+          value TEXT,
+          updated_at TIMESTAMPTZ DEFAULT NOW(),
+          PRIMARY KEY (tenant_id, key)
         )
       `);
 
       // Add indexes for tenant_id
       await client.query("CREATE INDEX IF NOT EXISTS idx_events_tenant_id ON events(tenant_id)");
       await client.query("CREATE INDEX IF NOT EXISTS idx_audit_log_tenant_id ON audit_log(tenant_id)");
+
+      // Performance indexes for common query patterns
+      await client.query("CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp)");
+      await client.query("CREATE INDEX IF NOT EXISTS idx_events_entity_guid ON events(entity_guid)");
+      await client.query("CREATE INDEX IF NOT EXISTS idx_events_tenant_timestamp ON events(tenant_id, timestamp)");
+      await client.query("CREATE INDEX IF NOT EXISTS idx_events_sync_level ON events(sync_level)");
+      await client.query("CREATE INDEX IF NOT EXISTS idx_audit_log_entity_guid ON audit_log(entity_guid)");
+      await client.query("CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp)");
     } finally {
       client.release();
     }
@@ -214,7 +189,6 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
     const guids: string[] = [];
     try {
       await client.query("BEGIN");
-      
       for (const event of events) {
         await client.query(
           "INSERT INTO events (guid, tenant_id, entity_guid, type, data, timestamp, user_id, sync_level) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
@@ -341,50 +315,6 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
   }
 
   /**
-   * Saves the Merkle root to the Merkle root store.
-   *
-   * If a Merkle root already exists for the tenant, this operation will do nothing (ON CONFLICT DO NOTHING).
-   *
-   * @param root The Merkle root string to save.
-   * @returns A Promise that resolves when the Merkle root is successfully saved.
-   * @throws {Error} If the database operation fails.
-   */
-  async saveMerkleRoot(root: string): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      if (!root) {
-        await client.query("DELETE FROM merkle_root WHERE tenant_id = $1", [this.tenantId]);
-        return;
-      }
-
-      await client.query(
-        "INSERT INTO merkle_root (root, tenant_id) VALUES ($1, $2) ON CONFLICT (tenant_id) DO UPDATE SET root = EXCLUDED.root",
-        [root, this.tenantId],
-      );
-    } finally {
-      client.release();
-    }
-  }
-
-  /**
-   * Retrieves the latest stored Merkle root for the current tenant.
-   *
-   * @returns A Promise that resolves with the Merkle root string, or an empty string if no root exists.
-   * @throws {Error} If the database query fails.
-   */
-  async getMerkleRoot(): Promise<string> {
-    const client = await this.pool.connect();
-    try {
-      const result = await client.query("SELECT root FROM merkle_root WHERE tenant_id = $1 ORDER BY id DESC LIMIT 1", [
-        this.tenantId,
-      ]);
-      return result.rows.length > 0 ? result.rows[0].root : "";
-    } finally {
-      client.release();
-    }
-  }
-
-  /**
    * Updates the `syncLevel` for a specific event identified by its GUID.
    *
    * @param id The GUID of the event to update.
@@ -467,18 +397,38 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
     events: FormSubmission[];
     nextCursor: string | Date | null;
   }> {
-    const timestampString = timestamp ? timestamp : new Date(0).toISOString();
+    const cursorString = timestamp ? String(timestamp) : new Date(0).toISOString();
     const client = await this.pool.connect();
     try {
-      const query = `
+      let query: string;
+      let params: unknown[];
+
+      if (cursorString.includes("|")) {
+        // Composite cursor: "timestamp|guid" for deterministic pagination
+        const [cursorTimestamp, cursorGuid] = cursorString.split("|", 2);
+        query = `
           SELECT guid, entity_guid, type, data, timestamp, user_id, sync_level
           FROM events
-          WHERE timestamp > $1 
+          WHERE (timestamp > $1 OR (timestamp = $1 AND guid > $2))
+          AND tenant_id = $3
+          ORDER BY timestamp ASC, guid ASC
+          LIMIT $4
+        `;
+        params = [cursorTimestamp, cursorGuid, this.tenantId, limit];
+      } else {
+        // Plain timestamp for backwards compatibility
+        query = `
+          SELECT guid, entity_guid, type, data, timestamp, user_id, sync_level
+          FROM events
+          WHERE timestamp > $1
           AND tenant_id = $2
-          ORDER BY timestamp ASC
+          ORDER BY timestamp ASC, guid ASC
           LIMIT $3
         `;
-      const result = await client.query(query, [timestampString, this.tenantId, limit]);
+        params = [cursorString, this.tenantId, limit];
+      }
+
+      const result = await client.query(query, params);
       const events = result.rows.map((row) => ({
         guid: row.guid,
         entityGuid: row.entity_guid,
@@ -488,8 +438,13 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
         userId: row.user_id,
         syncLevel: row.sync_level,
       }));
-      const nextCursor =
-        result.rows.length === limit ? result.rows[result.rows.length - 1].timestamp.toISOString() : null;
+
+      let nextCursor: string | null = null;
+      if (result.rows.length === limit) {
+        const lastRow = result.rows[result.rows.length - 1];
+        nextCursor = `${lastRow.timestamp.toISOString()}|${lastRow.guid}`;
+      }
+
       return { events, nextCursor };
     } finally {
       client.release();
@@ -566,10 +521,10 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
     const client = await this.pool.connect();
     try {
       const result = await client.query(
-        "SELECT MAX(timestamp) AS last_remote_sync_timestamp FROM last_remote_sync_timestamp WHERE tenant_id = $1",
-        [this.tenantId],
+        "SELECT value FROM sync_metadata WHERE tenant_id = $1 AND key = $2",
+        [this.tenantId, "last_remote_sync_timestamp"],
       );
-      return result.rows?.[0]?.last_remote_sync_timestamp?.toISOString() || "";
+      return result.rows?.[0]?.value || "";
     } finally {
       client.release();
     }
@@ -578,7 +533,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
   /**
    * Sets the timestamp of the last successful remote synchronization.
    *
-   * This operation deletes any existing remote sync timestamp for the tenant and inserts the new one.
+   * Uses an UPSERT to insert or update the timestamp in the sync_metadata table.
    *
    * @param timestamp The timestamp string to save.
    * @returns A Promise that resolves when the timestamp is successfully saved.
@@ -587,11 +542,12 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
   async setLastRemoteSyncTimestamp(timestamp: string): Promise<void> {
     const client = await this.pool.connect();
     try {
-      await client.query("DELETE FROM last_remote_sync_timestamp WHERE tenant_id = $1", [this.tenantId]);
-      await client.query("INSERT INTO last_remote_sync_timestamp (timestamp, tenant_id) VALUES ($1, $2)", [
-        timestamp,
-        this.tenantId,
-      ]);
+      await client.query(
+        `INSERT INTO sync_metadata (tenant_id, key, value, updated_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (tenant_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        [this.tenantId, "last_remote_sync_timestamp", timestamp],
+      );
     } finally {
       client.release();
     }
@@ -607,10 +563,10 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
     const client = await this.pool.connect();
     try {
       const result = await client.query(
-        "SELECT MAX(timestamp) AS last_local_sync_timestamp FROM last_local_sync_timestamp WHERE tenant_id = $1",
-        [this.tenantId],
+        "SELECT value FROM sync_metadata WHERE tenant_id = $1 AND key = $2",
+        [this.tenantId, "last_local_sync_timestamp"],
       );
-      return result.rows?.[0]?.last_local_sync_timestamp?.toISOString() || "";
+      return result.rows?.[0]?.value || "";
     } finally {
       client.release();
     }
@@ -619,7 +575,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
   /**
    * Sets the timestamp of the last successful local synchronization.
    *
-   * This operation deletes any existing local sync timestamp for the tenant and inserts the new one.
+   * Uses an UPSERT to insert or update the timestamp in the sync_metadata table.
    *
    * @param timestamp The timestamp string to save.
    * @returns A Promise that resolves when the timestamp is successfully saved.
@@ -628,11 +584,12 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
   async setLastLocalSyncTimestamp(timestamp: string): Promise<void> {
     const client = await this.pool.connect();
     try {
-      await client.query("DELETE FROM last_local_sync_timestamp WHERE tenant_id = $1", [this.tenantId]);
-      await client.query("INSERT INTO last_local_sync_timestamp (timestamp, tenant_id) VALUES ($1, $2)", [
-        timestamp,
-        this.tenantId,
-      ]);
+      await client.query(
+        `INSERT INTO sync_metadata (tenant_id, key, value, updated_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (tenant_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        [this.tenantId, "last_local_sync_timestamp", timestamp],
+      );
     } finally {
       client.release();
     }
@@ -648,10 +605,10 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
     const client = await this.pool.connect();
     try {
       const result = await client.query(
-        "SELECT MAX(timestamp) AS last_pull_external_sync_timestamp FROM last_pull_external_sync_timestamp WHERE tenant_id = $1",
-        [this.tenantId],
+        "SELECT value FROM sync_metadata WHERE tenant_id = $1 AND key = $2",
+        [this.tenantId, "last_pull_external_sync_timestamp"],
       );
-      return result.rows?.[0]?.last_pull_external_sync_timestamp?.toISOString() || "";
+      return result.rows?.[0]?.value || "";
     } finally {
       client.release();
     }
@@ -660,7 +617,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
   /**
    * Sets the timestamp of the last successful external pull synchronization.
    *
-   * This operation deletes any existing external pull sync timestamp for the tenant and inserts the new one.
+   * Uses an UPSERT to insert or update the timestamp in the sync_metadata table.
    *
    * @param timestamp The timestamp string to save.
    * @returns A Promise that resolves when the timestamp is successfully saved.
@@ -669,11 +626,12 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
   async setLastPullExternalSyncTimestamp(timestamp: string): Promise<void> {
     const client = await this.pool.connect();
     try {
-      await client.query("DELETE FROM last_pull_external_sync_timestamp WHERE tenant_id = $1", [this.tenantId]);
-      await client.query("INSERT INTO last_pull_external_sync_timestamp (timestamp, tenant_id) VALUES ($1, $2)", [
-        timestamp,
-        this.tenantId,
-      ]);
+      await client.query(
+        `INSERT INTO sync_metadata (tenant_id, key, value, updated_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (tenant_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        [this.tenantId, "last_pull_external_sync_timestamp", timestamp],
+      );
     } finally {
       client.release();
     }
@@ -689,10 +647,10 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
     const client = await this.pool.connect();
     try {
       const result = await client.query(
-        "SELECT MAX(timestamp) AS last_push_external_sync_timestamp FROM last_push_external_sync_timestamp WHERE tenant_id = $1",
-        [this.tenantId],
+        "SELECT value FROM sync_metadata WHERE tenant_id = $1 AND key = $2",
+        [this.tenantId, "last_push_external_sync_timestamp"],
       );
-      return result.rows?.[0]?.last_push_external_sync_timestamp?.toISOString() || "";
+      return result.rows?.[0]?.value || "";
     } finally {
       client.release();
     }
@@ -701,7 +659,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
   /**
    * Sets the timestamp of the last successful external push synchronization.
    *
-   * This operation deletes any existing external push sync timestamp for the tenant and inserts the new one.
+   * Uses an UPSERT to insert or update the timestamp in the sync_metadata table.
    *
    * @param timestamp The timestamp string to save.
    * @returns A Promise that resolves when the timestamp is successfully saved.
@@ -710,11 +668,12 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
   async setLastPushExternalSyncTimestamp(timestamp: string): Promise<void> {
     const client = await this.pool.connect();
     try {
-      await client.query("DELETE FROM last_push_external_sync_timestamp WHERE tenant_id = $1", [this.tenantId]);
-      await client.query("INSERT INTO last_push_external_sync_timestamp (timestamp, tenant_id) VALUES ($1, $2)", [
-        timestamp,
-        this.tenantId,
-      ]);
+      await client.query(
+        `INSERT INTO sync_metadata (tenant_id, key, value, updated_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (tenant_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+        [this.tenantId, "last_push_external_sync_timestamp", timestamp],
+      );
     } finally {
       client.release();
     }
@@ -772,7 +731,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
   }
 
   /**
-   * Clears all events, audit logs, Merkle roots, and sync timestamps for the current tenant from the store.
+   * Clears all events, audit logs, and sync metadata for the current tenant from the store.
    *
    * @returns A Promise that resolves when all data is cleared.
    * @throws {Error} If the database deletion fails.
@@ -782,11 +741,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
     try {
       await client.query("DELETE FROM events WHERE tenant_id = $1", [this.tenantId]);
       await client.query("DELETE FROM audit_log WHERE tenant_id = $1", [this.tenantId]);
-      await client.query("DELETE FROM merkle_root WHERE tenant_id = $1", [this.tenantId]);
-      await client.query("DELETE FROM last_remote_sync_timestamp WHERE tenant_id = $1", [this.tenantId]);
-      await client.query("DELETE FROM last_local_sync_timestamp WHERE tenant_id = $1", [this.tenantId]);
-      await client.query("DELETE FROM last_pull_external_sync_timestamp WHERE tenant_id = $1", [this.tenantId]);
-      await client.query("DELETE FROM last_push_external_sync_timestamp WHERE tenant_id = $1", [this.tenantId]);
+      await client.query("DELETE FROM sync_metadata WHERE tenant_id = $1", [this.tenantId]);
     } finally {
       client.release();
     }

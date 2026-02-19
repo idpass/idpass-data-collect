@@ -23,6 +23,7 @@ import {
   DetailEntityDoc,
   DetailGroupDoc,
   EntityDoc,
+  EntityPair,
   EntityStore,
   EventStore,
   FormSubmission,
@@ -266,7 +267,7 @@ export class EntityDataManager {
    */
   async getAllEntities(
     options: ReadAuditOptions = {},
-  ): Promise<{ initial: EntityDoc; modified: EntityDoc }[]> {
+  ): Promise<EntityPair[]> {
     const entities = await this.entityStore.getAllEntities();
     await this.logReadAudit("read-all-entities", "*", { count: entities.length }, options);
     return entities;
@@ -304,7 +305,7 @@ export class EntityDataManager {
   async getEntity(
     id: string,
     options: ReadAuditOptions = {},
-  ): Promise<{ initial: EntityDoc; modified: EntityDoc }> {
+  ): Promise<EntityPair> {
     try {
       const entityPair = await this.entityStore.getEntity(id);
       if (!entityPair) {
@@ -317,16 +318,17 @@ export class EntityDataManager {
 
       this.logger.debug(`Updated entity after applying events: ${JSON.stringify(updatedEntity)}`);
 
-      let result: { initial: EntityDoc; modified: EntityDoc };
+      let result: EntityPair;
       if (updatedEntity.type === "group") {
         const groupWithDetails = await this.loadGroupDetails(updatedEntity as GroupDoc);
         this.logger.debug(`Group with loaded details: ${JSON.stringify(groupWithDetails)}`);
         result = {
+          guid: entityPair.guid,
           initial: entityPair.initial,
           modified: groupWithDetails,
         };
       } else {
-        result = { initial: entityPair.initial, modified: updatedEntity };
+        result = { guid: entityPair.guid, initial: entityPair.initial, modified: updatedEntity };
       }
 
       await this.logReadAudit("read-entity", id, { entityType: result.modified.type }, options);
@@ -431,7 +433,7 @@ export class EntityDataManager {
    * }
    * ```
    */
-  async getMembers(groupId: string): Promise<{ initial: EntityDoc; modified: EntityDoc }[]> {
+  async getMembers(groupId: string): Promise<EntityPair[]> {
     const groupPair = await this.entityStore.getEntity(groupId);
     if (!groupPair || groupPair.modified.type !== "group") {
       throw new AppError("INVALID_GROUP", `Group with ID ${groupId} not found or is not a group`);
@@ -540,7 +542,7 @@ export class EntityDataManager {
   async searchEntities(
     criteria: SearchCriteria,
     options: ReadAuditOptions = {},
-  ): Promise<{ initial: EntityDoc; modified: EntityDoc }[]> {
+  ): Promise<EntityPair[]> {
     const results = await this.entityStore.searchEntities(criteria);
     await this.logReadAudit("search-entities", "*", { criteria, resultCount: results.length }, options);
     return results;

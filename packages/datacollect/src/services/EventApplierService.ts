@@ -434,6 +434,9 @@ export class EventApplierService {
   }
 
   private hasLocalChanges(entityPair: EntityPair): boolean {
+    if (entityPair.initial === null) {
+      return true;
+    }
     return entityPair.initial.version !== entityPair.modified.version;
   }
 
@@ -496,7 +499,7 @@ export class EventApplierService {
     individual.version += 1;
     individual.lastUpdated = new Date().toISOString();
 
-    await this.entityStore.saveEntity(existingIndividual || individual, individual);
+    await this.entityStore.saveEntity(existingIndividual ?? null, individual);
     await this.logAudit(formData.userId, formData.type, eventGuid, individual.guid, formData.data);
 
     return individual;
@@ -594,7 +597,7 @@ export class EventApplierService {
     delete group.data.members;
 
     this.logger.debug(`Saving group: ${JSON.stringify(group)}`);
-    await this.entityStore.saveEntity(group, group);
+    await this.entityStore.saveEntity(existingGroup ?? null, group);
     await this.logAudit(formData.userId, formData.type, eventGuid, group.guid, formData.data);
 
     return group;
@@ -818,7 +821,7 @@ export class EventApplierService {
    * ]);
    * ```
    */
-  async searchEntities(criteria: SearchCriteria): Promise<{ initial: EntityDoc; modified: EntityDoc }[]> {
+  async searchEntities(criteria: SearchCriteria): Promise<EntityPair[]> {
     return await this.entityStore.searchEntities(criteria);
   }
 
@@ -856,7 +859,7 @@ export class EventApplierService {
     const potentialDuplicates = await this.searchEntities(searchCriteria);
 
     for (const duplicate of potentialDuplicates) {
-      if (duplicate.initial.guid !== entityGuid) {
+      if (duplicate.modified.guid !== entityGuid) {
         await this.entityStore.savePotentialDuplicates([{ entityGuid, duplicateGuid: duplicate.modified.guid }]);
         this.logger.info(`Flagging potential duplicate: ${duplicate.modified.guid}`);
         await this.logAudit("system", "flag-potential-duplicate", eventGuid, entityGuid, {

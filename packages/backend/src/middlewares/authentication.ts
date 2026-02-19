@@ -44,7 +44,7 @@ export const authenticateJWT = async (req: Request, res: Response, next: NextFun
       return;
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "") as DecodedPayload;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as DecodedPayload;
     (req as AuthenticatedRequest).user = decoded;
     next();
   } catch (error) {
@@ -54,7 +54,7 @@ export const authenticateJWT = async (req: Request, res: Response, next: NextFun
 };
 export async function authenticateJWTBackend(token: string): Promise<DecodedPayload | null> {
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "") as DecodedPayload;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as DecodedPayload;
     return decoded;
   } catch (error) {
     console.error(error);
@@ -74,7 +74,7 @@ export function createDynamicAuthMiddleware(appInstanceStore: AppInstanceStore) 
 
       const [authType, token] = authHeader.split(" ");
       if (authType.toLowerCase() === "bearer") {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || "") as DecodedPayload;
+        const decoded = jwt.verify(token, process.env.JWT_SECRET!) as DecodedPayload;
         (req as AuthenticatedRequest).user = decoded;
       }
 
@@ -123,7 +123,7 @@ export function createAuthAdminMiddleware(userStore: UserStore) {
         return;
       }
 
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || "") as DecodedPayload;
+      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as DecodedPayload;
       const user = await userStore.getUser(decoded.email);
 
       if (!user || user.role !== Role.ADMIN) {

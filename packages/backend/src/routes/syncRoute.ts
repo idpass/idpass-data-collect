@@ -19,10 +19,24 @@
 
 import { Router } from "express";
 import bodyParser from "body-parser";
-import { AuditLogEntry, ExternalSyncCredentials, FormSubmission } from "@idpass/data-collect-core";
+import { AuditLogEntry, ExternalSyncCredentials } from "@idpass/data-collect-core";
+import { z } from "zod";
 import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { AppInstanceStore } from "../types";
+
+const SyncPushPayloadSchema = z.object({
+  events: z.array(z.object({
+    guid: z.string(),
+    entityGuid: z.string(),
+    type: z.string(),
+    data: z.record(z.string(), z.unknown()),
+    timestamp: z.string(),
+    userId: z.string(),
+    syncLevel: z.number(),
+  })),
+  configId: z.string().optional(),
+});
 
 export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
   const router = Router();
@@ -46,7 +60,6 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
       const edm = appInstance.edm;
       const duplicates = await edm.getPotentialDuplicates();
       if (duplicates.length > 0) {
-        console.log("Duplicates exist! Please resolve them before syncing.");
         return res.json({
           events: [],
           nextCursor: null,
@@ -55,7 +68,6 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
       }
 
       const result = await edm.getEventsSincePagination(since as string, 10);
-      console.log("Request pulling: ", result.events?.length, " events since", since);
       res.json(result);
     }),
   );
@@ -79,14 +91,11 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
     "/push",
     createDynamicAuthMiddleware(appInstanceStore),
     asyncHandler(async (req, res) => {
-      // get body
-      const events: FormSubmission[] = req.body.events;
-      const configId = req.body.configId;
-      console.log("Request pushing: ", events?.length, " events");
-
-      if (!Array.isArray(events)) {
-        return res.json({ status: "success" });
+      const parseResult = SyncPushPayloadSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ status: "error", message: "Invalid payload", errors: parseResult.error.issues });
       }
+      const { events, configId } = parseResult.data;
 
       const sorted = events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
@@ -114,10 +123,8 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
     "/push/audit-logs",
     authenticateJWT,
     asyncHandler(async (req, res) => {
-      // get body
       const auditLogs: AuditLogEntry[] = req.body.auditLogs;
       const configId = req.body.configId;
-      console.log("Request pushing: ", auditLogs?.length, " audit logs");
 
       const appInstance = await appInstanceStore.getAppInstance(configId || "default");
       if (!appInstance) {
@@ -153,7 +160,6 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
       }
       const edm = appInstance.edm;
       const auditLogs = await edm.getAuditLogsSince(since as string);
-      console.log("Request pulling: ", auditLogs?.length, " audit logs since", since);
       res.json(auditLogs);
     }),
   );

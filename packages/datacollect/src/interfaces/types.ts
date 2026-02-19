@@ -69,6 +69,8 @@ export interface EntityDoc {
   data: Record<string, any>;
   /** ISO timestamp of last modification */
   lastUpdated: string;
+  /** Multiple typed identifiers per entity (national ID, UNHCR ID, etc.) */
+  identifiers?: IdentifierRecord[];
 }
 
 /**
@@ -91,8 +93,8 @@ export interface EntityDoc {
 export interface EntityPair {
   /** Global unique identifier for the entity */
   guid: string;
-  /** Entity state when first loaded or last synced */
-  initial: EntityDoc;
+  /** Entity state when first loaded or last synced (null for entities not yet synced) */
+  initial: EntityDoc | null;
   /** Current entity state with any local modifications */
   modified: EntityDoc;
 }
@@ -137,6 +139,8 @@ export interface GroupDoc extends EntityDoc {
   type: EntityType.Group;
   /** Array of entity GUIDs that are members of this group */
   memberIds: string[];
+  /** Typed membership records (replaces flat memberIds for rich membership data) */
+  membershipRecords?: MembershipRecord[];
 }
 
 /**
@@ -273,12 +277,10 @@ export interface EventStore {
   getEvents(): Promise<FormSubmission[]>;
   /** Get all events in the store */
   getAllEvents(): Promise<FormSubmission[]>;
-  /** Get the current Merkle tree root hash for integrity verification */
-  getMerkleRoot(): string;
-  /** Verify an event using Merkle tree proof */
-  verifyEvent(event: FormSubmission, proof: string[]): boolean;
-  /** Get Merkle tree proof for an event */
-  getProof(form: FormSubmission): Promise<string[]>;
+  /** Get the latest hash in the hash chain for integrity verification */
+  getLatestHash(): string;
+  /** Verify the integrity of the entire event hash chain */
+  verifyHashChain(): Promise<boolean>;
   /** Log a single audit entry */
   logAuditEntry(entry: AuditLogEntry): Promise<void>;
   /** Save multiple audit log entries */
@@ -344,10 +346,6 @@ export interface EventStorageAdapter {
   saveAuditLog(entries: AuditLogEntry[]): Promise<void>;
   /** Get all audit log entries */
   getAuditLog(): Promise<AuditLogEntry[]>;
-  /** Save Merkle tree root hash */
-  saveMerkleRoot(root: string): Promise<void>;
-  /** Get current Merkle tree root hash */
-  getMerkleRoot(): Promise<string>;
   /** Update the sync level of an event */
   updateEventSyncLevel(id: string, syncLevel: SyncLevel): Promise<void>;
   /** Update the sync level of an audit log entry */
@@ -494,8 +492,8 @@ export type SearchCriteria = Record<string, any>[];
 export interface EntityStore {
   /** Initialize the entity store (create tables, indexes, etc.) */
   initialize(): Promise<void>;
-  /** Save entity with both initial and current state */
-  saveEntity(initial: EntityDoc, modified: EntityDoc): Promise<void>;
+  /** Save entity with both initial and current state (initial is null for entities not yet synced) */
+  saveEntity(initial: EntityDoc | null, modified: EntityDoc): Promise<void>;
   /** Get entity by internal ID */
   getEntity(id: string): Promise<EntityPair | null>;
   /** Get entity by external system ID */
@@ -600,16 +598,14 @@ export interface SyncStatus {
 }
 
 /**
- * Merkle tree storage interface for data integrity verification.
+ * Hash chain storage interface for data integrity verification.
+ * Replaced the Merkle tree approach with an incremental hash chain
+ * for O(1) append and simpler implementation.
  */
-export interface MerkleTreeStorage {
-  /** Initialize the Merkle tree storage */
+export interface HashChainStorage {
+  /** Initialize the hash chain storage */
   initialize(): Promise<void>;
-  /** Save the root hash of the Merkle tree */
-  saveRootHash(hash: string): Promise<void>;
-  /** Get the current root hash */
-  getRootHash(): Promise<string>;
-  /** Clear the Merkle tree storage */
+  /** Clear the hash chain storage */
   clearStore(): Promise<void>;
   /** Close storage connections */
   closeConnection(): Promise<void>;
@@ -645,6 +641,80 @@ export interface Conflict {
  * };
  * ```
  */
+/**
+ * Represents a membership record linking an individual to a group.
+ * Replaces the flat `memberIds: string[]` array with typed metadata.
+ */
+export interface MembershipRecord {
+  /** GUID of the individual member */
+  individualGuid: string;
+  /** Membership type codes (e.g., "head", "spouse", "child") */
+  membershipTypes: string[];
+  /** ISO date when membership started */
+  startDate: string;
+  /** ISO date when membership ended (null = ongoing) */
+  endDate: string | null;
+}
+
+/**
+ * Represents a typed identifier for an entity.
+ * Supports multiple IDs per entity (national ID, UNHCR ID, etc.).
+ */
+export interface IdentifierRecord {
+  /** Identifier type code (e.g., "national-id", "unhcr-id") */
+  type: string;
+  /** The identifier value */
+  value: string;
+  /** ISO date when the identifier expires (null = no expiry) */
+  expiryDate: string | null;
+}
+
+/**
+ * RBAC role identifiers for the DataCollect system.
+ */
+export enum SystemRole {
+  /** Can create and update entities in assigned areas */
+  ENUMERATOR = "enumerator",
+  /** Can review submissions and see all data in assigned areas */
+  SUPERVISOR = "supervisor",
+  /** Can manage users and configure the program */
+  PROGRAM_ADMIN = "program-admin",
+  /** Can manage programs and tenants (replaces current admin role) */
+  SYSTEM_ADMIN = "system-admin",
+  /** Read-only access to assigned data */
+  VIEWER = "viewer",
+}
+
+/**
+ * Represents a user's role assignment within a program and area scope.
+ */
+export interface UserRoleAssignment {
+  /** User identifier */
+  userId: string;
+  /** Program identifier */
+  programId: string;
+  /** Role assigned to the user */
+  role: SystemRole;
+  /** Area codes the user is assigned to (empty = all areas) */
+  areaCodes: string[];
+  /** Whether this is a local (area-restricted) or global role */
+  isGlobal: boolean;
+}
+
+/**
+ * Represents a hierarchical geographic area (HDX admin boundary aligned).
+ */
+export interface Area {
+  /** Unique area code (HDX p-code, e.g., "KH0101") */
+  code: string;
+  /** Human-readable area name */
+  name: string;
+  /** Area type/admin level (e.g., "admin0", "admin1", "admin2") */
+  type: string;
+  /** Parent area code (null = top-level) */
+  parentCode: string | null;
+}
+
 export type ExternalSyncField = { name: string; value: string };
 
 /**

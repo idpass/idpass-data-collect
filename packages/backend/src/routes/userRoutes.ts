@@ -19,10 +19,19 @@
 
 import bcrypt from "bcrypt";
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
 import { AuthenticatedRequest, authenticateJWT, createAuthAdminMiddleware } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { UserStore } from "../types";
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 15, // 15 attempts per window
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { message: "Too many login attempts, please try again later" },
+});
 
 export function createUserRoutes(userStore: UserStore): Router {
   const router = Router();
@@ -30,6 +39,7 @@ export function createUserRoutes(userStore: UserStore): Router {
   // Login user
   router.post(
     "/login",
+    loginLimiter,
     asyncHandler(async (req, res) => {
       const { email, password } = req.body;
       const user = await userStore.getUser(email);
@@ -42,7 +52,7 @@ export function createUserRoutes(userStore: UserStore): Router {
       }
 
       // generate JWT token with id and email
-      const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET || "", {});
+      const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET!, {});
       res.json({ token, userId: user.id });
     }),
   );

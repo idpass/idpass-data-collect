@@ -48,7 +48,11 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   const app = express();
 
   setupUncaughtHandlers();
-  app.use(cors());
+  const corsOrigins = process.env.CORS_ORIGINS;
+  app.use(cors(corsOrigins ? {
+    origin: corsOrigins.split(",").map(o => o.trim()),
+    credentials: true,
+  } : undefined));
   app.use(bodyParser.json({ limit: "50mb" }));
   app.use(
     express.static(path.join(__dirname, "public"), {
@@ -70,6 +74,10 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
       console.warn("OpenAPI specification not available:", error);
       res.status(500).json({ error: "OpenAPI specification not available" });
     }
+  });
+
+  app.get("/health", (_req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
   app.use("/api/apps", createAppConfigRoutes(appConfigStore, appInstanceStore));

@@ -32,7 +32,7 @@ describe("EventStore", () => {
     syncLevel: SyncLevel.LOCAL,
   };
 
-  test("saveEvent should add event and update Merkle tree", async () => {
+  test("saveEvent should add event and update hash chain", async () => {
     await eventStore.saveEvent(mockEvent);
     const events = await eventStore.getAllEvents();
     expect(events).toEqual([
@@ -47,7 +47,7 @@ describe("EventStore", () => {
         id: 1,
       },
     ]);
-    expect(eventStore.getMerkleRoot()).toBeTruthy();
+    expect(eventStore.getLatestHash()).toBeTruthy();
   });
 
   test("getEvents should return events for a specific entity", async () => {

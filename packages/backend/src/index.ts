@@ -27,10 +27,15 @@ const {
   ADMIN_EMAIL: adminEmail,
   POSTGRES: postgresUrl,
   DATABASE_URL: databaseUrl,
+  JWT_SECRET: jwtSecret,
 } = process.env;
 
 if (!adminPassword || !adminEmail) {
   throw new Error("Initial admin credentials must be set");
+}
+
+if (!jwtSecret) {
+  throw new Error("JWT_SECRET must be set");
 }
 
 // Use POSTGRES if set, otherwise fallback to DATABASE_URL (Railway's default)
