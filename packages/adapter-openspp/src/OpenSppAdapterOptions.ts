@@ -17,8 +17,8 @@
  * under the License.
  */
 
-import type { ExternalSyncConfig } from "../../interfaces/types";
-import { getExternalField } from "../../interfaces/types";
+import type { ExternalSyncConfig } from "@idpass/data-collect-core";
+import { getExternalField } from "@idpass/data-collect-core";
 
 export interface OpenSppFieldMap {
   [key: string]: string | undefined;
@@ -203,4 +203,3 @@ function mergeObjects<T extends Record<string, unknown> | undefined>(
 export function resolveParentField(option?: OpenSppEntityOptions): string {
   return option?.parentField ?? DEFAULT_PARENT_FIELD;
 }
-

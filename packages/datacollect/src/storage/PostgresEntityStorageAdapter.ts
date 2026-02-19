@@ -19,6 +19,9 @@
 
 import { Pool } from "pg";
 import { EntityPair, EntityStorageAdapter, SearchCriteria } from "../interfaces/types";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("PostgresEntityStorageAdapter");
 
 /**
  * PostgreSQL implementation of the EntityStorageAdapter for server-side entity persistence.
@@ -527,7 +530,7 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
         [externalId, guid],
       );
     } catch (error) {
-      console.error("Error setting externalId:", error);
+      log.error({ err: error }, "Error setting externalId");
     } finally {
       client.release();
     }

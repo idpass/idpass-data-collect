@@ -1,0 +1,29 @@
+{
+  "name": "@idpass/adapter-openspp",
+  "version": "1.0.0",
+  "description": "OpenSPP sync adapters (V1 and V2) for ID PASS DataCollect",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest --silent"
+  },
+  "dependencies": {
+    "@idpass/data-collect-core": "workspace:*",
+    "axios": "^1.13.5",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^20.19.33",
+    "@types/uuid": "^10.0.0",
+    "jest": "^29.7.0",
+    "jest-fetch-mock": "^3.0.3",
+    "ts-jest": "^29.4.6",
+    "typescript": "^5.9.3"
+  },
+  "license": "Apache-2.0"
+}

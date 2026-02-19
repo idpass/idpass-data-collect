@@ -26,17 +26,15 @@ import {
   SyncLevel,
   getExternalField,
   EntityType,
-} from "../../interfaces/types";
+  createTransformer,
+  type TransformerType,
+} from "@idpass/data-collect-core";
+import { EventApplierService } from "@idpass/data-collect-core";
 import OdooClient from "./OdooClient";
-import { EventApplierService } from "../../services/EventApplierService";
 import { IndividualTransformer } from "./pullTransformers/IndividualTransformer";
 import type { OdooConfig, OpenSPPCreateIndividualPayload } from "./odoo-types";
 import type { OpenSppAdapterOptions } from "./OpenSppAdapterOptions";
 import { parseOpenSppAdapterOptions } from "./OpenSppAdapterOptions";
-import {
-  createTransformer,
-  type TransformerType,
-} from "../../utils/fieldTransformers";
 
 /**
  * Field mapping configuration from external sync config.
@@ -72,15 +70,15 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
   ) {
     this.url = (this.config?.url as string | undefined) ?? "";
     this.options = parseOpenSppAdapterOptions(config);
-    
+
     // Configure batch size (default: 50 entities per batch)
     const configuredBatchSize = this.getOptionalField("batchSize");
     this.batchSize = configuredBatchSize ? parseInt(configuredBatchSize, 10) || 50 : 50;
-    
+
     // Configure delay between batches in milliseconds (default: 1000ms = 1 second)
     const configuredDelay = this.getOptionalField("batchDelayMs");
     this.batchDelayMs = configuredDelay ? parseInt(configuredDelay, 10) || 1000 : 1000;
-    
+
     // Configure max retries for failed entities (default: 2)
     const configuredRetries = this.getOptionalField("maxRetries");
     this.maxRetries = configuredRetries ? parseInt(configuredRetries, 10) || 2 : 2;
@@ -100,12 +98,12 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     await this.ensureClient(credentials);
 
     const entityStore = this.eventApplierService.getEntityStore();
-    
+
     // Get all individual entities that need to be synced
     // For now, we'll push entities that don't have an externalId set (new entities)
     // or entities that have been modified locally
     const allEntities = await entityStore.getAllEntities();
-    
+
     const individualsToSync = allEntities.filter((pair) => {
       const entity = pair.modified;
       return (
@@ -131,14 +129,14 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       const batch = individualsToSync.slice(i, i + this.batchSize);
       const batchNumber = Math.floor(i / this.batchSize) + 1;
       const totalBatches = Math.ceil(individualsToSync.length / this.batchSize);
-      
+
       console.log(`Processing batch ${batchNumber}/${totalBatches} (${batch.length} entities)`);
 
       // Process batch with retry logic
       for (const entityPair of batch) {
         const entity = entityPair.modified;
         const externalId = await this.resolveExternalIdFromEntity(entity.guid);
-        
+
         let attempt = 0;
         let lastError: Error | null = null;
         let success = false;
@@ -173,7 +171,7 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
           } catch (error) {
             attempt++;
             lastError = error instanceof Error ? error : new Error(String(error));
-            
+
             if (attempt <= this.maxRetries) {
               // Wait before retry (exponential backoff: 1s, 2s, 4s)
               const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
@@ -248,7 +246,7 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
   async sync(credentials?: ExternalSyncCredentials): Promise<void> {
     // Push local changes to OpenSPP first
     await this.pushData(credentials);
-    
+
     // Then pull changes from OpenSPP
     await this.pullData();
   }
@@ -361,7 +359,7 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     // Apply field mappings with transformers
     for (const mapping of fieldMappings) {
       const formValue = formData[mapping.formField];
-      
+
       // Skip if form field value is missing
       if (formValue === null || formValue === undefined || formValue === "") {
         continue;
@@ -458,10 +456,10 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
   /**
    * Saves the external ID back to the entity after successful creation in OpenSPP.
    * This prevents duplicates by ensuring the entity knows its external ID for future updates.
-   * 
+   *
    * IMPORTANT: This method directly updates the entity data without creating a new event
    * to avoid the event being picked up in the next sync cycle and causing duplicate processing.
-   * 
+   *
    * Sets the externalId at both the top-level (for IndexedDB index) and in data.externalId
    * (for consistency with form data structure).
    */
@@ -478,16 +476,16 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       const currentTopLevel = entityPair.modified.externalId;
       const currentNested = entityPair.modified.data.externalId;
       const externalIdStr = String(externalId);
-      
+
       // Compare top-level (stored as string) with string version
       const topLevelMatches = currentTopLevel === externalIdStr;
-      
+
       // Compare nested (could be number or string) with both number and string versions
-      const nestedMatches = 
-        currentNested === externalId || 
+      const nestedMatches =
+        currentNested === externalId ||
         currentNested === externalIdStr ||
         String(currentNested) === externalIdStr;
-      
+
       if (topLevelMatches && nestedMatches) {
         return;
       }
@@ -518,4 +516,3 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
 }
 
 export default OpenSppSyncAdapter;
-

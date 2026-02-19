@@ -17,8 +17,14 @@
  * under the License.
  */
 
-export { default as OdooClient } from "./OdooClient";
-export type { OdooConfig } from "./odoo-types";
-export * from "./odoo-types";
-export * from "./OpenSppAdapterOptions";
+import pino from "pino";
 
+const isTest = process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID !== undefined;
+
+const level = isTest ? "silent" : (process.env.LOG_LEVEL || "info");
+
+export const logger = pino({ name: "datacollect", level });
+
+export function createLogger(component: string) {
+  return logger.child({ component });
+}

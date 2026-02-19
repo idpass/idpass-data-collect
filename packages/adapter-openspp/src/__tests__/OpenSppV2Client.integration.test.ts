@@ -33,12 +33,12 @@
  */
 
 import axios from "axios";
-import { OpenSppV2Client } from "../components/openspp-v2/OpenSppV2Client";
+import { OpenSppV2Client } from "../v2/OpenSppV2Client";
 import type {
   IndividualResource,
   GroupResource,
   SearchResult,
-} from "../components/openspp-v2/types";
+} from "../v2/types";
 
 const BASE_URL = process.env.OPENSPP_URL || "http://localhost:8069";
 const CLIENT_ID = process.env.OPENSPP_CLIENT_ID || "client_9wPoIAlhjWDfl4NnkEK5bw";

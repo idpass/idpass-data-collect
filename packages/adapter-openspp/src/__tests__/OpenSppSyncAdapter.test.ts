@@ -17,10 +17,10 @@
  * under the License.
  */
 
-import type { EventStore, ExternalSyncConfig, ExternalSyncCredentials, EntityPair } from "../interfaces/types";
-import { EntityType } from "../interfaces/types";
-import OpenSppSyncAdapter from "../components/openspp/OpenSppSyncAdapter";
-import { EventApplierService } from "../services/EventApplierService";
+import type { EventStore, ExternalSyncConfig, ExternalSyncCredentials, EntityPair } from "@idpass/data-collect-core";
+import { EntityType } from "@idpass/data-collect-core";
+import OpenSppSyncAdapter from "../OpenSppSyncAdapter";
+import { EventApplierService } from "@idpass/data-collect-core";
 
 const mockOdooClientImplementation = {
   login: jest.fn(),
@@ -33,7 +33,7 @@ const mockOdooClientImplementation = {
 };
 
 // Mock OdooClient
-jest.mock("../components/openspp/OdooClient", () => {
+jest.mock("../OdooClient", () => {
   return {
     __esModule: true,
     default: jest.fn().mockImplementation(() => mockOdooClientImplementation),

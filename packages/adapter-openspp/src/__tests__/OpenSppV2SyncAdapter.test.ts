@@ -17,11 +17,11 @@
  * under the License.
  */
 
-import type { EventStore, ExternalSyncConfig, EntityPair } from "../interfaces/types";
-import { EntityType } from "../interfaces/types";
-import OpenSppV2SyncAdapter from "../components/openspp-v2/OpenSppV2SyncAdapter";
-import { EventApplierService } from "../services/EventApplierService";
-import type { IndividualResource, GroupResource, SearchResult } from "../components/openspp-v2/types";
+import type { EventStore, ExternalSyncConfig, EntityPair } from "@idpass/data-collect-core";
+import { EntityType } from "@idpass/data-collect-core";
+import OpenSppV2SyncAdapter from "../v2/OpenSppV2SyncAdapter";
+import { EventApplierService } from "@idpass/data-collect-core";
+import type { IndividualResource, GroupResource, SearchResult } from "../v2/types";
 
 const mockV2ClientImplementation = {
   authenticate: jest.fn().mockResolvedValue(undefined),
@@ -56,7 +56,7 @@ const mockV2ClientImplementation = {
   patchGroup: jest.fn().mockImplementation(() => ({ type: "Group", identifier: [] })),
 };
 
-jest.mock("../components/openspp-v2/OpenSppV2Client", () => {
+jest.mock("../v2/OpenSppV2Client", () => {
   return {
     __esModule: true,
     OpenSppV2Client: jest.fn().mockImplementation(() => mockV2ClientImplementation),

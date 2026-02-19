@@ -26,6 +26,9 @@ import {
   TokenCredentials,
   SingleAuthStorage,
 } from "../interfaces/types";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("AuthManager");
 import { SingleAuthStorageImpl } from "../services/SingleAuthStorageImpl";
 import { KeycloakAuthAdapter } from "./authentication/KeycloakAuthAdapter";
 import { Auth0AuthAdapter } from "./authentication/Auth0AuthAdapter";
@@ -116,7 +119,7 @@ export class AuthManager {
             acc[config.type] = new adapterModule(singleAuthStorage, config);
           }
         } catch (error) {
-          console.error(`Failed to initialize adapter for type ${config.type}:`, error);
+          log.error({ err: error, adapterType: config.type }, "Failed to initialize auth adapter");
           // Skip this adapter but continue with others
         }
         return acc;
@@ -232,7 +235,7 @@ export class AuthManager {
       await this.authStorage.setUsername(credentials.username);
       return;
     } catch (error) {
-      console.error("Failed to login to sync server using default login");
+      log.error({ err: error }, "Failed to login to sync server using default login");
       throw error;
     }
   }

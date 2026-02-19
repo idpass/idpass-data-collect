@@ -37,6 +37,9 @@ import { AppError } from "../utils/AppError";
 
 import { validateFormSubmission } from "../utils/formValidation";
 import { DuplicateDetectionService } from "./DuplicateDetectionService";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("EventApplierService");
 
 type ConflictResolutionResult =
   | { resolution: "no-conflict"; baseEntity?: EntityDoc }
@@ -398,11 +401,7 @@ export class EventApplierService {
       return updatedEntity;
     } catch (error) {
       // Log error with full details for debugging
-      console.error("Error in submitForm:", error);
-      if (error instanceof Error) {
-        console.error("Error stack:", error.stack);
-        console.error("Error message:", error.message);
-      }
+      log.error({ err: error }, "Error in submitForm");
       // Re-throw the error - don't suppress it
       throw error;
     }
@@ -663,7 +662,7 @@ export class EventApplierService {
     }
     const updatedGroup = this.removeFromGroupStructure(groupPair.modified as GroupDoc, memberId);
 
-    console.log("updated group", updatedGroup);
+    log.debug({ updatedGroup }, "Updated group");
     await this.entityStore.saveEntity(groupPair.initial, updatedGroup);
     await this.logAudit(formData.userId, formData.type, eventGuid, groupId, formData.data);
 

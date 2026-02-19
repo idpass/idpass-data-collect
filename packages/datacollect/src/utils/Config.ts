@@ -20,8 +20,11 @@
 import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
+import { createLogger } from "./logger";
 
 dotenv.config();
+
+const log = createLogger("Config");
 
 /**
  * Configuration interface for OpenSPP integration settings.
@@ -140,9 +143,9 @@ export class OpenSPPConfig {
       const rawData = fs.readFileSync(filePath, "utf8");
       this.config = JSON.parse(rawData) as Config;
     } catch (error) {
-      console.error(error);
+      log.debug({ err: error }, "Could not read config file; using defaults");
       // TODO Decide on how to handle this. For now it is silent.
-      // console.warn(`Warning: Could not read config file. ${error instanceof Error ? error.message : String(error)}`);
+      // log.warn({ err: error }, `Could not read config file`);
       this.config = { syncAdapterAuthPassword: "" };
     }
 

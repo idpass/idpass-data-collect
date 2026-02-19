@@ -18,13 +18,9 @@
  */
 
 import { v4 as uuidv4 } from "uuid";
-import { FormSubmission, SyncLevel } from "../../../interfaces/types";
+import { FormSubmission, SyncLevel, createTransformer, type TransformerType } from "@idpass/data-collect-core";
 import type { OpenSppEntityOptions } from "../OpenSppAdapterOptions";
 import type { OpenSPPIndividualExtended as OpenSPPIndividual } from "../odoo-types";
-import {
-  createTransformer,
-  type TransformerType,
-} from "../../../utils/fieldTransformers";
 
 /**
  * Field mapping configuration from external sync config.

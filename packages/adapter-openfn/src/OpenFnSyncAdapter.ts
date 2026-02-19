@@ -28,8 +28,8 @@ import {
   FormSubmission,
   SyncLevel,
   getExternalField,
-} from "../../interfaces/types";
-import { EventApplierService } from "../../services/EventApplierService";
+} from "@idpass/data-collect-core";
+import { EventApplierService } from "@idpass/data-collect-core";
 
 class OpenFnSyncAdapter implements ExternalSyncAdapter {
   private readonly url: string = "";

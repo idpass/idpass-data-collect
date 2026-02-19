@@ -24,6 +24,9 @@ import { z } from "zod";
 import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware, validateTenantAccess } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { AppInstanceStore } from "../types";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("syncRoute");
 
 const SyncPushPayloadSchema = z.object({
   events: z.array(z.object({
@@ -114,7 +117,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
         const result = await edm.submitFormBatch(batchEvents);
         res.json({ status: "success", applied: result.applied, failed: result.failed, errors: result.errors });
       } catch (error) {
-        console.error(error);
+        log.error({ err: error }, "Batch push failed");
         const message = error instanceof Error ? error.message : String(error);
         res.status(422).json({
           status: "error",
@@ -144,9 +147,9 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
       }
 
       try {
-        await edm.saveAuditLogs(auditLogs.map((log) => ({ ...log, userId: (req as AuthenticatedRequest).user?.id })));
+        await edm.saveAuditLogs(auditLogs.map((entry) => ({ ...entry, userId: (req as AuthenticatedRequest).user?.id })));
       } catch (error) {
-        console.error(error);
+        log.error({ err: error }, "Failed to save audit logs");
         // ignore errors
       }
 
@@ -187,7 +190,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
         await edm.syncWithExternalSystem(credentials as unknown as ExternalSyncCredentials);
         res.json({ status: "success" });
       } catch (error) {
-        console.error(error);
+        log.error({ err: error }, "Failed to sync with external system");
         res.json({
           status: "error",
           message: "Failed to sync with external system",

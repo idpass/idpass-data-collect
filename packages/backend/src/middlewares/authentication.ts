@@ -20,6 +20,9 @@
 import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { AppInstanceStore, Role, UserStore } from "../types";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("authentication");
 
 export interface DecodedPayload {
   id: string;
@@ -50,7 +53,7 @@ export const authenticateJWT = async (req: Request, res: Response, next: NextFun
     (req as AuthenticatedRequest).user = decoded;
     next();
   } catch (error) {
-    console.error(error);
+    log.error({ err: error }, "JWT authentication failed");
     res.status(401).json({ error: "Invalid token" });
   }
 };
@@ -59,7 +62,7 @@ export async function authenticateJWTBackend(token: string): Promise<DecodedPayl
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as DecodedPayload;
     return decoded;
   } catch (error) {
-    console.error(error);
+    log.error({ err: error }, "JWT backend authentication failed");
     return null;
   }
 }
@@ -104,7 +107,7 @@ export function createDynamicAuthMiddleware(appInstanceStore: AppInstanceStore) 
 
       next();
     } catch (error) {
-      console.error(error);
+      log.error({ err: error }, "Dynamic auth middleware failed");
       res.status(401).json({ error: "Invalid token" });
     }
   };
@@ -137,7 +140,7 @@ export function createAuthAdminMiddleware(userStore: UserStore) {
       (req as AuthenticatedRequest).user = decoded;
       next();
     } catch (error) {
-      console.error(error);
+      log.error({ err: error }, "Admin auth middleware failed");
       res.status(401).json({ error: "Invalid token" });
     }
   };

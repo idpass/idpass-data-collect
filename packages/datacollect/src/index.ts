@@ -215,6 +215,8 @@ export * from "./components/SyncAdapter";
 // Core Services
 export * from "./services/EventApplierService";
 export * from "./services/DuplicateDetectionService";
+export { ProjectionRebuildService } from "./services/ProjectionRebuildService";
+export type { RebuildResult } from "./services/ProjectionRebuildService";
 
 // Storage Adapters
 export * from "./storage/IndexedDbEntityStorageAdapter";
@@ -232,11 +234,8 @@ export * from "./components/AuthManager";
 export * from "./storage/IndexedDbAuthStorageAdapter";
 export * from "./services/SingleAuthStorageImpl";
 
-// OpenSPP/Odoo Components (V1)
-export * from "./components/openspp";
-
-// OpenSPP V2 Components
-export * from "./components/openspp-v2";
-
 // Field Transformers
 export * from "./utils/fieldTransformers";
+
+// Utility functions
+export { normalizeLegacyRelationField, normalizeLegacyRelationFields } from "./utils/normalizeLegacyRelationFields";

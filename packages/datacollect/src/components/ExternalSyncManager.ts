@@ -20,29 +20,37 @@
 import { EventStore, ExternalSyncAdapter, ExternalSyncConfig, ExternalSyncCredentials } from "../interfaces/types";
 import { EventApplierService } from "../services/EventApplierService";
 import MockSyncServerAdapter from "../services/MockSyncServerAdapter";
-import OpenFnSyncAdapter from "./openfn/OpenFnSyncAdapter";
-import OpenSppSyncAdapter from "./openspp/OpenSppSyncAdapter";
-import OpenSppV2SyncAdapter from "./openspp-v2/OpenSppV2SyncAdapter";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("ExternalSyncManager");
 
 /**
- * Registry of available external sync adapters mapped by their type identifiers.
+ * Constructor type for ExternalSyncAdapter implementations.
+ */
+type AdapterConstructor = new (
+  eventStore: EventStore,
+  eventApplierService: EventApplierService,
+  config: ExternalSyncConfig,
+) => ExternalSyncAdapter;
+
+/**
+ * Built-in adapter registry. Contains only adapters that are bundled with the core package.
  *
- * Add new adapters here to make them available for external synchronization.
+ * External adapters (OpenSPP, OpenFn) are registered at application startup using
+ * ExternalSyncManager.registerAdapter() to avoid circular dependencies between packages.
  *
  * Adapter types:
  * - mock-sync-server: Mock adapter for testing
- * - openfn-adapter: OpenFn webhook-based integration
- * - openspp-v1-adapter: OpenSPP V1 (JSON-RPC/Odoo API)
- * - openspp-adapter: Alias for openspp-v1-adapter
- * - openspp-v2-adapter: OpenSPP V2 (REST API with OAuth2)
  */
-const adaptersMapping = {
-  "mock-sync-server": MockSyncServerAdapter,
-  "openfn-adapter": OpenFnSyncAdapter,
-  "openspp-v1-adapter": OpenSppSyncAdapter,
-  "openspp-adapter": OpenSppSyncAdapter, // Alias for backwards compatibility
-  "openspp-v2-adapter": OpenSppV2SyncAdapter,
+const builtInAdaptersMapping: Record<string, AdapterConstructor> = {
+  "mock-sync-server": MockSyncServerAdapter as unknown as AdapterConstructor,
 };
+
+/**
+ * Runtime adapter registry. External adapters are registered here at application startup.
+ * Keys are adapter type strings (e.g., "openspp-v2-adapter", "openfn-adapter").
+ */
+const runtimeAdapterRegistry: Record<string, AdapterConstructor> = {};
 
 /**
  * Manages synchronization with external third-party systems using pluggable adapters.
@@ -145,11 +153,33 @@ export class ExternalSyncManager {
   ) {}
 
   /**
+   * Registers an external adapter class for a given type identifier.
+   *
+   * Call this at application startup to make adapters from external packages
+   * (e.g., @idpass/adapter-openspp, @idpass/adapter-openfn) available to the manager.
+   *
+   * @param type The adapter type string used in ExternalSyncConfig.type
+   * @param adapterClass The adapter constructor to register
+   *
+   * @example
+   * ```typescript
+   * import { OpenSppV2SyncAdapter } from '@idpass/adapter-openspp';
+   * import { OpenFnSyncAdapter } from '@idpass/adapter-openfn';
+   *
+   * ExternalSyncManager.registerAdapter('openspp-v2-adapter', OpenSppV2SyncAdapter);
+   * ExternalSyncManager.registerAdapter('openfn-adapter', OpenFnSyncAdapter);
+   * ```
+   */
+  static registerAdapter(type: string, adapterClass: AdapterConstructor): void {
+    runtimeAdapterRegistry[type] = adapterClass;
+  }
+
+  /**
    * Initializes the external sync manager by instantiating the appropriate adapter.
    *
-   * Looks up the adapter class based on the configuration type and creates an instance
-   * with the provided dependencies. If the adapter type is not found in the registry,
-   * the manager remains uninitialized (adapter will be null).
+   * Looks up the adapter class in the built-in registry first, then in the runtime
+   * registry populated via registerAdapter(). If the adapter type is not found in
+   * either registry, the manager remains uninitialized (adapter will be null).
    *
    * This method must be called before attempting synchronization.
    *
@@ -171,19 +201,15 @@ export class ExternalSyncManager {
    * ```
    */
   async initialize() {
-    const adapterModule = adaptersMapping[this.config.type as keyof typeof adaptersMapping];
+    const adapterModule =
+      builtInAdaptersMapping[this.config.type] ??
+      runtimeAdapterRegistry[this.config.type];
 
     if (!adapterModule) {
       return;
     }
 
-    const AdapterCtor = adapterModule as unknown as new (
-      eventStore: EventStore,
-      eventApplierService: EventApplierService,
-      config: ExternalSyncConfig,
-    ) => ExternalSyncAdapter;
-
-    this.adapter = new AdapterCtor(this.eventStore, this.eventApplierService, this.config);
+    this.adapter = new adapterModule(this.eventStore, this.eventApplierService, this.config);
   }
 
   /**
@@ -234,7 +260,7 @@ export class ExternalSyncManager {
       }
     }
 
-    console.log("SYNC_STARTED");
+    log.info("SYNC_STARTED");
 
     const supportsPush = typeof this.adapter.pushData === "function";
     const supportsPull = typeof this.adapter.pullData === "function";
@@ -251,7 +277,7 @@ export class ExternalSyncManager {
       await this.adapter.sync(credentials);
     }
 
-    console.log("SYNC_COMPLETED");
+    log.info("SYNC_COMPLETED");
   }
 
   /**

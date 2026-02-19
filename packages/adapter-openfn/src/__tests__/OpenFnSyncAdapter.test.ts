@@ -1,9 +1,9 @@
 import axios from 'axios';
 
-import OpenFnSyncAdapter from '../openfn/OpenFnSyncAdapter';
-import type { EventStore, ExternalSyncConfig, FormSubmission } from '../../interfaces/types';
-import { SyncLevel } from '../../interfaces/types';
-import type { EventApplierService } from '../../services/EventApplierService';
+import OpenFnSyncAdapter from '../OpenFnSyncAdapter';
+import type { EventStore, ExternalSyncConfig, FormSubmission } from '@idpass/data-collect-core';
+import { SyncLevel } from '@idpass/data-collect-core';
+import type { EventApplierService } from '@idpass/data-collect-core';
 
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;

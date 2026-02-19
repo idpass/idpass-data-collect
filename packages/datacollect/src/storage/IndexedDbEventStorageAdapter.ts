@@ -18,6 +18,9 @@
  */
 
 import { AuditLogEntry, EventStorageAdapter, FormSubmission, SyncLevel } from "../interfaces/types";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("IndexedDbEventStorageAdapter");
 
 /**
  * IndexedDB implementation of the EventStorageAdapter for browser-based event persistence.
@@ -91,7 +94,7 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
       const request = window.indexedDB.open(this.dbName, 1);
 
       request.onerror = (event) => {
-        console.error("Error opening IndexedDB:", event);
+        log.error({ event }, "Error opening IndexedDB");
         reject(event);
       };
 

@@ -26,6 +26,9 @@ import {
   EntityStore,
   AuthStorageAdapter,
 } from "../interfaces/types";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("InternalSyncManager");
 import { EventApplierService } from "../services/EventApplierService";
 
 /**
@@ -362,7 +365,7 @@ export class InternalSyncManager {
           lastSuccessfulTimestamp = latestEventTimestamp;
           await this.eventStore.setLastRemoteSyncTimestamp(latestEventTimestamp);
         } catch (error) {
-          console.error(`Error applying remote events batch: ${error}`);
+          log.error({ err: error }, "Error applying remote events batch");
           // Roll back the lastRemoteSyncTimestamp to the last successful timestamp
           if (lastSuccessfulTimestamp) {
             await this.eventStore.setLastRemoteSyncTimestamp(lastSuccessfulTimestamp);
@@ -447,7 +450,7 @@ export class InternalSyncManager {
       await this.uploadLocalEvents();
       await this.downloadRemoteEvents();
     } catch (error) {
-      console.error("Error during sync:", error);
+      log.error({ err: error }, "Error during sync");
       throw error;
     } finally {
       this.isSyncing = false;

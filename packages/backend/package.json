@@ -20,7 +20,8 @@
     "api-docs": "echo 'OpenAPI spec available at http://localhost:3000/api-docs/openapi.json'",
     "validate-api": "redocly lint openapi.yaml --skip-rule=operation-4xx-response --skip-rule=no-server-example.com --skip-rule=operation-operationId --skip-rule=no-identical-paths --skip-rule=no-ambiguous-paths",
     "lint": "eslint . --config eslint.config.mjs --fix",
-    "type-check": "tsc --noEmit -p tsconfig.type-check.json"
+    "type-check": "tsc --noEmit -p tsconfig.type-check.json",
+    "rebuild-projections": "ts-node src/cli/rebuild-projections.ts"
   },
   "dependencies": {
     "@idpass/data-collect-core": "workspace:*",
@@ -34,6 +35,8 @@
     "lodash": "^4.17.23",
     "multer": "1.4.5-lts.2",
     "pg": "^8.18.0",
+    "pino": "^10.3.1",
+    "pino-http": "^11.0.0",
     "qrcode": "^1.5.4",
     "uuid": "^10.0.0",
     "yamljs": "^0.3.0",

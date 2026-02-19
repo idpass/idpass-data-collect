@@ -21,6 +21,7 @@ import bcrypt from "bcrypt";
 import bodyParser from "body-parser";
 import cors from "cors";
 import express from "express";
+import pinoHttp from "pino-http";
 import path from "path";
 import fs from "fs/promises";
 import YAML from "yamljs";
@@ -36,6 +37,9 @@ import { AppInstanceStoreImpl } from "./stores/AppInstanceStore";
 import { UserStoreImpl } from "./stores/UserStore";
 import { Role, SyncServerConfig, SyncServerInstance } from "./types";
 import { generatePublicArtifacts, resolvePublicBaseUrl } from "./utils/publicArtifacts";
+import { logger, createLogger } from "./utils/logger";
+
+const log = createLogger("syncServer");
 
 export async function run(config: SyncServerConfig): Promise<SyncServerInstance> {
   const userStore = new UserStoreImpl(config.postgresUrl);
@@ -53,6 +57,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
     origin: corsOrigins.split(",").map(o => o.trim()),
     credentials: true,
   } : undefined));
+  app.use(pinoHttp({ logger }));
   app.use(bodyParser.json({ limit: "50mb" }));
   app.use(
     express.static(path.join(__dirname, "public"), {
@@ -71,7 +76,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
       const openApiSpec = YAML.load(path.join(__dirname, "../openapi.yaml"));
       res.json(openApiSpec);
     } catch (error) {
-      console.warn("OpenAPI specification not available:", error);
+      log.warn({ err: error }, "OpenAPI specification not available");
       res.status(500).json({ error: "OpenAPI specification not available" });
     }
   });
@@ -116,7 +121,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
       try {
         await fs.access(qrPath);
       } catch (accessError) {
-        console.error(`QR code file not found at ${qrPath} after generation`, accessError);
+        log.error({ err: accessError, qrPath }, "QR code file not found after generation");
         res.status(500).send("Failed to generate QR code");
         return;
       }
@@ -133,7 +138,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
           res.status(400).send("Invalid configuration: missing artifact ID");
           return;
         }
-        console.error("Error generating QR code:", error);
+        log.error({ err: error }, "Error generating QR code");
       }
       next(error);
     }
@@ -156,8 +161,8 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   app.use(notFoundHandler);
   app.use(errorHandler);
   const httpServer = app.listen(config.port, "0.0.0.0", () => {
-    console.log(`Sync server is running on port ${config.port}`);
-    console.log(`API documentation available at http://localhost:${config.port}/api-docs`);
+    log.info({ port: config.port }, "Sync server is running");
+    log.info({ url: `http://localhost:${config.port}/api-docs` }, "API documentation available");
   });
 
   // Create an initial admin user if there is no existing admin
@@ -172,7 +177,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
       tenantIds: [] as string[],
     };
     await userStore.saveUser(initialAdmin);
-    console.log("Initial admin user " + initialAdmin.email + " created");
+    log.info({ email: initialAdmin.email }, "Initial admin user created");
   }
 
   // Add a cron job to run every 30 minutes

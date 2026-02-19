@@ -19,6 +19,9 @@
 
 import { Pool } from "pg";
 import { Role, User, UserStore, UserWithPasswordHash } from "../types";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("UserStore");
 
 export class UserStoreImpl implements UserStore {
   private pool: Pool;
@@ -61,7 +64,7 @@ export class UserStoreImpl implements UserStore {
 
       const { rows } = await client.query(query);
       const userId = rows[0].id;
-      console.log(`New user created with id: ${userId}`);
+      log.info({ userId }, "New user created");
     } finally {
       client.release();
     }

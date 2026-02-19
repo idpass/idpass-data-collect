@@ -18,10 +18,9 @@
  */
 
 import { v4 as uuidv4 } from "uuid";
-import { FormSubmission, SyncLevel } from "../../../interfaces/types";
+import { FormSubmission, SyncLevel, normalizeLegacyRelationField } from "@idpass/data-collect-core";
 import type { OpenSppEntityOptions } from "../OpenSppAdapterOptions";
 import type { OpenSPPHousehold } from "../odoo-types";
-import { normalizeLegacyRelationField } from "../../../utils/normalizeLegacyRelationFields";
 
 /**
  * Transformer for converting OpenSPP household records into DataCollect FormSubmission objects.

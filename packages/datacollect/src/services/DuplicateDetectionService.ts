@@ -19,6 +19,7 @@
 
 import { v4 as uuidv4 } from "uuid";
 import { AuditLogEntry, EntityStore, EventStore, SearchCriteria } from "../interfaces/types";
+import { createLogger } from "../utils/logger";
 
 /**
  * Represents a queued item for async duplicate detection processing.
@@ -49,8 +50,9 @@ interface DuplicateDetectionQueueItem {
  * // The caller continues without waiting; duplicates appear asynchronously
  * ```
  */
+const log = createLogger("DuplicateDetectionService");
+
 export class DuplicateDetectionService {
-  private logger = console;
   private queue: DuplicateDetectionQueueItem[] = [];
   private processing = false;
 
@@ -108,7 +110,7 @@ export class DuplicateDetectionService {
     if (!this.processing) {
       setTimeout(() => {
         this.processQueue().catch((error) => {
-          this.logger.error("DuplicateDetectionService: error processing queue", error);
+          log.error({ err: error }, "DuplicateDetectionService: error processing queue");
         });
       }, 0);
     }
@@ -151,12 +153,12 @@ export class DuplicateDetectionService {
   async checkForDuplicates(entityGuid: string, eventGuid: string): Promise<void> {
     const entity = await this.entityStore.getEntity(entityGuid);
     if (!entity) {
-      this.logger.warn(`DuplicateDetectionService: entity ${entityGuid} not found, skipping duplicate check`);
+      log.warn({ entityGuid }, "DuplicateDetectionService: entity not found, skipping duplicate check");
       return;
     }
 
     if (!entity.modified.data) {
-      this.logger.warn(`DuplicateDetectionService: entity ${entityGuid} has no data, skipping duplicate check`);
+      log.warn({ entityGuid }, "DuplicateDetectionService: entity has no data, skipping duplicate check");
       return;
     }
 
@@ -177,14 +179,14 @@ export class DuplicateDetectionService {
     try {
       potentialDuplicates = await this.entityStore.searchEntities(searchCriteria);
     } catch (error) {
-      this.logger.error(`DuplicateDetectionService: search failed for entity ${entityGuid}`, error);
+      log.error({ err: error, entityGuid }, "DuplicateDetectionService: search failed for entity");
       return;
     }
 
     for (const duplicate of potentialDuplicates) {
       if (duplicate.modified.guid !== entityGuid) {
         await this.entityStore.savePotentialDuplicates([{ entityGuid, duplicateGuid: duplicate.modified.guid }]);
-        this.logger.info(`DuplicateDetectionService: flagged potential duplicate ${duplicate.modified.guid} for entity ${entityGuid}`);
+        log.info({ entityGuid, duplicateGuid: duplicate.modified.guid }, "DuplicateDetectionService: flagged potential duplicate");
         await this.logAudit(eventGuid, entityGuid, duplicate.modified.guid);
       }
     }
@@ -214,7 +216,7 @@ export class DuplicateDetectionService {
     try {
       await this.eventStore.logAuditEntry(auditEntry);
     } catch (error) {
-      this.logger.error("DuplicateDetectionService: failed to log audit entry", error);
+      log.error({ err: error }, "DuplicateDetectionService: failed to log audit entry");
     }
   }
 

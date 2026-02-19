@@ -26,8 +26,10 @@ import {
   SyncLevel,
   getAdapterConfigValue,
   FieldMapping,
-} from "../../interfaces/types";
-import { EventApplierService } from "../../services/EventApplierService";
+  createTransformer,
+  type TransformerType,
+} from "@idpass/data-collect-core";
+import { EventApplierService } from "@idpass/data-collect-core";
 import { OpenSppV2Client } from "./OpenSppV2Client";
 import type {
   IndividualResource,
@@ -36,7 +38,6 @@ import type {
   CodeableConcept,
   Extension,
 } from "./types";
-import { createTransformer, type TransformerType } from "../../utils/fieldTransformers";
 
 /**
  * OpenSPP V2 Sync Adapter

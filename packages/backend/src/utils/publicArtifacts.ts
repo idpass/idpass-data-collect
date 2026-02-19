@@ -23,6 +23,9 @@ import path from "path";
 import qrcode from "qrcode";
 import { cloneDeep, set } from "lodash";
 import { AppConfig } from "../types";
+import { createLogger } from "./logger";
+
+const log = createLogger("publicArtifacts");
 
 const PUBLIC_FOLDER = path.join(__dirname, "..", "public", "artifacts");
 
@@ -101,7 +104,7 @@ export async function generatePublicArtifacts(baseUrl: string, appConfig: AppCon
       margin: 1,
     });
   } catch (qrError) {
-    console.error(`Failed to generate QR code for ${appConfig.artifactId}:`, qrError);
+    log.error({ err: qrError, artifactId: appConfig.artifactId }, "Failed to generate QR code");
     throw new Error(`Failed to generate QR code: ${qrError instanceof Error ? qrError.message : 'Unknown error'}`);
   }
 
