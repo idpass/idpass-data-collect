@@ -17,7 +17,7 @@
  * under the License.
  */
 
-import { pgTable, text, jsonb, serial } from "drizzle-orm/pg-core";
+import { pgTable, text, jsonb, serial, timestamp, integer, boolean, index } from "drizzle-orm/pg-core";
 
 /**
  * Users table for authentication and authorization.
@@ -29,7 +29,56 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   role: text("role").notNull(),
   tenantIds: text("tenant_ids").array().notNull().default([]),
+  roleAssignments: jsonb("role_assignments").default([]),
 });
+
+/**
+ * Submission reviews table for the review pipeline.
+ * Stores submissions that require approval before being applied.
+ */
+export const submissionReviews = pgTable(
+  "submission_reviews",
+  {
+    id: text("id").primaryKey(),
+    submissionGuid: text("submission_guid").notNull(),
+    tenantId: text("tenant_id").notNull(),
+    status: text("status").notNull(),
+    submittedBy: text("submitted_by").notNull(),
+    reviewedBy: text("reviewed_by"),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    rejectionReason: text("rejection_reason"),
+    eventType: text("event_type").notNull(),
+    entityGuid: text("entity_guid").notNull(),
+    data: jsonb("data").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    index("idx_submission_reviews_tenant_id").on(table.tenantId),
+    index("idx_submission_reviews_status").on(table.status),
+    index("idx_submission_reviews_tenant_status").on(table.tenantId, table.status),
+  ],
+);
+
+/**
+ * Review configs table for storing per-tenant, per-event-type review policies.
+ */
+export const reviewConfigs = pgTable(
+  "review_configs",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id").notNull(),
+    eventType: text("event_type").notNull(),
+    policy: text("policy").notNull(),
+    requiredRole: text("required_role"),
+    externalAdapterType: text("external_adapter_type"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    index("idx_review_configs_tenant_id").on(table.tenantId),
+    index("idx_review_configs_tenant_event").on(table.tenantId, table.eventType),
+  ],
+);
 
 /**
  * App configs table for multi-tenant configuration.
@@ -46,4 +95,51 @@ export const appConfigs = pgTable("app_configs", {
   entityData: jsonb("entity_data"),
   externalSync: jsonb("external_sync"),
   authConfigs: jsonb("auth_configs"),
+  selfService: jsonb("self_service"),
 });
+
+/**
+ * OTP codes table for self-service authentication.
+ * Stores one-time passwords with expiry and attempt tracking.
+ */
+export const otpCodes = pgTable(
+  "otp_codes",
+  {
+    id: text("id").primaryKey(),
+    identifier: text("identifier").notNull(),
+    code: text("code").notNull(),
+    tenantId: text("tenant_id").notNull(),
+    entityGuid: text("entity_guid"),
+    expiresAt: timestamp("expires_at").notNull(),
+    attempts: integer("attempts").default(0),
+    verified: boolean("verified").default(false),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_otp_codes_identifier_tenant").on(table.identifier, table.tenantId),
+  ],
+);
+
+/**
+ * Verifications table for the self-service verification pipeline.
+ * Tracks the status of self-service submissions through review.
+ */
+export const verifications = pgTable(
+  "verifications",
+  {
+    id: text("id").primaryKey(),
+    submissionGuid: text("submission_guid").notNull(),
+    entityGuid: text("entity_guid").notNull(),
+    tenantId: text("tenant_id").notNull(),
+    status: text("status").notNull(),
+    duplicateCheckResult: jsonb("duplicate_check_result"),
+    verifiedBy: text("verified_by"),
+    verifiedAt: timestamp("verified_at"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_verifications_submission_guid").on(table.submissionGuid),
+    index("idx_verifications_tenant_id").on(table.tenantId),
+  ],
+);

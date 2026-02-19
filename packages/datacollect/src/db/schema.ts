@@ -17,7 +17,7 @@
  * under the License.
  */
 
-import { pgTable, text, jsonb, timestamp, serial, integer, primaryKey, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, text, jsonb, timestamp, serial, integer, boolean, primaryKey, uniqueIndex, index } from "drizzle-orm/pg-core";
 
 /**
  * Main entities table for storing entity pairs (initial and modified states).
@@ -144,3 +144,96 @@ export const appConfigs = pgTable("app_configs", {
   externalSync: jsonb("external_sync"),
   authConfigs: jsonb("auth_configs"),
 });
+
+/**
+ * Hierarchical geographic areas table (HDX admin boundary aligned).
+ * Supports p-codes, admin levels, and optional GeoJSON geometry.
+ */
+export const areas = pgTable(
+  "areas",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    pcode: text("pcode").unique(),
+    type: text("type").notNull(),
+    level: integer("level").notNull(),
+    parentId: text("parent_id"),
+    geometry: jsonb("geometry"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    index("idx_areas_parent_id").on(table.parentId),
+    index("idx_areas_level").on(table.level),
+    index("idx_areas_type").on(table.type),
+    index("idx_areas_pcode").on(table.pcode),
+  ],
+);
+
+/**
+ * User-to-area assignments for selective sync and RBAC.
+ * Links a user to an area within a tenant with a specific role.
+ */
+export const userAssignments = pgTable(
+  "user_assignments",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    tenantId: text("tenant_id").notNull(),
+    areaId: text("area_id").references(() => areas.id),
+    role: text("role").notNull(),
+    includeDescendants: boolean("include_descendants").default(true),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    index("idx_user_assignments_user_id").on(table.userId),
+    index("idx_user_assignments_tenant_id").on(table.tenantId),
+    index("idx_user_assignments_area_id").on(table.areaId),
+    index("idx_user_assignments_user_tenant").on(table.userId, table.tenantId),
+  ],
+);
+
+/**
+ * Per-entity overrides for user data assignment.
+ * Allows including or excluding specific entities from a user's view.
+ */
+export const entityOverrides = pgTable(
+  "entity_overrides",
+  {
+    id: text("id").primaryKey(),
+    entityGuid: text("entity_guid").notNull(),
+    userId: text("user_id").notNull(),
+    tenantId: text("tenant_id").notNull(),
+    action: text("action").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    index("idx_entity_overrides_user_id").on(table.userId),
+    index("idx_entity_overrides_tenant_id").on(table.tenantId),
+    index("idx_entity_overrides_entity_guid").on(table.entityGuid),
+    index("idx_entity_overrides_user_tenant").on(table.userId, table.tenantId),
+  ],
+);
+
+/**
+ * Entity snapshots for event sourcing optimization.
+ * Stores point-in-time snapshots of entity state to avoid replaying all events.
+ */
+export const entitySnapshots = pgTable(
+  "entity_snapshots",
+  {
+    id: text("id").primaryKey(),
+    entityGuid: text("entity_guid").notNull(),
+    tenantId: text("tenant_id").notNull().default("default"),
+    data: jsonb("data").notNull(),
+    eventSequence: integer("event_sequence").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  },
+  (table) => [
+    index("idx_entity_snapshots_entity_guid").on(table.entityGuid),
+    index("idx_entity_snapshots_tenant_id").on(table.tenantId),
+    index("idx_entity_snapshots_entity_tenant").on(table.entityGuid, table.tenantId),
+  ],
+);

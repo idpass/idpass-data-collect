@@ -51,9 +51,9 @@ export function createUserRoutes(userStore: UserStore): Router {
         return res.status(401).json({ message: "Invalid email or password" });
       }
 
-      // generate JWT token with id, email, role, and tenantIds
+      // generate JWT token with id, email, role, tenantIds, and roleAssignments
       const token = jwt.sign(
-        { id: user.id, email: user.email, role: user.role, tenantIds: user.tenantIds },
+        { id: user.id, email: user.email, role: user.role, tenantIds: user.tenantIds, roleAssignments: user.roleAssignments ?? [] },
         process.env.JWT_SECRET!,
         {},
       );

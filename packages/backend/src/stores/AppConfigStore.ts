@@ -45,6 +45,7 @@ function mapRowToAppConfig(row: AppConfigRow, artifactId: string): AppConfig {
     entityData: row.entityData,
     externalSync: row.externalSync,
     authConfigs: row.authConfigs,
+    selfService: row.selfService ?? undefined,
   } as AppConfig;
 }
 
@@ -78,6 +79,7 @@ export class AppConfigStoreImpl implements AppConfigStore {
     try {
       await this.pool.query(createTableQuery);
       await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS artifact_id TEXT`);
+      await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS self_service JSONB`);
     } catch (error) {
       throw new Error(`Failed to initialize database: ${error}`);
     }
@@ -149,6 +151,7 @@ export class AppConfigStoreImpl implements AppConfigStore {
         entityData: JSON.stringify(config.entityData),
         externalSync: config.externalSync ?? null,
         authConfigs: JSON.stringify(config.authConfigs),
+        selfService: config.selfService ? JSON.stringify(config.selfService) : null,
       };
       await this.db
         .insert(appConfigs)
@@ -165,6 +168,7 @@ export class AppConfigStoreImpl implements AppConfigStore {
             entityData: JSON.stringify(config.entityData),
             externalSync: config.externalSync ?? null,
             authConfigs: JSON.stringify(config.authConfigs),
+            selfService: config.selfService ? JSON.stringify(config.selfService) : null,
           },
         });
     } catch (error) {

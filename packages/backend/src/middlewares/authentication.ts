@@ -29,6 +29,7 @@ export interface DecodedPayload {
   email: string;
   role?: Role;
   tenantIds?: string[];
+  roleAssignments?: Array<{ tenantId: string; role: string; areaId?: string }>;
 }
 
 export interface AuthenticatedRequest extends Request {

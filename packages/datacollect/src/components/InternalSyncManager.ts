@@ -79,12 +79,27 @@ import { EventApplierService } from "../services/EventApplierService";
  * await syncManager.pullFromRemote();
  * ```
  */
+/**
+ * Options for selective sync configuration.
+ */
+export interface SelectiveSyncOptions {
+  /** Area IDs the client is assigned to (server uses these to filter data) */
+  assignedAreaIds?: string[];
+  /** Specific entity GUIDs to sync (overrides area-based filtering) */
+  assignedEntityGuids?: string[];
+  /** How to handle data from previously assigned areas during reassignment */
+  reassignmentMode?: "keep" | "purge";
+}
+
 export class InternalSyncManager {
   /** Flag indicating if a sync operation is currently in progress */
   public isSyncing = false;
 
   /** HTTP client instance with configured base URL and headers */
   private readonly axiosInstance: AxiosInstance;
+
+  /** Selective sync options for area-based filtering */
+  private selectiveSyncOptions: SelectiveSyncOptions = {};
 
   /**
    * Creates a new InternalSyncManager instance.
@@ -110,6 +125,27 @@ export class InternalSyncManager {
         "Content-Type": "application/json",
       },
     });
+  }
+
+  /**
+   * Sets selective sync options for area-based and entity-based filtering.
+   *
+   * When set, the sync pull will include area IDs as query parameters so the
+   * server can filter events to only those relevant to the client's assignment.
+   *
+   * @param options - The selective sync configuration.
+   */
+  setSelectiveSyncOptions(options: SelectiveSyncOptions): void {
+    this.selectiveSyncOptions = options;
+  }
+
+  /**
+   * Gets the current selective sync options.
+   *
+   * @returns The current selective sync configuration.
+   */
+  getSelectiveSyncOptions(): SelectiveSyncOptions {
+    return { ...this.selectiveSyncOptions };
   }
 
   private async loadAuthToken(): Promise<void> {
@@ -177,7 +213,14 @@ export class InternalSyncManager {
     events: FormSubmission[];
     nextCursor: string | Date | null;
   }> {
-    const result = await this.axiosInstance.get(`/api/sync/pull?since=${lastSyncTimestamp}&configId=${this.configId}`);
+    let url = `/api/sync/pull?since=${lastSyncTimestamp}&configId=${this.configId}`;
+
+    // Include assigned area IDs for server-side selective filtering
+    if (this.selectiveSyncOptions.assignedAreaIds?.length) {
+      url += `&areaIds=${this.selectiveSyncOptions.assignedAreaIds.join(",")}`;
+    }
+
+    const result = await this.axiosInstance.get(url);
     return result.data as {
       events: FormSubmission[];
       nextCursor: string | Date | null;
@@ -344,13 +387,24 @@ export class InternalSyncManager {
     let nextCursor: string | Date | null = await this.eventStore.getLastRemoteSyncTimestamp();
     let lastSuccessfulTimestamp: string | null = null;
 
-    while (nextCursor !== null) { 
+    while (nextCursor !== null) {
       const result = await this.pullFromRemote(nextCursor.toString());
       const { events, nextCursor: newCursor } = result;
 
       if (events && events.length) {
-        const sorted = events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-        const latestEventTimestamp = sorted[sorted.length - 1].timestamp;
+        // Apply client-side filtering for selective sync when entity GUIDs are specified
+        let filteredEvents = events;
+        if (this.selectiveSyncOptions.assignedEntityGuids?.length) {
+          const allowedGuids = new Set(this.selectiveSyncOptions.assignedEntityGuids);
+          filteredEvents = events.filter((event) => allowedGuids.has(event.entityGuid));
+        }
+
+        const sorted = filteredEvents.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+        // Use the timestamp from the original (unfiltered) events for cursor tracking
+        // to avoid getting stuck when all events in a page are filtered out
+        const allSorted = events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        const latestEventTimestamp = allSorted[allSorted.length - 1].timestamp;
 
         try {
           for (const event of sorted) {
@@ -439,9 +493,14 @@ export class InternalSyncManager {
    * await syncManager.sync();
    * ```
    */
-  async sync(): Promise<void> {
+  async sync(options?: SelectiveSyncOptions): Promise<void> {
     if (this.isSyncing) {
       return;
+    }
+
+    // Apply options for this sync session if provided
+    if (options) {
+      this.setSelectiveSyncOptions(options);
     }
 
     this.isSyncing = true;

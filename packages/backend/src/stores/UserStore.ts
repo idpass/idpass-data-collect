@@ -20,7 +20,7 @@
 import { Pool } from "pg";
 import { eq, count, sql } from "drizzle-orm";
 import { drizzle, NodePgDatabase } from "drizzle-orm/node-postgres";
-import { Role, User, UserStore, UserWithPasswordHash } from "../types";
+import { Role, RoleAssignment, User, UserStore, UserWithPasswordHash } from "../types";
 import { createLogger } from "../utils/logger";
 import { users } from "../db/schema";
 
@@ -48,12 +48,17 @@ export class UserStoreImpl implements UserStore {
           email TEXT UNIQUE NOT NULL,
           password_hash TEXT NOT NULL,
           role TEXT NOT NULL,
-          tenant_ids TEXT[] NOT NULL DEFAULT '{}'
+          tenant_ids TEXT[] NOT NULL DEFAULT '{}',
+          role_assignments JSONB DEFAULT '[]'
         )
       `);
       // Add tenant_ids column to existing tables that were created before this migration
       await client.query(`
         ALTER TABLE users ADD COLUMN IF NOT EXISTS tenant_ids TEXT[] NOT NULL DEFAULT '{}'
+      `);
+      // Add role_assignments column to existing tables that were created before this migration
+      await client.query(`
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS role_assignments JSONB DEFAULT '[]'
       `);
     } finally {
       client.release();
@@ -61,7 +66,7 @@ export class UserStoreImpl implements UserStore {
   }
 
   async saveUser(user: Omit<UserWithPasswordHash, "id">): Promise<void> {
-    const { email, passwordHash, role, tenantIds = [] } = user;
+    const { email, passwordHash, role, tenantIds = [], roleAssignments = [] } = user;
     const result = await this.db
       .insert(users)
       .values({
@@ -69,6 +74,7 @@ export class UserStoreImpl implements UserStore {
         passwordHash,
         role,
         tenantIds,
+        roleAssignments,
       })
       .returning({ id: users.id });
 
@@ -90,17 +96,19 @@ export class UserStoreImpl implements UserStore {
       passwordHash: row.passwordHash,
       role: Role[row.role as keyof typeof Role] as Role,
       tenantIds: row.tenantIds ?? [],
+      roleAssignments: (row.roleAssignments as RoleAssignment[]) ?? [],
     };
   }
 
   async updateUser(user: UserWithPasswordHash): Promise<void> {
-    const { id, email, passwordHash, role, tenantIds = [] } = user;
+    const { id, email, passwordHash, role, tenantIds = [], roleAssignments = [] } = user;
     await this.db
       .update(users)
       .set({
         passwordHash,
         role,
         tenantIds,
+        roleAssignments,
       })
       .where(eq(users.id, id));
   }
@@ -129,6 +137,7 @@ export class UserStoreImpl implements UserStore {
         email: users.email,
         role: users.role,
         tenantIds: users.tenantIds,
+        roleAssignments: users.roleAssignments,
       })
       .from(users);
 
@@ -137,6 +146,7 @@ export class UserStoreImpl implements UserStore {
       email: row.email,
       role: Role[row.role as keyof typeof Role],
       tenantIds: row.tenantIds ?? [],
+      roleAssignments: (row.roleAssignments as RoleAssignment[]) ?? [],
     }));
   }
 
@@ -148,6 +158,7 @@ export class UserStoreImpl implements UserStore {
         passwordHash: users.passwordHash,
         role: users.role,
         tenantIds: users.tenantIds,
+        roleAssignments: users.roleAssignments,
       })
       .from(users)
       .where(eq(users.id, id))
@@ -164,6 +175,7 @@ export class UserStoreImpl implements UserStore {
       email: row.email,
       role: Role[row.role as keyof typeof Role],
       tenantIds: row.tenantIds ?? [],
+      roleAssignments: (row.roleAssignments as RoleAssignment[]) ?? [],
     };
   }
 

@@ -41,11 +41,18 @@ export enum Role {
   USER = "USER",
 }
 
+export interface RoleAssignment {
+  tenantId: string;
+  role: string;
+  areaId?: string;
+}
+
 export interface User {
   id: number;
   email: string;
   role: Role;
   tenantIds: string[];
+  roleAssignments?: RoleAssignment[];
 }
 
 export interface UserWithPasswordHash extends User {
@@ -90,6 +97,24 @@ export interface AuthConfig {
   fields: Record<string, string>;
 }
 
+/**
+ * Self-service configuration for a tenant. Controls which authentication
+ * methods and forms are available to beneficiaries accessing the system
+ * directly (without a field worker).
+ */
+export interface SelfServiceConfig {
+  /** Whether self-service mode is enabled for this tenant */
+  enabled: boolean;
+  /** Authentication methods available to beneficiaries */
+  authMethods: ("otp" | "id" | "qr")[];
+  /** Form types that beneficiaries can submit through self-service */
+  allowedForms: string[];
+  /** Languages supported for the self-service interface */
+  languages: string[];
+  /** Whether all self-service submissions require review before being applied */
+  requireReview: boolean;
+}
+
 export interface AppConfig {
   id: string;
   artifactId?: string;
@@ -101,6 +126,7 @@ export interface AppConfig {
   entityData?: EntityData[];
   externalSync?: ExternalSyncConfig;
   authConfigs?: AuthConfig[];
+  selfService?: SelfServiceConfig;
 }
 
 export interface AppConfigStore {

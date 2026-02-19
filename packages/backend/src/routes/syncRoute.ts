@@ -22,6 +22,7 @@ import bodyParser from "body-parser";
 import { AuditLogEntry, ExternalSyncCredentials } from "@idpass/data-collect-core";
 import { z } from "zod";
 import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware, validateTenantAccess } from "../middlewares/authentication";
+import { requireAction } from "../middlewares/rbac";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { AppInstanceStore } from "../types";
 import { createLogger } from "../utils/logger";
@@ -52,9 +53,10 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
     "/pull",
     createDynamicAuthMiddleware(appInstanceStore),
     validateTenantAccess,
+    requireAction("read"),
     asyncHandler(async (req, res) => {
       // get param timestamp
-      const { since, configId = "default" } = req.query;
+      const { since, configId = "default", areaIds } = req.query;
 
       // check if duplicates exist
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
@@ -72,6 +74,31 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
       }
 
       const result = await edm.getEventsSincePagination(since as string, 10);
+
+      // Apply server-side area filtering when areaIds are provided.
+      // This enables selective sync: clients only receive events for entities
+      // in their assigned geographic areas.
+      if (areaIds && typeof areaIds === "string" && areaIds.length > 0) {
+        const areaIdList = areaIds.split(",").filter(Boolean);
+        if (areaIdList.length > 0) {
+          // Get all entities for this config to build area-to-entity mapping
+          const allEntities = await edm.getAllEntities();
+          const allowedEntityGuids = new Set<string>();
+
+          for (const entityPair of allEntities) {
+            const entity = entityPair.modified;
+            if (entity?.data?.area_id && areaIdList.includes(entity.data.area_id as string)) {
+              allowedEntityGuids.add(entityPair.guid);
+            }
+          }
+
+          // Filter events to only those targeting allowed entities
+          result.events = result.events.filter(
+            (event) => allowedEntityGuids.has(event.entityGuid),
+          );
+        }
+      }
+
       res.json(result);
     }),
   );
@@ -96,6 +123,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
     "/push",
     createDynamicAuthMiddleware(appInstanceStore),
     validateTenantAccess,
+    requireAction("create"),
     asyncHandler(async (req, res) => {
       const parseResult = SyncPushPayloadSchema.safeParse(req.body);
       if (!parseResult.success) {

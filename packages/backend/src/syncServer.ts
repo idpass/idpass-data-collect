@@ -32,9 +32,13 @@ import { createOpenSppFieldRoutes } from "./routes/opensppFieldRoutes";
 import { createPotentialDuplicatesRoute } from "./routes/potentialDuplicatesRoute";
 import { createSyncRouter } from "./routes/syncRoute";
 import { createUserRoutes } from "./routes/userRoutes";
+import { createSelfServiceRouter } from "./routes/selfServiceRoutes";
+import { createReviewRoutes, clearReviewState } from "./routes/reviewRoutes";
 import { AppConfigStoreImpl } from "./stores/AppConfigStore";
 import { AppInstanceStoreImpl } from "./stores/AppInstanceStore";
 import { UserStoreImpl } from "./stores/UserStore";
+import { OtpStoreImpl } from "./stores/OtpStore";
+import { VerificationStoreImpl } from "./stores/VerificationStore";
 import { Role, SyncServerConfig, SyncServerInstance } from "./types";
 import { generatePublicArtifacts, resolvePublicBaseUrl } from "./utils/publicArtifacts";
 import { logger, createLogger } from "./utils/logger";
@@ -48,6 +52,10 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   await appConfigStore.initialize();
   const appInstanceStore = new AppInstanceStoreImpl(appConfigStore, config.postgresUrl);
   await appInstanceStore.initialize();
+  const otpStore = new OtpStoreImpl(config.postgresUrl);
+  await otpStore.initialize();
+  const verificationStore = new VerificationStoreImpl(config.postgresUrl);
+  await verificationStore.initialize();
 
   const app = express();
 
@@ -91,6 +99,8 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   app.use("/api/users", createUserRoutes(userStore));
   app.use("/api/openspp-fields", createOpenSppFieldRoutes());
   app.use("/api/potential-duplicates", createPotentialDuplicatesRoute(appInstanceStore));
+  app.use("/api/auth", createSelfServiceRouter(otpStore, appInstanceStore));
+  app.use("/api/reviews", createReviewRoutes(appInstanceStore));
 
   app.get("/artifacts/:artifactId.json", async (req, res, next) => {
     try {
@@ -194,6 +204,9 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
     await userStore.clearStore();
     await appConfigStore.clearStore();
     await appInstanceStore.clearStore();
+    await otpStore.clearStore();
+    await verificationStore.clearStore();
+    clearReviewState();
 
     //delete all json and png files in public folder
     const publicFolder = path.join(__dirname, "public");
@@ -216,6 +229,8 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
     await userStore.closeConnection();
     await appConfigStore.closeConnection();
     await appInstanceStore.closeConnection();
+    await otpStore.closeConnection();
+    await verificationStore.closeConnection();
     await new Promise<void>((resolve) => {
       httpServer.close(() => resolve());
     });

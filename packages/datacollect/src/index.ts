@@ -217,6 +217,16 @@ export * from "./services/EventApplierService";
 export * from "./services/DuplicateDetectionService";
 export { ProjectionRebuildService } from "./services/ProjectionRebuildService";
 export type { RebuildResult } from "./services/ProjectionRebuildService";
+export * from "./services/RbacService";
+export * from "./services/ReviewService";
+
+// Phase 3: Area Management, Data Assignment, and Snapshot Services
+export { AreaService } from "./services/AreaService";
+export type { AreaRecord, CreateAreaInput, HdxAreaImportRecord } from "./services/AreaService";
+export { AssignmentService } from "./services/AssignmentService";
+export type { UserAssignmentRecord, EntityOverrideRecord } from "./services/AssignmentService";
+export { SnapshotService } from "./services/SnapshotService";
+export type { SnapshotRecord, BatchSnapshotResult } from "./services/SnapshotService";
 
 // Storage Adapters
 export * from "./storage/IndexedDbEntityStorageAdapter";
@@ -232,9 +242,20 @@ export * from "./components/AdapterRegistry";
 export * from "./interfaces/types";
 export * from "./interfaces/adapter-configs";
 
-// Authentication Components
+// Self-Service Components
+export { SelfServiceManager } from "./services/SelfServiceManager";
+export type { SelfServiceConfig, FormConfig } from "./services/SelfServiceManager";
+export { VerificationService } from "./services/VerificationService";
+export type {
+  VerificationStatus,
+  VerificationResult,
+  DuplicateCheckResult,
+} from "./services/VerificationService";
 
+// Authentication Components
 export * from "./components/AuthManager";
+export * from "./components/authentication/OtpAuthAdapter";
+export * from "./components/authentication/IdAuthAdapter";
 export * from "./storage/IndexedDbAuthStorageAdapter";
 export * from "./services/SingleAuthStorageImpl";
 

@@ -32,10 +32,14 @@ const log = createLogger("AuthManager");
 import { SingleAuthStorageImpl } from "../services/SingleAuthStorageImpl";
 import { KeycloakAuthAdapter } from "./authentication/KeycloakAuthAdapter";
 import { Auth0AuthAdapter } from "./authentication/Auth0AuthAdapter";
+import { OtpAuthAdapter } from "./authentication/OtpAuthAdapter";
+import { IdAuthAdapter } from "./authentication/IdAuthAdapter";
 
 const adaptersMapping = {
   auth0: Auth0AuthAdapter,
   keycloak: KeycloakAuthAdapter,
+  otp: OtpAuthAdapter,
+  id: IdAuthAdapter,
 };
 
 /**
