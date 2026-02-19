@@ -1,6 +1,9 @@
 /**
  * @jest-environment jsdom
  */
+// jsdom environment is required because the IndexedDB storage adapters from
+// @idpass/data-collect-core reference window.indexedDB, which is only available
+// in browser-like environments. fake-indexeddb provides the implementation.
 
 /*
  * Licensed to the Association pour la cooperation numerique (ACN) under one
@@ -689,6 +692,142 @@ describe("Redemption Integration Tests", () => {
     const entity = entityPair.modified;
     expect(entity.data.redemptionHistory).toHaveLength(1);
     expect(entity.data.entitlements[0].redeemed).toBe(15);
+  });
+
+  test("should redeem a monetary entitlement using amount field", async () => {
+    const entityGuid = uuidv4();
+    await manager.submitForm(makeIndividualForm(entityGuid));
+
+    await manager.submitForm(
+      makeGrantForm(entityGuid, [
+        makeEntitlement({
+          type: "monetary",
+          allocated: 100.0,
+          redeemed: 0,
+        }),
+      ]),
+    );
+
+    await manager.submitForm(
+      makeRedeemForm(entityGuid, {
+        entitlementId: "ent-1",
+        redemptionType: "monetary",
+        amount: 25.5,
+      }),
+    );
+
+    const entityPair = await manager.getEntity(entityGuid);
+    const entity = entityPair.modified;
+
+    expect(entity.data.entitlements[0].redeemed).toBe(25.5);
+    expect(entity.data.redemptionHistory).toHaveLength(1);
+    expect(entity.data.redemptionHistory[0].amount).toBe(25.5);
+    expect(entity.data.redemptionHistory[0].type).toBe("redemption");
+  });
+
+  test("should set synced: false on new redemption history entries", async () => {
+    const entityGuid = uuidv4();
+    await manager.submitForm(makeIndividualForm(entityGuid));
+
+    await manager.submitForm(
+      makeGrantForm(entityGuid, [
+        makeEntitlement({ allocated: 100, redeemed: 0 }),
+      ]),
+    );
+
+    await manager.submitForm(
+      makeRedeemForm(entityGuid, {
+        entitlementId: "ent-1",
+        quantity: 10,
+      }),
+    );
+
+    const entityPair = await manager.getEntity(entityGuid);
+    const entity = entityPair.modified;
+
+    expect(entity.data.redemptionHistory).toHaveLength(1);
+    expect(entity.data.redemptionHistory[0].synced).toBe(false);
+  });
+
+  test("should set synced: false on void history entries", async () => {
+    const entityGuid = uuidv4();
+    await manager.submitForm(makeIndividualForm(entityGuid));
+
+    await manager.submitForm(
+      makeGrantForm(entityGuid, [
+        makeEntitlement({ allocated: 100, redeemed: 0 }),
+      ]),
+    );
+
+    const redeemFormGuid = uuidv4();
+    await manager.submitForm(
+      makeRedeemForm(
+        entityGuid,
+        { entitlementId: "ent-1", quantity: 20 },
+        { guid: redeemFormGuid },
+      ),
+    );
+
+    await manager.submitForm(
+      makeVoidForm(entityGuid, {
+        entitlementId: "ent-1",
+        originalRedemptionGuid: redeemFormGuid,
+        quantity: 20,
+      }),
+    );
+
+    const entityPair = await manager.getEntity(entityGuid);
+    const entity = entityPair.modified;
+
+    expect(entity.data.redemptionHistory).toHaveLength(2);
+    // The void entry (second in history) should also have synced: false
+    const voidEntry = entity.data.redemptionHistory.find(
+      (entry: Record<string, unknown>) => entry["type"] === "void",
+    );
+    expect(voidEntry).toBeDefined();
+    expect(voidEntry.synced).toBe(false);
+  });
+
+  test("grant should re-derive balance from unsynced local history", async () => {
+    const entityGuid = uuidv4();
+    await manager.submitForm(makeIndividualForm(entityGuid));
+
+    // Initial grant with allocated: 100, redeemed: 0
+    await manager.submitForm(
+      makeGrantForm(entityGuid, [
+        makeEntitlement({ allocated: 100, redeemed: 0 }),
+      ]),
+    );
+
+    // Redeem 30 locally (creates history entry with synced: false)
+    await manager.submitForm(
+      makeRedeemForm(entityGuid, {
+        entitlementId: "ent-1",
+        quantity: 30,
+      }),
+    );
+
+    // Verify redemption was recorded
+    let entityPair = await manager.getEntity(entityGuid);
+    expect(entityPair.modified.data.entitlements[0].redeemed).toBe(30);
+
+    // Apply a new grant-entitlement event (simulating a sync pull from server)
+    // where the server still shows redeemed: 0 (server has not yet seen our
+    // local redemption).
+    await manager.submitForm(
+      makeGrantForm(entityGuid, [
+        makeEntitlement({ allocated: 100, redeemed: 0 }),
+      ]),
+    );
+
+    entityPair = await manager.getEntity(entityGuid);
+    const entity = entityPair.modified;
+
+    // After grant merge: redeemed should be 30 (server 0 + local unsynced delta 30).
+    // This test FAILS if synced: false is missing from redeem history entries,
+    // because the grant applier filters on entry["synced"] === false to compute
+    // the local delta.
+    expect(entity.data.entitlements[0].redeemed).toBe(30);
   });
 });
 

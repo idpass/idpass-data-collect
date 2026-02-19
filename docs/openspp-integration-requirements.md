@@ -163,7 +163,7 @@ The `{code}` path parameter is the entitlement's UUID (`code` field on `spp.enti
 
 | HTTP Status | `code` | When |
 |---|---|---|
-| 404 | `RECEIPT_NOT_FOUND` | No payment/distribution found for the given receipt number |
+| 404 | `REDEMPTION_NOT_FOUND` | No payment/distribution found for the given receipt number. Note: DataCollect's `voidRedemptionApplier` throws `REDEMPTION_NOT_FOUND` (not `RECEIPT_NOT_FOUND`), so the OpenSPP endpoint should use the same code for consistency. |
 | 409 | `ALREADY_VOIDED` | The redemption has already been voided |
 
 ---
@@ -316,12 +316,16 @@ DataCollect stores attendance per-individual (each individual entity has an `att
 ```typescript
 {
   sessionId: string,      // UUID
+  sessionName: string,    // Human-readable session name
+  mode: "check-in" | "roll-call",  // How attendance was captured (informational)
   groupGuid: string,      // Optional - group the session belongs to
   programId: string,      // Optional - program identifier
   date: string,           // ISO date (YYYY-MM-DD)
   status: "present" | "absent" | "excused" | "late"
 }
 ```
+
+> **Note on `mode`:** The `mode` field indicates how the attendance was captured on the mobile device. `"check-in"` means individuals were scanned/tapped in one-by-one; `"roll-call"` means a group roster was displayed and statuses were set in bulk. This field is included in the form submission data but is not used by the `AttendanceEventApplier` for state derivation — it is informational metadata that OpenSPP may store for reporting or audit purposes.
 
 The sync adapter will need to map between DataCollect's per-individual event model and OpenSPP's session-based model.
 

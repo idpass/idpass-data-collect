@@ -216,6 +216,7 @@ export const redeemEntitlementApplier: EventApplier = {
       items: form.data["items"],
       timestamp: form.timestamp,
       userId: form.userId,
+      synced: false,
     });
     mutated.data.redemptionHistory = mutatedHistory;
 
@@ -336,6 +337,7 @@ export const voidRedemptionApplier: EventApplier = {
       supervisorId: form.data["supervisorId"],
       timestamp: form.timestamp,
       userId: form.userId,
+      synced: false,
     });
     mutated.data.redemptionHistory = mutatedHistory;
 

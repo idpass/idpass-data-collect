@@ -101,6 +101,19 @@ export interface AppConfig {
   externalSync?: ExternalSyncConfig;
   authConfigs?: AuthConfig[];
   customEventTypes?: string[];
+  attendanceConfig?: {
+    modes: string[];
+    defaultMode: string;
+    scanners: Array<{ decoderId: string; config: Record<string, unknown>; match: { field: string } }>;
+  };
+  redemptionConfig?: {
+    identityConfirmation: {
+      enabled: boolean;
+      fields: string[];
+    };
+    scanners: Array<{ decoderId: string; config: Record<string, unknown>; match: { field: string } }>;
+    duplicateDetection: string;
+  };
 }
 
 export interface AppConfigStore {

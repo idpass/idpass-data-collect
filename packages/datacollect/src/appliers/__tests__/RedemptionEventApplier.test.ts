@@ -370,6 +370,7 @@ describe("redeemEntitlementApplier – redeem", () => {
     expect(result.data.redemptionHistory[0].type).toBe("redemption");
     expect(result.data.redemptionHistory[0].formGuid).toBe(form.guid);
     expect(result.data.redemptionHistory[0].receiptNumber).toBe("RCP-20240615-DEVICE01-0001");
+    expect(result.data.redemptionHistory[0].synced).toBe(false);
     expect(result.data.entitlements[0].redeemed).toBe(20);
   });
 
@@ -575,6 +576,7 @@ describe("voidRedemptionApplier – void", () => {
     expect(result.data.entitlements[0].redeemed).toBe(0);
     expect(result.data.redemptionHistory).toHaveLength(2);
     expect(result.data.redemptionHistory[1].type).toBe("void");
+    expect(result.data.redemptionHistory[1].synced).toBe(false);
   });
 
   test("void without supervisorVerified=true throws UNAUTHORIZED", async () => {
