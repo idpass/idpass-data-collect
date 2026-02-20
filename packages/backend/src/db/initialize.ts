@@ -161,15 +161,18 @@ export async function initializeDatabase(postgresUrl: string): Promise<void> {
         required_role TEXT,
         external_adapter_type TEXT,
         created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(tenant_id, event_type)
       )
     `);
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_review_configs_tenant_id
       ON review_configs (tenant_id)
     `);
+    // Ensure the unique constraint exists for ON CONFLICT upserts in ReviewStore.
+    // Uses CREATE UNIQUE INDEX to handle tables created before this constraint was added.
     await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_review_configs_tenant_event
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_review_configs_tenant_event_unique
       ON review_configs (tenant_id, event_type)
     `);
 

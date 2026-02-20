@@ -202,24 +202,14 @@ export function createSelfServiceRouter(
       const { identifier, otp, tenantId } = parseResult.data;
 
       // Verify the OTP using constant-time hash comparison in the store.
-      // The store retrieves the most recent active code and compares via
-      // SHA-256 hash + crypto.timingSafeEqual to prevent timing attacks.
+      // The store atomically locks the row, verifies the hash, increments
+      // attempts on failure, and marks as verified on success — all in a
+      // single transaction to prevent race conditions.
       const matchingCode = await otpStore.verifyOtp(identifier, otp, tenantId);
 
       if (!matchingCode) {
-        // Increment attempts on the most recent active code
-        const activeCodes = await otpStore.getActiveCodesByIdentifier(
-          identifier,
-          tenantId,
-        );
-        if (activeCodes.length > 0) {
-          await otpStore.incrementAttempts(activeCodes[0].id);
-        }
         return res.status(401).json({ error: "Invalid OTP" });
       }
-
-      // Mark the code as verified
-      await otpStore.markVerified(matchingCode.id);
 
       // Generate a self-service JWT
       const tokenPayload: SelfServiceDecodedPayload = {
@@ -284,16 +274,18 @@ export function createSelfServiceRouter(
 
       // Also check identifiers array for national-id type
       if (matchingEntities.length === 0) {
-        // Fallback: check identifiers field
-        const allResults = await edm.searchEntities([]);
-        const identifierMatch = allResults.filter((pair) => {
+        // Fallback: search by dateOfBirth to narrow results, then filter
+        // by national-id in the identifiers array. This avoids loading all
+        // entities which is expensive and a potential DoS vector.
+        const dobResults = await edm.searchEntities([
+          { "data.dateOfBirth": dateOfBirth },
+        ]);
+        const identifierMatch = dobResults.filter((pair) => {
           const identifiers = pair.modified.identifiers || [];
-          const hasMatchingId = identifiers.some(
+          return identifiers.some(
             (id: { type: string; value: string }) =>
               id.type === "national-id" && id.value === nationalId,
           );
-          const hasMatchingDob = pair.modified.data.dateOfBirth === dateOfBirth;
-          return hasMatchingId && hasMatchingDob;
         });
 
         if (identifierMatch.length === 0) {

@@ -128,6 +128,15 @@ export class OtpStoreImpl implements OtpStore {
 
     const client = await this.pool.connect();
     try {
+      // Invalidate all existing active codes for this identifier/tenant
+      // before creating a new one. This prevents code accumulation and
+      // ensures only the most recent code is valid.
+      await client.query(
+        `UPDATE otp_codes SET verified = true
+         WHERE identifier = $1 AND tenant_id = $2 AND verified = false AND expires_at > NOW()`,
+        [identifier, tenantId],
+      );
+
       await client.query(
         `INSERT INTO otp_codes (id, identifier, code, tenant_id, entity_guid, expires_at, attempts, verified)
          VALUES ($1, $2, $3, $4, $5, $6, 0, false)`,
@@ -161,8 +170,10 @@ export class OtpStoreImpl implements OtpStore {
   ): Promise<OtpCode | null> {
     const client = await this.pool.connect();
     try {
-      // Retrieve the most recent active code for this identifier/tenant,
-      // then verify via constant-time hash comparison rather than SQL equality.
+      await client.query("BEGIN");
+
+      // Lock the most recent active code with FOR UPDATE SKIP LOCKED
+      // to prevent concurrent verification of the same code.
       const result = await client.query(
         `SELECT id, identifier, code, tenant_id, entity_guid, expires_at, attempts, verified, created_at
          FROM otp_codes
@@ -172,11 +183,13 @@ export class OtpStoreImpl implements OtpStore {
            AND attempts < $3
            AND expires_at > NOW()
          ORDER BY created_at DESC
-         LIMIT 1`,
+         LIMIT 1
+         FOR UPDATE SKIP LOCKED`,
         [identifier, tenantId, MAX_ATTEMPTS],
       );
 
       if (result.rows.length === 0) {
+        await client.query("ROLLBACK");
         return null;
       }
 
@@ -184,8 +197,21 @@ export class OtpStoreImpl implements OtpStore {
 
       // Constant-time comparison of the input code against the stored hash
       if (!this.verifyCodeHash(code, row.code)) {
+        // Increment attempts atomically within the same transaction
+        await client.query(
+          `UPDATE otp_codes SET attempts = attempts + 1 WHERE id = $1`,
+          [row.id],
+        );
+        await client.query("COMMIT");
         return null;
       }
+
+      // Mark as verified atomically within the same transaction
+      await client.query(
+        `UPDATE otp_codes SET verified = true WHERE id = $1`,
+        [row.id],
+      );
+      await client.query("COMMIT");
 
       return {
         id: row.id,
@@ -195,9 +221,12 @@ export class OtpStoreImpl implements OtpStore {
         entityGuid: row.entity_guid,
         expiresAt: row.expires_at,
         attempts: row.attempts,
-        verified: row.verified,
+        verified: true,
         createdAt: row.created_at,
       };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
     } finally {
       client.release();
     }

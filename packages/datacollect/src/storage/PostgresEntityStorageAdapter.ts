@@ -292,11 +292,14 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
       .from(entities)
       .where(eq(entities.tenantId, this.tenantId));
 
-    return result.map((row) => ({
-      guid: row.guid,
-      initial: row.initial as EntityPair["initial"],
-      modified: row.modified as EntityPair["modified"],
-    }));
+    return result.map((row) => {
+      this.validateEntityRow(row);
+      return {
+        guid: row.guid,
+        initial: row.initial as EntityPair["initial"],
+        modified: row.modified as EntityPair["modified"],
+      };
+    });
   }
 
   /**
@@ -340,6 +343,13 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
     // Keys may only contain alphanumeric characters, underscores, and dots.
     const SAFE_KEY_PATTERN = /^[a-zA-Z0-9_.]+$/;
 
+    // Maximum allowed length for user-supplied regex patterns to prevent ReDoS
+    const MAX_REGEX_LENGTH = 100;
+
+    // Detects nested quantifiers that can cause catastrophic backtracking (ReDoS).
+    // Matches patterns like (a+)+, (a*)+, (a+)*, (a{2,})+ etc.
+    const NESTED_QUANTIFIER_PATTERN = /[+*}\?]\s*\)[\s]*[+*{?]/;
+
     // Build parameterized SQL conditions for JSONB search.
     // Field keys are validated against an allowlist and then used with sql.raw()
     // (PostgreSQL JSONB ->> does not support parameterized key names).
@@ -382,6 +392,12 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
 
         if (operator === "$regex") {
           const regexValue = String(operandValue);
+          if (regexValue.length > MAX_REGEX_LENGTH) {
+            throw new Error(`Regex pattern exceeds maximum length of ${MAX_REGEX_LENGTH} characters`);
+          }
+          if (NESTED_QUANTIFIER_PATTERN.test(regexValue)) {
+            throw new Error("Regex pattern contains nested quantifiers which may cause catastrophic backtracking");
+          }
           return sql`((${initialPath}) ~* ${regexValue} OR (${modifiedPath}) ~* ${regexValue})`;
         }
 
@@ -406,11 +422,14 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
       .from(entities)
       .where(and(eq(entities.tenantId, this.tenantId), ...conditions));
 
-    return result.map((row) => ({
-      guid: row.guid,
-      initial: row.initial as EntityPair["initial"],
-      modified: row.modified as EntityPair["modified"],
-    }));
+    return result.map((row) => {
+      this.validateEntityRow(row);
+      return {
+        guid: row.guid,
+        initial: row.initial as EntityPair["initial"],
+        modified: row.modified as EntityPair["modified"],
+      };
+    });
   }
 
   /**
@@ -424,24 +443,25 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    */
   async saveEntity(entity: EntityPair): Promise<void> {
     const guid = entity.initial?.guid || entity.modified.guid;
-    await this.db
-      .insert(entities)
-      .values({
-        id: guid,
-        guid: guid,
-        initial: entity.initial ?? null,
-        modified: entity.modified,
-        lastUpdated: entity.modified.lastUpdated ? new Date(entity.modified.lastUpdated) : null,
-        tenantId: this.tenantId,
-      })
-      .onConflictDoUpdate({
-        target: [entities.guid, entities.tenantId],
-        set: {
-          initial: entity.initial ?? null,
-          modified: entity.modified,
-          lastUpdated: entity.modified.lastUpdated ? new Date(entity.modified.lastUpdated) : null,
-        },
-      });
+    const newVersion = entity.modified.version;
+    const initialJson = entity.initial ? JSON.stringify(entity.initial) : null;
+    const modifiedJson = JSON.stringify(entity.modified);
+    const lastUpdated = entity.modified.lastUpdated ? new Date(entity.modified.lastUpdated) : null;
+
+    // Use a version check on upsert so stale versions never overwrite newer ones.
+    // The ON CONFLICT UPDATE only applies when the incoming version is greater than
+    // or equal to the existing version stored in the modified JSONB.
+    // Uses this.db.execute() to respect the Drizzle transaction context when
+    // setDrizzleInstance(tx) has been called (e.g., transactional batch processing).
+    await this.db.execute(
+      sql`INSERT INTO entities (id, guid, initial, modified, last_updated, tenant_id)
+         VALUES (${guid}, ${guid}, ${initialJson}::jsonb, ${modifiedJson}::jsonb, ${lastUpdated}, ${this.tenantId})
+         ON CONFLICT (guid, tenant_id) DO UPDATE SET
+           initial = ${initialJson}::jsonb,
+           modified = ${modifiedJson}::jsonb,
+           last_updated = ${lastUpdated}
+         WHERE COALESCE((entities.modified->>'version')::int, 0) <= ${newVersion}`,
+    );
   }
 
   /**
@@ -465,6 +485,7 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
       return null;
     }
     const row = result[0];
+    this.validateEntityRow(row);
     return {
       guid: row.guid,
       initial: row.initial as EntityPair["initial"],
@@ -499,11 +520,14 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
       .from(entities)
       .where(and(eq(entities.tenantId, this.tenantId), gt(entities.lastUpdated, new Date(timestamp))));
 
-    return result.map((row) => ({
-      guid: row.guid,
-      initial: row.initial as EntityPair["initial"],
-      modified: row.modified as EntityPair["modified"],
-    }));
+    return result.map((row) => {
+      this.validateEntityRow(row);
+      return {
+        guid: row.guid,
+        initial: row.initial as EntityPair["initial"],
+        modified: row.modified as EntityPair["modified"],
+      };
+    });
   }
 
   /**
@@ -533,15 +557,17 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database deletion fails.
    */
   async deleteEntity(id: string): Promise<void> {
-    await this.db.delete(entities).where(and(eq(entities.id, id), eq(entities.tenantId, this.tenantId)));
-    await this.db
-      .delete(potentialDuplicates)
-      .where(
-        and(
-          or(eq(potentialDuplicates.entityGuid, id), eq(potentialDuplicates.duplicateGuid, id)),
-          eq(potentialDuplicates.tenantId, this.tenantId),
-        ),
-      );
+    await this.db.transaction(async (tx) => {
+      await tx.delete(entities).where(and(eq(entities.id, id), eq(entities.tenantId, this.tenantId)));
+      await tx
+        .delete(potentialDuplicates)
+        .where(
+          and(
+            or(eq(potentialDuplicates.entityGuid, id), eq(potentialDuplicates.duplicateGuid, id)),
+            eq(potentialDuplicates.tenantId, this.tenantId),
+          ),
+        );
+    });
   }
 
   /**
@@ -575,6 +601,7 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
       return null;
     }
     const row = result[0];
+    this.validateEntityRow(row);
     return {
       guid: row.guid,
       initial: row.initial as EntityPair["initial"],
@@ -680,5 +707,21 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
   async clearStore(): Promise<void> {
     await this.db.delete(entities).where(eq(entities.tenantId, this.tenantId));
     await this.db.delete(potentialDuplicates).where(eq(potentialDuplicates.tenantId, this.tenantId));
+  }
+
+  /**
+   * Validates critical fields on a database row and logs warnings for type mismatches.
+   * Ensures guid is a string and modified is a non-null object.
+   */
+  private validateEntityRow(row: { guid: string; initial: unknown; modified: unknown }): void {
+    if (typeof row.guid !== "string" || row.guid.length === 0) {
+      log.warn({ guid: row.guid }, "Entity row has missing or non-string guid");
+    }
+    if (row.modified === null || typeof row.modified !== "object") {
+      log.warn({ guid: row.guid }, "Entity row has null or non-object modified field");
+    }
+    if (row.initial !== null && typeof row.initial !== "object") {
+      log.warn({ guid: row.guid }, "Entity row has non-object initial field");
+    }
   }
 }

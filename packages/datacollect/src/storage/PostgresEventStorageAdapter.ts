@@ -22,6 +22,9 @@ import { and, eq, gt, sql, asc, desc, count } from "drizzle-orm";
 import { AuditLogEntry, EventStorageAdapter, FormSubmission, SyncLevel } from "../interfaces/types";
 import { createDrizzleFromPool, DrizzleDatabase } from "../db/connection";
 import { events, auditLog, syncMetadata } from "../db/schema";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("PostgresEventStorageAdapter");
 
 /**
  * PostgreSQL implementation of the EventStorageAdapter for server-side event persistence.
@@ -265,6 +268,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
       .orderBy(asc(events.timestamp), asc(events.guid));
 
     return result.map((row) => {
+      this.validateEventRow(row);
       // const timestamp: string = row.timestamp ? row.timestamp.toISOString() : null;
       const timestamp: string = row.timestamp ? new Date(row.timestamp).toISOString() : "";
       return {
@@ -360,14 +364,11 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
    * @throws {Error} If the database update fails.
    */
   async updateAuditLogSyncLevel(entityGuid: string, syncLevel: SyncLevel): Promise<void> {
-    // The audit_log table may or may not have a sync_level column depending on schema version.
-    // Using raw SQL to maintain backwards compatibility with the original implementation.
-    const client = await this.pool.connect();
-    try {
-      await client.query("UPDATE audit_log SET sync_level = $1 WHERE entity_guid = $2", [syncLevel, entityGuid]);
-    } finally {
-      client.release();
-    }
+    // Use this.db instead of this.pool so the query participates in any
+    // active transaction rather than bypassing it with a separate connection.
+    await this.db.execute(
+      sql`UPDATE audit_log SET sync_level = ${syncLevel} WHERE entity_guid = ${entityGuid}`,
+    );
   }
 
   /**
@@ -396,15 +397,18 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
       .where(and(gt(events.timestamp, timestampValue), eq(events.tenantId, this.tenantId)))
       .orderBy(asc(events.timestamp), asc(events.guid));
 
-    return result.map((row) => ({
-      guid: row.guid,
-      entityGuid: row.entityGuid || "",
-      type: row.type || "",
-      data: (row.data as Record<string, unknown>) || {},
-      timestamp: row.timestamp ? new Date(row.timestamp as unknown as Date).toISOString() : "",
-      userId: row.userId || "",
-      syncLevel: row.syncLevel ?? SyncLevel.LOCAL,
-    }));
+    return result.map((row) => {
+      this.validateEventRow(row);
+      return {
+        guid: row.guid,
+        entityGuid: row.entityGuid || "",
+        type: row.type || "",
+        data: (row.data as Record<string, unknown>) || {},
+        timestamp: row.timestamp ? new Date(row.timestamp as unknown as Date).toISOString() : "",
+        userId: row.userId || "",
+        syncLevel: row.syncLevel ?? SyncLevel.LOCAL,
+      };
+    });
   }
 
   /**
@@ -692,6 +696,26 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
   }
 
   /**
+   * Persists the latest hash anchor for tamper detection on restart.
+   *
+   * @param hash The hash string to persist.
+   * @returns A Promise that resolves when the hash is persisted.
+   */
+  async persistHashAnchor(hash: string): Promise<void> {
+    await this.setSyncMetadataValue("hash_anchor", hash);
+  }
+
+  /**
+   * Retrieves the previously persisted hash anchor, or null if none exists.
+   *
+   * @returns The persisted hash string, or null if no anchor has been saved.
+   */
+  async getPersistedHashAnchor(): Promise<string | null> {
+    const value = await this.getSyncMetadataValue("hash_anchor");
+    return value || null;
+  }
+
+  /**
    * Helper to get a sync metadata value by key.
    */
   private async getSyncMetadataValue(key: string): Promise<string> {
@@ -722,5 +746,21 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
           updatedAt: new Date(),
         },
       });
+  }
+
+  /**
+   * Validates critical fields on an event database row and logs warnings for type mismatches.
+   * Ensures guid and type are strings and timestamp is present.
+   */
+  private validateEventRow(row: { guid: string; type: string | null; timestamp: Date | null }): void {
+    if (typeof row.guid !== "string" || row.guid.length === 0) {
+      log.warn({ guid: row.guid }, "Event row has missing or non-string guid");
+    }
+    if (typeof row.type !== "string" || row.type.length === 0) {
+      log.warn({ guid: row.guid, type: row.type }, "Event row has missing or non-string type");
+    }
+    if (row.timestamp === null || row.timestamp === undefined) {
+      log.warn({ guid: row.guid }, "Event row has null or missing timestamp");
+    }
   }
 }

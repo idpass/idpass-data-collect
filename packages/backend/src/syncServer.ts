@@ -27,6 +27,7 @@ import crypto from "crypto";
 import path from "path";
 import fs from "fs/promises";
 import YAML from "yamljs";
+import { Pool } from "pg";
 import { errorHandler, notFoundHandler, setupUncaughtHandlers } from "./middlewares/errorHandlers";
 import { createAppConfigRoutes } from "./routes/appConfigRoutes";
 import { createEntitiesRouter } from "./routes/entitiesRoute";
@@ -42,6 +43,7 @@ import { AppInstanceStoreImpl } from "./stores/AppInstanceStore";
 import { UserStoreImpl } from "./stores/UserStore";
 import { OtpStoreImpl } from "./stores/OtpStore";
 import { VerificationStoreImpl } from "./stores/VerificationStore";
+import { ReviewStoreImpl } from "./stores/ReviewStore";
 import { Role, SyncServerConfig, SyncServerInstance } from "./types";
 import { generatePublicArtifacts, resolvePublicBaseUrl } from "./utils/publicArtifacts";
 import { logger, createLogger } from "./utils/logger";
@@ -64,6 +66,8 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   await otpStore.initialize();
   const verificationStore = new VerificationStoreImpl(config.postgresUrl);
   await verificationStore.initialize();
+  const reviewStore = new ReviewStoreImpl(config.postgresUrl);
+  await reviewStore.initialize();
 
   const app = express();
 
@@ -104,8 +108,18 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
     }
   });
 
-  app.get("/health", (_req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  // Shared pool for health checks to verify database connectivity
+  const healthCheckPool = new Pool({ connectionString: config.postgresUrl, max: 2 });
+
+  app.get("/health", async (_req, res) => {
+    const timestamp = new Date().toISOString();
+    try {
+      await healthCheckPool.query("SELECT 1");
+      res.json({ status: "ok", database: "connected", timestamp });
+    } catch (error) {
+      log.warn({ err: error }, "Health check: database connectivity failed");
+      res.status(503).json({ status: "degraded", database: "disconnected", timestamp });
+    }
   });
 
   app.use("/api/apps", createAppConfigRoutes(appConfigStore, appInstanceStore, userStore));
@@ -115,7 +129,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   app.use("/api/openspp-fields", createOpenSppFieldRoutes());
   app.use("/api/potential-duplicates", createPotentialDuplicatesRoute(appInstanceStore));
   app.use("/api/auth", createSelfServiceRouter(otpStore, appInstanceStore));
-  app.use("/api/reviews", createReviewRoutes(appInstanceStore));
+  app.use("/api/reviews", createReviewRoutes(appInstanceStore, reviewStore));
   app.use("/api/attachments", createAttachmentRoutes(appInstanceStore, config.postgresUrl));
 
   app.get("/artifacts/:artifactId.json", async (req, res, next) => {
@@ -223,6 +237,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
     await otpStore.clearStore();
     await verificationStore.clearStore();
     clearReviewState();
+    await reviewStore.clearStore();
 
     //delete all json and png files in public folder
     const publicFolder = path.join(__dirname, "public");
@@ -247,6 +262,8 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
     await appInstanceStore.closeConnection();
     await otpStore.closeConnection();
     await verificationStore.closeConnection();
+    await reviewStore.closeConnection();
+    await healthCheckPool.end();
     await new Promise<void>((resolve) => {
       httpServer.close(() => resolve());
     });
