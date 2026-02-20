@@ -17,7 +17,11 @@ const describeWithPostgres = POSTGRES_URL ? describe : describe.skip;
 
 const getConnectionString = () => {
   if (!POSTGRES_URL) return "";
-  return POSTGRES_URL.replace(/ /g, "%20");
+  const parsed = new URL(POSTGRES_URL.replace(/ /g, "%20"));
+  const baseName = parsed.pathname.replace(/^\//, "");
+  const dbName = baseName ? `${baseName}_resolve_dup` : "test_resolve_dup";
+  parsed.pathname = `/${dbName}`;
+  return parsed.toString();
 };
 
 const ensureDatabaseExists = async (connectionString: string) => {

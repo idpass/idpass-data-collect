@@ -189,11 +189,22 @@ export class PostgresAttachmentStorageAdapter implements AttachmentStore {
 
   /**
    * Deletes an attachment and its binary data.
+   * Only deletes if the attachment belongs to the current tenant.
    */
   async deleteAttachment(guid: string): Promise<void> {
     await this.db.transaction(async (tx) => {
-      await tx.delete(attachmentData).where(eq(attachmentData.guid, guid));
-      await tx.delete(attachments).where(eq(attachments.guid, guid));
+      // Only delete the attachment if it belongs to the current tenant
+      const result = await tx
+        .delete(attachments)
+        .where(and(eq(attachments.guid, guid), eq(attachments.tenantId, this.tenantId)))
+        .returning({ guid: attachments.guid });
+
+      // Only delete binary data if the metadata row was actually deleted
+      if (result.length > 0) {
+        await tx.delete(attachmentData).where(eq(attachmentData.guid, guid));
+      } else {
+        log.warn({ guid, tenantId: this.tenantId }, "Attachment not found or does not belong to tenant");
+      }
     });
   }
 
