@@ -10,6 +10,7 @@ RUN pnpm run build:datacollect
 FROM base as admin-ui
 WORKDIR /app
 COPY --from=build /app .
-EXPOSE 5173
-CMD ["pnpm", "run", "dev:admin"]
+RUN pnpm run build:admin
+EXPOSE 4173
+CMD ["pnpm", "--filter", "@idpass/data-collect-admin", "preview", "--host"]
 

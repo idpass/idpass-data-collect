@@ -23,7 +23,7 @@ import { FormSubmission, ReviewService, EventApplierService } from "@idpass/data
 import { authenticateJWT, AuthenticatedRequest } from "../middlewares/authentication";
 import { requireAction } from "../middlewares/rbac";
 import { asyncHandler } from "../middlewares/errorHandlers";
-import { AppInstanceStore } from "../types";
+import { AppInstanceStore, Role } from "../types";
 import { createLogger } from "../utils/logger";
 
 const log = createLogger("reviewRoutes");
@@ -161,7 +161,7 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore): Router {
       const userTenantIds = user.tenantIds ?? [];
       let review = null;
       for (const [tenantId, reviewService] of reviewServiceCache) {
-        if (user.role !== "ADMIN" && !userTenantIds.includes(tenantId)) continue;
+        if (user.role !== Role.ADMIN && !userTenantIds.includes(tenantId)) continue;
         const found = reviewService.getReviewById(id);
         if (found) {
           review = await reviewService.approve(id, user.email);
@@ -194,7 +194,7 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore): Router {
       const userTenantIds = user.tenantIds ?? [];
       let review = null;
       for (const [tenantId, reviewService] of reviewServiceCache) {
-        if (user.role !== "ADMIN" && !userTenantIds.includes(tenantId)) continue;
+        if (user.role !== Role.ADMIN && !userTenantIds.includes(tenantId)) continue;
         const found = reviewService.getReviewById(id);
         if (found) {
           review = await reviewService.reject(id, user.email, reason);
@@ -230,7 +230,7 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore): Router {
       // Group review IDs by their tenant's review service, filtered by user access
       const userTenantIds = user.tenantIds ?? [];
       for (const [tenantId, reviewService] of reviewServiceCache) {
-        if (user.role !== "ADMIN" && !userTenantIds.includes(tenantId)) continue;
+        if (user.role !== Role.ADMIN && !userTenantIds.includes(tenantId)) continue;
         const tenantReviewIds = reviewIds.filter((rid: string) => {
           const review = reviewService.getReviewById(rid);
           return review !== null;

@@ -10,6 +10,6 @@ RUN pnpm run build:datacollect
 FROM base as backend
 WORKDIR /app
 COPY --from=build /app .
-EXPOSE 3000 9229
-CMD ["pnpm", "run", "dev:backend"]
+EXPOSE 3000
+CMD ["node", "packages/backend/dist/index.js"]
 

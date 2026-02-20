@@ -64,12 +64,11 @@ services:
     networks:
       - datacollect-network-dev
     environment:
-      # Additional environment variables for OpenSPP integration
-      - EXTERNAL_SYNC_ENABLED=true
-      - OPENSPP_URL=http://openspp:8069
-      - OPENSPP_DB=odoo
-      - OPENSPP_USERNAME=admin
-      - OPENSPP_PASSWORD=admin
+      - EXTERNAL_SYNC_ENABLED=${EXTERNAL_SYNC_ENABLED:-true}
+      - OPENSPP_URL=${OPENSPP_URL:-http://openspp:8069}
+      - OPENSPP_DB=${OPENSPP_DB:-odoo}
+      - OPENSPP_USERNAME=${OPENSPP_USERNAME:-admin}
+      - OPENSPP_PASSWORD=${OPENSPP_PASSWORD:-admin}
 
   # Admin UI - Development mode
   admin-ui:

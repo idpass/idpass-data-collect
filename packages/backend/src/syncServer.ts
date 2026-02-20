@@ -23,6 +23,7 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
+import crypto from "crypto";
 import path from "path";
 import fs from "fs/promises";
 import YAML from "yamljs";
@@ -67,6 +68,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   const app = express();
 
   setupUncaughtHandlers();
+  app.set("trust proxy", 1);
   app.use(helmet());
   const corsOrigins = process.env.CORS_ORIGINS;
   app.use(cors(corsOrigins ? {
@@ -75,7 +77,10 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   } : {
     origin: false,
   }));
-  app.use(pinoHttp({ logger }));
+  app.use(pinoHttp({
+    logger,
+    genReqId: () => crypto.randomUUID(),
+  }));
   app.use(bodyParser.json({ limit: "1mb" }));
   app.use(
     express.static(path.join(__dirname, "public"), {

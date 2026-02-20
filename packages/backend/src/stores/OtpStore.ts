@@ -137,7 +137,7 @@ export class OtpStoreImpl implements OtpStore {
       client.release();
     }
 
-    log.info({ identifier, tenantId }, "OTP code created");
+    log.info({ tenantId }, "OTP code created");
 
     // Return the plaintext code so it can be sent to the user (e.g. via SMS).
     // The database stores only the hashed version.

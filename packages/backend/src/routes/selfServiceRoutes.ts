@@ -172,7 +172,7 @@ export function createSelfServiceRouter(
       // For development/testing, the code is stored and can be retrieved
       // from the OTP store directly.
       log.info(
-        { identifier, tenantId, codeId: otpCode.id },
+        { tenantId, codeId: otpCode.id },
         "OTP code generated",
       );
 
@@ -236,7 +236,7 @@ export function createSelfServiceRouter(
       const username = `self-service:${identifier}`;
 
       log.info(
-        { identifier, tenantId },
+        { tenantId },
         "OTP verified successfully, self-service token issued",
       );
 

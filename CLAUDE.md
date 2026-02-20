@@ -177,3 +177,7 @@ docker-compose up
 ```
 
 See `docker/README.md` for detailed configuration options.
+
+## Known Pitfalls
+
+- When producing audit or review reports, never force findings into round numbers. Report the actual count of issues found — artificial caps cause findings to be silently dropped or underclassified.
