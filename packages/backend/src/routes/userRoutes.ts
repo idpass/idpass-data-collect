@@ -23,6 +23,7 @@ import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { AuthenticatedRequest, authenticateJWT, createAuthAdminMiddleware } from "../middlewares/authentication";
+import { verifyRoleFromDatabase } from "../middlewares/rbac";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { Role, UserStore } from "../types";
 
@@ -70,7 +71,7 @@ export function createUserRoutes(userStore: UserStore): Router {
       const token = jwt.sign(
         { id: user.id, email: user.email, role: user.role, tenantIds: user.tenantIds, roleAssignments: user.roleAssignments ?? [] },
         process.env.JWT_SECRET!,
-        { expiresIn: "8h" },
+        { expiresIn: "1h" },
       );
       res.json({ token, userId: user.id });
     }),
@@ -99,7 +100,7 @@ export function createUserRoutes(userStore: UserStore): Router {
       const token = jwt.sign(
         { id: user.id, email: user.email, role: user.role, tenantIds: user.tenantIds, roleAssignments: user.roleAssignments ?? [] },
         process.env.JWT_SECRET!,
-        { expiresIn: "8h" },
+        { expiresIn: "1h" },
       );
       res.json({ token, userId: user.id });
     }),
@@ -119,6 +120,7 @@ export function createUserRoutes(userStore: UserStore): Router {
   router.post(
     "/",
     createAuthAdminMiddleware(userStore),
+    verifyRoleFromDatabase(userStore),
     asyncHandler(async (req, res) => {
       const parseResult = CreateUserSchema.safeParse(req.body);
       if (!parseResult.success) {
@@ -137,6 +139,7 @@ export function createUserRoutes(userStore: UserStore): Router {
   router.put(
     "/:id",
     createAuthAdminMiddleware(userStore),
+    verifyRoleFromDatabase(userStore),
     asyncHandler(async (req, res) => {
       const { id } = req.params;
       const parseResult = UpdateUserSchema.safeParse(req.body);
@@ -162,6 +165,7 @@ export function createUserRoutes(userStore: UserStore): Router {
   router.delete(
     "/:email",
     createAuthAdminMiddleware(userStore),
+    verifyRoleFromDatabase(userStore),
     asyncHandler(async (req, res) => {
       const { email } = req.params;
       await userStore.deleteUser(email);

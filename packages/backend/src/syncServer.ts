@@ -129,7 +129,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   app.use("/api/openspp-fields", createOpenSppFieldRoutes());
   app.use("/api/potential-duplicates", createPotentialDuplicatesRoute(appInstanceStore));
   app.use("/api/auth", createSelfServiceRouter(otpStore, appInstanceStore));
-  app.use("/api/reviews", createReviewRoutes(appInstanceStore, reviewStore));
+  app.use("/api/reviews", createReviewRoutes(appInstanceStore, reviewStore, userStore));
   app.use("/api/attachments", createAttachmentRoutes(appInstanceStore, config.postgresUrl));
 
   app.get("/artifacts/:artifactId.json", async (req, res, next) => {

@@ -166,6 +166,16 @@ export function createSelfServiceRouter(
 
       const { identifier, tenantId } = parseResult.data;
 
+      // Per-identifier rate limit: reject if >= 5 codes requested for
+      // this identifier+tenant in the last 15 minutes.
+      const recentCodes = await otpStore.getActiveCodesByIdentifier(identifier, tenantId);
+      const maxPerIdentifier = isTest ? 1000 : 5;
+      if (recentCodes.length >= maxPerIdentifier) {
+        return res.status(429).json({
+          error: "Too many OTP requests for this identifier, please try again later",
+        });
+      }
+
       const otpCode = await otpStore.createOtp(identifier, tenantId);
 
       // In production, send the code via SMS or email here.

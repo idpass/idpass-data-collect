@@ -143,6 +143,18 @@ export class EventUpcasterService {
   }
 
   /**
+   * Finalizes upcaster registration by validating all chains.
+   *
+   * Call this after all upcasters have been registered to catch configuration
+   * errors (e.g., version gaps) at startup rather than at runtime.
+   *
+   * @throws {Error} If any event type has gaps in its upcaster chain.
+   */
+  finalizeRegistration(): void {
+    this.validateAllChains();
+  }
+
+  /**
    * Returns the current (highest) schema version for an event type.
    *
    * If no upcasters are registered for the event type, returns 1 (the implicit

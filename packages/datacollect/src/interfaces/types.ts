@@ -560,6 +560,21 @@ export interface EntityStorageAdapter {
 }
 
 /**
+ * Shared abstraction over Drizzle's database and transaction objects.
+ *
+ * Both the full database connection and transaction objects expose an
+ * `execute` method for running raw SQL and a `transaction` method for
+ * nesting transactions. Typing adapter methods against this interface
+ * lets them accept either a full DB or a transaction handle, which is
+ * required for callers that need to coordinate writes across multiple
+ * adapters inside a single transaction.
+ */
+export type DrizzleQueryExecutor = {
+  execute: (query: unknown) => Promise<unknown>;
+  transaction: <T>(fn: (tx: DrizzleQueryExecutor) => Promise<T>) => Promise<T>;
+};
+
+/**
  * Sync adapter interface for external system synchronization.
  *
  * Provides integration with external systems for bi-directional data sync.

@@ -20,9 +20,9 @@
 import { Router } from "express";
 import { FormSubmission, ReviewService, EventApplierService } from "@idpass/data-collect-core";
 import { authenticateJWT, AuthenticatedRequest, validateTenantAccess } from "../middlewares/authentication";
-import { requireAction } from "../middlewares/rbac";
+import { requireAction, verifyRoleFromDatabase } from "../middlewares/rbac";
 import { asyncHandler } from "../middlewares/errorHandlers";
-import { AppInstanceStore, Role } from "../types";
+import { AppInstanceStore, Role, UserStore } from "../types";
 import { ReviewStore } from "../stores/ReviewStore";
 import { createLogger } from "../utils/logger";
 
@@ -83,7 +83,7 @@ async function getReviewService(
   return reviewService;
 }
 
-export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewStore: ReviewStore): Router {
+export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewStore: ReviewStore, userStore: UserStore): Router {
   const router = Router();
 
   // List pending reviews
@@ -139,6 +139,8 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
   router.post(
     "/:id/approve",
     authenticateJWT,
+    validateTenantAccess,
+    verifyRoleFromDatabase(userStore),
     requireAction("approve"),
     asyncHandler(async (req, res) => {
       const { id } = req.params;
@@ -168,6 +170,8 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
   router.post(
     "/:id/reject",
     authenticateJWT,
+    validateTenantAccess,
+    verifyRoleFromDatabase(userStore),
     requireAction("approve"),
     asyncHandler(async (req, res) => {
       const { id } = req.params;
@@ -201,6 +205,8 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
   router.post(
     "/bulk-approve",
     authenticateJWT,
+    validateTenantAccess,
+    verifyRoleFromDatabase(userStore),
     requireAction("approve"),
     asyncHandler(async (req, res) => {
       const { reviewIds } = req.body;

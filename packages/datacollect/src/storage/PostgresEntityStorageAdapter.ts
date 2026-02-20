@@ -705,8 +705,10 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database deletion fails.
    */
   async clearStore(): Promise<void> {
-    await this.db.delete(entities).where(eq(entities.tenantId, this.tenantId));
-    await this.db.delete(potentialDuplicates).where(eq(potentialDuplicates.tenantId, this.tenantId));
+    await this.db.transaction(async (tx) => {
+      await tx.delete(entities).where(eq(entities.tenantId, this.tenantId));
+      await tx.delete(potentialDuplicates).where(eq(potentialDuplicates.tenantId, this.tenantId));
+    });
   }
 
   /**

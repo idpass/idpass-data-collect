@@ -92,12 +92,16 @@ export interface SelectiveSyncOptions {
 }
 
 export class InternalSyncManager {
-  /** Flag indicating if a sync operation is currently in progress */
-  public isSyncing = false;
+  /** Read-only flag for observability; concurrency is governed by the mutex below */
+  private _syncing = false;
 
-  /** Promise-based lock: resolves when the current sync operation completes */
+  /** Whether a sync operation is currently running (read-only accessor) */
+  get isSyncing(): boolean {
+    return this._syncing;
+  }
+
+  /** Promise-based mutex: each sync call awaits the previous one to serialize access */
   private syncLock: Promise<void> = Promise.resolve();
-  private releaseSyncLock: (() => void) | null = null;
 
   /** HTTP client instance with configured base URL and headers */
   private readonly axiosInstance: AxiosInstance;
@@ -471,7 +475,7 @@ export class InternalSyncManager {
    * 3. **Download Phase**: Pulls and applies remote events (paginated)
    *
    * The sync operation is atomic - if any phase fails, the entire sync is rolled back.
-   * Only one sync operation can run at a time (protected by `isSyncing` flag).
+   * Only one sync operation can run at a time (protected by a promise-based mutex).
    *
    * @throws {Error} When duplicates exist, authentication fails, or network errors occur
    *
@@ -502,23 +506,24 @@ export class InternalSyncManager {
    * ```
    */
   async sync(options?: SelectiveSyncOptions): Promise<void> {
-    // Use a promise-based lock to await the previous sync before starting a new one,
-    // rather than simply throwing when isSyncing is true.
-    if (this.isSyncing) {
-      // Wait for the previous sync to complete before proceeding
-      await this.syncLock;
-    }
+    // Capture the previous lock and chain this sync onto it. This ensures
+    // concurrent callers are serialized without a boolean race window.
+    const previousLock = this.syncLock;
+
+    let releaseLock: () => void;
+    this.syncLock = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+
+    // Wait for any previous sync to complete before proceeding
+    await previousLock;
 
     // Apply options for this sync session if provided
     if (options) {
       this.setSelectiveSyncOptions(options);
     }
 
-    this.isSyncing = true;
-    // Create a new lock promise that will resolve when this sync completes
-    this.syncLock = new Promise<void>((resolve) => {
-      this.releaseSyncLock = resolve;
-    });
+    this._syncing = true;
     try {
       await this.loadAuthToken();
 
@@ -533,11 +538,8 @@ export class InternalSyncManager {
       log.error({ err: error }, "Error during sync");
       throw error;
     } finally {
-      this.isSyncing = false;
-      if (this.releaseSyncLock) {
-        this.releaseSyncLock();
-        this.releaseSyncLock = null;
-      }
+      this._syncing = false;
+      releaseLock!();
     }
   }
 }

@@ -64,7 +64,7 @@ services:
       dockerfile: docker/Dockerfile
       target: mobile-app
     environment:
-      - VITE_DB_ENCRYPTION_PASSWORD=password
+      - VITE_DB_ENCRYPTION_PASSWORD=${VITE_DB_ENCRYPTION_PASSWORD}
       - VITE_DEVELOP=true
       - VITE_DEBUG=true
       - VITE_FEATURE_DYNAMIC=true
