@@ -1461,21 +1461,25 @@ describe("EntityDataManager", () => {
       syncLevel: SyncLevel.LOCAL,
     });
 
-    // Resolve any remaining reverse-direction pair
-    const remaining = await manager.getPotentialDuplicates();
-    for (const dup of remaining) {
-      await manager.submitForm({
-        guid: uuidv4(),
-        type: "resolve-duplicate",
-        entityGuid: dup.entityGuid,
-        data: { duplicates: [{ entityGuid: dup.entityGuid, duplicateGuid: dup.duplicateGuid }], shouldDelete: true },
-        timestamp: new Date().toISOString(),
-        userId: "user-id",
-        syncLevel: SyncLevel.LOCAL,
-      });
+    // Flush async queue and resolve any remaining reverse-direction pairs
+    await dupService.flush();
+    let remaining = await manager.getPotentialDuplicates();
+    while (remaining.length > 0) {
+      for (const dup of remaining) {
+        await manager.submitForm({
+          guid: uuidv4(),
+          type: "resolve-duplicate",
+          entityGuid: dup.entityGuid,
+          data: { duplicates: [{ entityGuid: dup.entityGuid, duplicateGuid: dup.duplicateGuid }], shouldDelete: true },
+          timestamp: new Date().toISOString(),
+          userId: "user-id",
+          syncLevel: SyncLevel.LOCAL,
+        });
+      }
+      await dupService.flush();
+      remaining = await manager.getPotentialDuplicates();
     }
-    const potentialDuplicatesAfter = await manager.getPotentialDuplicates();
-    expect(potentialDuplicatesAfter).toHaveLength(0);
+    expect(remaining).toHaveLength(0);
   });
 
   it("should resolve sync conflicts using latest timestamp precedence", async () => {
