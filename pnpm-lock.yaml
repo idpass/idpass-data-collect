@@ -663,9 +663,15 @@ importers:
 
   packages/web:
     dependencies:
+      '@formio/vue':
+        specifier: ^5.0.0
+        version: 5.0.0(formiojs@4.21.7)(vue@3.5.28(typescript@5.8.3))
       axios:
         specifier: ^1.13.5
         version: 1.13.5
+      formiojs:
+        specifier: ^4.21.7
+        version: 4.21.7
       oidc-client-ts:
         specifier: ^3.0.0
         version: 3.4.1
@@ -14882,6 +14888,11 @@ snapshots:
   '@formio/text-mask-addons@3.8.0-formio.4': {}
 
   '@formio/vanilla-text-mask@5.1.1-formio.1': {}
+
+  '@formio/vue@5.0.0(formiojs@4.21.7)(vue@3.5.28(typescript@5.8.3))':
+    dependencies:
+      formiojs: 4.21.7
+      vue: 3.5.28(typescript@5.8.3)
 
   '@formio/vue@5.0.0(formiojs@4.21.7)(vue@3.5.28(typescript@5.9.3))':
     dependencies:

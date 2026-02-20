@@ -17,7 +17,9 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
+    "@formio/vue": "^5.0.0",
     "axios": "^1.13.5",
+    "formiojs": "^4.21.7",
     "oidc-client-ts": "^3.0.0",
     "pinia": "^3.0.4",
     "uuid": "^10.0.0",
