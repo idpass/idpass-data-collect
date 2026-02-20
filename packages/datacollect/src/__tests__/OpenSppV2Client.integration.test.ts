@@ -41,10 +41,8 @@ import type {
 } from "../components/openspp-v2/types";
 
 const BASE_URL = process.env.OPENSPP_URL || "http://localhost:8069";
-const CLIENT_ID = process.env.OPENSPP_CLIENT_ID || "client_9wPoIAlhjWDfl4NnkEK5bw";
-const CLIENT_SECRET =
-  process.env.OPENSPP_CLIENT_SECRET ||
-  "tXwWLiS0ycIGcvUIBtw_g_5Kd01j7S3tel_7ln54Tz8";
+const CLIENT_ID = process.env.OPENSPP_CLIENT_ID || "";
+const CLIENT_SECRET = process.env.OPENSPP_CLIENT_SECRET || "";
 const ID_NAMESPACE =
   process.env.OPENSPP_ID_NAMESPACE || "urn:datacollect:integration-test";
 
@@ -61,6 +59,14 @@ function testGroupId(suffix: string): string {
 let serverAvailable = false;
 
 beforeAll(async () => {
+  if (!CLIENT_ID || !CLIENT_SECRET) {
+    console.warn(
+      "Skipping integration tests: OPENSPP_CLIENT_ID and OPENSPP_CLIENT_SECRET are required",
+    );
+    serverAvailable = false;
+    return;
+  }
+
   try {
     await axios.get(`${BASE_URL}/api/v2/spp/metadata`, { timeout: 5000 });
     serverAvailable = true;
