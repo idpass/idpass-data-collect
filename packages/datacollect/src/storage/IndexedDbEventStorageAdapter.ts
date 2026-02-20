@@ -735,6 +735,49 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
   }
 
   /**
+   * Persists the latest hash anchor for tamper detection on restart.
+   *
+   * @param hash The hash string to persist.
+   * @returns A Promise that resolves when the hash is persisted.
+   */
+  async persistHashAnchor(hash: string): Promise<void> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+
+    const transaction = this.db.transaction(["syncTimestamp"], "readwrite");
+    const objectStore = transaction.objectStore("syncTimestamp");
+    const request = objectStore.put({ id: "hashAnchor", value: hash });
+
+    return new Promise<void>((resolve, reject) => {
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Retrieves the previously persisted hash anchor, or null if none exists.
+   *
+   * @returns The persisted hash string, or null if no anchor has been saved.
+   */
+  async getPersistedHashAnchor(): Promise<string | null> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+
+    const transaction = this.db.transaction(["syncTimestamp"], "readonly");
+    const objectStore = transaction.objectStore("syncTimestamp");
+    const request = objectStore.get("hashAnchor");
+
+    return new Promise<string | null>((resolve, reject) => {
+      request.onsuccess = () => {
+        resolve(request.result ? request.result.value : null);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
    * Retrieves the audit trail for a specific entity, identified by its `entityGuid`.
    *
    * @param entityGuid The GUID of the entity to retrieve the audit trail for.

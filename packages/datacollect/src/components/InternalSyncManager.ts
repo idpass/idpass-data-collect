@@ -95,6 +95,10 @@ export class InternalSyncManager {
   /** Flag indicating if a sync operation is currently in progress */
   public isSyncing = false;
 
+  /** Promise-based lock: resolves when the current sync operation completes */
+  private syncLock: Promise<void> = Promise.resolve();
+  private releaseSyncLock: (() => void) | null = null;
+
   /** HTTP client instance with configured base URL and headers */
   private readonly axiosInstance: AxiosInstance;
 
@@ -340,7 +344,10 @@ export class InternalSyncManager {
           })),
         );
 
-        await this.eventStore.setLastLocalSyncTimestamp(new Date().toISOString());
+        // Use the last event's timestamp as the sync cursor instead of the
+        // current clock to prevent missed events when the server clock is ahead.
+        const lastEventTimestamp = localEvents[localEvents.length - 1].timestamp;
+        await this.eventStore.setLastLocalSyncTimestamp(lastEventTimestamp);
       } catch (error) {
         // Handle partial success - update sync level for successful chunks only
         if (successfulChunks.length > 0) {
@@ -399,12 +406,14 @@ export class InternalSyncManager {
           filteredEvents = events.filter((event) => allowedGuids.has(event.entityGuid));
         }
 
-        const sorted = filteredEvents.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        const sorted = [...filteredEvents].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
         // Use the timestamp from the original (unfiltered) events for cursor tracking
-        // to avoid getting stuck when all events in a page are filtered out
-        const allSorted = events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-        const latestEventTimestamp = allSorted[allSorted.length - 1].timestamp;
+        // to avoid getting stuck when all events in a page are filtered out.
+        // Use composite cursor (timestamp|guid) to handle events with identical timestamps.
+        const allSorted = [...events].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        const lastEvent = allSorted[allSorted.length - 1];
+        const latestEventTimestamp = `${lastEvent.timestamp}|${lastEvent.guid}`;
 
         try {
           for (const event of sorted) {
@@ -493,8 +502,11 @@ export class InternalSyncManager {
    * ```
    */
   async sync(options?: SelectiveSyncOptions): Promise<void> {
+    // Use a promise-based lock to await the previous sync before starting a new one,
+    // rather than simply throwing when isSyncing is true.
     if (this.isSyncing) {
-      throw new Error("Sync already in progress");
+      // Wait for the previous sync to complete before proceeding
+      await this.syncLock;
     }
 
     // Apply options for this sync session if provided
@@ -503,6 +515,10 @@ export class InternalSyncManager {
     }
 
     this.isSyncing = true;
+    // Create a new lock promise that will resolve when this sync completes
+    this.syncLock = new Promise<void>((resolve) => {
+      this.releaseSyncLock = resolve;
+    });
     try {
       await this.loadAuthToken();
 
@@ -518,6 +534,10 @@ export class InternalSyncManager {
       throw error;
     } finally {
       this.isSyncing = false;
+      if (this.releaseSyncLock) {
+        this.releaseSyncLock();
+        this.releaseSyncLock = null;
+      }
     }
   }
 }

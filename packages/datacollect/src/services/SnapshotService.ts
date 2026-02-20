@@ -347,32 +347,61 @@ export class SnapshotService {
   async rebuildFromSnapshot(entityGuid: string): Promise<EntityDoc | null> {
     const snapshot = await this.getLatestSnapshot(entityGuid);
 
-    // Get all events for this entity, ordered chronologically
-    const allEventsResult = await this.db
-      .select()
-      .from(events)
-      .where(
-        and(
-          eq(events.entityGuid, entityGuid),
-          eq(events.tenantId, this.tenantId),
-        ),
-      )
-      .orderBy(asc(events.timestamp));
-
-    if (allEventsResult.length === 0) {
-      return snapshot?.data ?? null;
-    }
-
-    // Determine which events to replay
-    let eventsToReplay: typeof allEventsResult;
+    let eventsToReplay: Array<typeof events.$inferSelect>;
     let baseEntity: EntityDoc | null = null;
 
     if (snapshot) {
-      // Skip the events that are already included in the snapshot
-      eventsToReplay = allEventsResult.slice(snapshot.eventSequence);
       baseEntity = snapshot.data;
+
+      // Use the eventSequence to determine the boundary event's timestamp
+      // rather than slicing by array index, which is fragile when events
+      // are modified concurrently. Fetch the boundary event (the last one
+      // included in the snapshot) by its position.
+      const boundaryEvents = await this.db
+        .select()
+        .from(events)
+        .where(
+          and(
+            eq(events.entityGuid, entityGuid),
+            eq(events.tenantId, this.tenantId),
+          ),
+        )
+        .orderBy(asc(events.timestamp), asc(events.guid))
+        .limit(1)
+        .offset(snapshot.eventSequence - 1);
+
+      if (boundaryEvents.length > 0) {
+        const boundaryTimestamp = boundaryEvents[0].timestamp;
+        const boundaryGuid = boundaryEvents[0].guid;
+
+        // Fetch only events after the boundary (by timestamp, then guid for ties)
+        eventsToReplay = await this.db
+          .select()
+          .from(events)
+          .where(
+            and(
+              eq(events.entityGuid, entityGuid),
+              eq(events.tenantId, this.tenantId),
+              sql`(${events.timestamp} > ${boundaryTimestamp} OR (${events.timestamp} = ${boundaryTimestamp} AND ${events.guid} > ${boundaryGuid}))`,
+            ),
+          )
+          .orderBy(asc(events.timestamp), asc(events.guid));
+      } else {
+        // Snapshot eventSequence is beyond current event count; nothing to replay
+        eventsToReplay = [];
+      }
     } else {
-      eventsToReplay = allEventsResult;
+      // No snapshot: get all events for this entity, ordered chronologically
+      eventsToReplay = await this.db
+        .select()
+        .from(events)
+        .where(
+          and(
+            eq(events.entityGuid, entityGuid),
+            eq(events.tenantId, this.tenantId),
+          ),
+        )
+        .orderBy(asc(events.timestamp), asc(events.guid));
     }
 
     if (eventsToReplay.length === 0) {
@@ -401,7 +430,9 @@ export class SnapshotService {
       };
 
       try {
-        const result = await this.eventApplierService.submitForm(formSubmission);
+        // Use replayEvent instead of submitForm to replay existing events
+        // without creating new event records in the event store.
+        const result = await this.eventApplierService.replayEvent(formSubmission);
         if (result) {
           currentEntity = result;
         }

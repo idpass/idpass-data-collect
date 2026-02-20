@@ -36,6 +36,7 @@ import {
 import { AppError } from "../utils/AppError";
 
 import { validateFormSubmission } from "../utils/formValidation";
+import { ConflictService } from "./ConflictService";
 import { DuplicateDetectionService } from "./DuplicateDetectionService";
 import { EventUpcasterService } from "./EventUpcasterService";
 import { createLogger } from "../utils/logger";
@@ -155,6 +156,10 @@ export class EventApplierService {
   private duplicateDetectionService: DuplicateDetectionService;
   /** Optional service for upcasting event data from older schema versions */
   private upcasterService?: EventUpcasterService;
+  /** Optional service for recording detected conflicts */
+  private conflictService?: ConflictService;
+  /** Tenant ID for conflict recording (defaults to "default") */
+  private tenantId: string;
 
   /**
    * Creates a new EventApplierService instance.
@@ -163,16 +168,22 @@ export class EventApplierService {
    * @param entityStore Store for managing current entity state.
    * @param duplicateDetectionService Optional service for async duplicate detection. A default instance is created if not provided.
    * @param upcasterService Optional service for event schema version upcasting. When provided, event data is automatically upcasted before being applied.
+   * @param conflictService Optional service for recording detected conflicts.
+   * @param tenantId Tenant ID for conflict recording (defaults to "default").
    */
   constructor(
     private eventStore: EventStore,
     private entityStore: EntityStore,
     duplicateDetectionService?: DuplicateDetectionService,
     upcasterService?: EventUpcasterService,
+    conflictService?: ConflictService,
+    tenantId?: string,
   ) {
     this.duplicateDetectionService =
       duplicateDetectionService ?? new DuplicateDetectionService(entityStore, eventStore);
     this.upcasterService = upcasterService;
+    this.conflictService = conflictService;
+    this.tenantId = tenantId ?? "default";
   }
 
   /**
@@ -495,6 +506,17 @@ export class EventApplierService {
         remoteTimestamp: formData.timestamp,
         localVersion: entityPair.modified.version,
       });
+      // Record the conflict in the ConflictService for tracking and review
+      if (this.conflictService) {
+        await this.conflictService.recordConflict({
+          entityGuid: entityPair.modified.guid,
+          tenantId: this.tenantId,
+          localVersion: entityPair.modified.data as Record<string, unknown>,
+          remoteVersion: formData.data as Record<string, unknown>,
+          localEventGuid: eventGuid,
+          remoteEventGuid: formData.guid,
+        });
+      }
       return { resolution: "local-wins", entity: entityPair.modified };
     }
 
@@ -503,6 +525,17 @@ export class EventApplierService {
       remoteTimestamp: formData.timestamp,
       localVersion: entityPair.modified.version,
     });
+    // Record the conflict in the ConflictService for tracking and review
+    if (this.conflictService) {
+      await this.conflictService.recordConflict({
+        entityGuid: entityPair.modified.guid,
+        tenantId: this.tenantId,
+        localVersion: entityPair.modified.data as Record<string, unknown>,
+        remoteVersion: formData.data as Record<string, unknown>,
+        localEventGuid: eventGuid,
+        remoteEventGuid: formData.guid,
+      });
+    }
 
     const baseline = entityPair.initial ? cloneDeep(entityPair.initial) : cloneDeep(entityPair.modified);
     return { resolution: "remote-wins", baseEntity: baseline };

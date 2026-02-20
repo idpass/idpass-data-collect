@@ -130,9 +130,12 @@ export class DuplicateDetectionService {
     this.processing = true;
     try {
       while (this.queue.length > 0) {
-        const item = this.queue.shift();
+        // Peek at the first item without removing it; only shift after
+        // successful processing so the item is not lost on failure.
+        const item = this.queue[0];
         if (item) {
           await this.checkForDuplicates(item.entityGuid, item.eventGuid);
+          this.queue.shift();
         }
       }
     } finally {

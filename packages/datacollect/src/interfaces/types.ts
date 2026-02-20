@@ -390,6 +390,10 @@ export interface EventStorageAdapter {
   clearStore(): Promise<void>;
   /** Close database connections and cleanup resources */
   closeConnection(): Promise<void>;
+  /** Persist the latest hash anchor for tamper detection on restart */
+  persistHashAnchor(hash: string): Promise<void>;
+  /** Retrieve the previously persisted hash anchor, or null if none exists */
+  getPersistedHashAnchor(): Promise<string | null>;
 }
 
 /**

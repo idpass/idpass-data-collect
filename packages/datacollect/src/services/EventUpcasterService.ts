@@ -123,6 +123,26 @@ export class EventUpcasterService {
   }
 
   /**
+   * Validates all registered upcaster chains and throws if any have version gaps.
+   *
+   * Should be called after all upcasters have been registered (e.g., at application
+   * startup) to catch configuration errors early.
+   *
+   * @throws {Error} If any event type has gaps in its upcaster chain.
+   */
+  validateAllChains(): void {
+    for (const eventType of this.upcasters.keys()) {
+      const result = this.validateChain(eventType);
+      if (!result.valid) {
+        throw new Error(
+          `Upcaster chain for event type "${eventType}" has gaps at versions: [${result.gaps.join(", ")}]`,
+        );
+      }
+    }
+    log.debug("All upcaster chains validated successfully");
+  }
+
+  /**
    * Returns the current (highest) schema version for an event type.
    *
    * If no upcasters are registered for the event type, returns 1 (the implicit

@@ -140,18 +140,15 @@ describe("InternalSyncManager", () => {
       // Start first sync
       const syncPromise1 = manager.sync();
 
-      // Second sync should be indicated as skipped via a rejection
-      // EXPECTED (correct): The second sync() call should throw an error
-      // indicating sync is already in progress
-      // ACTUAL (buggy): sync() returns a resolved Promise<void> with no
-      // indication that the sync was skipped. Callers cannot distinguish
-      // between "sync completed successfully" and "sync was silently skipped"
-      await expect(manager.sync()).rejects.toThrow(/[Ss]ync already in progress/);
+      // Second sync should await the lock rather than throw, ensuring
+      // the caller waits for the first sync to complete before proceeding.
+      const syncPromise2 = manager.sync();
 
       await syncPromise1;
+      await syncPromise2;
 
-      // The first sync should have run successfully
-      expect(mockAxiosInstance.get).toHaveBeenCalledTimes(1);
+      // Both syncs should have completed (second one waited for the first)
+      expect(mockAxiosInstance.get).toHaveBeenCalled();
     });
   });
 

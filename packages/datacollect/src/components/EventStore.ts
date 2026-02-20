@@ -20,6 +20,9 @@
 import CryptoJS from "crypto-js";
 import { AuditLogEntry, EventStorageAdapter, EventStore, FormSubmission, SyncLevel } from "../interfaces/types";
 import { EventUpcasterService } from "../services/EventUpcasterService";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("EventStore");
 
 /**
  * Computes a SHA256 hash of the given data string.
@@ -114,6 +117,8 @@ export class EventStoreImpl implements EventStore {
   private storageAdapter: EventStorageAdapter;
   /** Optional service for stamping events with the current schema version */
   private upcasterService?: EventUpcasterService;
+  /** Promise queue to serialize saveEvent calls and prevent concurrent hash chain corruption */
+  private saveQueue: Promise<void> = Promise.resolve();
 
   /**
    * Creates a new EventStoreImpl instance.
@@ -153,7 +158,30 @@ export class EventStoreImpl implements EventStore {
    */
   async initialize(): Promise<void> {
     await this.storageAdapter.initialize();
+
+    // Compare persisted hash anchor vs recomputed hash to detect tampering.
+    // Only flag tampering when there are actual events and both hashes are
+    // non-empty — an empty store or a first-run store will have no anchor yet.
+    const persistedHash = await this.storageAdapter.getPersistedHashAnchor();
     await this.rebuildHashChain();
+
+    if (
+      persistedHash !== null &&
+      persistedHash !== "" &&
+      this.latestHash !== "" &&
+      persistedHash !== this.latestHash
+    ) {
+      log.error(
+        { persistedHash, recomputedHash: this.latestHash },
+        "Hash chain tamper detected: persisted anchor does not match recomputed hash",
+      );
+      throw new Error("Event store integrity check failed: hash chain has been tampered with");
+    }
+
+    // Persist the current hash anchor so future restarts can detect tampering
+    if (this.latestHash !== "") {
+      await this.storageAdapter.persistHashAnchor(this.latestHash);
+    }
   }
 
   /**
@@ -184,13 +212,25 @@ export class EventStoreImpl implements EventStore {
    * @throws {Error} When event storage fails.
    */
   async saveEvent(form: FormSubmission): Promise<string> {
-    // Stamp the event with the current schema version when an upcaster service is available
-    if (this.upcasterService && form.schemaVersion === undefined) {
-      form.schemaVersion = this.upcasterService.getCurrentVersion(form.type);
-    }
-    const guids = await this.storageAdapter.saveEvents([form]);
-    this.latestHash = this.computeNextHash(form);
-    return guids[0];
+    // Serialize save operations through a promise queue to prevent concurrent
+    // hash chain corruption when multiple saveEvent calls overlap.
+    const resultPromise = new Promise<string>((resolve, reject) => {
+      this.saveQueue = this.saveQueue.then(async () => {
+        try {
+          // Stamp the event with the current schema version when an upcaster service is available
+          if (this.upcasterService && form.schemaVersion === undefined) {
+            form.schemaVersion = this.upcasterService.getCurrentVersion(form.type);
+          }
+          const guids = await this.storageAdapter.saveEvents([form]);
+          this.latestHash = this.computeNextHash(form);
+          await this.storageAdapter.persistHashAnchor(this.latestHash);
+          resolve(guids[0]);
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+    return resultPromise;
   }
 
   /**
