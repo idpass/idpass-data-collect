@@ -18,6 +18,7 @@
  */
 
 import { Router } from "express";
+import { GroupDoc } from "@idpass/data-collect-core";
 import { authenticateJWT, validateTenantAccess } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { AppInstanceStore } from "../types";
@@ -86,6 +87,9 @@ export function createEntitiesRouter(appInstanceStore: AppInstanceStore): Router
           entityName: pair.modified.data?.entityName,
           type: pair.modified.type,
           data: pair.modified.data,
+          memberIds: pair.modified.type === "group"
+            ? (pair.modified as GroupDoc).memberIds ?? []
+            : undefined,
           lastUpdated: pair.modified.lastUpdated,
         }))
         .sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime())

@@ -669,7 +669,9 @@ export class EventApplierService {
           const { guid: memberGuid, ...memberData } = member;
 
           if (memberData && memberData.type === "group") {
-            const subGroup = await this.createOrUpdateGroup(eventGuid, undefined, {
+            const existingPair = await this.entityStore.getEntity(memberGuid);
+            const existingGroup = existingPair?.modified as GroupDoc | undefined;
+            const subGroup = await this.createOrUpdateGroup(eventGuid, existingGroup, {
               guid: uuidv4(),
               entityGuid: memberGuid,
               data: memberData,
@@ -680,7 +682,9 @@ export class EventApplierService {
             });
             return subGroup.guid;
           } else if (memberData) {
-            const individualDoc = await this.createOrUpdateIndividual(eventGuid, undefined, {
+            const existingPair = await this.entityStore.getEntity(memberGuid);
+            const existingIndividual = existingPair?.modified as IndividualDoc | undefined;
+            const individualDoc = await this.createOrUpdateIndividual(eventGuid, existingIndividual, {
               guid: uuidv4(),
               entityGuid: memberGuid,
               data: memberData,
@@ -804,24 +808,31 @@ export class EventApplierService {
     const { guid, ...memberData } = rawMemberData;
 
     if (memberData.type === "group") {
-      // If the new member is a group, create a new group
-      const subGroupForm: FormSubmission = {
-        guid: uuidv4(),
-        type: "create-group",
-        entityGuid: guid,
-        data: memberData,
-        timestamp: new Date().toISOString(),
-        userId: formData.userId,
-        syncLevel: SyncLevel.LOCAL,
-      };
-      await this.createOrUpdateGroup(eventGuid, undefined, subGroupForm);
+      // Only create the sub-group if it doesn't already exist
+      const existingGroupPair = await this.entityStore.getEntity(guid);
+      if (!existingGroupPair) {
+        const subGroupForm: FormSubmission = {
+          guid: uuidv4(),
+          type: "create-group",
+          entityGuid: guid,
+          data: memberData,
+          timestamp: new Date().toISOString(),
+          userId: formData.userId,
+          syncLevel: SyncLevel.LOCAL,
+        };
+        await this.createOrUpdateGroup(eventGuid, undefined, subGroupForm);
+      }
     } else {
-      await this.createOrUpdateIndividual(eventGuid, undefined, {
-        ...formData,
-        entityGuid: guid,
-        type: "create-individual",
-        data: memberData,
-      });
+      // Only create the individual if it doesn't already exist
+      const existingMemberPair = await this.entityStore.getEntity(guid);
+      if (!existingMemberPair) {
+        await this.createOrUpdateIndividual(eventGuid, undefined, {
+          ...formData,
+          entityGuid: guid,
+          type: "create-individual",
+          data: memberData,
+        });
+      }
     }
 
     // Ensure memberIds is always an array

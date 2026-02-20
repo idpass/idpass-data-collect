@@ -36,6 +36,7 @@ const router = useRouter()
 const isLoading = ref(true)
 const error = ref<string | null>(null)
 const entity = ref<EntityRecord | null>(null)
+const allEntities = ref<EntityRecord[]>([])
 const events = ref<EventRecord[]>([])
 const expandedEventIndices = ref<Set<number>>(new Set())
 const pendingReviews = ref<ReviewRecord[]>([])
@@ -43,6 +44,17 @@ const fileInput = ref<HTMLInputElement | null>(null)
 
 const routeId = computed(() => route.params.id as string)
 const entityGuid = computed(() => route.params.guid as string)
+
+const members = computed(() => {
+  if (!entity.value || entity.value.type !== 'group' || !entity.value.memberIds?.length) {
+    return []
+  }
+  const entityMap = new Map(allEntities.value.map((e) => [e.guid, e]))
+  return entity.value.memberIds.map((guid) => {
+    const resolved = entityMap.get(guid)
+    return resolved ?? { guid, id: guid, name: guid, type: 'unknown', data: {}, lastUpdated: '' }
+  })
+})
 
 const formatDate = (dateString: string): string => {
   try {
@@ -60,6 +72,8 @@ const formatDate = (dateString: string): string => {
 }
 
 const getEventTypeColor = (type: string): string => {
+  if (type === 'add-member') return 'deep-purple'
+  if (type === 'remove-member') return 'warning'
   if (type.startsWith('create-')) return 'success'
   if (type.startsWith('update-')) return 'info'
   if (type.startsWith('delete-')) return 'error'
@@ -67,6 +81,8 @@ const getEventTypeColor = (type: string): string => {
 }
 
 const getEventTypeIcon = (type: string): string => {
+  if (type === 'add-member') return 'mdi-account-plus'
+  if (type === 'remove-member') return 'mdi-account-minus'
   if (type.startsWith('create-')) return 'mdi-plus-circle'
   if (type.startsWith('update-')) return 'mdi-pencil-circle'
   if (type.startsWith('delete-')) return 'mdi-delete-circle'
@@ -91,9 +107,10 @@ const fetchEntityAndEvents = async () => {
   error.value = null
 
   try {
-    // Fetch all entities to find the one we need
-    const allEntities = await getEntities(routeId.value, 1000)
-    const foundEntity = allEntities.find((e) => e.guid === entityGuid.value)
+    // Fetch all entities to find the one we need and to resolve member GUIDs
+    const fetchedEntities = await getEntities(routeId.value, 1000)
+    allEntities.value = fetchedEntities
+    const foundEntity = fetchedEntities.find((e) => e.guid === entityGuid.value)
 
     if (!foundEntity) {
       error.value = 'Entity not found'
@@ -241,6 +258,46 @@ onMounted(() => {
               <v-sheet class="data-sheet pa-4" color="surface-variant">
                 <pre class="data-display">{{ JSON.stringify(entity.data, null, 2) }}</pre>
               </v-sheet>
+            </v-card-text>
+          </v-card>
+
+          <!-- Members Section (groups only) -->
+          <v-card
+            v-if="entity.type === 'group' && members.length > 0"
+            class="detail-content mt-6"
+            border="md"
+            elevation="0"
+          >
+            <v-card-text class="pa-6">
+              <h2 class="section-title mb-4">
+                Members
+                <v-chip size="small" variant="tonal" color="deep-purple" class="ml-2">
+                  {{ members.length }}
+                </v-chip>
+              </h2>
+
+              <v-list density="compact">
+                <v-list-item
+                  v-for="member in members"
+                  :key="member.guid"
+                  :to="member.type !== 'unknown' ? { name: 'entity-detail', params: { id: routeId, guid: member.guid } } : undefined"
+                >
+                  <template #prepend>
+                    <v-icon :icon="member.type === 'group' ? 'mdi-account-group' : 'mdi-account'" />
+                  </template>
+                  <v-list-item-title>{{ member.name || 'Unnamed' }}</v-list-item-title>
+                  <v-list-item-subtitle>{{ member.entityName || member.type }}</v-list-item-subtitle>
+                  <template #append>
+                    <v-chip
+                      :color="member.type === 'group' ? 'secondary' : 'primary'"
+                      size="x-small"
+                      variant="tonal"
+                    >
+                      {{ member.type }}
+                    </v-chip>
+                  </template>
+                </v-list-item>
+              </v-list>
             </v-card-text>
           </v-card>
 
@@ -580,6 +637,16 @@ onMounted(() => {
 .marker-grey {
   border-color: rgb(158, 158, 158);
   color: rgb(158, 158, 158);
+}
+
+.marker-deep-purple {
+  border-color: rgb(103, 58, 183);
+  color: rgb(103, 58, 183);
+}
+
+.marker-warning {
+  border-color: rgb(255, 152, 0);
+  color: rgb(255, 152, 0);
 }
 
 .timeline-content {

@@ -106,22 +106,80 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
     if (!config.entityData) {
       return;
     }
+
+    // Build form lookup: which forms are top-level (group) vs dependent (individual)
+    const formLookup = new Map<string, { dependsOn?: string }>();
+    if (config.entityForms) {
+      for (const form of config.entityForms) {
+        formLookup.set(form.name || form.id, { dependsOn: form.dependsOn });
+      }
+    }
+
+    const isTopLevel = (formName: string) => !formLookup.get(formName)?.dependsOn;
+
+    // Build set of form names that are used as dependsOn targets by other forms.
+    // Forms that are dependsOn targets define entity types (e.g., "individual", "household"),
+    // while forms that are NOT targets are record types (e.g., "home_visit", "assistance").
+    const dependsOnTargets = new Set<string>();
+    if (config.entityForms) {
+      for (const form of config.entityForms) {
+        if (form.dependsOn) dependsOnTargets.add(form.dependsOn);
+      }
+    }
+
+    // Pass 1: top-level entities (groups)
     for (const entityData of config.entityData) {
+      if (!isTopLevel(entityData.name)) continue;
       for (const item of entityData.data) {
         await manager.submitForm({
           guid: uuidv4(),
           entityGuid: item?.id || uuidv4(),
-          type: "create-individual",
-          data: {
-            ...item,
-            entityName: entityData.name,
-            parentGuid: item.parentId || undefined,
-            name: item?.name || item?.id,
-          },
+          type: "create-group",
+          data: { ...item, entityName: entityData.name, name: item?.name || item?.id },
           timestamp: new Date().toISOString(),
           userId: "admin",
           syncLevel: SyncLevel.REMOTE,
         });
+      }
+    }
+
+    // Pass 2: dependent entities (individuals) + link to parent group if applicable
+    for (const entityData of config.entityData) {
+      if (isTopLevel(entityData.name)) continue;
+      // Only emit add-member when the parent form is a top-level (group) entity.
+      // Forms like "training" depend on "individual" (not a group), so their
+      // parentId link should not produce add-member events.
+      const parentFormName = formLookup.get(entityData.name)?.dependsOn;
+      const parentIsGroup = parentFormName ? isTopLevel(parentFormName) : false;
+
+      for (const item of entityData.data) {
+        const entityGuid = item?.id || uuidv4();
+        await manager.submitForm({
+          guid: uuidv4(),
+          entityGuid,
+          type: "create-individual",
+          data: { ...item, entityName: entityData.name, name: item?.name || item?.id },
+          timestamp: new Date().toISOString(),
+          userId: "admin",
+          syncLevel: SyncLevel.REMOTE,
+        });
+
+        // Link to parent group only if this form is an entity-creating form (a dependsOn target)
+        // and the parent is a group. Record forms (home_visit, assistance) are not linked as members.
+        const isEntityForm = dependsOnTargets.has(entityData.name);
+        if (item.parentId && parentIsGroup && isEntityForm) {
+          await manager.submitForm({
+            guid: uuidv4(),
+            entityGuid: item.parentId,
+            type: "add-member",
+            data: {
+              members: [{ guid: entityGuid, name: item?.name || item?.id, type: "individual" }],
+            },
+            timestamp: new Date().toISOString(),
+            userId: "admin",
+            syncLevel: SyncLevel.REMOTE,
+          });
+        }
       }
     }
   }

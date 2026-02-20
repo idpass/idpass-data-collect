@@ -184,6 +184,7 @@ export interface EntityRecord {
   entityName?: string
   type: string
   data: Record<string, unknown>
+  memberIds?: string[]
   lastUpdated: string
 }
 
@@ -330,6 +331,16 @@ export const fetchOpenSppFieldsFromAPI = async (params: FetchOpenSppFieldsParams
 
 // --- Reviews ---
 
+export interface ReviewFormData {
+  guid: string
+  entityGuid: string
+  type: string
+  data: Record<string, unknown>
+  timestamp: string
+  userId: string
+  syncLevel: number
+}
+
 export interface ReviewRecord {
   id: string
   submissionGuid: string
@@ -341,7 +352,7 @@ export interface ReviewRecord {
   rejectionReason: string | null
   eventType: string
   entityGuid: string
-  data: Record<string, unknown>
+  formData: ReviewFormData
   createdAt: string
 }
 
