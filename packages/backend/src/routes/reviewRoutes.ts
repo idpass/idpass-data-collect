@@ -18,41 +18,27 @@
  */
 
 import { Router } from "express";
-import { v4 as uuidv4 } from "uuid";
 import { FormSubmission, ReviewService, EventApplierService } from "@idpass/data-collect-core";
-import { authenticateJWT, AuthenticatedRequest } from "../middlewares/authentication";
+import { authenticateJWT, AuthenticatedRequest, validateTenantAccess } from "../middlewares/authentication";
 import { requireAction } from "../middlewares/rbac";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { AppInstanceStore, Role } from "../types";
+import { ReviewStore } from "../stores/ReviewStore";
 import { createLogger } from "../utils/logger";
 
 const log = createLogger("reviewRoutes");
 
 /**
- * In-memory store of review configs and reviews per tenant.
+ * In-memory cache of ReviewService instances per tenant.
  * Each tenant gets its own ReviewService instance backed by
  * the corresponding app instance's EventApplierService.
+ * Review configs are persisted in PostgreSQL via ReviewStore.
  */
 const reviewServiceCache = new Map<string, ReviewService>();
 
-/**
- * In-memory store of review configs indexed by "tenantId:eventType".
- * Shared across all requests to maintain state.
- */
-const reviewConfigStore = new Map<
-  string,
-  {
-    id: string;
-    tenantId: string;
-    eventType: string;
-    policy: string;
-    requiredRole?: string;
-    externalAdapterType?: string;
-  }
->();
-
 async function getReviewService(
   appInstanceStore: AppInstanceStore,
+  reviewStore: ReviewStore,
   tenantId: string,
 ): Promise<ReviewService | null> {
   // Check cache first
@@ -83,28 +69,28 @@ async function getReviewService(
     } as InstanceType<typeof EventApplierService>,
   );
 
-  // Apply any stored review configs
-  for (const [key, config] of reviewConfigStore) {
-    if (config.tenantId === tenantId) {
-      reviewService.setReviewConfig(tenantId, config.eventType, {
-        policy: config.policy as "auto-approve" | "internal-review" | "external-delegate",
-        requiredRole: config.requiredRole,
-        externalAdapterType: config.externalAdapterType,
-      });
-    }
+  // Apply persisted review configs from the database
+  const configs = await reviewStore.getConfigsByTenant(tenantId);
+  for (const config of configs) {
+    reviewService.setReviewConfig(tenantId, config.eventType, {
+      policy: config.policy as "auto-approve" | "internal-review" | "external-delegate",
+      requiredRole: config.requiredRole,
+      externalAdapterType: config.externalAdapterType,
+    });
   }
 
   reviewServiceCache.set(tenantId, reviewService);
   return reviewService;
 }
 
-export function createReviewRoutes(appInstanceStore: AppInstanceStore): Router {
+export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewStore: ReviewStore): Router {
   const router = Router();
 
   // List pending reviews
   router.get(
     "/",
     authenticateJWT,
+    validateTenantAccess,
     requireAction("read"),
     asyncHandler(async (req, res) => {
       const { tenantId, status } = req.query;
@@ -113,7 +99,7 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore): Router {
         return res.status(400).json({ error: "Missing tenantId query parameter" });
       }
 
-      const reviewService = await getReviewService(appInstanceStore, tenantId as string);
+      const reviewService = await getReviewService(appInstanceStore, reviewStore, tenantId as string);
       if (!reviewService) {
         return res.status(404).json({ error: "Tenant not found" });
       }
@@ -129,6 +115,7 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore): Router {
   router.post(
     "/submit",
     authenticateJWT,
+    validateTenantAccess,
     requireAction("create"),
     asyncHandler(async (req, res) => {
       const { tenantId, formData } = req.body;
@@ -137,7 +124,7 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore): Router {
         return res.status(400).json({ error: "Missing tenantId or formData" });
       }
 
-      const reviewService = await getReviewService(appInstanceStore, tenantId);
+      const reviewService = await getReviewService(appInstanceStore, reviewStore, tenantId);
       if (!reviewService) {
         return res.status(404).json({ error: "Tenant not found" });
       }
@@ -252,29 +239,21 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore): Router {
   router.get(
     "/config/:tenantId",
     authenticateJWT,
+    validateTenantAccess,
     requireAction("read"),
     asyncHandler(async (req, res) => {
       const { tenantId } = req.params;
 
-      const configs: Array<{
-        eventType: string;
-        policy: string;
-        requiredRole?: string;
-        externalAdapterType?: string;
-      }> = [];
+      const configs = await reviewStore.getConfigsByTenant(tenantId);
 
-      for (const [key, config] of reviewConfigStore) {
-        if (config.tenantId === tenantId) {
-          configs.push({
-            eventType: config.eventType,
-            policy: config.policy,
-            requiredRole: config.requiredRole,
-            externalAdapterType: config.externalAdapterType,
-          });
-        }
-      }
-
-      res.json({ configs });
+      res.json({
+        configs: configs.map((c) => ({
+          eventType: c.eventType,
+          policy: c.policy,
+          requiredRole: c.requiredRole,
+          externalAdapterType: c.externalAdapterType,
+        })),
+      });
     }),
   );
 
@@ -282,6 +261,7 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore): Router {
   router.put(
     "/config/:tenantId/:eventType",
     authenticateJWT,
+    validateTenantAccess,
     requireAction("manage-config"),
     asyncHandler(async (req, res) => {
       const { tenantId, eventType } = req.params;
@@ -291,17 +271,11 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore): Router {
         return res.status(400).json({ error: "Missing policy" });
       }
 
-      const key = `${tenantId}:${eventType}`;
-      const configRecord = {
-        id: reviewConfigStore.get(key)?.id ?? uuidv4(),
-        tenantId,
-        eventType,
+      const configRecord = await reviewStore.setConfig(tenantId, eventType, {
         policy,
         requiredRole,
         externalAdapterType,
-      };
-
-      reviewConfigStore.set(key, configRecord);
+      });
 
       // Invalidate cached ReviewService so next request picks up the config
       reviewServiceCache.delete(tenantId);
@@ -319,5 +293,4 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore): Router {
  */
 export function clearReviewState(): void {
   reviewServiceCache.clear();
-  reviewConfigStore.clear();
 }

@@ -38,6 +38,10 @@ if (!jwtSecret) {
   throw new Error("JWT_SECRET must be set");
 }
 
+if (jwtSecret.length < 32) {
+  throw new Error("JWT_SECRET must be at least 32 characters long");
+}
+
 // Use POSTGRES if set, otherwise fallback to DATABASE_URL (Railway's default)
 const postgresConnectionString = postgresUrl || databaseUrl;
 
@@ -45,10 +49,29 @@ if (!postgresConnectionString) {
   throw new Error("PostgreSQL connection string must be set via POSTGRES or DATABASE_URL environment variable");
 }
 
-run({
+import { createLogger } from "./utils/logger";
+const log = createLogger("index");
+
+const serverInstance = run({
   port: parseInt(port),
   adminPassword,
   adminEmail,
   userId,
   postgresUrl: postgresConnectionString,
 });
+
+async function shutdown(signal: string) {
+  log.info({ signal }, "Received shutdown signal, closing connections");
+  try {
+    const instance = await serverInstance;
+    await instance.closeConnection();
+    log.info("Graceful shutdown complete");
+    process.exit(0);
+  } catch (error) {
+    log.error({ err: error }, "Error during graceful shutdown");
+    process.exit(1);
+  }
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

@@ -94,11 +94,13 @@ export function createDynamicAuthMiddleware(appInstanceStore: AppInstanceStore) 
       }
     
       isValid = await appInstance.edm.validateToken(authType, token);
-      
+
       if (isValid) {
         // Basic auth succeeded; mark the request so downstream middleware
         // (validateTenantAccess) knows auth was handled upstream.
-        (req as AuthenticatedRequest & { basicAuthValidated?: boolean }).basicAuthValidated = true;
+        // Also store the validated configId so tenant access is scoped.
+        (req as AuthenticatedRequest & { basicAuthValidated?: boolean; basicAuthConfigId?: string }).basicAuthValidated = true;
+        (req as AuthenticatedRequest & { basicAuthConfigId?: string }).basicAuthConfigId = configId as string;
       }
 
       if (!isValid) {
@@ -160,7 +162,16 @@ export function validateTenantAccess(req: Request, res: Response, next: NextFunc
   // Non-JWT authenticated requests (e.g. basic auth for external sync clients)
   // are validated by the upstream createDynamicAuthMiddleware, which sets a flag.
   if (!user) {
-    if ((req as AuthenticatedRequest & { basicAuthValidated?: boolean }).basicAuthValidated) {
+    const extReq = req as AuthenticatedRequest & { basicAuthValidated?: boolean; basicAuthConfigId?: string };
+    if (extReq.basicAuthValidated) {
+      // Enforce that the basic-auth configId matches the request's configId
+      const requestConfigId = (req.query.configId as string)
+        || ((req.body as Record<string, unknown>)?.configId as string)
+        || "default";
+      if (extReq.basicAuthConfigId && requestConfigId !== extReq.basicAuthConfigId) {
+        res.status(403).json({ error: "Forbidden: No access to this tenant" });
+        return;
+      }
       log.debug("validateTenantAccess: no JWT user, request authenticated via basic auth");
       next();
       return;
@@ -175,10 +186,24 @@ export function validateTenantAccess(req: Request, res: Response, next: NextFunc
     return;
   }
 
-  const configId = (req.query.configId as string) || ((req.body as Record<string, unknown>)?.configId as string) || "default";
+  // Check configId from query, body, or params
+  const configId = (req.query.configId as string)
+    || ((req.body as Record<string, unknown>)?.configId as string)
+    || "default";
+
+  // Also check tenantId from query, body, or params (used by review routes)
+  const tenantId = (req.query.tenantId as string)
+    || ((req.body as Record<string, unknown>)?.tenantId as string)
+    || (req.params.tenantId as string);
 
   const tenantIds = user.tenantIds ?? [];
-  if (!tenantIds.includes(configId)) {
+
+  if (!tenantIds.includes(configId) && configId !== "default") {
+    res.status(403).json({ error: "Forbidden: No access to this tenant" });
+    return;
+  }
+
+  if (tenantId && !tenantIds.includes(tenantId)) {
     res.status(403).json({ error: "Forbidden: No access to this tenant" });
     return;
   }

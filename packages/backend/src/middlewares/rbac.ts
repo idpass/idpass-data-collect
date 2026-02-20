@@ -20,7 +20,7 @@
 import { Request, Response, NextFunction } from "express";
 import { RbacService, RbacAction, ROLE_HIERARCHY, SystemRole } from "@idpass/data-collect-core";
 import { AuthenticatedRequest } from "./authentication";
-import { Role } from "../types";
+import { Role, UserStore } from "../types";
 import { createLogger } from "../utils/logger";
 
 const log = createLogger("rbac");
@@ -139,5 +139,42 @@ export function requireAction(action: RbacAction) {
     }
 
     next();
+  };
+}
+
+/**
+ * Middleware factory that re-verifies the user's role from the database
+ * rather than trusting the JWT claim alone. Use on sensitive endpoints
+ * where a stale JWT could grant elevated privileges (e.g., after a user
+ * has been demoted but their token has not yet expired).
+ */
+export function verifyRoleFromDatabase(userStore: UserStore) {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const user = (req as AuthenticatedRequest).user;
+    if (!user) {
+      res.status(401).json({ error: "Authentication required" });
+      return;
+    }
+
+    try {
+      const dbUser = await userStore.getUser(user.email);
+      if (!dbUser) {
+        res.status(401).json({ error: "User no longer exists" });
+        return;
+      }
+
+      // Update the request with the authoritative database role
+      (req as AuthenticatedRequest).user = {
+        ...user,
+        role: dbUser.role,
+        tenantIds: dbUser.tenantIds,
+        roleAssignments: dbUser.roleAssignments,
+      };
+
+      next();
+    } catch (error) {
+      log.error({ err: error, userId: user.id }, "Failed to verify role from database");
+      res.status(500).json({ error: "Internal server error" });
+    }
   };
 }
