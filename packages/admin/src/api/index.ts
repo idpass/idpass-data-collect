@@ -25,6 +25,9 @@ const APPS_URL = '/api/apps'
 const ENTITIES_URL = '/api/entities'
 const EXTERNAL_SYNC_URL = '/api/sync/external'
 const USERS_URL = '/api/users'
+const REVIEWS_URL = '/api/reviews'
+const DUPLICATES_URL = '/api/potential-duplicates'
+const ATTACHMENTS_URL = '/api/attachments'
 
 export let instance: AxiosInstance | null = null
 
@@ -226,7 +229,7 @@ export const getUsers = async (): Promise<{ id: string; email: string; role: str
   return response.data
 }
 
-export const createUser = async (user: { email: string; password: string; role: string }) => {
+export const createUser = async (user: { email: string; password: string; role: string; tenantIds?: string[] }) => {
   if (!instance) {
     throw new Error('Instance not initialized')
   }
@@ -237,8 +240,9 @@ export const createUser = async (user: { email: string; password: string; role: 
 export const updateUser = async (user: {
   id: string
   email: string
-  password: string
+  password?: string
   role: string
+  tenantIds?: string[]
 }) => {
   if (!instance) {
     throw new Error('Instance not initialized')
@@ -321,5 +325,214 @@ export const fetchOpenSppFieldsFromAPI = async (params: FetchOpenSppFieldsParams
     throw new Error('Instance not initialized')
   }
   const response = await instance.post(`${OPENSPP_FIELDS_URL}/fetch`, params)
+  return response.data
+}
+
+// --- Reviews ---
+
+export interface ReviewRecord {
+  id: string
+  submissionGuid: string
+  tenantId: string
+  status: 'pending' | 'approved' | 'rejected'
+  submittedBy: string
+  reviewedBy: string | null
+  reviewedAt: string | null
+  rejectionReason: string | null
+  eventType: string
+  entityGuid: string
+  data: Record<string, unknown>
+  createdAt: string
+}
+
+export interface ReviewConfigRecord {
+  eventType: string
+  policy: 'auto-approve' | 'internal-review' | 'external-delegate'
+  requiredRole?: string
+  externalAdapterType?: string
+}
+
+export const getReviews = async (
+  tenantId: string,
+  status?: 'pending' | 'approved' | 'rejected',
+): Promise<{ reviews: ReviewRecord[] }> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const params: Record<string, string> = { tenantId }
+  if (status) {
+    params.status = status
+  }
+  const response = await instance.get(REVIEWS_URL, { params })
+  return response.data
+}
+
+export const approveReview = async (
+  id: string,
+  tenantId: string,
+): Promise<{ review: ReviewRecord }> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const response = await instance.post(`${REVIEWS_URL}/${id}/approve`, { tenantId })
+  return response.data
+}
+
+export const rejectReview = async (
+  id: string,
+  tenantId: string,
+  reason: string,
+): Promise<{ review: ReviewRecord }> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const response = await instance.post(`${REVIEWS_URL}/${id}/reject`, { tenantId, reason })
+  return response.data
+}
+
+export const bulkApproveReviews = async (
+  reviewIds: string[],
+  tenantId: string,
+): Promise<{ approved: number; failed: number; errors: Array<{ reviewId: string; error: string }> }> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const response = await instance.post(`${REVIEWS_URL}/bulk-approve`, { reviewIds, tenantId })
+  return response.data
+}
+
+export const getReviewConfigs = async (
+  tenantId: string,
+): Promise<{ configs: ReviewConfigRecord[] }> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const response = await instance.get(`${REVIEWS_URL}/config/${tenantId}`)
+  return response.data
+}
+
+export const setReviewConfig = async (
+  tenantId: string,
+  eventType: string,
+  config: { policy: string; requiredRole?: string; externalAdapterType?: string },
+): Promise<{ status: string; config: ReviewConfigRecord }> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const response = await instance.put(`${REVIEWS_URL}/config/${tenantId}/${eventType}`, config)
+  return response.data
+}
+
+// --- Potential Duplicates ---
+
+export interface PotentialDuplicate {
+  entityGuid: string
+  duplicateGuid: string
+}
+
+export const getPotentialDuplicates = async (
+  configId: string,
+): Promise<PotentialDuplicate[]> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const response = await instance.get(DUPLICATES_URL, { params: { configId } })
+  return response.data
+}
+
+export const resolveDuplicate = async (params: {
+  newItem: string
+  existingItem: string
+  shouldDeleteNewItem: boolean
+  configId: string
+}): Promise<{ status: string }> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const response = await instance.post(`${DUPLICATES_URL}/resolve`, params)
+  return response.data
+}
+
+// --- Attachments ---
+
+export interface AttachmentMetadata {
+  guid: string
+  entityGuid: string
+  filename: string
+  mimeType: string
+  sizeBytes: number
+  tenantId: string
+}
+
+export const uploadAttachment = async (
+  file: File,
+  entityGuid: string,
+  configId: string,
+): Promise<{ status: string; attachment: AttachmentMetadata }> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('entityGuid', entityGuid)
+  formData.append('configId', configId)
+  const response = await instance.post(`${ATTACHMENTS_URL}/upload`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+  return response.data
+}
+
+export const getEntityAttachments = async (
+  entityGuid: string,
+  configId: string,
+): Promise<{ status: string; attachments: AttachmentMetadata[] }> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const response = await instance.get(`${ATTACHMENTS_URL}/entity/${entityGuid}`, {
+    params: { configId },
+  })
+  return response.data
+}
+
+export const deleteAttachment = async (
+  guid: string,
+  configId: string,
+): Promise<{ status: string }> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const response = await instance.delete(`${ATTACHMENTS_URL}/${guid}`, {
+    params: { configId },
+  })
+  return response.data
+}
+
+export const getAttachmentDownloadUrl = (guid: string, configId: string): string => {
+  const baseUrl = API_URL.replace(/\/+$/, '')
+  return `${baseUrl}${ATTACHMENTS_URL}/${guid}?configId=${configId}`
+}
+
+// --- User Token Management ---
+
+export const refreshToken = async (): Promise<{ token: string; userId: string }> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const response = await instance.post(`${USERS_URL}/refresh`)
+  return response.data
+}
+
+export const getCurrentUser = async (): Promise<{
+  id: string
+  email: string
+  role: string
+  tenantIds: string[]
+  roleAssignments?: Array<{ tenantId: string; role: string; areaId?: string }>
+}> => {
+  if (!instance) {
+    throw new Error('Instance not initialized')
+  }
+  const response = await instance.get(`${USERS_URL}/me`)
   return response.data
 }
