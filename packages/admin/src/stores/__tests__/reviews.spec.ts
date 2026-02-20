@@ -31,7 +31,15 @@ function makeReview(overrides: Partial<ReviewRecord> = {}): ReviewRecord {
     rejectionReason: null,
     eventType: 'create-group',
     entityGuid: 'entity-1',
-    data: {},
+    formData: {
+      guid: 'sub-1',
+      entityGuid: 'entity-1',
+      type: 'create-group',
+      data: {},
+      timestamp: '2026-01-01T00:00:00Z',
+      userId: 'user-1',
+      syncLevel: 1,
+    },
     createdAt: '2026-01-01T00:00:00Z',
     ...overrides,
   }

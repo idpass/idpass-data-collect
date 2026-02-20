@@ -15,6 +15,9 @@ const selectedReviewIds = ref<string[]>([])
 const showRejectDialog = ref(false)
 const rejectionReason = ref('')
 const rejectingReviewId = ref<string | null>(null)
+const selectedReview = ref<ReviewRecord | null>(null)
+const showDetailDialog = ref(false)
+const showRawJson = ref(false)
 
 const statusOptions = [
   { title: 'All', value: null },
@@ -53,6 +56,42 @@ const formatDate = (dateString: string): string => {
   } catch {
     return dateString
   }
+}
+
+const formatFieldLabel = (key: string): string => {
+  return key
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_-]/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+const formDataEntries = computed(() => {
+  if (!selectedReview.value?.formData?.data) return []
+  return Object.entries(selectedReview.value.formData.data).map(([key, value]) => ({
+    label: formatFieldLabel(key),
+    value: typeof value === 'object' ? JSON.stringify(value) : String(value ?? ''),
+  }))
+})
+
+const handleRowClick = (_event: Event, row: { item: ReviewRecord }) => {
+  selectedReview.value = row.item
+  showRawJson.value = false
+  showDetailDialog.value = true
+}
+
+const handleDialogApprove = async () => {
+  if (!selectedReview.value) return
+  await handleApprove(selectedReview.value)
+  // Refresh the selected review from the store after approval
+  const updated = reviewsStore.reviews.find((r: ReviewRecord) => r.id === selectedReview.value?.id)
+  if (updated) {
+    selectedReview.value = updated
+  }
+}
+
+const openRejectFromDialog = () => {
+  if (!selectedReview.value) return
+  openRejectDialog(selectedReview.value)
 }
 
 const displayedReviews = computed(() => {
@@ -191,7 +230,8 @@ onMounted(() => {
       :loading="reviewsStore.loading"
       item-value="id"
       show-select
-      class="elevation-1"
+      class="elevation-1 reviews-table"
+      @click:row="handleRowClick"
     >
       <template #item.entityGuid="{ item }">
         <span class="entity-guid" :title="item.entityGuid">
@@ -261,6 +301,93 @@ onMounted(() => {
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- Review Detail Dialog -->
+    <v-dialog v-model="showDetailDialog" max-width="700">
+      <v-card v-if="selectedReview">
+        <v-card-title class="d-flex align-center justify-space-between">
+          <span class="text-h6">Review Detail</span>
+          <v-btn icon="mdi-close" variant="text" size="small" @click="showDetailDialog = false" />
+        </v-card-title>
+
+        <v-card-text>
+          <div class="d-flex align-center ga-2 mb-4">
+            <v-chip :color="statusColor(selectedReview.status)" size="small" variant="tonal">
+              {{ selectedReview.status }}
+            </v-chip>
+            <span class="text-body-1 font-weight-medium">{{ selectedReview.eventType }}</span>
+          </div>
+
+          <div class="detail-meta mb-4">
+            <div class="detail-meta-row">
+              <span class="detail-meta-label">Entity</span>
+              <span class="detail-meta-value mono-text">{{ selectedReview.entityGuid }}</span>
+            </div>
+            <div class="detail-meta-row">
+              <span class="detail-meta-label">Submitted by</span>
+              <span class="detail-meta-value">{{ selectedReview.submittedBy }}</span>
+            </div>
+            <div class="detail-meta-row">
+              <span class="detail-meta-label">Date</span>
+              <span class="detail-meta-value">{{ formatDate(selectedReview.createdAt) }}</span>
+            </div>
+            <div v-if="selectedReview.reviewedBy" class="detail-meta-row">
+              <span class="detail-meta-label">Reviewed by</span>
+              <span class="detail-meta-value">{{ selectedReview.reviewedBy }}</span>
+            </div>
+            <div v-if="selectedReview.reviewedAt" class="detail-meta-row">
+              <span class="detail-meta-label">Reviewed at</span>
+              <span class="detail-meta-value">{{ formatDate(selectedReview.reviewedAt) }}</span>
+            </div>
+            <div v-if="selectedReview.rejectionReason" class="detail-meta-row">
+              <span class="detail-meta-label">Rejection reason</span>
+              <span class="detail-meta-value text-error">{{ selectedReview.rejectionReason }}</span>
+            </div>
+          </div>
+
+          <v-divider class="mb-4" />
+
+          <h3 class="text-subtitle-1 font-weight-bold mb-3">Submitted Data</h3>
+
+          <v-table v-if="formDataEntries.length > 0" density="compact" class="mb-3">
+            <tbody>
+              <tr v-for="entry in formDataEntries" :key="entry.label">
+                <td class="text-medium-emphasis font-weight-medium" style="width: 40%">
+                  {{ entry.label }}
+                </td>
+                <td>{{ entry.value }}</td>
+              </tr>
+            </tbody>
+          </v-table>
+
+          <div v-else class="text-medium-emphasis text-body-2 mb-3">No form data available.</div>
+
+          <v-btn
+            variant="text"
+            size="small"
+            :prepend-icon="showRawJson ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+            class="mb-2"
+            @click="showRawJson = !showRawJson"
+          >
+            Raw JSON
+          </v-btn>
+
+          <v-sheet v-if="showRawJson" class="data-sheet pa-3" color="surface-variant">
+            <pre class="data-display">{{ JSON.stringify(selectedReview.formData, null, 2) }}</pre>
+          </v-sheet>
+        </v-card-text>
+
+        <v-card-actions v-if="selectedReview.status === 'pending'">
+          <v-spacer />
+          <v-btn color="error" variant="tonal" @click="openRejectFromDialog">
+            Reject
+          </v-btn>
+          <v-btn color="success" variant="tonal" @click="handleDialogApprove">
+            Approve
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
@@ -268,5 +395,51 @@ onMounted(() => {
 .entity-guid {
   font-family: monospace;
   font-size: 0.85rem;
+}
+
+.reviews-table :deep(tbody tr) {
+  cursor: pointer;
+}
+
+.detail-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-meta-row {
+  display: flex;
+  gap: 12px;
+  font-size: 0.9rem;
+}
+
+.detail-meta-label {
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.6);
+  min-width: 120px;
+  flex-shrink: 0;
+}
+
+.detail-meta-value {
+  color: rgba(0, 0, 0, 0.87);
+  word-break: break-word;
+}
+
+.mono-text {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.85rem;
+}
+
+.data-sheet {
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.data-display {
+  margin: 0;
+  font-size: 0.85rem;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  line-height: 1.5;
+  overflow-x: auto;
 }
 </style>

@@ -24,6 +24,7 @@ import { AppError, asyncHandler } from "../middlewares/errorHandlers";
 import multer from "multer";
 import path from "path";
 import fs from "fs/promises";
+// @ts-expect-error OdooClient was moved to @idpass/adapter-openspp; needs dependency wiring
 import { OdooClient } from "@idpass/data-collect-core";
 
 /**

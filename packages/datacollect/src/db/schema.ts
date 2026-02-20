@@ -69,6 +69,8 @@ export const events = pgTable(
     timestamp: timestamp("timestamp", { withTimezone: true }),
     userId: text("user_id"),
     syncLevel: integer("sync_level"),
+    /** Monotonically increasing insertion-order sequence for hash chain rebuild. */
+    seq: serial("seq"),
   },
   (table) => [
     index("idx_events_tenant_id").on(table.tenantId),

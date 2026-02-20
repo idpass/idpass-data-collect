@@ -105,7 +105,7 @@ export function createAttachmentRoutes(appInstanceStore: AppInstanceStore, postg
       const arrayBuffer = req.file.buffer.buffer.slice(
         req.file.buffer.byteOffset,
         req.file.buffer.byteOffset + req.file.buffer.byteLength,
-      );
+      ) as ArrayBuffer;
 
       // Sanitize the filename on ingestion to prevent null bytes, path
       // separators, or header-injection sequences from being stored.

@@ -34,7 +34,9 @@ const log = createLogger("syncRoute");
 const SyncPushPayloadSchema = z.object({
   events: z.array(z.object({
     guid: z.string().uuid(),
-    entityGuid: z.string().uuid(),
+    // entityGuid accepts any non-empty string because loadEntityData creates
+    // entities with human-readable IDs (e.g. "hh-001") rather than UUIDs.
+    entityGuid: z.string().min(1),
     type: z.string(),
     data: z.record(z.string(), z.unknown()),
     timestamp: z.string().datetime(),

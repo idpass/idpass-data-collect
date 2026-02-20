@@ -171,8 +171,16 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
           data JSONB,
           timestamp TIMESTAMPTZ,
           user_id TEXT,
-          sync_level INTEGER
+          sync_level INTEGER,
+          seq SERIAL
         )
+      `);
+      // Add the seq column to existing tables that were created without it.
+      await client.query(`
+        DO $$ BEGIN
+          ALTER TABLE events ADD COLUMN IF NOT EXISTS seq SERIAL;
+        EXCEPTION WHEN others THEN NULL;
+        END $$
       `);
       await client.query(`
         CREATE TABLE IF NOT EXISTS audit_log (
@@ -265,7 +273,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
       })
       .from(events)
       .where(eq(events.tenantId, this.tenantId))
-      .orderBy(asc(events.timestamp), asc(events.guid));
+      .orderBy(asc(events.seq));
 
     return result.map((row) => {
       this.validateEventRow(row);

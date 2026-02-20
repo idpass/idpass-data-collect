@@ -25,6 +25,15 @@ import { createLogger } from "../utils/logger";
 const log = createLogger("EventStore");
 
 /**
+ * Version prefix for hash anchors using the deterministic serialization
+ * algorithm. Anchors without this prefix are from the legacy algorithm
+ * and will be migrated on the next initialization.
+ *
+ * @private
+ */
+const HASH_V2_PREFIX = "v2:";
+
+/**
  * Computes a SHA256 hash of the given data string.
  *
  * @private
@@ -34,20 +43,60 @@ function sha256(data: string): string {
 }
 
 /**
+ * Produces deterministic JSON serialization by sorting object keys recursively.
+ *
+ * PostgreSQL JSONB does not preserve object key insertion order. When events
+ * are saved, the `data` field has a specific key order in JavaScript, but
+ * JSONB may reorder keys internally. Since standard JSON.stringify depends
+ * on insertion order, the serialized string differs between save-time and
+ * read-time, breaking the hash chain. This function ensures the same output
+ * regardless of key insertion order.
+ *
+ * @private
+ */
+function deterministicStringify(value: unknown): string {
+  if (value === null || value === undefined) {
+    return JSON.stringify(value);
+  }
+  if (typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return "[" + value.map((item) => deterministicStringify(item)).join(",") + "]";
+  }
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj).sort();
+  const parts = keys.map((key) => JSON.stringify(key) + ":" + deterministicStringify(obj[key]));
+  return "{" + parts.join(",") + "}";
+}
+
+/**
  * Extracts only the canonical FormSubmission fields from an event for hashing.
  * Storage adapters may add extra fields (e.g., IndexedDB auto-increment `id`),
  * which must be excluded to keep the hash chain consistent between save-time
  * and verification-time.
  *
+ * Timestamps are normalized to canonical ISO 8601 format to prevent
+ * precision differences across storage backends from breaking the chain.
+ *
  * @private
  */
 function normalizeEventForHash(event: FormSubmission): FormSubmission {
+  // Normalize timestamp to canonical ISO 8601 when possible. Fall back to the
+  // original string for non-standard timestamps (e.g. Unix epoch strings used
+  // in tests) to avoid breaking the hash chain.
+  let normalizedTimestamp = event.timestamp;
+  const parsed = new Date(event.timestamp);
+  if (!isNaN(parsed.getTime())) {
+    normalizedTimestamp = parsed.toISOString();
+  }
+
   const normalized: FormSubmission = {
     guid: event.guid,
     entityGuid: event.entityGuid,
     type: event.type,
     data: event.data,
-    timestamp: event.timestamp,
+    timestamp: normalizedTimestamp,
     userId: event.userId,
     syncLevel: event.syncLevel,
   };
@@ -162,25 +211,32 @@ export class EventStoreImpl implements EventStore {
     // Compare persisted hash anchor vs recomputed hash to detect tampering.
     // Only flag tampering when there are actual events and both hashes are
     // non-empty — an empty store or a first-run store will have no anchor yet.
-    const persistedHash = await this.storageAdapter.getPersistedHashAnchor();
+    const rawAnchor = await this.storageAdapter.getPersistedHashAnchor();
     await this.rebuildHashChain();
 
-    if (
-      persistedHash !== null &&
-      persistedHash !== "" &&
-      this.latestHash !== "" &&
-      persistedHash !== this.latestHash
-    ) {
-      log.error(
-        { persistedHash, recomputedHash: this.latestHash },
-        "Hash chain tamper detected: persisted anchor does not match recomputed hash",
-      );
-      throw new Error("Event store integrity check failed: hash chain has been tampered with");
+    if (rawAnchor !== null && rawAnchor !== "" && this.latestHash !== "") {
+      if (rawAnchor.startsWith(HASH_V2_PREFIX)) {
+        // Current algorithm — strict tamper check
+        const persistedHash = rawAnchor.slice(HASH_V2_PREFIX.length);
+        if (persistedHash !== this.latestHash) {
+          log.error(
+            { persistedHash, recomputedHash: this.latestHash },
+            "Hash chain tamper detected: persisted anchor does not match recomputed hash",
+          );
+          throw new Error("Event store integrity check failed: hash chain has been tampered with");
+        }
+      } else {
+        // Legacy anchor (no version prefix) — the old algorithm used non-deterministic
+        // JSON.stringify which breaks on PostgreSQL JSONB key reordering. Migrate
+        // gracefully by re-persisting with the deterministic algorithm.
+        log.info("Migrating hash anchor from legacy format to deterministic v2 algorithm");
+      }
     }
 
-    // Persist the current hash anchor so future restarts can detect tampering
+    // Persist the current hash anchor with version prefix so future restarts
+    // can detect tampering using the deterministic algorithm.
     if (this.latestHash !== "") {
-      await this.storageAdapter.persistHashAnchor(this.latestHash);
+      await this.storageAdapter.persistHashAnchor(HASH_V2_PREFIX + this.latestHash);
     }
   }
 
@@ -192,7 +248,7 @@ export class EventStoreImpl implements EventStore {
     const events = await this.storageAdapter.getEvents();
     let hash = "";
     for (const event of events) {
-      hash = sha256(hash + JSON.stringify(normalizeEventForHash(event)));
+      hash = sha256(hash + deterministicStringify(normalizeEventForHash(event)));
     }
     this.latestHash = hash;
   }
@@ -201,7 +257,7 @@ export class EventStoreImpl implements EventStore {
    * Computes the next hash in the chain for a given event.
    */
   private computeNextHash(event: FormSubmission): string {
-    return sha256(this.latestHash + JSON.stringify(normalizeEventForHash(event)));
+    return sha256(this.latestHash + deterministicStringify(normalizeEventForHash(event)));
   }
 
   /**
@@ -223,7 +279,7 @@ export class EventStoreImpl implements EventStore {
           }
           const guids = await this.storageAdapter.saveEvents([form]);
           this.latestHash = this.computeNextHash(form);
-          await this.storageAdapter.persistHashAnchor(this.latestHash);
+          await this.storageAdapter.persistHashAnchor(HASH_V2_PREFIX + this.latestHash);
           resolve(guids[0]);
         } catch (error) {
           reject(error);
@@ -285,7 +341,7 @@ export class EventStoreImpl implements EventStore {
     const events = await this.storageAdapter.getEvents();
     let hash = "";
     for (const event of events) {
-      hash = sha256(hash + JSON.stringify(normalizeEventForHash(event)));
+      hash = sha256(hash + deterministicStringify(normalizeEventForHash(event)));
     }
     return hash === this.latestHash;
   }

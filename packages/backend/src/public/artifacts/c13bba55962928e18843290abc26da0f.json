@@ -1,8 +1,10 @@
 {
   "id": "demo-household-registry",
+  "artifactId": "c13bba55962928e18843290abc26da0f",
   "name": "Demo Household Registry",
   "description": "Demo app configuration with households and individuals for development and testing.",
   "version": "1.0.0",
+  "url": null,
   "entityForms": [
     {
       "id": "household",
@@ -16,7 +18,9 @@
             "type": "textfield",
             "input": true,
             "label": "Household Name",
-            "validate": { "required": true }
+            "validate": {
+              "required": true
+            }
           },
           {
             "key": "address",
@@ -38,11 +42,26 @@
             "label": "District",
             "data": {
               "values": [
-                { "label": "Chanthabuly", "value": "chanthabuly" },
-                { "label": "Sikhottabong", "value": "sikhottabong" },
-                { "label": "Xaysetha", "value": "xaysetha" },
-                { "label": "Sisattanak", "value": "sisattanak" },
-                { "label": "Hadxaifong", "value": "hadxaifong" }
+                {
+                  "label": "Chanthabuly",
+                  "value": "chanthabuly"
+                },
+                {
+                  "label": "Sikhottabong",
+                  "value": "sikhottabong"
+                },
+                {
+                  "label": "Xaysetha",
+                  "value": "xaysetha"
+                },
+                {
+                  "label": "Sisattanak",
+                  "value": "sisattanak"
+                },
+                {
+                  "label": "Hadxaifong",
+                  "value": "hadxaifong"
+                }
               ]
             }
           }
@@ -61,7 +80,9 @@
             "type": "textfield",
             "input": true,
             "label": "Cooperative Name",
-            "validate": { "required": true }
+            "validate": {
+              "required": true
+            }
           },
           {
             "key": "cooperative_type",
@@ -70,9 +91,18 @@
             "label": "Cooperative Type",
             "data": {
               "values": [
-                { "label": "Agricultural", "value": "agricultural" },
-                { "label": "Savings", "value": "savings" },
-                { "label": "Marketing", "value": "marketing" }
+                {
+                  "label": "Agricultural",
+                  "value": "agricultural"
+                },
+                {
+                  "label": "Savings",
+                  "value": "savings"
+                },
+                {
+                  "label": "Marketing",
+                  "value": "marketing"
+                }
               ]
             }
           },
@@ -89,11 +119,26 @@
             "label": "District",
             "data": {
               "values": [
-                { "label": "Chanthabuly", "value": "chanthabuly" },
-                { "label": "Sikhottabong", "value": "sikhottabong" },
-                { "label": "Xaysetha", "value": "xaysetha" },
-                { "label": "Sisattanak", "value": "sisattanak" },
-                { "label": "Hadxaifong", "value": "hadxaifong" }
+                {
+                  "label": "Chanthabuly",
+                  "value": "chanthabuly"
+                },
+                {
+                  "label": "Sikhottabong",
+                  "value": "sikhottabong"
+                },
+                {
+                  "label": "Xaysetha",
+                  "value": "xaysetha"
+                },
+                {
+                  "label": "Sisattanak",
+                  "value": "sisattanak"
+                },
+                {
+                  "label": "Hadxaifong",
+                  "value": "hadxaifong"
+                }
               ]
             }
           },
@@ -122,14 +167,18 @@
             "type": "textfield",
             "input": true,
             "label": "First Name",
-            "validate": { "required": true }
+            "validate": {
+              "required": true
+            }
           },
           {
             "key": "last_name",
             "type": "textfield",
             "input": true,
             "label": "Last Name",
-            "validate": { "required": true }
+            "validate": {
+              "required": true
+            }
           },
           {
             "key": "date_of_birth",
@@ -147,9 +196,18 @@
             "label": "Gender",
             "data": {
               "values": [
-                { "label": "Male", "value": "male" },
-                { "label": "Female", "value": "female" },
-                { "label": "Other", "value": "other" }
+                {
+                  "label": "Male",
+                  "value": "male"
+                },
+                {
+                  "label": "Female",
+                  "value": "female"
+                },
+                {
+                  "label": "Other",
+                  "value": "other"
+                }
               ]
             }
           }
@@ -180,9 +238,18 @@
             "label": "Purpose",
             "data": {
               "values": [
-                { "label": "Assessment", "value": "assessment" },
-                { "label": "Follow-up", "value": "follow-up" },
-                { "label": "Verification", "value": "verification" }
+                {
+                  "label": "Assessment",
+                  "value": "assessment"
+                },
+                {
+                  "label": "Follow-up",
+                  "value": "follow-up"
+                },
+                {
+                  "label": "Verification",
+                  "value": "verification"
+                }
               ]
             }
           },
@@ -200,8 +267,14 @@
             "label": "Follow-up Required",
             "data": {
               "values": [
-                { "label": "Yes", "value": "yes" },
-                { "label": "No", "value": "no" }
+                {
+                  "label": "Yes",
+                  "value": "yes"
+                },
+                {
+                  "label": "No",
+                  "value": "no"
+                }
               ]
             }
           },
@@ -250,9 +323,18 @@
             "label": "Status",
             "data": {
               "values": [
-                { "label": "Enrolled", "value": "enrolled" },
-                { "label": "Completed", "value": "completed" },
-                { "label": "Dropped", "value": "dropped" }
+                {
+                  "label": "Enrolled",
+                  "value": "enrolled"
+                },
+                {
+                  "label": "Completed",
+                  "value": "completed"
+                },
+                {
+                  "label": "Dropped",
+                  "value": "dropped"
+                }
               ]
             }
           },
@@ -263,8 +345,14 @@
             "label": "Certificate Issued",
             "data": {
               "values": [
-                { "label": "Yes", "value": "yes" },
-                { "label": "No", "value": "no" }
+                {
+                  "label": "Yes",
+                  "value": "yes"
+                },
+                {
+                  "label": "No",
+                  "value": "no"
+                }
               ]
             }
           }
@@ -295,9 +383,18 @@
             "label": "Assistance Type",
             "data": {
               "values": [
-                { "label": "Cash", "value": "cash" },
-                { "label": "Food", "value": "food" },
-                { "label": "Non-food", "value": "non-food" }
+                {
+                  "label": "Cash",
+                  "value": "cash"
+                },
+                {
+                  "label": "Food",
+                  "value": "food"
+                },
+                {
+                  "label": "Non-food",
+                  "value": "non-food"
+                }
               ]
             }
           },
@@ -314,9 +411,18 @@
             "label": "Currency",
             "data": {
               "values": [
-                { "label": "LAK", "value": "LAK" },
-                { "label": "USD", "value": "USD" },
-                { "label": "THB", "value": "THB" }
+                {
+                  "label": "LAK",
+                  "value": "LAK"
+                },
+                {
+                  "label": "USD",
+                  "value": "USD"
+                },
+                {
+                  "label": "THB",
+                  "value": "THB"
+                }
               ]
             }
           },
@@ -327,9 +433,18 @@
             "label": "Delivery Method",
             "data": {
               "values": [
-                { "label": "Bank Transfer", "value": "bank-transfer" },
-                { "label": "Mobile Money", "value": "mobile-money" },
-                { "label": "In Person", "value": "in-person" }
+                {
+                  "label": "Bank Transfer",
+                  "value": "bank-transfer"
+                },
+                {
+                  "label": "Mobile Money",
+                  "value": "mobile-money"
+                },
+                {
+                  "label": "In Person",
+                  "value": "in-person"
+                }
               ]
             }
           },
@@ -366,10 +481,22 @@
             "label": "Service Type",
             "data": {
               "values": [
-                { "label": "Health", "value": "health" },
-                { "label": "Education", "value": "education" },
-                { "label": "Legal", "value": "legal" },
-                { "label": "Livelihood", "value": "livelihood" }
+                {
+                  "label": "Health",
+                  "value": "health"
+                },
+                {
+                  "label": "Education",
+                  "value": "education"
+                },
+                {
+                  "label": "Legal",
+                  "value": "legal"
+                },
+                {
+                  "label": "Livelihood",
+                  "value": "livelihood"
+                }
               ]
             }
           },
@@ -393,9 +520,18 @@
             "label": "Status",
             "data": {
               "values": [
-                { "label": "Pending", "value": "pending" },
-                { "label": "Completed", "value": "completed" },
-                { "label": "Cancelled", "value": "cancelled" }
+                {
+                  "label": "Pending",
+                  "value": "pending"
+                },
+                {
+                  "label": "Completed",
+                  "value": "completed"
+                },
+                {
+                  "label": "Cancelled",
+                  "value": "cancelled"
+                }
               ]
             }
           },
@@ -826,5 +962,8 @@
         }
       ]
     }
-  ]
+  ],
+  "externalSync": null,
+  "authConfigs": null,
+  "syncServerUrl": "http://localhost:3000"
 }
