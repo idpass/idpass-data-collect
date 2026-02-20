@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useProgramDraftStore } from '@/stores/programDraft'
 import FieldsInput from '@/components/FieldsInput.vue'
+import { computed } from 'vue'
 
 const draftStore = useProgramDraftStore()
 
@@ -9,6 +10,18 @@ const authTypeOptions = [
   { title: 'Auth0', value: 'auth0' },
   { title: 'Keycloak', value: 'keycloak' },
 ]
+
+const selfServiceAuthMethods = [
+  { title: 'OTP (SMS/Email)', value: 'otp' },
+  { title: 'ID Verification', value: 'id' },
+  { title: 'QR Code', value: 'qr' },
+]
+
+const entityFormOptions = computed(() =>
+  draftStore.draft.entityForms
+    .filter((f) => f.name && f.title)
+    .map((f) => ({ title: f.title, value: f.name })),
+)
 
 const addAuthConfig = () => {
   draftStore.addAuthConfig()
@@ -107,6 +120,64 @@ const removeAuthConfig = (index: number) => {
         Add Another Configuration
       </v-btn>
     </div>
+
+    <!-- Self-Service Access -->
+    <v-divider class="my-6" />
+
+    <h3 class="text-h6 mb-4">Self-Service Access</h3>
+    <p class="step-description">
+      Allow beneficiaries to access their own data through self-service authentication (OTP, ID
+      verification, or QR code).
+    </p>
+
+    <v-card variant="outlined" class="pa-4">
+      <v-switch
+        v-model="draftStore.draft.selfService.enabled"
+        label="Enable Self-Service Access"
+        color="primary"
+        hide-details
+        class="mb-4"
+      />
+
+      <template v-if="draftStore.draft.selfService.enabled">
+        <v-select
+          v-model="draftStore.draft.selfService.authMethods"
+          :items="selfServiceAuthMethods"
+          item-title="title"
+          item-value="value"
+          label="Authentication Methods"
+          multiple
+          chips
+          closable-chips
+          variant="outlined"
+          density="comfortable"
+          class="mb-4"
+        />
+
+        <v-select
+          v-model="draftStore.draft.selfService.allowedForms"
+          :items="entityFormOptions"
+          item-title="title"
+          item-value="value"
+          label="Allowed Forms"
+          multiple
+          chips
+          closable-chips
+          variant="outlined"
+          density="comfortable"
+          hint="Forms beneficiaries can view/submit through self-service"
+          persistent-hint
+          class="mb-4"
+        />
+
+        <v-switch
+          v-model="draftStore.draft.selfService.requireReview"
+          label="Require review for self-service submissions"
+          color="primary"
+          hide-details
+        />
+      </template>
+    </v-card>
 
     <!-- Info Alert -->
     <v-alert

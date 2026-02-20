@@ -46,6 +46,13 @@ export interface AuthConfig {
   fields: Record<string, string>
 }
 
+export interface SelfServiceConfig {
+  enabled: boolean
+  authMethods: string[]
+  allowedForms: string[]
+  requireReview: boolean
+}
+
 export interface ProgramDraft {
   artifactId?: string
   name: string
@@ -54,6 +61,7 @@ export interface ProgramDraft {
   entityForms: EntityForm[]
   externalSync: ExternalSync
   authConfigs: AuthConfig[]
+  selfService: SelfServiceConfig
   /** Cached OpenSPP V2 fields for mapping UI */
   opensppV2Fields?: OpenSppV2Field[]
 }
@@ -109,6 +117,12 @@ const getEmptyDraft = (): ProgramDraft => ({
     adapterConfig: {},
   },
   authConfigs: [],
+  selfService: {
+    enabled: false,
+    authMethods: [],
+    allowedForms: [],
+    requireReview: false,
+  },
   opensppV2Fields: [],
 })
 
@@ -263,6 +277,12 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
           fieldMappings: config.externalSync?.fieldMappings || [],
         },
         authConfigs: config.authConfigs || [],
+        selfService: config.selfService || {
+          enabled: false,
+          authMethods: [],
+          allowedForms: [],
+          requireReview: false,
+        },
       }
       errors.value = getEmptyErrors()
       mode.value = 'edit'
@@ -292,6 +312,12 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
           fieldMappings: config.externalSync?.fieldMappings || [],
         },
         authConfigs: config.authConfigs || [],
+        selfService: config.selfService || {
+          enabled: false,
+          authMethods: [],
+          allowedForms: [],
+          requireReview: false,
+        },
       }
       errors.value = getEmptyErrors()
       mode.value = 'copy'
@@ -541,6 +567,7 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
         entityForms: draft.value.entityForms,
         externalSync: draft.value.externalSync,
         authConfigs: draft.value.authConfigs,
+        selfService: draft.value.selfService,
       }
 
       const formData = new FormData()

@@ -21,11 +21,15 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { AxiosError } from 'axios'
-import { getEntities, getEntityEvents } from '@/api'
-import type { EntityRecord, EventRecord } from '@/api'
+import { getEntities, getEntityEvents, getReviews, getAttachmentDownloadUrl } from '@/api'
+import type { EntityRecord, EventRecord, ReviewRecord } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { useAttachmentsStore } from '@/stores/attachments'
+import { useSnackBarStore } from '@/stores/snackBar'
 
 const authStore = useAuthStore()
+const attachmentsStore = useAttachmentsStore()
+const snackBarStore = useSnackBarStore()
 const route = useRoute()
 const router = useRouter()
 
@@ -34,6 +38,8 @@ const error = ref<string | null>(null)
 const entity = ref<EntityRecord | null>(null)
 const events = ref<EventRecord[]>([])
 const expandedEventIndices = ref<Set<number>>(new Set())
+const pendingReviews = ref<ReviewRecord[]>([])
+const fileInput = ref<HTMLInputElement | null>(null)
 
 const routeId = computed(() => route.params.id as string)
 const entityGuid = computed(() => route.params.guid as string)
@@ -111,12 +117,65 @@ const fetchEntityAndEvents = async () => {
   }
 }
 
+const pendingReviewCount = computed(() => pendingReviews.value.length)
+const hasPendingReviews = computed(() => pendingReviewCount.value > 0)
+
+const getFileIcon = (mimeType: string): string => {
+  if (mimeType.startsWith('image/')) return 'mdi-file-image'
+  if (mimeType === 'application/pdf') return 'mdi-file-pdf-box'
+  if (mimeType.includes('word') || mimeType.includes('document')) return 'mdi-file-word'
+  return 'mdi-file'
+}
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+const fetchPendingReviews = async () => {
+  try {
+    const response = await getReviews(routeId.value, 'pending')
+    pendingReviews.value = response.reviews.filter(
+      (r: ReviewRecord) => r.entityGuid === entityGuid.value,
+    )
+  } catch {
+    // Reviews are optional; fail silently
+  }
+}
+
+const handleUpload = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  try {
+    await attachmentsStore.upload(file, entityGuid.value, routeId.value)
+    snackBarStore.showSnackbar('Attachment uploaded', 'success')
+  } catch {
+    snackBarStore.showSnackbar('Failed to upload attachment', 'error')
+  }
+  input.value = ''
+}
+
+const handleDeleteAttachment = async (guid: string) => {
+  try {
+    await attachmentsStore.remove(guid, routeId.value)
+    snackBarStore.showSnackbar('Attachment deleted', 'success')
+  } catch {
+    snackBarStore.showSnackbar('Failed to delete attachment', 'error')
+  }
+}
+
 const goBack = () => {
   router.push({ name: 'app-details', params: { id: routeId.value } })
 }
 
 onMounted(() => {
   fetchEntityAndEvents()
+  fetchPendingReviews()
+  if (entityGuid.value && routeId.value) {
+    attachmentsStore.fetchForEntity(entityGuid.value, routeId.value)
+  }
 })
 </script>
 
@@ -133,6 +192,12 @@ onMounted(() => {
     </v-alert>
 
     <template v-else-if="entity">
+      <!-- Review Status Banner -->
+      <v-alert v-if="hasPendingReviews" type="warning" variant="tonal" class="mb-4">
+        This entity has {{ pendingReviewCount }} pending review(s).
+        <v-btn variant="text" size="small" to="/reviews">View Reviews</v-btn>
+      </v-alert>
+
       <div class="detail-header">
         <div class="detail-header__text">
           <h1 class="detail-header__title">{{ entity.name || 'Unnamed Entity' }}</h1>
@@ -248,6 +313,71 @@ onMounted(() => {
                   </div>
                 </div>
               </div>
+            </v-card-text>
+          </v-card>
+
+          <!-- Attachments Section -->
+          <v-card class="detail-content mt-6" border="md" elevation="0">
+            <v-card-text class="pa-6">
+              <div class="d-flex align-center justify-space-between mb-4">
+                <h2 class="section-title">
+                  Attachments
+                  <v-chip size="small" variant="tonal" color="primary" class="ml-2">
+                    {{ attachmentsStore.attachments.length }}
+                  </v-chip>
+                </h2>
+                <v-btn
+                  color="primary"
+                  variant="tonal"
+                  size="small"
+                  prepend-icon="mdi-upload"
+                  :loading="attachmentsStore.uploading"
+                  @click="fileInput?.click()"
+                >
+                  Upload
+                </v-btn>
+                <input
+                  ref="fileInput"
+                  type="file"
+                  style="display: none"
+                  @change="handleUpload"
+                />
+              </div>
+
+              <v-progress-linear v-if="attachmentsStore.loading" indeterminate color="primary" />
+
+              <div v-else-if="attachmentsStore.attachments.length === 0" class="empty-state">
+                No attachments for this entity.
+              </div>
+
+              <v-list v-else density="compact">
+                <v-list-item
+                  v-for="attachment in attachmentsStore.attachments"
+                  :key="attachment.guid"
+                >
+                  <template #prepend>
+                    <v-icon :icon="getFileIcon(attachment.mimeType)" />
+                  </template>
+                  <v-list-item-title>{{ attachment.filename }}</v-list-item-title>
+                  <v-list-item-subtitle>{{ formatFileSize(attachment.sizeBytes) }}</v-list-item-subtitle>
+                  <template #append>
+                    <v-btn
+                      icon="mdi-download"
+                      variant="text"
+                      size="small"
+                      :href="getAttachmentDownloadUrl(attachment.guid, routeId)"
+                      target="_blank"
+                    />
+                    <v-btn
+                      icon="mdi-delete"
+                      variant="text"
+                      size="small"
+                      color="error"
+                      @click="handleDeleteAttachment(attachment.guid)"
+                    />
+                  </template>
+                </v-list-item>
+              </v-list>
             </v-card-text>
           </v-card>
         </v-col>

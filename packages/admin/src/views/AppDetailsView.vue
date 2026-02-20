@@ -463,6 +463,24 @@ watch(
           >
             Trigger Sync
           </v-btn>
+          <v-btn
+            class="details-header__action"
+            variant="tonal"
+            color="secondary"
+            prepend-icon="mdi-content-duplicate"
+            @click="router.push({ name: 'duplicates', params: { id: routeId } })"
+          >
+            Duplicates
+          </v-btn>
+          <v-btn
+            class="details-header__action"
+            variant="tonal"
+            color="secondary"
+            prepend-icon="mdi-clipboard-check-outline"
+            @click="router.push({ name: 'review-config', params: { id: routeId } })"
+          >
+            Review Config
+          </v-btn>
           <v-menu location="bottom end">
             <template #activator="{ props }">
               <v-btn

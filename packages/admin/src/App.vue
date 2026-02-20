@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { useAuthStore } from '@/stores/auth'
 import { useSnackBarStore } from '@/stores/snackBar'
+import { useReviewsStore } from '@/stores/reviews'
 import { RouterView } from 'vue-router'
 
 const authStore = useAuthStore()
 const snackBarStore = useSnackBarStore()
+const reviewsStore = useReviewsStore()
 </script>
 
 <template>
@@ -20,6 +22,16 @@ const snackBarStore = useSnackBarStore()
         <v-btn to="/users" variant="text" class="mx-2">
           <v-icon start icon="mdi-account-group"></v-icon>
           Users
+        </v-btn>
+        <v-btn to="/reviews" variant="text" class="mx-2">
+          <v-icon start icon="mdi-clipboard-check-outline"></v-icon>
+          Reviews
+          <v-badge
+            v-if="reviewsStore.pendingCount > 0"
+            :content="reviewsStore.pendingCount"
+            color="warning"
+            floating
+          />
         </v-btn>
         <v-menu>
           <template v-slot:activator="{ props }">
