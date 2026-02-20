@@ -37,6 +37,7 @@ import { AppError } from "../utils/AppError";
 
 import { validateFormSubmission } from "../utils/formValidation";
 import { DuplicateDetectionService } from "./DuplicateDetectionService";
+import { EventUpcasterService } from "./EventUpcasterService";
 import { createLogger } from "../utils/logger";
 
 const log = createLogger("EventApplierService");
@@ -154,6 +155,8 @@ export class EventApplierService {
   private eventAppliers: Map<string, EventApplier> = new Map();
   /** Service that performs duplicate detection asynchronously off the write path */
   private duplicateDetectionService: DuplicateDetectionService;
+  /** Optional service for upcasting event data from older schema versions */
+  private upcasterService?: EventUpcasterService;
 
   /**
    * Creates a new EventApplierService instance.
@@ -161,14 +164,17 @@ export class EventApplierService {
    * @param eventStore Store for managing events and audit logs.
    * @param entityStore Store for managing current entity state.
    * @param duplicateDetectionService Optional service for async duplicate detection. A default instance is created if not provided.
+   * @param upcasterService Optional service for event schema version upcasting. When provided, event data is automatically upcasted before being applied.
    */
   constructor(
     private eventStore: EventStore,
     private entityStore: EntityStore,
     duplicateDetectionService?: DuplicateDetectionService,
+    upcasterService?: EventUpcasterService,
   ) {
     this.duplicateDetectionService =
       duplicateDetectionService ?? new DuplicateDetectionService(entityStore, eventStore);
+    this.upcasterService = upcasterService;
   }
 
   /**
@@ -313,6 +319,15 @@ export class EventApplierService {
     try {
       const formData = cloneDeep(formDataParam);
       validateFormSubmission(formData);
+
+      // Upcast event data from older schema versions if an upcaster service is available
+      if (this.upcasterService) {
+        formData.data = this.upcasterService.upcastEvent(
+          formData.type,
+          formData.schemaVersion,
+          formData.data as Record<string, unknown>,
+        ) as Record<string, unknown>;
+      }
 
       // Get existing entity if it exists
       const entityGuid = formData.entityGuid;

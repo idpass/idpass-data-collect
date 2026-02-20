@@ -221,6 +221,8 @@ export interface FormSubmission {
   userId: string;
   /** Current synchronization level of this event */
   syncLevel: SyncLevel;
+  /** Schema version of the event data for upcasting support. Undefined treated as version 1. */
+  schemaVersion?: number;
 }
 
 /**
@@ -951,4 +953,54 @@ export interface SingleAuthStorage {
   getToken(): Promise<string>;
   setToken(token: string): Promise<void>;
   removeToken(): Promise<void>;
+}
+
+/**
+ * Metadata for a file attachment associated with an entity.
+ *
+ * Tracks filename, MIME type, content hash for integrity verification,
+ * and sync status for offline-first upload workflows.
+ */
+export interface AttachmentMetadata {
+  /** Unique identifier for this attachment */
+  guid: string;
+  /** GUID of the entity this attachment belongs to */
+  entityGuid: string;
+  /** Original filename */
+  filename: string;
+  /** MIME type of the file (e.g., "image/jpeg", "application/pdf") */
+  mimeType: string;
+  /** File size in bytes */
+  sizeBytes: number;
+  /** SHA-256 hash of the file content for integrity verification */
+  hash: string;
+  /** ISO timestamp when the attachment was created */
+  createdAt: string;
+  /** Sync status: pending (not uploaded), uploaded (synced), failed (upload error) */
+  syncStatus: "pending" | "uploaded" | "failed";
+  /** Tenant identifier for multi-tenant isolation */
+  tenantId: string;
+}
+
+/**
+ * Storage interface for file attachments.
+ *
+ * Provides CRUD operations for attachment metadata and binary data,
+ * along with sync-related queries for offline-first upload workflows.
+ */
+export interface AttachmentStore {
+  /** Save attachment metadata and binary data */
+  saveAttachment(metadata: AttachmentMetadata, data: ArrayBuffer): Promise<void>;
+  /** Get attachment metadata and binary data by GUID */
+  getAttachment(guid: string): Promise<{ metadata: AttachmentMetadata; data: ArrayBuffer } | null>;
+  /** Get only the metadata for an attachment (without loading binary data) */
+  getAttachmentMetadata(guid: string): Promise<AttachmentMetadata | null>;
+  /** List all attachments for a specific entity */
+  listAttachments(entityGuid: string): Promise<AttachmentMetadata[]>;
+  /** Delete an attachment and its binary data */
+  deleteAttachment(guid: string): Promise<void>;
+  /** Get all attachments with 'pending' sync status for a tenant */
+  getPendingAttachments(tenantId: string): Promise<AttachmentMetadata[]>;
+  /** Update the sync status of an attachment */
+  updateSyncStatus(guid: string, status: AttachmentMetadata["syncStatus"]): Promise<void>;
 }

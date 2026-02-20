@@ -19,6 +19,7 @@
 
 import CryptoJS from "crypto-js";
 import { AuditLogEntry, EventStorageAdapter, EventStore, FormSubmission, SyncLevel } from "../interfaces/types";
+import { EventUpcasterService } from "../services/EventUpcasterService";
 
 /**
  * Computes a SHA256 hash of the given data string.
@@ -87,14 +88,18 @@ export class EventStoreImpl implements EventStore {
   /** The latest hash in the event hash chain */
   private latestHash: string = "";
   private storageAdapter: EventStorageAdapter;
+  /** Optional service for stamping events with the current schema version */
+  private upcasterService?: EventUpcasterService;
 
   /**
    * Creates a new EventStoreImpl instance.
    *
    * @param storageAdapter Storage adapter for persistence (IndexedDB, PostgreSQL, etc.).
+   * @param upcasterService Optional upcaster service. When provided, saved events are stamped with the current schema version for their event type.
    */
-  constructor(storageAdapter: EventStorageAdapter) {
+  constructor(storageAdapter: EventStorageAdapter, upcasterService?: EventUpcasterService) {
     this.storageAdapter = storageAdapter;
+    this.upcasterService = upcasterService;
   }
 
   /**
@@ -155,6 +160,10 @@ export class EventStoreImpl implements EventStore {
    * @throws {Error} When event storage fails.
    */
   async saveEvent(form: FormSubmission): Promise<string> {
+    // Stamp the event with the current schema version when an upcaster service is available
+    if (this.upcasterService && form.schemaVersion === undefined) {
+      form.schemaVersion = this.upcasterService.getCurrentVersion(form.type);
+    }
     const guids = await this.storageAdapter.saveEvents([form]);
     this.latestHash = this.computeNextHash(form);
     return guids[0];

@@ -26,6 +26,7 @@ import { requireAction } from "../middlewares/rbac";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { AppInstanceStore } from "../types";
 import { createLogger } from "../utils/logger";
+import { processTransactionalBatch } from "../utils/transactionalEdm";
 
 const log = createLogger("syncRoute");
 
@@ -42,7 +43,7 @@ const SyncPushPayloadSchema = z.object({
   configId: z.string().optional(),
 });
 
-export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
+export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl?: string): Router {
   const router = Router();
   
   // Apply increased body parser limit only to sync routes that handle biometric data
@@ -131,18 +132,33 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore): Router {
       }
       const { events, configId } = parseResult.data;
 
-      const sorted = events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-
-      const appInstance = await appInstanceStore.getAppInstance(configId || "default");
+      const tenantId = configId || "default";
+      const appInstance = await appInstanceStore.getAppInstance(tenantId);
       if (!appInstance) {
         return res.json({ status: "error", message: "App instance not found" });
       }
-      const edm = appInstance.edm;
 
+      const sorted = events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
       const batchEvents = sorted.map((event) => ({ ...event, syncLevel: 1 }));
 
+      if (postgresUrl) {
+        // Transactional path: all events succeed or none are applied
+        const result = await processTransactionalBatch(postgresUrl, tenantId, batchEvents);
+        if (!result.success) {
+          return res.status(422).json({
+            status: "error",
+            message: "Batch push failed; no events were applied",
+            applied: result.applied,
+            failed: result.failed,
+          });
+        }
+        return res.json({ status: "success", applied: result.applied, failed: result.failed, errors: [] });
+      }
+
+      // Fallback for environments without a direct postgres URL (e.g., tests
+      // that don't pass the URL through). Uses the non-transactional path.
       try {
-        const result = await edm.submitFormBatch(batchEvents);
+        const result = await appInstance.edm.submitFormBatch(batchEvents);
         res.json({ status: "success", applied: result.applied, failed: result.failed, errors: result.errors });
       } catch (error) {
         log.error({ err: error }, "Batch push failed");

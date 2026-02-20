@@ -91,24 +91,56 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
   private pool: Pool;
   private db: DrizzleDatabase;
   private tenantId: string;
+  private ownsPool: boolean;
 
-  constructor(connectionString: string, tenantId?: string) {
-    this.pool = new Pool({
-      connectionString,
-    });
+  constructor(connectionString: string, tenantId?: string);
+  /**
+   * Creates a PostgresEventStorageAdapter using an existing Pool.
+   * When constructed this way, the adapter does NOT own the pool and will not close it.
+   */
+  constructor(pool: Pool, tenantId?: string);
+  constructor(connectionStringOrPool: string | Pool, tenantId?: string) {
+    if (typeof connectionStringOrPool === "string") {
+      this.pool = new Pool({ connectionString: connectionStringOrPool });
+      this.ownsPool = true;
+    } else {
+      this.pool = connectionStringOrPool;
+      this.ownsPool = false;
+    }
     this.db = createDrizzleFromPool(this.pool);
     this.tenantId = tenantId || "default";
   }
 
   /**
-   * Closes all connections in the PostgreSQL connection pool.
+   * Returns the underlying pg Pool used by this adapter.
+   * Useful for creating transactional EDM stacks that share a single connection pool.
+   */
+  getPool(): Pool {
+    return this.pool;
+  }
+
+  /**
+   * Replaces the internal Drizzle database instance.
+   * Used to inject a Drizzle transaction object so that all operations on this
+   * adapter participate in an external transaction.
    *
-   * Should be called during application shutdown to ensure graceful cleanup of database connections.
+   * @param db A Drizzle database or transaction instance.
+   */
+  setDrizzleInstance(db: DrizzleDatabase): void {
+    this.db = db;
+  }
+
+  /**
+   * Closes all connections in the PostgreSQL connection pool.
+   * Only closes the pool if this adapter owns it (created from a connection string).
+   * When constructed with an external Pool, the caller is responsible for pool lifecycle.
    *
    * @returns A Promise that resolves when the connection is closed.
    */
   async closeConnection(): Promise<void> {
-    await this.pool.end();
+    if (this.ownsPool) {
+      await this.pool.end();
+    }
   }
 
   /**

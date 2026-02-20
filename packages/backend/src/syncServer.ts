@@ -34,6 +34,7 @@ import { createSyncRouter } from "./routes/syncRoute";
 import { createUserRoutes } from "./routes/userRoutes";
 import { createSelfServiceRouter } from "./routes/selfServiceRoutes";
 import { createReviewRoutes, clearReviewState } from "./routes/reviewRoutes";
+import { createAttachmentRoutes } from "./routes/attachmentRoutes";
 import { AppConfigStoreImpl } from "./stores/AppConfigStore";
 import { AppInstanceStoreImpl } from "./stores/AppInstanceStore";
 import { UserStoreImpl } from "./stores/UserStore";
@@ -42,10 +43,15 @@ import { VerificationStoreImpl } from "./stores/VerificationStore";
 import { Role, SyncServerConfig, SyncServerInstance } from "./types";
 import { generatePublicArtifacts, resolvePublicBaseUrl } from "./utils/publicArtifacts";
 import { logger, createLogger } from "./utils/logger";
+import { initializeDatabase } from "./db/initialize";
 
 const log = createLogger("syncServer");
 
 export async function run(config: SyncServerConfig): Promise<SyncServerInstance> {
+  // Consolidated schema initialization: creates all backend tables and indexes
+  // in dependency order before individual stores verify their schemas.
+  await initializeDatabase(config.postgresUrl);
+
   const userStore = new UserStoreImpl(config.postgresUrl);
   await userStore.initialize();
   const appConfigStore = new AppConfigStoreImpl(config.postgresUrl);
@@ -95,12 +101,13 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
 
   app.use("/api/apps", createAppConfigRoutes(appConfigStore, appInstanceStore));
   app.use("/api/entities", createEntitiesRouter(appInstanceStore));
-  app.use("/api/sync", createSyncRouter(appInstanceStore));
+  app.use("/api/sync", createSyncRouter(appInstanceStore, config.postgresUrl));
   app.use("/api/users", createUserRoutes(userStore));
   app.use("/api/openspp-fields", createOpenSppFieldRoutes());
   app.use("/api/potential-duplicates", createPotentialDuplicatesRoute(appInstanceStore));
   app.use("/api/auth", createSelfServiceRouter(otpStore, appInstanceStore));
   app.use("/api/reviews", createReviewRoutes(appInstanceStore));
+  app.use("/api/attachments", createAttachmentRoutes(appInstanceStore, config.postgresUrl));
 
   app.get("/artifacts/:artifactId.json", async (req, res, next) => {
     try {

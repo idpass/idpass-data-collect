@@ -215,6 +215,8 @@ export * from "./components/SyncAdapter";
 // Core Services
 export * from "./services/EventApplierService";
 export * from "./services/DuplicateDetectionService";
+export { EventUpcasterService } from "./services/EventUpcasterService";
+export type { EventUpcaster } from "./services/EventUpcasterService";
 export { ProjectionRebuildService } from "./services/ProjectionRebuildService";
 export type { RebuildResult } from "./services/ProjectionRebuildService";
 export * from "./services/RbacService";
@@ -228,11 +230,17 @@ export type { UserAssignmentRecord, EntityOverrideRecord } from "./services/Assi
 export { SnapshotService } from "./services/SnapshotService";
 export type { SnapshotRecord, BatchSnapshotResult } from "./services/SnapshotService";
 
+// Attachment Services
+export { AttachmentService } from "./services/AttachmentService";
+export type { AttachmentServiceOptions } from "./services/AttachmentService";
+
 // Storage Adapters
 export * from "./storage/IndexedDbEntityStorageAdapter";
 export * from "./storage/IndexedDbEventStorageAdapter";
+export * from "./storage/IndexedDbAttachmentStorageAdapter";
 export * from "./storage/PostgresEntityStorageAdapter";
 export * from "./storage/PostgresEventStorageAdapter";
+export * from "./storage/PostgresAttachmentStorageAdapter";
 
 // Adapter Registry and V2 Adapter Interfaces
 export * from "./interfaces/adapter";
@@ -262,9 +270,20 @@ export * from "./services/SingleAuthStorageImpl";
 // Field Transformers
 export * from "./utils/fieldTransformers";
 
-// Database Schema and Connection (Drizzle ORM)
+// Database Schema, Connection, and Initialization (Drizzle ORM)
 export * from "./db/schema";
 export * from "./db/connection";
+export { initializeDatacollectDatabase } from "./db/initialize";
+
+// Conflict Detection and Resolution
+export { ConflictService, InMemoryConflictStore } from "./services/ConflictService";
+export type { ConflictRecord, ConflictStore, RecordConflictParams } from "./services/ConflictService";
+
+// Testing Utilities
+export { NetworkSimulator } from "./testing/NetworkSimulator";
+export type { NetworkCondition, NetworkStats } from "./testing/NetworkSimulator";
+export { StorageFaultInjector } from "./testing/StorageFaultInjector";
+export type { FaultRule } from "./testing/StorageFaultInjector";
 
 // Utility functions
 export { normalizeLegacyRelationField, normalizeLegacyRelationFields } from "./utils/normalizeLegacyRelationFields";

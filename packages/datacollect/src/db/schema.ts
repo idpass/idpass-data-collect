@@ -17,7 +17,7 @@
  * under the License.
  */
 
-import { pgTable, text, jsonb, timestamp, serial, integer, boolean, primaryKey, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, text, jsonb, timestamp, serial, integer, boolean, primaryKey, uniqueIndex, index, customType } from "drizzle-orm/pg-core";
 
 /**
  * Main entities table for storing entity pairs (initial and modified states).
@@ -237,3 +237,53 @@ export const entitySnapshots = pgTable(
     index("idx_entity_snapshots_entity_tenant").on(table.entityGuid, table.tenantId),
   ],
 );
+
+/**
+ * Custom bytea type for Drizzle ORM.
+ * Maps PostgreSQL BYTEA columns to Node.js Buffer objects.
+ */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return "bytea";
+  },
+  toDriver(value: Buffer): Buffer {
+    return value;
+  },
+  fromDriver(value: Buffer): Buffer {
+    return value;
+  },
+});
+
+/**
+ * Attachment metadata table for storing file attachment metadata.
+ * Uses guid as primary key with tenant_id for multi-tenant isolation.
+ */
+export const attachments = pgTable(
+  "attachments",
+  {
+    guid: text("guid").primaryKey(),
+    entityGuid: text("entity_guid").notNull(),
+    filename: text("filename").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    hash: text("hash").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    syncStatus: text("sync_status").notNull().default("pending"),
+    tenantId: text("tenant_id").notNull().default("default"),
+  },
+  (table) => [
+    index("idx_attachments_entity_guid").on(table.entityGuid),
+    index("idx_attachments_tenant_id").on(table.tenantId),
+    index("idx_attachments_sync_status").on(table.syncStatus),
+    index("idx_attachments_tenant_sync_status").on(table.tenantId, table.syncStatus),
+  ],
+);
+
+/**
+ * Attachment data table for storing binary file content.
+ * Stores the actual file bytes as PostgreSQL BYTEA.
+ */
+export const attachmentData = pgTable("attachment_data", {
+  guid: text("guid").primaryKey(),
+  data: bytea("data").notNull(),
+});

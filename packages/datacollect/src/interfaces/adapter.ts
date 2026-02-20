@@ -18,6 +18,7 @@
  */
 
 import { z } from "zod";
+import type { AttachmentMetadata } from "./types";
 
 /**
  * Describes what sync directions an adapter supports.
@@ -137,6 +138,14 @@ export interface ExternalSyncAdapterV2 {
    * @returns Sync result with counts and any errors
    */
   pull(since?: string): Promise<SyncResult>;
+
+  /**
+   * Push file attachments to the external system.
+   * Optional: only implemented by adapters that support attachment sync.
+   * @param attachments Array of attachment metadata and binary data pairs
+   * @returns Sync result with counts and any errors
+   */
+  pushAttachments?(attachments: Array<{ metadata: AttachmentMetadata; data: ArrayBuffer }>): Promise<SyncResult>;
 
   /**
    * Disconnect from the external system and release resources.
