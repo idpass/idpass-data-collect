@@ -20,16 +20,15 @@
 import { computed, ref, watch } from 'vue'
 import { useProgramDraftStore } from '@/stores/programDraft'
 import { useSnackBarStore } from '@/stores/snackBar'
-import type { ParsedOpenSppField, FieldMapping } from '@/api'
-import OpenSppFieldInputDialog from '@/components/OpenSppFieldInputDialog.vue'
+import { fetchOpenSppFieldsFromAPI, type ParsedOpenSppField, type FieldMapping } from '@/api'
 import OpenSppV2FieldFetcher from '@/components/OpenSppV2FieldFetcher.vue'
 import { getFormFields } from '@/utils/formioFields'
 
 const draftStore = useProgramDraftStore()
 const snackBarStore = useSnackBarStore()
 
-const showOpenSppFieldInput = ref(false)
 const opensppV1Fields = ref<ParsedOpenSppField[]>([])
+const isFetchingV1Fields = ref(false)
 const expandedRows = ref<Record<number, boolean>>({})
 
 // Determine adapter type
@@ -126,10 +125,47 @@ const opensppFieldCount = computed(() => {
   return opensppV1Fields.value.length
 })
 
-// V1 field import handler
-const onOpenSppFieldsParsed = (fields: ParsedOpenSppField[]) => {
-  opensppV1Fields.value = fields
-  snackBarStore.showSnackbar(`Loaded ${fields.length} OpenSPP fields`, 'success')
+// V1 adapter config derived from the draft store
+const v1Config = computed(() => {
+  const sync = draftStore.draft.externalSync
+  const config = sync?.adapterConfig || {}
+  return {
+    url: sync?.url || '',
+    database: (config.database as string) || '',
+    username: (config.username as string) || '',
+    password: (config.password as string) || '',
+  }
+})
+
+const isV1ConfigComplete = computed(() => {
+  const { url, database, username, password } = v1Config.value
+  return !!(url && database && username && password)
+})
+
+const fetchV1Fields = async () => {
+  if (!isV1ConfigComplete.value) {
+    snackBarStore.showSnackbar('Complete the OpenSPP connection settings in the Integration step first', 'warning')
+    return
+  }
+
+  try {
+    isFetchingV1Fields.value = true
+    const result = await fetchOpenSppFieldsFromAPI({
+      url: v1Config.value.url,
+      database: v1Config.value.database,
+      username: v1Config.value.username,
+      password: v1Config.value.password,
+    })
+    opensppV1Fields.value = result.fields
+    snackBarStore.showSnackbar(`Fetched ${result.fields.length} OpenSPP fields`, 'success')
+  } catch (error) {
+    snackBarStore.showSnackbar(
+      error instanceof Error ? error.message : 'Failed to fetch OpenSPP fields',
+      'error',
+    )
+  } finally {
+    isFetchingV1Fields.value = false
+  }
 }
 
 const addMapping = () => {
@@ -231,7 +267,7 @@ const toggleRowExpansion = (index: number) => {
         Fields are automatically fetched from the OpenSPP V2 API.
       </template>
       <template v-else-if="isV1Adapter">
-        Import fields from OpenSPP using a sample payload or API fetch.
+        Fields are fetched directly from the configured OpenSPP V1 instance.
       </template>
     </p>
 
@@ -261,34 +297,65 @@ const toggleRowExpansion = (index: number) => {
       <div class="v1-field-header">
         <div class="v1-field-header__info">
           <h4>OpenSPP V1 Fields</h4>
-          <p>Import fields from a sample payload or fetch directly from the Odoo API.</p>
+          <p>Fields are fetched directly from the configured OpenSPP instance.</p>
         </div>
         <v-btn
           color="primary"
           variant="outlined"
-          @click="showOpenSppFieldInput = true"
+          :loading="isFetchingV1Fields"
+          :disabled="!isV1ConfigComplete"
+          @click="fetchV1Fields"
         >
-          <v-icon start icon="mdi-upload" />
-          Import Fields
+          <v-icon start icon="mdi-refresh" />
+          Fetch Fields
         </v-btn>
       </div>
 
+      <v-card variant="outlined" density="compact" class="mt-3 v1-config-preview">
+        <v-card-text class="pa-3">
+          <p class="config-preview-label">Fetching from:</p>
+          <div class="config-preview-rows">
+            <div class="config-preview-row">
+              <span class="config-key">URL</span>
+              <span class="config-value">{{ v1Config.url || '—' }}</span>
+            </div>
+            <div class="config-preview-row">
+              <span class="config-key">Database</span>
+              <span class="config-value">{{ v1Config.database || '—' }}</span>
+            </div>
+            <div class="config-preview-row">
+              <span class="config-key">Username</span>
+              <span class="config-value">{{ v1Config.username || '—' }}</span>
+            </div>
+          </div>
+          <v-alert
+            v-if="!isV1ConfigComplete"
+            type="warning"
+            variant="tonal"
+            density="compact"
+            class="mt-2"
+          >
+            Complete the OpenSPP connection settings in the Integration step to enable field fetching.
+          </v-alert>
+        </v-card-text>
+      </v-card>
+
       <v-alert
-        v-if="opensppV1Fields.length === 0"
-        type="warning"
+        v-if="isV1ConfigComplete && opensppV1Fields.length === 0"
+        type="info"
         variant="tonal"
         density="compact"
-        class="mt-4"
+        class="mt-3"
       >
-        Import OpenSPP fields to enable field mapping.
+        Click "Fetch Fields" to load available OpenSPP fields for mapping.
       </v-alert>
 
       <v-alert
-        v-else
+        v-else-if="opensppV1Fields.length > 0"
         type="success"
         variant="tonal"
         density="compact"
-        class="mt-4"
+        class="mt-3"
       >
         {{ opensppV1Fields.length }} OpenSPP field{{ opensppV1Fields.length === 1 ? '' : 's' }} loaded.
       </v-alert>
@@ -542,11 +609,6 @@ const toggleRowExpansion = (index: number) => {
       </div>
     </div>
 
-    <!-- OpenSPP V1 Field Input Dialog -->
-    <OpenSppFieldInputDialog
-      v-model="showOpenSppFieldInput"
-      @fields-parsed="onOpenSppFieldsParsed"
-    />
   </div>
 </template>
 
@@ -587,6 +649,45 @@ const toggleRowExpansion = (index: number) => {
   font-size: var(--font-size-sm);
   color: var(--text-muted);
   margin: 0;
+}
+
+.v1-config-preview {
+  background: var(--neutral-50) !important;
+}
+
+.config-preview-label {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 0 0 var(--spacing-sm);
+}
+
+.config-preview-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.config-preview-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-sm);
+}
+
+.config-key {
+  font-weight: 500;
+  color: var(--text-muted);
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.config-value {
+  color: var(--text-main);
+  font-family: monospace;
+  font-size: 0.8125rem;
 }
 
 .mapping-section {
