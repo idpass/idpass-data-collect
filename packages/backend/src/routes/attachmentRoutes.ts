@@ -18,6 +18,7 @@
  */
 
 import { Router } from "express";
+import path from "path";
 import multer from "multer";
 import { v4 as uuidv4 } from "uuid";
 import { AttachmentService, PostgresAttachmentStorageAdapter } from "@idpass/data-collect-core";
@@ -106,11 +107,15 @@ export function createAttachmentRoutes(appInstanceStore: AppInstanceStore, postg
         req.file.buffer.byteOffset + req.file.buffer.byteLength,
       );
 
+      // Sanitize the filename on ingestion to prevent null bytes, path
+      // separators, or header-injection sequences from being stored.
+      const sanitizedFilename = path.basename(req.file.originalname).replace(/[^a-zA-Z0-9._-]/g, "_");
+
       const metadata = await service.saveAttachment(
         {
           guid,
           entityGuid,
-          filename: req.file.originalname,
+          filename: sanitizedFilename,
           mimeType: req.file.mimetype,
           tenantId,
         },

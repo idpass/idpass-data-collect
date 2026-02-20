@@ -128,6 +128,10 @@ export class OtpStoreImpl implements OtpStore {
 
     const client = await this.pool.connect();
     try {
+      // Wrap invalidation + insert in a transaction so both succeed or fail
+      // together. Without this, a crash between the UPDATE and INSERT would
+      // leave the user with no valid code (denial of service).
+      await client.query("BEGIN");
       // Invalidate all existing active codes for this identifier/tenant
       // before creating a new one. This prevents code accumulation and
       // ensures only the most recent code is valid.
@@ -142,6 +146,10 @@ export class OtpStoreImpl implements OtpStore {
          VALUES ($1, $2, $3, $4, $5, $6, 0, false)`,
         [id, identifier, hashedCode, tenantId, entityGuid || null, expiresAt],
       );
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
     } finally {
       client.release();
     }
