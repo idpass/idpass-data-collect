@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { getPublicApp, type PublicAppConfig } from '@/api/apps'
 import { startOidcLogin, type OidcTenantConfig } from '@/auth/oidcManager'
@@ -43,13 +43,11 @@ async function loadTenantConfig() {
   }
 }
 
-const hasOidc = ref(false)
-
-function checkOidcAvailability() {
+const isOidcAvailable = computed(() => {
   if (!publicConfig.value?.selfService) return false
   return publicConfig.value.selfService.authMethods?.includes('oidc') &&
     !!publicConfig.value.selfService.oidcConfig
-}
+})
 
 async function handleOidcLogin() {
   if (!publicConfig.value?.selfService?.oidcConfig || !tenantId.value) return
@@ -118,7 +116,7 @@ async function handleOidcLogin() {
               <p v-if="publicConfig.description" class="mb-4">{{ publicConfig.description }}</p>
 
               <v-btn
-                v-if="checkOidcAvailability()"
+                v-if="isOidcAvailable"
                 color="accent"
                 size="large"
                 block
@@ -139,7 +137,7 @@ async function handleOidcLogin() {
               variant="text"
               block
               class="mt-4"
-              @click="publicConfig = null; tenantId = ''"
+              @click="publicConfig = null; tenantId = ''; tenantIdInput = ''"
             >
               Choose a different program
             </v-btn>

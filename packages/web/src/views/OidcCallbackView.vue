@@ -47,7 +47,8 @@ onMounted(async () => {
     if (err instanceof Error && err.message.includes('404')) {
       error.value = 'No matching beneficiary record found. Please contact your administrator.'
     } else {
-      error.value = err instanceof Error ? err.message : 'Authentication failed. Please try again.'
+      console.error('OIDC exchange error details:', err)
+      error.value = 'We were unable to verify your identity. Please try again or contact your program administrator.'
     }
   }
 })

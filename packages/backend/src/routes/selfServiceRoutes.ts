@@ -341,6 +341,7 @@ export function createSelfServiceRouter(
     idToken: z.string().min(1, "ID token is required"),
     accessToken: z.string().min(1, "Access token is required"),
     tenantId: z.string().min(1, "Tenant ID is required"),
+    nonce: z.string().optional(),
   });
 
   /**
@@ -359,7 +360,7 @@ export function createSelfServiceRouter(
         });
       }
 
-      const { idToken, accessToken, tenantId } = parseResult.data;
+      const { idToken, tenantId, nonce } = parseResult.data;
 
       // Load tenant config
       const appInstance = await appInstanceStore.getAppInstance(tenantId);
@@ -367,10 +368,19 @@ export function createSelfServiceRouter(
         return res.status(400).json({ error: "Tenant not found" });
       }
 
+      // Validate that OIDC is configured for this tenant
+      const oidcConfig = appInstance.config.selfService?.oidcConfig;
+      if (!oidcConfig) {
+        return res.status(400).json({ error: "OIDC not configured for this tenant" });
+      }
+
+      const expectedIssuer = oidcConfig.authority.replace(/\/+$/, "");
+      const expectedAudience = oidcConfig.clientId;
+
       // Dynamically import jose to avoid requiring it at module load time
       const { createRemoteJWKSet, jwtVerify } = await import("jose");
 
-      // Decode the ID token header to get the issuer
+      // Decode the ID token to validate issuer before making any network requests
       const tokenParts = idToken.split(".");
       if (tokenParts.length !== 3) {
         return res.status(400).json({ error: "Invalid ID token format" });
@@ -378,21 +388,25 @@ export function createSelfServiceRouter(
 
       let payload: Record<string, unknown>;
       try {
-        // Decode payload to get issuer for JWKS discovery
         payload = JSON.parse(Buffer.from(tokenParts[1], "base64url").toString());
       } catch {
         return res.status(400).json({ error: "Invalid ID token payload" });
       }
 
-      const issuer = payload.iss as string;
-      if (!issuer) {
+      // Validate issuer against tenant config BEFORE fetching JWKS (prevents SSRF)
+      const tokenIssuer = payload.iss as string;
+      if (!tokenIssuer) {
         return res.status(400).json({ error: "ID token missing issuer claim" });
       }
+      const normalizedTokenIssuer = tokenIssuer.replace(/\/+$/, "");
+      if (normalizedTokenIssuer !== expectedIssuer) {
+        return res.status(401).json({ error: "Token issuer does not match tenant configuration" });
+      }
 
-      // Fetch JWKS and verify the token
+      // Fetch JWKS from the trusted authority and verify the token
       try {
-        const jwksUrl = new URL(`${issuer.replace(/\/+$/, "")}/.well-known/openid-configuration`);
-        const discoveryResponse = await fetch(jwksUrl.toString());
+        const discoveryUrl = `${expectedIssuer}/.well-known/openid-configuration`;
+        const discoveryResponse = await fetch(discoveryUrl);
         if (!discoveryResponse.ok) {
           return res.status(502).json({ error: "Failed to fetch OIDC discovery document" });
         }
@@ -400,8 +414,14 @@ export function createSelfServiceRouter(
         const JWKS = createRemoteJWKSet(new URL(discovery.jwks_uri));
 
         const { payload: verifiedPayload } = await jwtVerify(idToken, JWKS, {
-          issuer,
+          issuer: expectedIssuer,
+          audience: expectedAudience,
         });
+
+        // Validate nonce if provided (prevents token replay)
+        if (nonce && verifiedPayload.nonce !== nonce) {
+          return res.status(401).json({ error: "Nonce mismatch" });
+        }
 
         // Extract subject and mapped claims
         const sub = verifiedPayload.sub;
@@ -458,10 +478,10 @@ export function createSelfServiceRouter(
         return res.status(404).json({ error: "Tenant not found" });
       }
 
-      const entityPairs = await appInstance.edm.getAllEntities();
-      const entityPair = entityPairs.find((p) => p.modified.guid === entityGuid);
-
-      if (!entityPair) {
+      let entityPair;
+      try {
+        entityPair = await appInstance.edm.getEntity(entityGuid);
+      } catch {
         return res.status(404).json({ error: "Entity not found" });
       }
 

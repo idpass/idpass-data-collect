@@ -44,7 +44,9 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const parts = token.split('.')
     if (parts.length !== 3) return null
-    return JSON.parse(atob(parts[1]))
+    // Convert base64url to standard base64 before decoding
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    return JSON.parse(atob(base64))
   } catch {
     return null
   }

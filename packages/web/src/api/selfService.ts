@@ -47,7 +47,7 @@ export interface SelfServiceSubmission {
 }
 
 export async function getSelfServiceEntity(): Promise<SelfServiceEntity> {
-  const response = await getClient().get('/api/self-service/entity')
+  const response = await getClient().get('/api/auth/self-service/entity')
   return response.data
 }
 
@@ -55,13 +55,13 @@ export async function submitSelfServiceForm(params: {
   formType: string
   formData: Record<string, unknown>
 }): Promise<{ review?: SelfServiceSubmission; status?: string }> {
-  const response = await getClient().post('/api/self-service/submit', params)
+  const response = await getClient().post('/api/auth/self-service/submit', params)
   return response.data
 }
 
 export async function getSelfServiceSubmissions(): Promise<{
   submissions: SelfServiceSubmission[]
 }> {
-  const response = await getClient().get('/api/self-service/submissions')
+  const response = await getClient().get('/api/auth/self-service/submissions')
   return response.data
 }

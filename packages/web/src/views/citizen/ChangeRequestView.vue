@@ -22,6 +22,7 @@ const formFields = ref<Array<{ key: string; value: unknown; label: string }>>([]
 const hiddenFields = new Set([
   'oidcSubject', 'password', 'passwordHash', 'secret',
   'guid', 'id', 'type', 'memberIds',
+  '__proto__', 'constructor', 'prototype',
 ])
 
 onMounted(async () => {
@@ -35,7 +36,7 @@ onMounted(async () => {
       .map(([key, value]) => ({
         key,
         value: value ?? '',
-        label: key.replace(/([A-Z])/g, ' $1').replace(/[_-]/g, ' '),
+        label: key.replace(/([A-Z])/g, ' $1').replace(/[_-]/g, ' ').trim().replace(/^./, c => c.toUpperCase()),
       }))
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load form'
@@ -49,9 +50,11 @@ async function handleSubmit() {
   submitError.value = null
 
   try {
-    const formData: Record<string, unknown> = {}
+    const formData: Record<string, unknown> = Object.create(null)
     for (const field of formFields.value) {
-      formData[field.key] = field.value
+      if (!hiddenFields.has(field.key)) {
+        formData[field.key] = field.value
+      }
     }
 
     await submitSelfServiceForm({

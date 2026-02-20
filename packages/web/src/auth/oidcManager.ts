@@ -50,8 +50,12 @@ export function getUserManager(): UserManager | null {
   return userManagerInstance
 }
 
+const OIDC_CONFIG_KEY = 'web_oidc_config'
+
 export async function startOidcLogin(config: OidcTenantConfig, tenantId: string): Promise<void> {
   const manager = createUserManager(config)
+  // Persist config in sessionStorage so the callback can reconstruct the UserManager
+  sessionStorage.setItem(OIDC_CONFIG_KEY, JSON.stringify(config))
   // Store tenantId in state so we can recover it after redirect
   await manager.signinRedirect({ state: { tenantId } })
 }
@@ -61,22 +65,32 @@ export async function handleOidcCallback(): Promise<{
   accessToken: string
   tenantId: string
 } | null> {
-  // Create a temporary manager to process the callback
-  // We need to read from the state store which has the original settings
-  const manager = userManagerInstance || new UserManager({
-    authority: 'https://placeholder',
-    client_id: 'placeholder',
-    redirect_uri: window.location.origin + '/callback',
-    response_type: 'code',
-    userStore: new WebStorageStateStore({ store: sessionStorage }),
-    stateStore: new WebStorageStateStore({ store: sessionStorage }),
-  })
+  // Reconstruct UserManager from persisted config if the in-memory instance is gone (page refresh)
+  let manager = userManagerInstance
+  if (!manager) {
+    const savedConfig = sessionStorage.getItem(OIDC_CONFIG_KEY)
+    if (savedConfig) {
+      try {
+        const config = JSON.parse(savedConfig) as OidcTenantConfig
+        manager = createUserManager(config)
+      } catch {
+        console.error('Failed to parse saved OIDC config')
+        return null
+      }
+    } else {
+      console.error('No OIDC configuration available for callback processing')
+      return null
+    }
+  }
 
   try {
     const user = await manager.signinRedirectCallback()
     if (!user) return null
 
     const tenantId = (user.state as { tenantId?: string })?.tenantId || ''
+
+    // Clean up persisted config
+    sessionStorage.removeItem(OIDC_CONFIG_KEY)
 
     return {
       idToken: user.id_token || '',
