@@ -48,7 +48,11 @@ body {
 
 body.barcode-scanner-active {
   visibility: hidden;
-  opacity: 0;
+  background-color: transparent !important;
+}
+
+body.barcode-scanner-active #app {
+  background-color: transparent !important;
 }
 
 .barcode-scanner-modal {

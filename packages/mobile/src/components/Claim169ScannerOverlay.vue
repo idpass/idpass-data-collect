@@ -214,7 +214,7 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <div v-else-if="isScanning" class="scanning-overlay">
+        <div v-else-if="isScanning" class="scanning-overlay barcode-scanner-modal">
           <div class="scan-frame">
             <div class="corner top-left"></div>
             <div class="corner top-right"></div>
@@ -417,7 +417,7 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.9);
+  background: transparent;
   z-index: 100;
 }
 
@@ -488,14 +488,15 @@ onUnmounted(() => {
   color: white;
   font-size: 1rem;
   margin-top: 2rem;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 
 .cancel-button {
   margin-top: 2rem;
   padding: 0.75rem 2rem;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.5);
   color: white;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 12px;
   font-size: 1rem;
   cursor: pointer;
