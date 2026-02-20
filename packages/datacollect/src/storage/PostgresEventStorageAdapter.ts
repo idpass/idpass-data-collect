@@ -261,7 +261,8 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
         syncLevel: events.syncLevel,
       })
       .from(events)
-      .where(eq(events.tenantId, this.tenantId));
+      .where(eq(events.tenantId, this.tenantId))
+      .orderBy(asc(events.timestamp), asc(events.guid));
 
     return result.map((row) => {
       // const timestamp: string = row.timestamp ? row.timestamp.toISOString() : null;
@@ -393,14 +394,14 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
       })
       .from(events)
       .where(and(gt(events.timestamp, timestampValue), eq(events.tenantId, this.tenantId)))
-      .orderBy(asc(events.timestamp));
+      .orderBy(asc(events.timestamp), asc(events.guid));
 
     return result.map((row) => ({
       guid: row.guid,
       entityGuid: row.entityGuid || "",
       type: row.type || "",
       data: (row.data as Record<string, unknown>) || {},
-      timestamp: row.timestamp as unknown as string,
+      timestamp: row.timestamp ? new Date(row.timestamp as unknown as Date).toISOString() : "",
       userId: row.userId || "",
       syncLevel: row.syncLevel ?? SyncLevel.LOCAL,
     }));

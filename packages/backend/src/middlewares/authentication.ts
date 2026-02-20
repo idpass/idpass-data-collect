@@ -95,10 +95,17 @@ export function createDynamicAuthMiddleware(appInstanceStore: AppInstanceStore) 
     
       isValid = await appInstance.edm.validateToken(authType, token);
       
+      if (isValid) {
+        // Basic auth succeeded; mark the request so downstream middleware
+        // (validateTenantAccess) knows auth was handled upstream.
+        (req as AuthenticatedRequest & { basicAuthValidated?: boolean }).basicAuthValidated = true;
+      }
+
       if (!isValid) {
         const decoded = await authenticateJWTBackend(token);
-        if (decoded) {
+        if (decoded && (decoded as DecodedPayload & { scope?: string }).scope !== "self-service") {
           isValid = true;
+          (req as AuthenticatedRequest).user = decoded;
         }
       }
       if (!isValid) {
@@ -151,9 +158,14 @@ export function validateTenantAccess(req: Request, res: Response, next: NextFunc
   const user = (req as AuthenticatedRequest).user;
 
   // Non-JWT authenticated requests (e.g. basic auth for external sync clients)
-  // are validated by the upstream auth middleware, not by tenant access
+  // are validated by the upstream createDynamicAuthMiddleware, which sets a flag.
   if (!user) {
-    next();
+    if ((req as AuthenticatedRequest & { basicAuthValidated?: boolean }).basicAuthValidated) {
+      log.debug("validateTenantAccess: no JWT user, request authenticated via basic auth");
+      next();
+      return;
+    }
+    res.status(401).json({ error: "Authentication required" });
     return;
   }
 
@@ -163,12 +175,7 @@ export function validateTenantAccess(req: Request, res: Response, next: NextFunc
     return;
   }
 
-  const configId = (req.query.configId as string) || ((req.body as Record<string, unknown>)?.configId as string);
-
-  if (!configId) {
-    res.status(400).json({ error: "Missing configId" });
-    return;
-  }
+  const configId = (req.query.configId as string) || ((req.body as Record<string, unknown>)?.configId as string) || "default";
 
   const tenantIds = user.tenantIds ?? [];
   if (!tenantIds.includes(configId)) {

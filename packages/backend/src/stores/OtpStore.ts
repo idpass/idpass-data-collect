@@ -96,6 +96,25 @@ export class OtpStoreImpl implements OtpStore {
     return number.toString().padStart(OTP_CODE_LENGTH, "0");
   }
 
+  /**
+   * Hash an OTP code using SHA-256 so plaintext codes are not stored in the database.
+   */
+  private hashCode(code: string): string {
+    return crypto.createHash("sha256").update(code).digest("hex");
+  }
+
+  /**
+   * Compare an input code against a stored hash using constant-time comparison
+   * to prevent timing side-channel attacks.
+   */
+  private verifyCodeHash(inputCode: string, storedHash: string): boolean {
+    const inputHash = this.hashCode(inputCode);
+    const inputBuf = Buffer.from(inputHash, "utf8");
+    const storedBuf = Buffer.from(storedHash, "utf8");
+    if (inputBuf.length !== storedBuf.length) return false;
+    return crypto.timingSafeEqual(inputBuf, storedBuf);
+  }
+
   async createOtp(
     identifier: string,
     tenantId: string,
@@ -105,12 +124,14 @@ export class OtpStoreImpl implements OtpStore {
     const code = this.generateOtpCode();
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_SECONDS * 1000);
 
+    const hashedCode = this.hashCode(code);
+
     const client = await this.pool.connect();
     try {
       await client.query(
         `INSERT INTO otp_codes (id, identifier, code, tenant_id, entity_guid, expires_at, attempts, verified)
          VALUES ($1, $2, $3, $4, $5, $6, 0, false)`,
-        [id, identifier, code, tenantId, entityGuid || null, expiresAt],
+        [id, identifier, hashedCode, tenantId, entityGuid || null, expiresAt],
       );
     } finally {
       client.release();
@@ -118,6 +139,8 @@ export class OtpStoreImpl implements OtpStore {
 
     log.info({ identifier, tenantId }, "OTP code created");
 
+    // Return the plaintext code so it can be sent to the user (e.g. via SMS).
+    // The database stores only the hashed version.
     return {
       id,
       identifier,
@@ -138,18 +161,19 @@ export class OtpStoreImpl implements OtpStore {
   ): Promise<OtpCode | null> {
     const client = await this.pool.connect();
     try {
+      // Retrieve the most recent active code for this identifier/tenant,
+      // then verify via constant-time hash comparison rather than SQL equality.
       const result = await client.query(
         `SELECT id, identifier, code, tenant_id, entity_guid, expires_at, attempts, verified, created_at
          FROM otp_codes
          WHERE identifier = $1
            AND tenant_id = $2
-           AND code = $3
            AND verified = false
-           AND attempts < $4
+           AND attempts < $3
            AND expires_at > NOW()
          ORDER BY created_at DESC
          LIMIT 1`,
-        [identifier, tenantId, code, MAX_ATTEMPTS],
+        [identifier, tenantId, MAX_ATTEMPTS],
       );
 
       if (result.rows.length === 0) {
@@ -157,6 +181,12 @@ export class OtpStoreImpl implements OtpStore {
       }
 
       const row = result.rows[0];
+
+      // Constant-time comparison of the input code against the stored hash
+      if (!this.verifyCodeHash(code, row.code)) {
+        return null;
+      }
+
       return {
         id: row.id,
         identifier: row.identifier,

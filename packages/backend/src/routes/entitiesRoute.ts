@@ -18,7 +18,7 @@
  */
 
 import { Router } from "express";
-import { authenticateJWT } from "../middlewares/authentication";
+import { authenticateJWT, validateTenantAccess } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { AppInstanceStore } from "../types";
 
@@ -28,6 +28,7 @@ export function createEntitiesRouter(appInstanceStore: AppInstanceStore): Router
   router.get(
     "/count",
     authenticateJWT,
+    validateTenantAccess,
     asyncHandler(async (req, res) => {
       const { configId = "default" } = req.query;
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
@@ -39,6 +40,7 @@ export function createEntitiesRouter(appInstanceStore: AppInstanceStore): Router
   router.get(
     "/count-by-form",
     authenticateJWT,
+    validateTenantAccess,
     asyncHandler(async (req, res) => {
       const { configId = "default" } = req.query;
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
@@ -62,6 +64,7 @@ export function createEntitiesRouter(appInstanceStore: AppInstanceStore): Router
   router.get(
     "/",
     authenticateJWT,
+    validateTenantAccess,
     asyncHandler(async (req, res) => {
       const { configId = "default", limit = "100" } = req.query;
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
@@ -92,6 +95,7 @@ export function createEntitiesRouter(appInstanceStore: AppInstanceStore): Router
   router.get(
     "/:guid/events",
     authenticateJWT,
+    validateTenantAccess,
     asyncHandler(async (req, res) => {
       const { configId = "default" } = req.query;
       const { guid } = req.params;

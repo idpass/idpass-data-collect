@@ -201,22 +201,20 @@ export function createSelfServiceRouter(
 
       const { identifier, otp, tenantId } = parseResult.data;
 
-      // Find matching active code
-      const activeCodes = await otpStore.getActiveCodesByIdentifier(
-        identifier,
-        tenantId,
-      );
-
-      if (activeCodes.length === 0) {
-        return res.status(401).json({ error: "No active OTP found" });
-      }
-
-      // Try to verify against the most recent active code
-      const matchingCode = activeCodes.find((c) => c.code === otp);
+      // Verify the OTP using constant-time hash comparison in the store.
+      // The store retrieves the most recent active code and compares via
+      // SHA-256 hash + crypto.timingSafeEqual to prevent timing attacks.
+      const matchingCode = await otpStore.verifyOtp(identifier, otp, tenantId);
 
       if (!matchingCode) {
-        // Increment attempts on the most recent code
-        await otpStore.incrementAttempts(activeCodes[0].id);
+        // Increment attempts on the most recent active code
+        const activeCodes = await otpStore.getActiveCodesByIdentifier(
+          identifier,
+          tenantId,
+        );
+        if (activeCodes.length > 0) {
+          await otpStore.incrementAttempts(activeCodes[0].id);
+        }
         return res.status(401).json({ error: "Invalid OTP" });
       }
 

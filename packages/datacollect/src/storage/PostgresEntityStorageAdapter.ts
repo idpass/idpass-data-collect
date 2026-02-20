@@ -336,38 +336,64 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * ```
    */
   async searchEntities(criteria: SearchCriteria): Promise<EntityPair[]> {
-    // Build raw SQL conditions for JSONB search (Drizzle does not natively support
-    // all JSONB operators like ~* or casting to ::numeric)
+    // Allowlist regex for JSONB field keys to prevent SQL injection via key names.
+    // Keys may only contain alphanumeric characters, underscores, and dots.
+    const SAFE_KEY_PATTERN = /^[a-zA-Z0-9_.]+$/;
+
+    // Build parameterized SQL conditions for JSONB search.
+    // Field keys are validated against an allowlist and then used with sql.raw()
+    // (PostgreSQL JSONB ->> does not support parameterized key names).
+    // All values are parameterized via Drizzle's sql tagged template.
     const conditions = criteria.map((criterion) => {
       const key = Object.keys(criterion)[0];
       const value = criterion[key];
+
+      if (!SAFE_KEY_PATTERN.test(key)) {
+        throw new Error(`Invalid search field key: ${key}`);
+      }
+
+      // Build safe raw key references for JSONB access
+      const initialPath = sql.raw(`initial->'data'->>'${key}'`);
+      const modifiedPath = sql.raw(`modified->'data'->>'${key}'`);
+
       if (typeof value === "object") {
         const operator = Object.keys(value)[0];
         const operandValue = value[operator];
-        switch (operator) {
-          case "$gt":
-            return `((initial->'data'->>'${key}')::numeric > ${operandValue} OR (modified->'data'->>'${key}')::numeric > ${operandValue})`;
-          case "$lt":
-            return `((initial->'data'->>'${key}')::numeric < ${operandValue} OR (modified->'data'->>'${key}')::numeric < ${operandValue})`;
-          case "$eq":
-            return `((initial->'data'->>'${key}')::numeric = ${operandValue} OR (modified->'data'->>'${key}')::numeric = ${operandValue})`;
-          case "$gte":
-            return `((initial->'data'->>'${key}')::numeric >= ${operandValue} OR (modified->'data'->>'${key}')::numeric >= ${operandValue})`;
-          case "$lte":
-            return `((initial->'data'->>'${key}')::numeric <= ${operandValue} OR (modified->'data'->>'${key}')::numeric <= ${operandValue})`;
-          case "$regex":
-            return `((initial->'data'->>'${key}') ~* '${operandValue}' OR (modified->'data'->>'${key}') ~* '${operandValue}')`;
-          default:
-            return "false";
+
+        // Validate numeric operands for comparison operators
+        if (["$gt", "$lt", "$eq", "$gte", "$lte"].includes(operator)) {
+          const numericValue = Number(operandValue);
+          if (isNaN(numericValue)) {
+            throw new Error(`Non-numeric value for ${operator} operator: ${operandValue}`);
+          }
+          switch (operator) {
+            case "$gt":
+              return sql`((${initialPath})::numeric > ${numericValue} OR (${modifiedPath})::numeric > ${numericValue})`;
+            case "$lt":
+              return sql`((${initialPath})::numeric < ${numericValue} OR (${modifiedPath})::numeric < ${numericValue})`;
+            case "$eq":
+              return sql`((${initialPath})::numeric = ${numericValue} OR (${modifiedPath})::numeric = ${numericValue})`;
+            case "$gte":
+              return sql`((${initialPath})::numeric >= ${numericValue} OR (${modifiedPath})::numeric >= ${numericValue})`;
+            case "$lte":
+              return sql`((${initialPath})::numeric <= ${numericValue} OR (${modifiedPath})::numeric <= ${numericValue})`;
+          }
         }
+
+        if (operator === "$regex") {
+          const regexValue = String(operandValue);
+          return sql`((${initialPath}) ~* ${regexValue} OR (${modifiedPath}) ~* ${regexValue})`;
+        }
+
+        return sql`false`;
       } else if (typeof value === "boolean") {
-        return `((initial->'data'->>'${key}')::boolean = ${value} OR (modified->'data'->>'${key}')::boolean = ${value})`;
+        const boolStr = String(value);
+        return sql`((${initialPath})::boolean = ${sql.raw(boolStr)} OR (${modifiedPath})::boolean = ${sql.raw(boolStr)})`;
       } else if (typeof value === "number") {
-        return `((initial->'data'->>'${key}')::numeric = ${value} OR (modified->'data'->>'${key}')::numeric = ${value})`;
-      } else if (typeof value === "string") {
-        return `(LOWER(initial->'data'->>'${key}') = LOWER('${value}') OR LOWER(modified->'data'->>'${key}') = LOWER('${value}'))`;
+        return sql`((${initialPath})::numeric = ${value} OR (${modifiedPath})::numeric = ${value})`;
       } else {
-        return `(LOWER(initial->'data'->>'${key}') = LOWER('${value}') OR LOWER(modified->'data'->>'${key}') = LOWER('${value}'))`;
+        const strValue = String(value);
+        return sql`(LOWER(${initialPath}) = LOWER(${strValue}) OR LOWER(${modifiedPath}) = LOWER(${strValue}))`;
       }
     });
 
@@ -378,7 +404,7 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
         modified: entities.modified,
       })
       .from(entities)
-      .where(and(eq(entities.tenantId, this.tenantId), sql.raw(conditions.join(" AND "))));
+      .where(and(eq(entities.tenantId, this.tenantId), ...conditions));
 
     return result.map((row) => ({
       guid: row.guid,
@@ -632,15 +658,17 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database deletion fails.
    */
   async resolvePotentialDuplicates(duplicates: Array<{ entityGuid: string; duplicateGuid: string }>): Promise<void> {
-    await this.db
-      .delete(potentialDuplicates)
-      .where(
-        and(
-          eq(potentialDuplicates.entityGuid, duplicates[0].entityGuid),
-          eq(potentialDuplicates.duplicateGuid, duplicates[0].duplicateGuid),
-          eq(potentialDuplicates.tenantId, this.tenantId),
-        ),
-      );
+    for (const dup of duplicates) {
+      await this.db
+        .delete(potentialDuplicates)
+        .where(
+          and(
+            eq(potentialDuplicates.entityGuid, dup.entityGuid),
+            eq(potentialDuplicates.duplicateGuid, dup.duplicateGuid),
+            eq(potentialDuplicates.tenantId, this.tenantId),
+          ),
+        );
+    }
   }
 
   /**

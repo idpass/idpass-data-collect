@@ -31,6 +31,30 @@ function sha256(data: string): string {
 }
 
 /**
+ * Extracts only the canonical FormSubmission fields from an event for hashing.
+ * Storage adapters may add extra fields (e.g., IndexedDB auto-increment `id`),
+ * which must be excluded to keep the hash chain consistent between save-time
+ * and verification-time.
+ *
+ * @private
+ */
+function normalizeEventForHash(event: FormSubmission): FormSubmission {
+  const normalized: FormSubmission = {
+    guid: event.guid,
+    entityGuid: event.entityGuid,
+    type: event.type,
+    data: event.data,
+    timestamp: event.timestamp,
+    userId: event.userId,
+    syncLevel: event.syncLevel,
+  };
+  if (event.schemaVersion !== undefined) {
+    normalized.schemaVersion = event.schemaVersion;
+  }
+  return normalized;
+}
+
+/**
  * Event store implementation providing tamper-evident event sourcing with hash chain integrity.
  *
  * The EventStoreImpl is the core component for managing immutable event storage with cryptographic
@@ -140,7 +164,7 @@ export class EventStoreImpl implements EventStore {
     const events = await this.storageAdapter.getEvents();
     let hash = "";
     for (const event of events) {
-      hash = sha256(hash + JSON.stringify(event));
+      hash = sha256(hash + JSON.stringify(normalizeEventForHash(event)));
     }
     this.latestHash = hash;
   }
@@ -149,7 +173,7 @@ export class EventStoreImpl implements EventStore {
    * Computes the next hash in the chain for a given event.
    */
   private computeNextHash(event: FormSubmission): string {
-    return sha256(this.latestHash + JSON.stringify(event));
+    return sha256(this.latestHash + JSON.stringify(normalizeEventForHash(event)));
   }
 
   /**
@@ -221,7 +245,7 @@ export class EventStoreImpl implements EventStore {
     const events = await this.storageAdapter.getEvents();
     let hash = "";
     for (const event of events) {
-      hash = sha256(hash + JSON.stringify(event));
+      hash = sha256(hash + JSON.stringify(normalizeEventForHash(event)));
     }
     return hash === this.latestHash;
   }

@@ -107,7 +107,7 @@ export class ProjectionRebuildService {
       const event = sortedEvents[i];
 
       try {
-        await this.eventApplierService.submitForm(event);
+        await this.eventApplierService.replayEvent(event);
         appliedEvents++;
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);

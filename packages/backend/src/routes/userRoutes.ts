@@ -55,7 +55,7 @@ export function createUserRoutes(userStore: UserStore): Router {
       const token = jwt.sign(
         { id: user.id, email: user.email, role: user.role, tenantIds: user.tenantIds, roleAssignments: user.roleAssignments ?? [] },
         process.env.JWT_SECRET!,
-        {},
+        { expiresIn: "8h" },
       );
       res.json({ token, userId: user.id });
     }),

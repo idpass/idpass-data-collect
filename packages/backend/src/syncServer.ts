@@ -21,6 +21,7 @@ import bcrypt from "bcrypt";
 import bodyParser from "body-parser";
 import cors from "cors";
 import express from "express";
+import helmet from "helmet";
 import pinoHttp from "pino-http";
 import path from "path";
 import fs from "fs/promises";
@@ -66,13 +67,16 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   const app = express();
 
   setupUncaughtHandlers();
+  app.use(helmet());
   const corsOrigins = process.env.CORS_ORIGINS;
   app.use(cors(corsOrigins ? {
     origin: corsOrigins.split(",").map(o => o.trim()),
     credentials: true,
-  } : undefined));
+  } : {
+    origin: false,
+  }));
   app.use(pinoHttp({ logger }));
-  app.use(bodyParser.json({ limit: "50mb" }));
+  app.use(bodyParser.json({ limit: "1mb" }));
   app.use(
     express.static(path.join(__dirname, "public"), {
       setHeaders: (res, path) => {
@@ -99,7 +103,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  app.use("/api/apps", createAppConfigRoutes(appConfigStore, appInstanceStore));
+  app.use("/api/apps", createAppConfigRoutes(appConfigStore, appInstanceStore, userStore));
   app.use("/api/entities", createEntitiesRouter(appInstanceStore));
   app.use("/api/sync", createSyncRouter(appInstanceStore, config.postgresUrl));
   app.use("/api/users", createUserRoutes(userStore));

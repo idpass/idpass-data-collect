@@ -358,7 +358,11 @@ export class ExternalSyncManager {
       runtimeAdapterRegistry[this.config.type];
 
     if (!adapterModule) {
-      return;
+      throw new Error(
+        `No adapter registered for type "${this.config.type}". ` +
+        `Available built-in types: ${Object.keys(builtInAdaptersMapping).join(", ") || "(none)"}. ` +
+        `Available runtime types: ${Object.keys(runtimeAdapterRegistry).join(", ") || "(none)"}.`,
+      );
     }
 
     this.adapter = new adapterModule(this.eventStore, this.eventApplierService, this.config);
@@ -390,11 +394,14 @@ export class ExternalSyncManager {
   async synchronize(credentials?: ExternalSyncCredentials): Promise<SyncResult> {
     const startTime = Date.now();
 
+    // Gather entities from the entity store to push to the external system
+    const entityPayloads = await this.gatherEntityPayloads();
+
     // Use V2 adapter if available
     if (this.v2Adapter) {
       log.info("SYNC_STARTED (V2)");
 
-      const pushResult = await this.v2Adapter.push([]);
+      const pushResult = await this.v2Adapter.push(entityPayloads);
       const pullResult = await this.v2Adapter.pull();
 
       const combinedResult: SyncResult = {
@@ -426,7 +433,7 @@ export class ExternalSyncManager {
 
     const wrapper = new LegacyAdapterWrapper(this.adapter, this.config.type);
 
-    const pushResult = await wrapper.push([]);
+    const pushResult = await wrapper.push(entityPayloads);
     const pullResult = await wrapper.pull();
 
     const combinedResult: SyncResult = {
@@ -486,7 +493,7 @@ export class ExternalSyncManager {
       return { healthy: true, message: "Legacy adapter (health check not supported)" };
     }
 
-    throw new Error("Adapter not initialized");
+    return { healthy: false, message: "Adapter not initialized" };
   }
 
   /**
@@ -508,5 +515,24 @@ export class ExternalSyncManager {
    */
   isInitialized(): boolean {
     return this.adapter !== null || this.v2Adapter !== null;
+  }
+
+  /**
+   * Gathers entities from the entity store and transforms them into push payloads
+   * for the external system.
+   *
+   * @returns Array of entity push payloads ready for the adapter's push() method.
+   * @private
+   */
+  private async gatherEntityPayloads(): Promise<EntityPushPayload[]> {
+    const entityStore = this.eventApplierService.getEntityStore();
+    const allEntities = await entityStore.getAllEntities();
+
+    return allEntities.map((pair) => ({
+      guid: pair.guid,
+      type: pair.modified.type,
+      data: pair.modified.data as Record<string, unknown>,
+      version: pair.modified.version,
+    }));
   }
 }

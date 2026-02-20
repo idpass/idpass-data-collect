@@ -163,7 +163,7 @@ export class PostgresAttachmentStorageAdapter implements AttachmentStore {
     const result = await this.db
       .select()
       .from(attachments)
-      .where(eq(attachments.guid, guid));
+      .where(and(eq(attachments.guid, guid), eq(attachments.tenantId, this.tenantId)));
 
     if (result.length === 0) return null;
 

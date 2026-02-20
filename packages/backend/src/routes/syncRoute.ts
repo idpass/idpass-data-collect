@@ -19,6 +19,7 @@
 
 import { Router } from "express";
 import bodyParser from "body-parser";
+import { Pool } from "pg";
 import { AuditLogEntry, ExternalSyncCredentials } from "@idpass/data-collect-core";
 import { z } from "zod";
 import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware, validateTenantAccess } from "../middlewares/authentication";
@@ -39,12 +40,16 @@ const SyncPushPayloadSchema = z.object({
     timestamp: z.string(),
     userId: z.string(),
     syncLevel: z.number(),
+    schemaVersion: z.number().optional(),
   })),
   configId: z.string().optional(),
 });
 
 export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl?: string): Router {
   const router = Router();
+
+  // Create a shared pool for transactional batch processing, reused across requests
+  const txPool = postgresUrl ? new Pool({ connectionString: postgresUrl }) : null;
   
   // Apply increased body parser limit only to sync routes that handle biometric data
   // This prevents DoS attacks on other endpoints while allowing large biometric payloads
@@ -82,13 +87,18 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
       if (areaIds && typeof areaIds === "string" && areaIds.length > 0) {
         const areaIdList = areaIds.split(",").filter(Boolean);
         if (areaIdList.length > 0) {
-          // Get all entities for this config to build area-to-entity mapping
-          const allEntities = await edm.getAllEntities();
+          // Query entity store per area ID to build the allowed set without
+          // loading every entity into memory.
           const allowedEntityGuids = new Set<string>();
 
-          for (const entityPair of allEntities) {
-            const entity = entityPair.modified;
-            if (entity?.data?.area_id && areaIdList.includes(entity.data.area_id as string)) {
+          const searchResults = await Promise.all(
+            areaIdList.map((areaId) =>
+              edm.searchEntities([{ area_id: areaId }]),
+            ),
+          );
+
+          for (const matches of searchResults) {
+            for (const entityPair of matches) {
               allowedEntityGuids.add(entityPair.guid);
             }
           }
@@ -141,9 +151,9 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
       const sorted = events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
       const batchEvents = sorted.map((event) => ({ ...event, syncLevel: 1 }));
 
-      if (postgresUrl) {
+      if (txPool) {
         // Transactional path: all events succeed or none are applied
-        const result = await processTransactionalBatch(postgresUrl, tenantId, batchEvents);
+        const result = await processTransactionalBatch(txPool, tenantId, batchEvents);
         if (!result.success) {
           return res.status(422).json({
             status: "error",

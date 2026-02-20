@@ -149,8 +149,6 @@ type ConflictResolutionResult =
  * ```
  */
 export class EventApplierService {
-  /** Logger instance for debugging and monitoring */
-  private logger = console;
   /** Registry of custom event appliers mapped by event type */
   private eventAppliers: Map<string, EventApplier> = new Map();
   /** Service that performs duplicate detection asynchronously off the write path */
@@ -335,77 +333,7 @@ export class EventApplierService {
 
       const eventGuid = await this.eventStore.saveEvent(formData);
 
-      const conflictResult = await this.handleIncomingConflict(entityPair, formData, eventGuid);
-
-      if (conflictResult.resolution === "local-wins") {
-        return conflictResult.entity;
-      }
-
-      const baseEntity = conflictResult.baseEntity ?? entityPair?.modified;
-
-      let updatedEntity: EntityDoc | null = null;
-      if (formData.type === "create-group" || formData.type === "update-group") {
-        // this.logger.debug(`Creating or updating group: ${JSON.stringify(formData)}`);
-        updatedEntity = await this.createOrUpdateGroup(
-          eventGuid,
-          baseEntity as GroupDoc | undefined,
-          formData,
-        );
-      } else if (formData.type === "create-individual" || formData.type === "update-individual") {
-        // this.logger.debug(`Creating or updating individual: ${JSON.stringify(formData)}`);
-        updatedEntity = await this.createOrUpdateIndividual(
-          eventGuid,
-          baseEntity as IndividualDoc | undefined,
-          formData,
-        );
-      } else if (formData.type === "add-member") {
-        // this.logger.debug(`Adding member: ${JSON.stringify(formData)}`);
-        updatedEntity = await this.addMemberToGroup(eventGuid, entityGuid, formData);
-      } else if (formData.type === "remove-member") {
-        if (!formData.data.memberId) {
-          throw new AppError("INVALID_MEMBER_DATA", "Member ID is required");
-        }
-        updatedEntity = await this.removeMemberFromGroup(eventGuid, formData);
-      } else if (formData.type === "delete-entity") {
-        // this.logger.debug(`Deleting entity: ${JSON.stringify(formData)}`);
-        await this.deleteEntity(entityPair, eventGuid, formData.userId);
-      } else if (formData.type === "resolve-duplicate") {
-        this.logger.debug(
-          `Resolving duplicate: ${JSON.stringify(formData)} with shouldDelete: ${formData.data.shouldDelete}`,
-        );
-        await this.entityStore.resolvePotentialDuplicates(
-          formData.data.duplicates as Array<{ entityGuid: string; duplicateGuid: string }>,
-        );
-        if (formData.data.shouldDelete) {
-          await this.deleteEntity(entityPair, eventGuid, formData.entityGuid);
-        }
-      } else {
-        const applier = this.getEventApplier(formData.type);
-        if (!applier) {
-          throw new Error(`No event applier found for event type: ${formData.type}`);
-        }
-        // this.logger.debug(`Applying event: ${JSON.stringify(formData)}`);
-        updatedEntity = await applier.apply(
-          baseEntity || this.createNewEntity(entityGuid, formData),
-          formData,
-          async (entityId: string) => {
-            return await this.entityStore.getEntity(entityId);
-          },
-          async (
-            action: string,
-            existingEntity: EntityDoc,
-            modifiedEntity: EntityDoc,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            changes: Record<string, any>,
-          ) => {
-            await this.entityStore.saveEntity(existingEntity, modifiedEntity);
-            await this.logAudit(formData.userId, action, eventGuid, modifiedEntity.guid, changes);
-            return;
-          },
-        );
-      }
-
-      // this.logger.debug(`Updated entity: ${JSON.stringify(updatedEntity)}`);
+      const updatedEntity = await this.applyEventToEntity(formData, eventGuid, entityPair);
 
       // Enqueue the entity for asynchronous duplicate detection so the write
       // path is never blocked by the O(n) entity scan.
@@ -420,6 +348,125 @@ export class EventApplierService {
       // Re-throw the error - don't suppress it
       throw error;
     }
+  }
+
+  /**
+   * Replays an existing event from the event store against the entity store without
+   * re-persisting the event. Used by ProjectionRebuildService to reconstruct entity
+   * projections from the event log.
+   *
+   * @param formDataParam The event (FormSubmission) to replay.
+   * @returns The resulting entity after applying the event, or null if deletion occurred.
+   * @throws {AppError} When validation fails or required data is missing.
+   */
+  async replayEvent(formDataParam: FormSubmission): Promise<EntityDoc | null> {
+    try {
+      const formData = cloneDeep(formDataParam);
+      validateFormSubmission(formData);
+
+      // Upcast event data from older schema versions if an upcaster service is available
+      if (this.upcasterService) {
+        formData.data = this.upcasterService.upcastEvent(
+          formData.type,
+          formData.schemaVersion,
+          formData.data as Record<string, unknown>,
+        ) as Record<string, unknown>;
+      }
+
+      const entityGuid = formData.entityGuid;
+      const entityPair = await this.entityStore.getEntity(entityGuid);
+      const eventGuid = formData.guid;
+
+      return await this.applyEventToEntity(formData, eventGuid, entityPair);
+    } catch (error) {
+      log.error({ err: error }, "Error in replayEvent");
+      throw error;
+    }
+  }
+
+  /**
+   * Core event application logic shared by submitForm and replayEvent.
+   * Applies the event to entity state without persisting the event itself.
+   */
+  private async applyEventToEntity(
+    formData: FormSubmission,
+    eventGuid: string,
+    entityPair: EntityPair | null,
+  ): Promise<EntityDoc | null> {
+    const conflictResult = await this.handleIncomingConflict(entityPair, formData, eventGuid);
+
+    if (conflictResult.resolution === "local-wins") {
+      return conflictResult.entity;
+    }
+
+    const baseEntity = conflictResult.baseEntity ?? entityPair?.modified;
+    const entityGuid = formData.entityGuid;
+
+    let updatedEntity: EntityDoc | null = null;
+    if (formData.type === "create-group" || formData.type === "update-group") {
+      // log.debug(`Creating or updating group: ${JSON.stringify(formData)}`);
+      updatedEntity = await this.createOrUpdateGroup(
+        eventGuid,
+        baseEntity as GroupDoc | undefined,
+        formData,
+      );
+    } else if (formData.type === "create-individual" || formData.type === "update-individual") {
+      // log.debug(`Creating or updating individual: ${JSON.stringify(formData)}`);
+      updatedEntity = await this.createOrUpdateIndividual(
+        eventGuid,
+        baseEntity as IndividualDoc | undefined,
+        formData,
+      );
+    } else if (formData.type === "add-member") {
+      // log.debug(`Adding member: ${JSON.stringify(formData)}`);
+      updatedEntity = await this.addMemberToGroup(eventGuid, entityGuid, formData);
+    } else if (formData.type === "remove-member") {
+      if (!formData.data.memberId) {
+        throw new AppError("INVALID_MEMBER_DATA", "Member ID is required");
+      }
+      updatedEntity = await this.removeMemberFromGroup(eventGuid, formData);
+    } else if (formData.type === "delete-entity") {
+      // log.debug(`Deleting entity: ${JSON.stringify(formData)}`);
+      await this.deleteEntity(entityPair, eventGuid, formData.userId);
+    } else if (formData.type === "resolve-duplicate") {
+      log.debug(
+        `Resolving duplicate: ${JSON.stringify(formData)} with shouldDelete: ${formData.data.shouldDelete}`,
+      );
+      await this.entityStore.resolvePotentialDuplicates(
+        formData.data.duplicates as Array<{ entityGuid: string; duplicateGuid: string }>,
+      );
+      if (formData.data.shouldDelete) {
+        await this.deleteEntity(entityPair, eventGuid, formData.entityGuid);
+      }
+    } else {
+      const applier = this.getEventApplier(formData.type);
+      if (!applier) {
+        throw new Error(`No event applier found for event type: ${formData.type}`);
+      }
+      // log.debug(`Applying event: ${JSON.stringify(formData)}`);
+      updatedEntity = await applier.apply(
+        baseEntity || this.createNewEntity(entityGuid, formData),
+        formData,
+        async (entityId: string) => {
+          return await this.entityStore.getEntity(entityId);
+        },
+        async (
+          action: string,
+          existingEntity: EntityDoc,
+          modifiedEntity: EntityDoc,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          changes: Record<string, any>,
+        ) => {
+          await this.entityStore.saveEntity(existingEntity, modifiedEntity);
+          await this.logAudit(formData.userId, action, eventGuid, modifiedEntity.guid, changes);
+          return;
+        },
+      );
+    }
+
+    // log.debug(`Updated entity: ${JSON.stringify(updatedEntity)}`);
+
+    return updatedEntity;
   }
 
   private async handleIncomingConflict(
@@ -556,7 +603,7 @@ export class EventApplierService {
     existingGroup: GroupDoc | undefined,
     formData: FormSubmission,
   ): Promise<GroupDoc> {
-    // this.logger.debug(
+    // log.debug(
     //   `Creating or updating group: ${JSON.stringify({
     //     existingGroup,
     //     formData,
@@ -578,7 +625,7 @@ export class EventApplierService {
     group.data.name = group.name || "Unnamed Group";
 
     if (formData.data?.members) {
-      // this.logger.debug(`Processing members: ${JSON.stringify(formData.data.members)}`);
+      // log.debug(`Processing members: ${JSON.stringify(formData.data.members)}`);
       const newMemberIds = await Promise.all(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         formData.data.members.map(async (member: Record<string, any>) => {
@@ -586,25 +633,24 @@ export class EventApplierService {
             throw new Error("Member GUID is required");
           }
 
-          const memberGuid = member.guid;
-          delete member.guid;
+          const { guid: memberGuid, ...memberData } = member;
 
-          if (member && member.type === "group") {
+          if (memberData && memberData.type === "group") {
             const subGroup = await this.createOrUpdateGroup(eventGuid, undefined, {
               guid: uuidv4(),
               entityGuid: memberGuid,
-              data: member,
+              data: memberData,
               type: "create-group",
               timestamp: new Date().toISOString(),
               userId: formData.userId,
               syncLevel: SyncLevel.LOCAL,
             });
             return subGroup.guid;
-          } else if (member) {
+          } else if (memberData) {
             const individualDoc = await this.createOrUpdateIndividual(eventGuid, undefined, {
               guid: uuidv4(),
               entityGuid: memberGuid,
-              data: member,
+              data: memberData,
               type: "create-individual",
               timestamp: new Date().toISOString(),
               userId: formData.userId,
@@ -628,7 +674,7 @@ export class EventApplierService {
     group.lastUpdated = new Date().toISOString();
     delete group.data.members;
 
-    this.logger.debug(`Saving group: ${JSON.stringify(group)}`);
+    log.debug(`Saving group: ${JSON.stringify(group)}`);
     await this.entityStore.saveEntity(existingGroup ?? null, group);
     await this.logAudit(formData.userId, formData.type, eventGuid, group.guid, formData.data);
 
@@ -702,7 +748,7 @@ export class EventApplierService {
    * @private
    */
   async addMemberToGroup(eventGuid: string, groupId: string, formData: FormSubmission): Promise<GroupDoc> {
-    // this.logger.debug(`Adding member to group: ${JSON.stringify({ groupId, formData })}`);
+    // log.debug(`Adding member to group: ${JSON.stringify({ groupId, formData })}`);
     const groupPair = await this.entityStore.getEntity(groupId);
 
     if (!groupPair || groupPair.modified.type !== "group") {
@@ -711,19 +757,18 @@ export class EventApplierService {
 
     const group = groupPair.modified as GroupDoc;
 
-    let memberData;
+    let rawMemberData;
     if (formData.data.members && Array.isArray(formData.data.members)) {
-      memberData = formData.data.members[0];
+      rawMemberData = formData.data.members[0];
     } else {
       throw new AppError("INVALID_MEMBER_DATA", "Member data is missing or in an invalid format");
     }
 
-    if (!memberData.guid) {
+    if (!rawMemberData.guid) {
       throw new AppError("INVALID_MEMBER_DATA", "Member GUID is missing");
     }
 
-    const guid = memberData.guid;
-    delete memberData.guid;
+    const { guid, ...memberData } = rawMemberData;
 
     if (memberData.type === "group") {
       // If the new member is a group, create a new group
@@ -757,7 +802,7 @@ export class EventApplierService {
       group.lastUpdated = new Date().toISOString();
     }
 
-    // this.logger.debug(`Updated group: ${JSON.stringify(group)}`);
+    // log.debug(`Updated group: ${JSON.stringify(group)}`);
     await this.entityStore.saveEntity(groupPair.initial, group);
     await this.logAudit(formData.userId, formData.type, eventGuid, groupId, formData.data);
 

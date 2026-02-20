@@ -42,14 +42,14 @@ export interface BatchResult {
  * Processes a batch of form submission events within a single PostgreSQL
  * transaction managed by Drizzle ORM.
  *
- * Creates a shared Pool and Drizzle instance, then uses `db.transaction()` to
+ * Uses a shared Pool and Drizzle instance, then uses `db.transaction()` to
  * run all event processing within a single database transaction. Both the event
  * and entity storage adapters are wired to the same transaction context (the
  * `tx` object), guaranteeing that either ALL events in the batch are committed
  * or NONE are.
  *
  * The approach:
- * 1. Create storage adapters with a shared Pool (tables already exist).
+ * 1. Create storage adapters with the shared Pool (tables already exist from server startup).
  * 2. Start a Drizzle transaction via `db.transaction()`.
  * 3. Inject the `tx` object into both adapters via `setDrizzleInstance()`.
  * 4. Build the EDM stack (EventStore, EntityStore, EventApplierService).
@@ -57,27 +57,23 @@ export interface BatchResult {
  * 6. On success, the transaction commits automatically when the callback returns.
  * 7. On failure, throw an error to trigger Drizzle's automatic rollback.
  *
- * @param postgresUrl PostgreSQL connection string.
+ * @param pool Shared PostgreSQL connection pool (managed by the caller).
  * @param tenantId Tenant identifier for multi-tenant isolation.
  * @param events Ordered list of form submissions to process atomically.
  * @returns A BatchResult describing the outcome.
  */
 export async function processTransactionalBatch(
-  postgresUrl: string,
+  pool: Pool,
   tenantId: string,
   events: FormSubmission[],
 ): Promise<BatchResult> {
-  const txPool = new Pool({ connectionString: postgresUrl });
-  const db = createDrizzleFromPool(txPool);
+  const db = createDrizzleFromPool(pool);
 
   try {
     // Build storage adapters on top of the shared pool.
-    // Tables already exist (created during server startup), so initialize()
-    // is safe to call (it uses CREATE TABLE IF NOT EXISTS).
-    const eventStorageAdapter = new PostgresEventStorageAdapter(txPool, tenantId);
-    await eventStorageAdapter.initialize();
-    const entityStorageAdapter = new PostgresEntityStorageAdapter(txPool, tenantId);
-    await entityStorageAdapter.initialize();
+    // Tables already exist (created during server startup).
+    const eventStorageAdapter = new PostgresEventStorageAdapter(pool, tenantId);
+    const entityStorageAdapter = new PostgresEntityStorageAdapter(pool, tenantId);
 
     // Track the result from inside the transaction callback
     let batchApplied = 0;
@@ -137,7 +133,7 @@ export async function processTransactionalBatch(
 
     return { success: true, applied: batchApplied, failed: [] };
   } catch (error) {
-    // Unexpected error (e.g., pool connection failure during initialization)
+    // Unexpected error (e.g., pool connection failure)
     log.error({ err: error }, "Unexpected error in transactional batch");
     const message = error instanceof Error ? error.message : String(error);
     return {
@@ -145,7 +141,5 @@ export async function processTransactionalBatch(
       applied: 0,
       failed: [{ index: -1, eventGuid: "", error: message }],
     };
-  } finally {
-    await txPool.end();
   }
 }

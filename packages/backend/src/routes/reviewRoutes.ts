@@ -159,9 +159,11 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore): Router {
       const { id } = req.params;
       const user = (req as AuthenticatedRequest).user;
 
-      // Find the review across all tenant review services
+      // Find the review across tenant review services the user has access to
+      const userTenantIds = user.tenantIds ?? [];
       let review = null;
       for (const [tenantId, reviewService] of reviewServiceCache) {
+        if (user.role !== "ADMIN" && !userTenantIds.includes(tenantId)) continue;
         const found = reviewService.getReviewById(id);
         if (found) {
           review = await reviewService.approve(id, user.email);
@@ -191,8 +193,10 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore): Router {
         return res.status(400).json({ error: "Missing rejection reason" });
       }
 
+      const userTenantIds = user.tenantIds ?? [];
       let review = null;
       for (const [tenantId, reviewService] of reviewServiceCache) {
+        if (user.role !== "ADMIN" && !userTenantIds.includes(tenantId)) continue;
         const found = reviewService.getReviewById(id);
         if (found) {
           review = await reviewService.reject(id, user.email, reason);
@@ -225,8 +229,10 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore): Router {
       let totalFailed = 0;
       const allErrors: Array<{ reviewId: string; error: string }> = [];
 
-      // Group review IDs by their tenant's review service
+      // Group review IDs by their tenant's review service, filtered by user access
+      const userTenantIds = user.tenantIds ?? [];
       for (const [tenantId, reviewService] of reviewServiceCache) {
+        if (user.role !== "ADMIN" && !userTenantIds.includes(tenantId)) continue;
         const tenantReviewIds = reviewIds.filter((rid: string) => {
           const review = reviewService.getReviewById(rid);
           return review !== null;

@@ -141,7 +141,8 @@ export function createAttachmentRoutes(appInstanceStore: AppInstanceStore, postg
       }
 
       res.setHeader("Content-Type", result.metadata.mimeType);
-      res.setHeader("Content-Disposition", `attachment; filename="${result.metadata.filename}"`);
+      const sanitizedFilename = result.metadata.filename.replace(/["\r\n\\]/g, "_");
+      res.setHeader("Content-Disposition", `attachment; filename="${sanitizedFilename}"`);
       res.setHeader("Content-Length", result.metadata.sizeBytes.toString());
       res.send(Buffer.from(result.data));
     }),

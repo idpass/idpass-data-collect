@@ -408,11 +408,10 @@ export class InternalSyncManager {
 
         try {
           for (const event of sorted) {
-            event.syncLevel = SyncLevel.REMOTE;
             if (await this.eventStore.isEventExisted(event.guid)) {
               continue;
             }
-            await this.eventApplierService.submitForm(event);
+            await this.eventApplierService.submitForm({ ...event, syncLevel: SyncLevel.REMOTE });
           }
 
           // Update lastRemoteSyncTimestamp only after successful batch
@@ -495,7 +494,7 @@ export class InternalSyncManager {
    */
   async sync(options?: SelectiveSyncOptions): Promise<void> {
     if (this.isSyncing) {
-      return;
+      throw new Error("Sync already in progress");
     }
 
     // Apply options for this sync session if provided
@@ -506,6 +505,12 @@ export class InternalSyncManager {
     this.isSyncing = true;
     try {
       await this.loadAuthToken();
+
+      // Check for unresolved duplicates before syncing to prevent data inconsistencies
+      if (await this.checkIfDuplicatesExist()) {
+        throw new Error("Duplicates exist! Please resolve them before syncing.");
+      }
+
       await this.uploadLocalEvents();
       await this.downloadRemoteEvents();
     } catch (error) {

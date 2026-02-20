@@ -19,16 +19,19 @@
 
 import { randomBytes } from "crypto";
 import { Router } from "express";
-import { authenticateJWT } from "../middlewares/authentication";
+import { authenticateJWT, createAuthAdminMiddleware } from "../middlewares/authentication";
 import { AppError, asyncHandler } from "../middlewares/errorHandlers";
-import { AppConfigStore, AppInstanceStore } from "../types";
+import { AppConfigStore, AppInstanceStore, UserStore } from "../types";
 import multer from "multer";
 import fs from "fs/promises";
 import { generatePublicArtifacts, getPublicArtifactPaths, resolvePublicBaseUrl } from "../utils/publicArtifacts";
 
-export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanceStore: AppInstanceStore): Router {
+export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanceStore: AppInstanceStore, userStore?: UserStore): Router {
   const router = Router();
   const CONFIG_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+  // Admin middleware for mutation routes; falls back to authenticateJWT when
+  // userStore is not provided (e.g. in tests that predate the admin guard).
+  const adminAuth = userStore ? createAuthAdminMiddleware(userStore) : authenticateJWT;
 
   const ensureValidConfigId = (id: unknown) => {
     if (typeof id !== "string" || !CONFIG_ID_PATTERN.test(id)) {
@@ -149,7 +152,7 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
 
   router.post(
     "/",
-    authenticateJWT,
+    adminAuth,
     upload.single("config"),
     asyncHandler(async (req, res) => {
       if (!req.file) {
@@ -190,7 +193,7 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
 
   router.put(
     "/:id",
-    authenticateJWT,
+    adminAuth,
     upload.single("config"),
     asyncHandler(async (req, res) => {
       const { id } = req.params;
@@ -235,7 +238,7 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
 
   router.delete(
     "/:id",
-    authenticateJWT,
+    adminAuth,
     asyncHandler(async (req, res) => {
       // get body
       const { id } = req.params;
