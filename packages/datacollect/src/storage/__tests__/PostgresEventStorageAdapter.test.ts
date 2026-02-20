@@ -320,7 +320,7 @@ describeIfPostgres("PostgresEventStorageAdapter", () => {
         data: { name: "Jane" },
         entityGuid: "456",
         syncLevel: 0,
-        timestamp: new Date("2023-05-02T12:00:00.000Z"),
+        timestamp: "2023-05-02T12:00:00.000Z",
         type: "",
         userId: "",
       },
@@ -329,7 +329,7 @@ describeIfPostgres("PostgresEventStorageAdapter", () => {
         data: { name: "Bob" },
         entityGuid: "789",
         syncLevel: 0,
-        timestamp: new Date("2023-05-03T14:00:00.000Z"),
+        timestamp: "2023-05-03T14:00:00.000Z",
         type: "",
         userId: "",
       },
@@ -383,7 +383,7 @@ describeIfPostgres("PostgresEventStorageAdapter", () => {
         userId: "",
       },
     ]);
-    expect(nextCursor).toBe("2023-05-02T12:00:00.000Z");
+    expect(nextCursor).toBe("2023-05-02T12:00:00.000Z|def456");
 
     const { events: eventsAfterWithCursor, nextCursor: nextCursorWithCursor } = await adapter.getEventsSincePagination(
       nextCursor as string,
@@ -402,7 +402,7 @@ describeIfPostgres("PostgresEventStorageAdapter", () => {
         userId: "",
       },
     ]);
-    expect(nextCursorWithCursor).toBe("2023-05-03T14:00:00.000Z");
+    expect(nextCursorWithCursor).toBe("2023-05-03T14:00:00.000Z|ghi789");
   });
 });
 

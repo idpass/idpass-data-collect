@@ -281,10 +281,9 @@ describeIfPostgres("Review Routes", () => {
       expect(rejectResponse.body.review.status).toBe("rejected");
       expect(rejectResponse.body.review.rejectionReason).toBe("Incomplete data");
 
-      // Verify entity was NOT created
+      // Verify entity was NOT created (getEntity throws when entity is not found)
       const appInstance = await currentApp.appInstanceStore.getAppInstance(mockConfig.id);
-      const entity = await appInstance?.edm.getEntity(entityGuid);
-      expect(entity).toBeNull();
+      await expect(appInstance?.edm.getEntity(entityGuid)).rejects.toThrow(/not found/);
     });
 
     it("bulk approves multiple reviews", async () => {

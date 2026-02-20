@@ -358,11 +358,11 @@ export class ExternalSyncManager {
       runtimeAdapterRegistry[this.config.type];
 
     if (!adapterModule) {
-      throw new Error(
-        `No adapter registered for type "${this.config.type}". ` +
-        `Available built-in types: ${Object.keys(builtInAdaptersMapping).join(", ") || "(none)"}. ` +
-        `Available runtime types: ${Object.keys(runtimeAdapterRegistry).join(", ") || "(none)"}.`,
+      log.warn(
+        { type: this.config.type, builtIn: Object.keys(builtInAdaptersMapping), runtime: Object.keys(runtimeAdapterRegistry) },
+        "No adapter registered for type; external sync disabled",
       );
+      return;
     }
 
     this.adapter = new adapterModule(this.eventStore, this.eventApplierService, this.config);

@@ -46,11 +46,11 @@ describeWithPostgres("SECURITY: SQL injection in searchEntities", () => {
 
   beforeAll(async () => {
     await ensureDatabaseExists(getConnectionString());
+    adapter = new PostgresEntityStorageAdapter(getConnectionString(), "sqli-test");
+    await adapter.initialize();
   });
 
   beforeEach(async () => {
-    adapter = new PostgresEntityStorageAdapter(getConnectionString(), "sqli-test");
-    await adapter.initialize();
     await adapter.clearStore();
 
     // Seed with known entities
@@ -76,6 +76,9 @@ describeWithPostgres("SECURITY: SQL injection in searchEntities", () => {
 
   afterEach(async () => {
     await adapter.clearStore();
+  });
+
+  afterAll(async () => {
     await adapter.closeConnection();
   });
 

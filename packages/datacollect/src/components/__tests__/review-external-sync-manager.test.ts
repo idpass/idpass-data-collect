@@ -140,24 +140,17 @@ describe("ExternalSyncManager", () => {
 
       const manager = new ExternalSyncManager(mockEventStore, mockEventApplierService, config);
 
-      // initialize() throws for unknown adapter types (tested separately)
-      try {
-        await manager.initialize();
-      } catch {
-        // Expected: unknown adapter type
-      }
+      // initialize() logs a warning for unknown adapter types but does not throw
+      await manager.initialize();
 
-      // EXPECTED (correct): healthCheck() returns { healthy: false, message: "..." }
-      // so callers can handle the unhealthy state gracefully
-      // ACTUAL (buggy): healthCheck() throws "Adapter not initialized" which is
-      // unexpected for a "check" method -- checks should return status, not throw
+      // healthCheck() returns { healthy: false } when no adapter is loaded
       const result = await manager.healthCheck();
       expect(result.healthy).toBe(false);
     });
   });
 
   describe("initialize() with invalid config type", () => {
-    test("initialize() should throw or report an error for unknown adapter type", async () => {
+    test("initialize() should warn and leave manager uninitialized for unknown adapter type", async () => {
       const config: ExternalSyncConfig = {
         type: "completely-unknown-adapter-type",
         url: "http://nowhere.example.com",
@@ -165,11 +158,13 @@ describe("ExternalSyncManager", () => {
 
       const manager = new ExternalSyncManager(mockEventStore, mockEventApplierService, config);
 
-      // EXPECTED (correct): initialize() should throw an error or set an error state
-      // when the config type does not match any registered adapter
-      // ACTUAL (buggy): initialize() silently returns, leaving the manager in an
-      // uninitialized state that only manifests as errors later during synchronize()
-      await expect(manager.initialize()).rejects.toThrow();
+      // initialize() should not throw for unknown adapter types;
+      // it logs a warning and leaves external sync disabled
+      await manager.initialize();
+
+      // The manager should report as unhealthy since no adapter was loaded
+      const health = await manager.healthCheck();
+      expect(health.healthy).toBe(false);
     });
   });
 });

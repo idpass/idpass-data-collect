@@ -118,20 +118,18 @@ describeIfPostgres("Self-Service Routes", () => {
 
       const codes = await otpStore.getActiveCodesByIdentifier("+1234567890", "tenant-1");
       expect(codes.length).toBeGreaterThan(0);
-      expect(codes[0].code).toMatch(/^\d{6}$/);
+      // OTP codes are stored as SHA-256 hashes (64-char hex strings)
+      expect(codes[0].code).toMatch(/^[a-f0-9]{64}$/);
     });
   });
 
   describe("POST /api/auth/otp/verify", () => {
     it("should return a JWT token when OTP is valid", async () => {
-      // First request an OTP
-      await request(app)
-        .post("/api/auth/otp/request")
-        .send({ identifier: "+1234567890", tenantId: "tenant-1" });
-
-      // Get the code from the store
-      const codes = await otpStore.getActiveCodesByIdentifier("+1234567890", "tenant-1");
-      const validCode = codes[0].code;
+      // Create OTP directly to get the plaintext code (the database stores
+      // a SHA-256 hash, so reading from the store returns the hash, not the
+      // original code).
+      const otpCode = await otpStore.createOtp("+1234567890", "tenant-1");
+      const validCode = otpCode.code;
 
       const response = await request(app)
         .post("/api/auth/otp/verify")
@@ -226,12 +224,11 @@ describeIfPostgres("Self-Service Routes", () => {
     });
 
     it("should mark the code as verified after successful verification", async () => {
-      await request(app)
-        .post("/api/auth/otp/request")
-        .send({ identifier: "+1234567890", tenantId: "tenant-1" });
-
-      const codes = await otpStore.getActiveCodesByIdentifier("+1234567890", "tenant-1");
-      const validCode = codes[0].code;
+      // Create OTP directly to get the plaintext code (the database stores
+      // a SHA-256 hash, so reading from the store returns the hash, not the
+      // original code).
+      const otpCode = await otpStore.createOtp("+1234567890", "tenant-1");
+      const validCode = otpCode.code;
 
       await request(app)
         .post("/api/auth/otp/verify")
@@ -337,13 +334,11 @@ describeIfPostgres("Self-Service Routes", () => {
 
   describe("Self-service scope middleware", () => {
     it("should allow access to own entity with self-service token", async () => {
-      // Request and verify OTP to get a self-service token
-      await request(app)
-        .post("/api/auth/otp/request")
-        .send({ identifier: "+1234567890", tenantId: "tenant-1" });
-
-      const codes = await otpStore.getActiveCodesByIdentifier("+1234567890", "tenant-1");
-      const validCode = codes[0].code;
+      // Create OTP directly to get the plaintext code (the database stores
+      // a SHA-256 hash, so reading from the store returns the hash, not the
+      // original code).
+      const otpCode = await otpStore.createOtp("+1234567890", "tenant-1");
+      const validCode = otpCode.code;
 
       const verifyResponse = await request(app)
         .post("/api/auth/otp/verify")

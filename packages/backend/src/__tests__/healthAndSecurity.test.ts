@@ -269,7 +269,7 @@ describeIfPostgres("Health and Security endpoints", () => {
       expect(response.body.status).toBe("success");
     });
 
-    it("returns success when events is not an array (graceful handling)", async () => {
+    it("rejects when events is not an array (Zod validation)", async () => {
       const currentApp = requireApp();
       const loginResponse = await axios.post(baseUrl + "/api/users/login", {
         email: "admin@example.com",
@@ -285,9 +285,9 @@ describeIfPostgres("Health and Security endpoints", () => {
           configId: mockConfig.id,
         });
 
-      // Current behavior: returns success when events is not an array
-      expect(response.status).toBe(200);
-      expect(response.body.status).toBe("success");
+      // Zod validation rejects non-array events payloads
+      expect(response.status).toBe(400);
+      expect(response.body.status).toBe("error");
     });
 
     it("returns 401 when no auth token is provided for push", async () => {

@@ -12,27 +12,14 @@ import { Client } from "pg";
 import { run } from "../syncServer";
 import { SyncServerInstance } from "../types";
 
-jest.mock("../utils/logger", () => ({
-  createLogger: () => ({
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-    trace: jest.fn(),
-    fatal: jest.fn(),
-    child: jest.fn().mockReturnThis(),
-  }),
-  logger: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-    trace: jest.fn(),
-    fatal: jest.fn(),
-    child: jest.fn().mockReturnThis(),
-    level: "silent",
-  },
-}));
+jest.mock("../utils/logger", () => {
+  const pino = require("pino");
+  const silentLogger = pino({ level: "silent" });
+  return {
+    createLogger: () => silentLogger.child({ component: "test" }),
+    logger: silentLogger,
+  };
+});
 
 const getConnectionString = () => {
   const url = process.env.POSTGRES_TEST;

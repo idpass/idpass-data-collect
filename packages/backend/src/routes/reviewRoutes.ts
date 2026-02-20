@@ -19,7 +19,7 @@
 
 import { Router } from "express";
 import { v4 as uuidv4 } from "uuid";
-import { FormSubmission, ReviewService } from "@idpass/data-collect-core";
+import { FormSubmission, ReviewService, EventApplierService } from "@idpass/data-collect-core";
 import { authenticateJWT, AuthenticatedRequest } from "../middlewares/authentication";
 import { requireAction } from "../middlewares/rbac";
 import { asyncHandler } from "../middlewares/errorHandlers";
@@ -69,8 +69,6 @@ async function getReviewService(
   // Create a ReviewService backed by the tenant's EventApplierService.
   // The EDM wraps the EventApplierService, so we need to access it indirectly.
   // We construct the ReviewService using the tenant's event applier.
-  const { EventApplierService } = await import("@idpass/data-collect-core");
-
   // Access the internal stores through the EDM to construct an EventApplierService
   // that shares the same underlying stores as the EDM instance.
   // Since EntityDataManager delegates to EventApplierService, we can create

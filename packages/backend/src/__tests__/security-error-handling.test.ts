@@ -16,27 +16,14 @@
 import express, { Request, Response, NextFunction } from "express";
 import request from "supertest";
 
-jest.mock("../utils/logger", () => ({
-  createLogger: () => ({
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-    trace: jest.fn(),
-    fatal: jest.fn(),
-    child: jest.fn().mockReturnThis(),
-  }),
-  logger: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-    trace: jest.fn(),
-    fatal: jest.fn(),
-    child: jest.fn().mockReturnThis(),
-    level: "silent",
-  },
-}));
+jest.mock("../utils/logger", () => {
+  const pino = require("pino");
+  const silentLogger = pino({ level: "silent" });
+  return {
+    createLogger: () => silentLogger.child({ component: "test" }),
+    logger: silentLogger,
+  };
+});
 
 import { errorHandler, asyncHandler, AppError } from "../middlewares/errorHandlers";
 
