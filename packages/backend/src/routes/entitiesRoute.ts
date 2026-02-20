@@ -32,7 +32,10 @@ export function createEntitiesRouter(appInstanceStore: AppInstanceStore): Router
     asyncHandler(async (req, res) => {
       const { configId = "default" } = req.query;
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
-      const entities = await appInstance?.edm.getAllEntities();
+      if (!appInstance) {
+        return res.status(404).json({ error: "Tenant not found", configId });
+      }
+      const entities = await appInstance.edm.getAllEntities();
       res.json({ count: entities?.length || 0 });
     }),
   );
@@ -45,10 +48,10 @@ export function createEntitiesRouter(appInstanceStore: AppInstanceStore): Router
       const { configId = "default" } = req.query;
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
       if (!appInstance) {
-        return res.json({});
+        return res.status(404).json({ error: "Tenant not found", configId });
       }
       const entities = await appInstance.edm.getAllEntities();
-      
+
       // Group entities by entityName from their data
       // Entities without entityName are grouped under "Unknown" to ensure all entities are counted
       const counts: Record<string, number> = {};
@@ -69,10 +72,10 @@ export function createEntitiesRouter(appInstanceStore: AppInstanceStore): Router
       const { configId = "default", limit = "100" } = req.query;
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
       if (!appInstance) {
-        return res.json([]);
+        return res.status(404).json({ error: "Tenant not found", configId });
       }
       const entities = await appInstance.edm.getAllEntities();
-      
+
       // Sort by lastUpdated descending (most recent first) and limit results
       const limitNum = Math.min(parseInt(limit as string, 10) || 100, 1000);
       const entityList = entities
@@ -102,9 +105,9 @@ export function createEntitiesRouter(appInstanceStore: AppInstanceStore): Router
       
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
       if (!appInstance) {
-        return res.json([]);
+        return res.status(404).json({ error: "Tenant not found", configId });
       }
-      
+
       const allEvents = await appInstance.edm.getAllEvents();
       
       // Filter events by entity GUID

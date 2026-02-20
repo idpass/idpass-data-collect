@@ -3,6 +3,7 @@ import "dotenv/config";
 import axios from "axios";
 import { get } from "lodash";
 import request from "supertest";
+import { v4 as uuidv4 } from "uuid";
 import { run } from "../syncServer";
 import { SyncServerInstance, AppConfig } from "../types";
 import { Client } from "pg";
@@ -253,8 +254,8 @@ describeIfPostgres("Health and Security endpoints", () => {
         .send({
           events: [
             {
-              guid: "test-event-1",
-              entityGuid: "test-entity-1",
+              guid: uuidv4(),
+              entityGuid: uuidv4(),
               type: "create-individual",
               data: { name: "Test Person" },
               timestamp: "2024-01-01T00:00:00.000Z",

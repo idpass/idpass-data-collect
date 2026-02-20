@@ -237,11 +237,19 @@ export class EntityDataManager {
     events: FormSubmission[],
   ): Promise<{ success: boolean; applied: number; failed: FormSubmission[]; errors: string[] }> {
     let applied = 0;
+    const failed: FormSubmission[] = [];
+    const errors: string[] = [];
     for (const event of events) {
-      await this.eventApplierService.submitForm(event);
-      applied += 1;
+      try {
+        await this.eventApplierService.submitForm(event);
+        applied += 1;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        failed.push(event);
+        errors.push(`Event ${event.guid}: ${message}`);
+      }
     }
-    return { success: true, applied, failed: [], errors: [] };
+    return { success: failed.length === 0, applied, failed, errors };
   }
 
   /**
@@ -422,20 +430,9 @@ export class EntityDataManager {
     this.logger.debug(`Loaded members: ${JSON.stringify(loadedMembers)}`);
     if (missingMembers.length > 0) {
       this.logger.warn(`Missing members: ${JSON.stringify(missingMembers)}`);
-      // update members to remove missing members
-      const updatedGroup = {
-        ...group,
-        memberIds: loadedMembers.map((member) => member.id),
-      };
-      await this.eventApplierService.submitForm({
-        type: "update-group",
-        guid: uuidv4(),
-        entityGuid: group.id,
-        data: updatedGroup,
-        userId: "system",
-        timestamp: new Date().toISOString(),
-        syncLevel: SyncLevel.LOCAL,
-      });
+      // Read operations must not produce side effects. Missing members are
+      // logged above so operators can investigate, but we do not submit an
+      // auto-heal event from the read path.
     }
 
     return {

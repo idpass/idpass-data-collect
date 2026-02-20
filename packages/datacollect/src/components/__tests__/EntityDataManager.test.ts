@@ -1668,7 +1668,7 @@ describe("EntityDataManager", () => {
       expect(result.errors).toEqual([]);
     });
 
-    it("should throw when an event in the batch is invalid, stopping processing", async () => {
+    it("should return partial results when an event in the batch is invalid", async () => {
       const events: FormSubmission[] = [
         {
           guid: uuidv4(),
@@ -1700,7 +1700,14 @@ describe("EntityDataManager", () => {
         },
       ];
 
-      await expect(manager.submitFormBatch(events)).rejects.toThrow();
+      const result = await manager.submitFormBatch(events);
+
+      expect(result.success).toBe(false);
+      expect(result.applied).toBe(2);
+      expect(result.failed).toHaveLength(1);
+      expect(result.failed[0].data).toEqual({ name: "BadEvent" });
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]).toMatch(/Form submission is missing an entity GUID/);
     });
   });
 });

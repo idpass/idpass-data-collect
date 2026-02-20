@@ -20,7 +20,7 @@
 import { Router } from "express";
 import bodyParser from "body-parser";
 import { Pool } from "pg";
-import { AuditLogEntry, ExternalSyncCredentials } from "@idpass/data-collect-core";
+import { ExternalSyncCredentials } from "@idpass/data-collect-core";
 import { z } from "zod";
 import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware, validateTenantAccess } from "../middlewares/authentication";
 import { requireAction } from "../middlewares/rbac";
@@ -33,16 +33,38 @@ const log = createLogger("syncRoute");
 
 const SyncPushPayloadSchema = z.object({
   events: z.array(z.object({
-    guid: z.string(),
-    entityGuid: z.string(),
+    guid: z.string().uuid(),
+    entityGuid: z.string().uuid(),
     type: z.string(),
     data: z.record(z.string(), z.unknown()),
-    timestamp: z.string(),
+    timestamp: z.string().datetime(),
     userId: z.string(),
     syncLevel: z.number(),
     schemaVersion: z.number().optional(),
   })),
   configId: z.string().optional(),
+});
+
+const AuditLogPushSchema = z.object({
+  auditLogs: z.array(z.object({
+    guid: z.string(),
+    timestamp: z.string(),
+    userId: z.string().optional(),
+    action: z.string(),
+    eventGuid: z.string(),
+    entityGuid: z.string(),
+    changes: z.record(z.string(), z.unknown()),
+    signature: z.string(),
+  })),
+  configId: z.string().optional(),
+});
+
+const ExternalSyncCredentialsSchema = z.object({
+  configId: z.string().optional(),
+  credentials: z.object({
+    username: z.string().min(1, "Username is required"),
+    password: z.string().min(1, "Password is required"),
+  }),
 });
 
 export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl?: string): Router {
@@ -187,8 +209,11 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
     authenticateJWT,
     validateTenantAccess,
     asyncHandler(async (req, res) => {
-      const auditLogs: AuditLogEntry[] = req.body.auditLogs;
-      const configId = req.body.configId;
+      const parseResult = AuditLogPushSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ status: "error", message: "Invalid audit log payload", errors: parseResult.error.issues });
+      }
+      const { auditLogs, configId } = parseResult.data;
 
       const appInstance = await appInstanceStore.getAppInstance(configId || "default");
       if (!appInstance) {
@@ -196,15 +221,12 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
       }
       const edm = appInstance.edm;
 
-      if (!Array.isArray(auditLogs)) {
-        return res.json({ status: "success" });
-      }
-
       try {
         await edm.saveAuditLogs(auditLogs.map((entry) => ({ ...entry, userId: (req as AuthenticatedRequest).user?.id })));
       } catch (error) {
         log.error({ err: error }, "Failed to save audit logs");
-        // ignore errors
+        const message = error instanceof Error ? error.message : String(error);
+        return res.status(500).json({ status: "error", message: "Failed to save audit logs", details: message });
       }
 
       res.json({ status: "success" });
@@ -234,21 +256,26 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
     authenticateJWT,
     validateTenantAccess,
     asyncHandler(async (req, res) => {
-      const { configId = "default", credentials } = req.body;
-      const appInstance = await appInstanceStore.getAppInstance(configId as string);
+      const parseResult = ExternalSyncCredentialsSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ status: "error", message: "Invalid external sync payload", errors: parseResult.error.issues });
+      }
+      const { configId, credentials } = parseResult.data;
+      const appInstance = await appInstanceStore.getAppInstance((configId || "default") as string);
       if (!appInstance) {
         return res.json({ status: "error", message: "App instance not found" });
       }
       const edm = appInstance.edm;
       try {
-        await edm.syncWithExternalSystem(credentials as unknown as ExternalSyncCredentials);
+        await edm.syncWithExternalSystem(credentials as ExternalSyncCredentials);
         res.json({ status: "success" });
       } catch (error) {
         log.error({ err: error }, "Failed to sync with external system");
+        const message = error instanceof Error ? error.message : String(error);
         res.json({
           status: "error",
           message: "Failed to sync with external system",
-          details: error,
+          details: message,
         });
       }
     }),

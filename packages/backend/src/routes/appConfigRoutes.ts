@@ -18,13 +18,57 @@
  */
 
 import { randomBytes } from "crypto";
+import path from "path";
 import { Router } from "express";
+import { z } from "zod";
 import { authenticateJWT, createAuthAdminMiddleware } from "../middlewares/authentication";
 import { AppError, asyncHandler } from "../middlewares/errorHandlers";
-import { AppConfigStore, AppInstanceStore, UserStore } from "../types";
+import { AppConfig, AppConfigStore, AppInstanceStore, UserStore } from "../types";
 import multer from "multer";
 import fs from "fs/promises";
 import { generatePublicArtifacts, getPublicArtifactPaths, resolvePublicBaseUrl } from "../utils/publicArtifacts";
+
+const AppConfigSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().optional(),
+  version: z.string().optional(),
+  url: z.string().optional(),
+  entityForms: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    title: z.string(),
+    dependsOn: z.string().optional(),
+    formio: z.record(z.string(), z.unknown()),
+  })).optional(),
+  entityData: z.array(z.object({
+    name: z.string(),
+    data: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+    }).passthrough()),
+  })).optional(),
+  externalSync: z.record(z.string(), z.unknown()).optional(),
+  authConfigs: z.array(z.object({
+    type: z.string(),
+    fields: z.record(z.string(), z.string()),
+  })).optional(),
+  selfService: z.object({
+    enabled: z.boolean(),
+    authMethods: z.array(z.enum(["otp", "id", "qr"])),
+    allowedForms: z.array(z.string()),
+    languages: z.array(z.string()),
+    requireReview: z.boolean(),
+  }).optional(),
+});
+
+/** Strip directory separators and special characters from filenames to prevent path traversal */
+function sanitizeFilename(filename: string): string {
+  // Extract only the base filename, removing any directory components
+  const basename = path.basename(filename);
+  // Remove any remaining path separators and null bytes
+  return basename.replace(/[\\/\0]/g, "_");
+}
 
 export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanceStore: AppInstanceStore, userStore?: UserStore): Router {
   const router = Router();
@@ -42,13 +86,15 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
   const generateArtifactId = () => randomBytes(16).toString("hex");
 
   // Configure multer for JSON file uploads
+  const uploadDestination = path.resolve(__dirname, "../../uploads");
   const upload = multer({
     storage: multer.diskStorage({
-      destination: "./uploads",
+      destination: uploadDestination,
       filename: (req, file, cb) => {
-        cb(null, `${Date.now()}-${file.originalname}`);
+        cb(null, `${Date.now()}-${sanitizeFilename(file.originalname)}`);
       },
     }),
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
     fileFilter: (req, file, cb) => {
       if (file.mimetype === "application/json") {
         cb(null, true);
@@ -162,9 +208,17 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
       try {
         // Read the uploaded JSON file
         const fileContent = await fs.readFile(req.file.path, "utf-8");
-        const appConfig = JSON.parse(fileContent);
+        const rawConfig = JSON.parse(fileContent);
+        const parseResult = AppConfigSchema.safeParse(rawConfig);
+        if (!parseResult.success) {
+          await fs.unlink(req.file.path).catch(() => {});
+          return res.status(400).json({ error: "Invalid app config JSON", details: parseResult.error.issues });
+        }
+        // Use validated data structure but cast to AppConfig since the Zod schema
+        // validates the shape while the runtime object carries the full type information
+        const appConfig = parseResult.data as unknown as AppConfig;
         ensureValidConfigId(appConfig.id);
-        const configToPersist = {
+        const configToPersist: AppConfig = {
           ...appConfig,
           artifactId: generateArtifactId(),
         };
@@ -204,14 +258,22 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
       try {
         // Read the uploaded JSON file
         const fileContent = await fs.readFile(req.file.path, "utf-8");
-        const updatedAppConfig = JSON.parse(fileContent);
+        const rawConfig = JSON.parse(fileContent);
+        const parseResult = AppConfigSchema.safeParse(rawConfig);
+        if (!parseResult.success) {
+          await fs.unlink(req.file.path).catch(() => {});
+          return res.status(400).json({ error: "Invalid app config JSON", details: parseResult.error.issues });
+        }
+        // Use validated data structure but cast to AppConfig since the Zod schema
+        // validates the shape while the runtime object carries the full type information
+        const updatedAppConfig = parseResult.data as unknown as AppConfig;
         ensureValidConfigId(updatedAppConfig.id);
         if (updatedAppConfig.id !== id) {
           throw new AppError("Config id mismatch between payload and URL", 400);
         }
 
         const existingConfig = await appConfigStore.getConfig(id);
-        const configToPersist = {
+        const configToPersist: AppConfig = {
           ...updatedAppConfig,
           artifactId: existingConfig.artifactId ?? generateArtifactId(),
         };
