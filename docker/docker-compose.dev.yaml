@@ -141,6 +141,33 @@ services:
     networks:
       - datacollect-network-dev
 
+  # Web App - Development mode
+  web-ui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: web-ui
+    develop:
+      watch:
+        - action: sync
+          path: ../packages/web
+          target: /app/packages/web
+          ignore:
+            - node_modules/
+            - dist/
+        - action: rebuild
+          path: ../package.json
+        - action: rebuild
+          path: ../pnpm-lock.yaml
+    environment:
+      - VITE_API_URL=${WEB_API_URL:-http://localhost:3000}
+    ports:
+      - "5174:5174"
+    depends_on:
+      - sync-server
+    networks:
+      - datacollect-network-dev
+
 volumes:
   postgres-data-dev:
 

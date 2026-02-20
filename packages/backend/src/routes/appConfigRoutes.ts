@@ -55,10 +55,23 @@ const AppConfigSchema = z.object({
   })).optional(),
   selfService: z.object({
     enabled: z.boolean(),
-    authMethods: z.array(z.enum(["otp", "id", "qr"])),
+    authMethods: z.array(z.enum(["otp", "id", "qr", "oidc"])),
     allowedForms: z.array(z.string()),
     languages: z.array(z.string()),
     requireReview: z.boolean(),
+    oidcConfig: z.object({
+      authority: z.string().url(),
+      clientId: z.string().min(1),
+      redirectUri: z.string().url(),
+      scope: z.string().min(1),
+      acrValues: z.string().optional(),
+      entityMapping: z.object({
+        primaryClaim: z.string().min(1),
+        fallbackClaim: z.string().optional(),
+        entityField: z.string().min(1),
+        fallbackField: z.string().optional(),
+      }),
+    }).optional(),
   }).optional(),
 });
 
@@ -193,6 +206,42 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
       const { id } = req.params;
       const appConfig = await appConfigStore.getConfig(id);
       res.json(appConfig);
+    }),
+  );
+
+  // Public config endpoint — unauthenticated, returns only safe-to-expose fields
+  router.get(
+    "/:id/public",
+    asyncHandler(async (req, res) => {
+      const { id } = req.params;
+      const appConfig = await appConfigStore.getConfig(id);
+
+      const publicConfig: Record<string, unknown> = {
+        name: appConfig.name,
+        description: appConfig.description,
+      };
+
+      if (appConfig.selfService) {
+        publicConfig.selfService = {
+          enabled: appConfig.selfService.enabled,
+          authMethods: appConfig.selfService.authMethods,
+          ...(appConfig.selfService.oidcConfig ? {
+            oidcConfig: {
+              authority: appConfig.selfService.oidcConfig.authority,
+              clientId: appConfig.selfService.oidcConfig.clientId,
+              redirectUri: appConfig.selfService.oidcConfig.redirectUri,
+              scope: appConfig.selfService.oidcConfig.scope,
+              acrValues: appConfig.selfService.oidcConfig.acrValues,
+            },
+          } : {}),
+        };
+      }
+
+      if (appConfig.authConfigs) {
+        publicConfig.authConfigs = appConfig.authConfigs.map((c) => ({ type: c.type }));
+      }
+
+      res.json(publicConfig);
     }),
   );
 

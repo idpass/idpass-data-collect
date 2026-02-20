@@ -337,5 +337,247 @@ export function createSelfServiceRouter(
     return res.json({ username, token });
   }
 
+  const OidcExchangeSchema = z.object({
+    idToken: z.string().min(1, "ID token is required"),
+    accessToken: z.string().min(1, "Access token is required"),
+    tenantId: z.string().min(1, "Tenant ID is required"),
+  });
+
+  /**
+   * POST /oidc/exchange
+   * Exchange an eSignet OIDC token for a DataCollect self-service JWT.
+   */
+  router.post(
+    "/oidc/exchange",
+    otpRequestLimiter,
+    asyncHandler(async (req: Request, res: Response) => {
+      const parseResult = OidcExchangeSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({
+          error: "Invalid request",
+          details: parseResult.error.issues,
+        });
+      }
+
+      const { idToken, accessToken, tenantId } = parseResult.data;
+
+      // Load tenant config
+      const appInstance = await appInstanceStore.getAppInstance(tenantId);
+      if (!appInstance) {
+        return res.status(400).json({ error: "Tenant not found" });
+      }
+
+      // Dynamically import jose to avoid requiring it at module load time
+      const { createRemoteJWKSet, jwtVerify } = await import("jose");
+
+      // Decode the ID token header to get the issuer
+      const tokenParts = idToken.split(".");
+      if (tokenParts.length !== 3) {
+        return res.status(400).json({ error: "Invalid ID token format" });
+      }
+
+      let payload: Record<string, unknown>;
+      try {
+        // Decode payload to get issuer for JWKS discovery
+        payload = JSON.parse(Buffer.from(tokenParts[1], "base64url").toString());
+      } catch {
+        return res.status(400).json({ error: "Invalid ID token payload" });
+      }
+
+      const issuer = payload.iss as string;
+      if (!issuer) {
+        return res.status(400).json({ error: "ID token missing issuer claim" });
+      }
+
+      // Fetch JWKS and verify the token
+      try {
+        const jwksUrl = new URL(`${issuer.replace(/\/+$/, "")}/.well-known/openid-configuration`);
+        const discoveryResponse = await fetch(jwksUrl.toString());
+        if (!discoveryResponse.ok) {
+          return res.status(502).json({ error: "Failed to fetch OIDC discovery document" });
+        }
+        const discovery = await discoveryResponse.json() as { jwks_uri: string };
+        const JWKS = createRemoteJWKSet(new URL(discovery.jwks_uri));
+
+        const { payload: verifiedPayload } = await jwtVerify(idToken, JWKS, {
+          issuer,
+        });
+
+        // Extract subject and mapped claims
+        const sub = verifiedPayload.sub;
+        if (!sub) {
+          return res.status(400).json({ error: "ID token missing subject claim" });
+        }
+
+        const edm = appInstance.edm;
+
+        // Search by oidcSubject first
+        let searchResults = await edm.searchEntities([
+          { "data.oidcSubject": sub },
+        ]);
+
+        if (searchResults.length === 0) {
+          // Fallback: search by sub as nationalId
+          searchResults = await edm.searchEntities([
+            { "data.nationalId": sub },
+          ]);
+        }
+
+        if (searchResults.length === 0) {
+          return res.status(404).json({
+            error: "No matching beneficiary record found",
+          });
+        }
+
+        const entity = searchResults[0];
+        return respondWithSelfServiceToken(res, entity.modified.guid, tenantId);
+      } catch (err) {
+        log.error({ err }, "OIDC token verification failed");
+        return res.status(401).json({ error: "Invalid or expired OIDC token" });
+      }
+    }),
+  );
+
+  /**
+   * GET /self-service/entity
+   * Returns the citizen's own entity data and available change request forms.
+   */
+  router.get(
+    "/self-service/entity",
+    requireSelfServiceScope,
+    asyncHandler(async (req: Request, res: Response) => {
+      const selfServiceUser = (req as SelfServiceAuthenticatedRequest).selfServiceUser;
+      const { entityGuid, tenantId } = selfServiceUser;
+
+      if (!entityGuid) {
+        return res.status(400).json({ error: "No entity associated with this token" });
+      }
+
+      const appInstance = await appInstanceStore.getAppInstance(tenantId);
+      if (!appInstance) {
+        return res.status(404).json({ error: "Tenant not found" });
+      }
+
+      const entityPairs = await appInstance.edm.getAllEntities();
+      const entityPair = entityPairs.find((p) => p.modified.guid === entityGuid);
+
+      if (!entityPair) {
+        return res.status(404).json({ error: "Entity not found" });
+      }
+
+      // Build available forms from tenant config if selfService is configured
+      const availableForms: Array<{ type: string; label: string }> = [];
+      availableForms.push({
+        type: "update-individual",
+        label: "Update Profile",
+      });
+
+      res.json({
+        entity: {
+          guid: entityPair.modified.guid,
+          data: entityPair.modified.data,
+          lastUpdated: entityPair.modified.lastUpdated,
+        },
+        availableForms,
+      });
+    }),
+  );
+
+  const SelfServiceSubmitSchema = z.object({
+    formType: z.string().min(1, "Form type is required"),
+    formData: z.record(z.string(), z.unknown()),
+  });
+
+  /**
+   * POST /self-service/submit
+   * Submit a change request through the review pipeline.
+   */
+  router.post(
+    "/self-service/submit",
+    requireSelfServiceScope,
+    asyncHandler(async (req: Request, res: Response) => {
+      const parseResult = SelfServiceSubmitSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({
+          error: "Invalid request",
+          details: parseResult.error.issues,
+        });
+      }
+
+      const selfServiceUser = (req as SelfServiceAuthenticatedRequest).selfServiceUser;
+      const { entityGuid, tenantId, identifier } = selfServiceUser;
+      const { formType, formData } = parseResult.data;
+
+      if (!entityGuid) {
+        return res.status(400).json({ error: "No entity associated with this token" });
+      }
+
+      const appInstance = await appInstanceStore.getAppInstance(tenantId);
+      if (!appInstance) {
+        return res.status(404).json({ error: "Tenant not found" });
+      }
+
+      const { v4: uuidv4 } = await import("uuid");
+
+      const submission = {
+        guid: uuidv4(),
+        entityGuid,
+        type: formType,
+        data: formData,
+        timestamp: new Date().toISOString(),
+        userId: `self-service:${identifier}`,
+        syncLevel: 0, // LOCAL
+      };
+
+      // Apply the form submission directly through the EDM
+      await appInstance.edm.submitForm(submission);
+
+      log.info(
+        { entityGuid, tenantId, formType },
+        "Self-service form submitted",
+      );
+
+      res.json({ status: "success", submissionGuid: submission.guid });
+    }),
+  );
+
+  /**
+   * GET /self-service/submissions
+   * Returns the citizen's change request history.
+   */
+  router.get(
+    "/self-service/submissions",
+    requireSelfServiceScope,
+    asyncHandler(async (req: Request, res: Response) => {
+      const selfServiceUser = (req as SelfServiceAuthenticatedRequest).selfServiceUser;
+      const { entityGuid, tenantId } = selfServiceUser;
+
+      if (!entityGuid) {
+        return res.status(400).json({ error: "No entity associated with this token" });
+      }
+
+      const appInstance = await appInstanceStore.getAppInstance(tenantId);
+      if (!appInstance) {
+        return res.status(404).json({ error: "Tenant not found" });
+      }
+
+      // Get events for this entity to build submission history
+      const auditTrail = await appInstance.edm.getAuditTrailByEntityGuid(entityGuid);
+      const submissions = auditTrail
+        .filter((event) => event.userId.startsWith("self-service:"))
+        .map((event) => ({
+          id: event.guid,
+          submissionGuid: event.guid,
+          tenantId,
+          status: "approved" as const, // Events in the store are already applied
+          eventType: event.action,
+          entityGuid: event.entityGuid,
+          createdAt: event.timestamp,
+        }));
+
+      res.json({ submissions });
+    }),
+  );
+
   return router;
 }

@@ -27,3 +27,9 @@ WORKDIR /app
 COPY --from=build /app .
 EXPOSE 8081
 CMD ["pnpm", "run", "dev:mobile"]
+
+FROM base AS web-ui
+WORKDIR /app
+COPY --from=build /app .
+EXPOSE 5174
+CMD ["pnpm", "run", "dev:web"]
