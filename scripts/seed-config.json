@@ -3,6 +3,13 @@
   "name": "Demo Household Registry",
   "description": "Demo app configuration with households and individuals for development and testing.",
   "version": "1.0.0",
+  "selfService": {
+    "enabled": true,
+    "authMethods": ["otp", "id"],
+    "allowedForms": ["individual"],
+    "languages": ["en", "fr"],
+    "requireReview": true
+  },
   "entityForms": [
     {
       "id": "household",
@@ -474,6 +481,8 @@
           "last_name": "Nguyen",
           "date_of_birth": "1985-03-15",
           "gender": "male",
+          "nationalId": "LA-1985-001",
+          "phone": "+856-20-1111111",
           "parentId": "hh-001"
         },
         {
@@ -483,6 +492,8 @@
           "last_name": "Nguyen",
           "date_of_birth": "1988-07-22",
           "gender": "female",
+          "nationalId": "LA-1988-002",
+          "phone": "+856-20-2222222",
           "parentId": "hh-001"
         },
         {
@@ -501,6 +512,8 @@
           "last_name": "Santos",
           "date_of_birth": "1990-11-05",
           "gender": "female",
+          "nationalId": "KH-1990-004",
+          "phone": "+855-12-4444444",
           "parentId": "hh-002"
         },
         {
@@ -510,6 +523,8 @@
           "last_name": "Santos",
           "date_of_birth": "1992-04-18",
           "gender": "male",
+          "nationalId": "KH-1992-005",
+          "phone": "+855-12-5555555",
           "parentId": "hh-002"
         },
         {
@@ -519,6 +534,8 @@
           "last_name": "Sithong",
           "date_of_birth": "1978-09-30",
           "gender": "male",
+          "nationalId": "LA-1978-006",
+          "phone": "+856-20-6666666",
           "parentId": "hh-003"
         },
         {

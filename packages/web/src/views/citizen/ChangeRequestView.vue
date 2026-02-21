@@ -132,8 +132,8 @@ async function handleSubmit() {
       <v-card v-if="hasFormioSchema && matchingForm && !submitSuccess" variant="outlined" class="pa-4">
         <v-card-title class="text-h6 mb-4">{{ matchingForm.label }}</v-card-title>
         <FormRenderer
-          :schema="matchingForm.formio"
-          :submission="entityData?.entity.data"
+          :schema="matchingForm.formio!"
+          :submission="entityData?.entity.data ?? {}"
           @submit="handleFormioSubmit"
         />
         <v-overlay :model-value="submitting" contained class="align-center justify-center">

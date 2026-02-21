@@ -21,8 +21,8 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    user: "node"
-    working_dir: /home/node/app
+      target: backend
+    working_dir: /app
     env_file: ./.env
     restart: always
     depends_on:

@@ -263,7 +263,7 @@ describe('useAuthStore', () => {
         email: 'agent@test.com',
         exp: Math.floor(Date.now() / 1000) + 7200,
       })
-      vi.mocked(refreshToken).mockResolvedValueOnce({ token: refreshedToken })
+      vi.mocked(refreshToken).mockResolvedValueOnce({ token: refreshedToken, userId: '1' })
 
       // Advance to 45 minutes (the refresh interval)
       await vi.advanceTimersByTimeAsync(45 * 60 * 1000)

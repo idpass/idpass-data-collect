@@ -28,11 +28,18 @@ export const i18n = createI18n({
   messages: { en, fr },
 })
 
+type SupportedLocale = 'en' | 'fr'
+const supportedLocales: SupportedLocale[] = ['en', 'fr']
+
+function isSupportedLocale(lang: string): lang is SupportedLocale {
+  return supportedLocales.includes(lang as SupportedLocale)
+}
+
 export function setLocaleFromTenant(languages: string[]) {
   const browserLang = navigator.language.split('-')[0]
-  if (languages.includes(browserLang)) {
+  if (languages.includes(browserLang) && isSupportedLocale(browserLang)) {
     i18n.global.locale.value = browserLang
-  } else if (languages.length > 0) {
+  } else if (languages.length > 0 && isSupportedLocale(languages[0])) {
     i18n.global.locale.value = languages[0]
   }
 }

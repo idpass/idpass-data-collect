@@ -67,6 +67,7 @@ export interface PublicAppConfig {
   selfService?: {
     enabled: boolean
     authMethods: string[]
+    languages?: string[]
     oidcConfig?: {
       authority: string
       clientId: string

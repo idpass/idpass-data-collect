@@ -264,12 +264,12 @@ export function createSelfServiceRouter(
       const edm = appInstance.edm;
 
       // Search for entities that have a matching nationalId or identifiers
-      const searchResults = await edm.searchEntities([{ "data.nationalId": nationalId }]);
+      const searchResults = await edm.searchEntities([{ "nationalId": nationalId }]);
 
-      // Filter by date of birth match
+      // Filter by date of birth match (check both camelCase and snake_case field names)
       const matchingEntities = searchResults.filter((pair) => {
         const entityData = pair.modified.data;
-        return entityData.dateOfBirth === dateOfBirth;
+        return entityData.dateOfBirth === dateOfBirth || entityData.date_of_birth === dateOfBirth;
       });
 
       // Also check identifiers array for national-id type
@@ -277,7 +277,10 @@ export function createSelfServiceRouter(
         // Fallback: search by dateOfBirth to narrow results, then filter
         // by national-id in the identifiers array. This avoids loading all
         // entities which is expensive and a potential DoS vector.
-        const dobResults = await edm.searchEntities([{ "data.dateOfBirth": dateOfBirth }]);
+        const dobResults = await edm.searchEntities([
+          { "dateOfBirth": dateOfBirth },
+          { "date_of_birth": dateOfBirth },
+        ]);
         const identifierMatch = dobResults.filter((pair) => {
           const identifiers = pair.modified.identifiers || [];
           return identifiers.some(
@@ -420,11 +423,11 @@ export function createSelfServiceRouter(
         const edm = appInstance.edm;
 
         // Search by oidcSubject first
-        let searchResults = await edm.searchEntities([{ "data.oidcSubject": sub }]);
+        let searchResults = await edm.searchEntities([{ "oidcSubject": sub }]);
 
         if (searchResults.length === 0) {
           // Fallback: search by sub as nationalId
-          searchResults = await edm.searchEntities([{ "data.nationalId": sub }]);
+          searchResults = await edm.searchEntities([{ "nationalId": sub }]);
         }
 
         if (searchResults.length === 0) {
