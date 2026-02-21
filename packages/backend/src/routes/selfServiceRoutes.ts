@@ -22,6 +22,7 @@ import jwt from "jsonwebtoken";
 import { z } from "zod";
 import rateLimit from "express-rate-limit";
 import { v4 as uuidv4 } from "uuid";
+import { FormClassifier, FormCategory } from "@idpass/data-collect-core";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { OtpStore } from "../stores/OtpStore";
 import { ReviewStore } from "../stores/ReviewStore";
@@ -174,16 +175,35 @@ export function createSelfServiceRouter(
         });
       }
 
-      const otpCode = await otpStore.createOtp(identifier, tenantId);
+      // Look up the entity by phone/email to bind the OTP to the correct entity.
+      // This allows the self-service token to include entityGuid for data access.
+      // SearchCriteria items are AND'd, so search phone and email separately.
+      let entityGuid: string | undefined;
+      const appInstance = await appInstanceStore.getAppInstance(tenantId);
+      if (appInstance) {
+        const edm = appInstance.edm;
+        let searchResults = await edm.searchEntities([{ phone: identifier }]);
+        if (searchResults.length === 0) {
+          searchResults = await edm.searchEntities([{ email: identifier }]);
+        }
+        if (searchResults.length > 0) {
+          entityGuid = searchResults[0].modified.guid;
+        }
+      }
+
+      const otpCode = await otpStore.createOtp(identifier, tenantId, entityGuid);
 
       // In production, send the code via SMS or email here.
-      // For development/testing, the code is stored and can be retrieved
-      // from the OTP store directly.
+      // For development/testing, the plaintext code is included in the
+      // response so it can be displayed in the UI without an SMS gateway.
       log.info({ tenantId, codeId: otpCode.id }, "OTP code generated");
+
+      const isProduction = process.env.NODE_ENV === "production";
 
       res.json({
         success: true,
         expiresIn: 300, // 5 minutes in seconds
+        ...(isProduction ? {} : { devCode: otpCode.code }),
       });
     }),
   );
@@ -277,10 +297,11 @@ export function createSelfServiceRouter(
         // Fallback: search by dateOfBirth to narrow results, then filter
         // by national-id in the identifiers array. This avoids loading all
         // entities which is expensive and a potential DoS vector.
-        const dobResults = await edm.searchEntities([
-          { "dateOfBirth": dateOfBirth },
-          { "date_of_birth": dateOfBirth },
-        ]);
+        // SearchCriteria items are AND'd, so search each field name separately.
+        let dobResults = await edm.searchEntities([{ "dateOfBirth": dateOfBirth }]);
+        if (dobResults.length === 0) {
+          dobResults = await edm.searchEntities([{ "date_of_birth": dateOfBirth }]);
+        }
         const identifierMatch = dobResults.filter((pair) => {
           const identifiers = pair.modified.identifiers || [];
           return identifiers.some(
@@ -543,17 +564,53 @@ export function createSelfServiceRouter(
         return res.status(403).json({ error: "Form type not allowed for this program" });
       }
 
+      // Classify the form using the centralized topology algorithm to determine
+      // the correct event type (update-group, update-individual, or update-record).
+      const entityForms = (appInstance.config.entityForms || []).map((f) => ({
+        name: f.name,
+        dependsOn: f.dependsOn,
+      }));
+      const classification = FormClassifier.classifyForm(formType, entityForms);
+      const isEntityUpdate = classification.category === FormCategory.Entity;
+
+      const eventType = isEntityUpdate
+        ? classification.updateEventType
+        : classification.updateEventType;
+
       const submission = {
         guid: uuidv4(),
         entityGuid,
-        type: formType,
+        type: eventType,
         data: formData,
         timestamp: new Date().toISOString(),
         userId: `self-service:${identifier}`,
         syncLevel: 0, // LOCAL
       };
 
-      // Route through review pipeline when requireReview is enabled
+      // Standalone forms (life_event, grievance, etc.) are stored as review
+      // records but never applied as entity events.
+      if (!isEntityUpdate) {
+        if (reviewStore) {
+          const reviewService = await getReviewService(appInstanceStore, reviewStore, tenantId);
+          if (reviewService) {
+            // Store as pending review — skip auto-approve since there's no entity event to apply
+            const review = reviewService.createPendingReview(tenantId, submission);
+            log.info(
+              { entityGuid, tenantId, formType, reviewId: review.id },
+              "Self-service standalone form submitted for review",
+            );
+            return res.json({
+              status: "pending_review",
+              submissionGuid: submission.guid,
+              reviewId: review.id,
+            });
+          }
+        }
+        log.info({ entityGuid, tenantId, formType }, "Self-service standalone form submitted");
+        return res.json({ status: "success", submissionGuid: submission.guid });
+      }
+
+      // Entity update forms route through the full review pipeline
       const requireReview = appInstance.config.selfService?.requireReview;
       if (requireReview && reviewStore) {
         const reviewService = await getReviewService(appInstanceStore, reviewStore, tenantId);
@@ -571,7 +628,7 @@ export function createSelfServiceRouter(
         }
       }
 
-      // Apply directly when review is not required or review infrastructure unavailable
+      // Apply entity update directly when review is not required
       await appInstance.edm.submitForm(submission);
 
       log.info({ entityGuid, tenantId, formType }, "Self-service form submitted");

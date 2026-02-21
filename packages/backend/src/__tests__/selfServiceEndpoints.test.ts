@@ -740,6 +740,167 @@ describe("POST /api/auth/self-service/submit (without PostgreSQL)", () => {
   });
 });
 
+// ─── 4b. Entity form name routing (config-driven topology) ───
+
+/**
+ * Tests that entity form detection in the submit handler uses the config's
+ * dependsOn topology rather than a hardcoded list of form names.
+ *
+ * A form is an "entity form" (produces update-<name> events) if:
+ * - It has a dependsOn field (it's a sub-entity of another form), OR
+ * - Other forms reference it via dependsOn (it's a top-level entity type)
+ *
+ * Forms that satisfy neither condition are "standalone" (e.g., grievance,
+ * life_event) and are stored as review records without modifying entities.
+ */
+describe("POST /api/auth/self-service/submit — entity form name routing", () => {
+  let app: express.Express;
+  let mockAppInstanceStore: jest.Mocked<AppInstanceStore>;
+  let mockSubmitForm: jest.Mock;
+
+  // Config with dependsOn topology:
+  // - "household" is top-level (no dependsOn), but "individual" depends on it → Group entity
+  // - "individual" has dependsOn: "household" and is a dependsOn target → Individual entity
+  // - "association" is top-level (no dependsOn), and "member" depends on it → Group entity
+  // - "member" has dependsOn: "association", not a target → Record
+  // - "grievance" has dependsOn: "individual", not a target → Record
+  // - "life_event" has dependsOn: "individual", not a target → Record
+  const TOPOLOGY_CONFIG: AppConfig = {
+    id: "topology-tenant",
+    name: "Topology Test Tenant",
+    entityForms: [
+      { id: "f-household", name: "household", title: "Household" },
+      { id: "f-individual", name: "individual", title: "Individual", dependsOn: "household" },
+      { id: "f-association", name: "association", title: "Association" },
+      { id: "f-member", name: "member", title: "Member", dependsOn: "association" },
+      { id: "f-grievance", name: "grievance", title: "Grievance", dependsOn: "individual" },
+      { id: "f-life-event", name: "life_event", title: "Life Event", dependsOn: "individual" },
+    ],
+    selfService: {
+      enabled: true,
+      authMethods: ["otp"],
+      allowedForms: ["household", "individual", "association", "member", "grievance", "life_event"],
+      languages: ["en"],
+      requireReview: false,
+    },
+  };
+
+  beforeAll(() => {
+    process.env.JWT_SECRET = JWT_SECRET;
+  });
+
+  beforeEach(() => {
+    mockSubmitForm = jest.fn().mockResolvedValue(undefined);
+
+    mockAppInstanceStore = {
+      initialize: jest.fn(),
+      createAppInstance: jest.fn(),
+      updateAppInstance: jest.fn(),
+      loadEntityData: jest.fn(),
+      getAppInstance: jest.fn().mockResolvedValue({
+        configId: "topology-tenant",
+        config: TOPOLOGY_CONFIG,
+        edm: {
+          getEntity: jest.fn().mockResolvedValue(TEST_ENTITY),
+          getAllEntities: jest.fn().mockResolvedValue([TEST_ENTITY]),
+          searchEntities: jest.fn().mockResolvedValue([]),
+          getAuditTrailByEntityGuid: jest.fn().mockResolvedValue([]),
+          submitForm: mockSubmitForm,
+        } as never,
+      }),
+      clearAppInstance: jest.fn(),
+      clearStore: jest.fn(),
+      closeConnection: jest.fn(),
+    } as jest.Mocked<AppInstanceStore>;
+
+    const mockOtpStore = {
+      initialize: jest.fn(),
+      createOtp: jest.fn(),
+      verifyOtp: jest.fn(),
+      getActiveCodesByIdentifier: jest.fn(),
+      clearStore: jest.fn(),
+      closeConnection: jest.fn(),
+    };
+
+    app = express();
+    app.use(bodyParser.json());
+    app.use("/api/auth", createSelfServiceRouter(mockOtpStore as never, mockAppInstanceStore));
+    app.use(errorHandler);
+  });
+
+  it("should route 'household' (top-level group) as entity update with update-group", async () => {
+    const token = createValidToken();
+
+    const response = await request(app)
+      .post("/api/auth/self-service/submit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ formType: "household", formData: { address: "123 Main St" } });
+
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe("success");
+    // Top-level entity forms produce update-group via FormClassifier
+    expect(mockSubmitForm).toHaveBeenCalledTimes(1);
+    expect(mockSubmitForm.mock.calls[0][0].type).toBe("update-group");
+  });
+
+  it("should route 'individual' (has dependsOn) as entity update", async () => {
+    const token = createValidToken();
+
+    const response = await request(app)
+      .post("/api/auth/self-service/submit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ formType: "individual", formData: { name: "Jane Doe" } });
+
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe("success");
+    expect(mockSubmitForm).toHaveBeenCalledTimes(1);
+    expect(mockSubmitForm.mock.calls[0][0].type).toBe("update-individual");
+  });
+
+  it("should route 'association' (top-level group) as entity update with update-group", async () => {
+    const token = createValidToken();
+
+    const response = await request(app)
+      .post("/api/auth/self-service/submit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ formType: "association", formData: { name: "Village Council" } });
+
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe("success");
+    // Top-level entity forms produce update-group via FormClassifier
+    expect(mockSubmitForm).toHaveBeenCalledTimes(1);
+    expect(mockSubmitForm.mock.calls[0][0].type).toBe("update-group");
+  });
+
+  it("should route 'grievance' (record, dependsOn individual, not a target) as record form", async () => {
+    const token = createValidToken();
+
+    const response = await request(app)
+      .post("/api/auth/self-service/submit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ formType: "grievance", formData: { description: "Water shortage" } });
+
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe("success");
+    // Record forms do NOT call submitForm (they go to review or are just logged)
+    expect(mockSubmitForm).not.toHaveBeenCalled();
+  });
+
+  it("should route 'life_event' (record, dependsOn individual) as record form", async () => {
+    const token = createValidToken();
+
+    const response = await request(app)
+      .post("/api/auth/self-service/submit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ formType: "life_event", formData: { event: "birth" } });
+
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe("success");
+    // Record forms do NOT call submitForm
+    expect(mockSubmitForm).not.toHaveBeenCalled();
+  });
+});
+
 // ─── 5. GET /api/auth/self-service/submissions ───
 
 describe("GET /api/auth/self-service/submissions (without PostgreSQL)", () => {

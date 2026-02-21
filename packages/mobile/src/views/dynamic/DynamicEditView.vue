@@ -5,7 +5,7 @@ import { store } from '@/store'
 import { EntityForm } from '@/utils/dynamicFormIoUtils'
 import { reverseTransformEntityData } from '@/utils/reverseTransformData'
 import { Form as FormIO } from '@formio/vue/lib/index'
-import { SyncLevel } from '@idpass/data-collect-core'
+import { SyncLevel, FormClassifier } from '@idpass/data-collect-core'
 import { v4 as uuidv4 } from 'uuid'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -125,10 +125,17 @@ onMounted(async () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const onSubmit = async (submission: any) => {
   const entityGuid = route.params.guid
+  // Classify the form to determine the correct update event type
+  const formDefs = tenantapp.value.entityForms.map((f: EntityForm) => ({
+    name: f.name,
+    dependsOn: f.dependsOn,
+  }))
+  const classification = FormClassifier.classifyForm(entityForm.value.name, formDefs)
+
   await store.submitForm({
     guid: uuidv4(),
     entityGuid: entityGuid as string,
-    type: 'update-individual',
+    type: classification.updateEventType,
     data: {
       ...submission.data,
       entityName: entityForm.value.name,

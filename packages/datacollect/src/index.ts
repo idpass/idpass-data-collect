@@ -215,6 +215,8 @@ export * from "./components/SyncAdapter";
 // Core Services
 export * from "./services/EventApplierService";
 export * from "./services/DuplicateDetectionService";
+export { FormClassifier, FormCategory } from "./services/FormClassifier";
+export type { FormDefinition, FormClassification } from "./services/FormClassifier";
 export { EventUpcasterService } from "./services/EventUpcasterService";
 export type { EventUpcaster } from "./services/EventUpcasterService";
 export { ProjectionRebuildService } from "./services/ProjectionRebuildService";

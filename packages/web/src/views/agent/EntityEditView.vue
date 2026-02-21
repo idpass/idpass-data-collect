@@ -41,7 +41,9 @@ const entityForm = computed(() => {
 
 const updateFormType = computed(() => {
   if (!entity.value) return entityType
-  return entity.value.type === 'group' ? 'update-group' : 'update-individual'
+  if (entity.value.type === 'group') return 'update-group'
+  if (entity.value.type === 'record') return 'update-record'
+  return 'update-individual'
 })
 
 async function handleFormSubmit(data: Record<string, unknown>) {

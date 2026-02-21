@@ -27,6 +27,7 @@ import {
   ExternalSyncManager,
   SyncLevel,
   AuthManager,
+  FormClassifier,
 } from "@idpass/data-collect-core";
 import { v4 as uuidv4 } from "uuid";
 import { AppConfigStore, AppInstance, AppInstanceStore } from "../types";
@@ -108,34 +109,22 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
       return;
     }
 
-    // Build form lookup: which forms are top-level (group) vs dependent (individual)
-    const formLookup = new Map<string, { dependsOn?: string }>();
-    if (config.entityForms) {
-      for (const form of config.entityForms) {
-        formLookup.set(form.name || form.id, { dependsOn: form.dependsOn });
-      }
-    }
-
-    const isTopLevel = (formName: string) => !formLookup.get(formName)?.dependsOn;
-
-    // Build set of form names that are used as dependsOn targets by other forms.
-    // Forms that are dependsOn targets define entity types (e.g., "individual", "household"),
-    // while forms that are NOT targets are record types (e.g., "home_visit", "assistance").
-    const dependsOnTargets = new Set<string>();
-    if (config.entityForms) {
-      for (const form of config.entityForms) {
-        if (form.dependsOn) dependsOnTargets.add(form.dependsOn);
-      }
-    }
+    // Classify all forms using the centralized topology algorithm
+    const formDefs = (config.entityForms || []).map((f) => ({
+      name: f.name || f.id,
+      dependsOn: f.dependsOn,
+    }));
+    const classifications = FormClassifier.classifyAll(formDefs);
 
     // Pass 1: top-level entities (groups)
     for (const entityData of config.entityData) {
-      if (!isTopLevel(entityData.name)) continue;
+      const classification = classifications.get(entityData.name);
+      if (classification?.entityType !== "group") continue;
       for (const item of entityData.data) {
         await manager.submitForm({
           guid: uuidv4(),
           entityGuid: item?.id || uuidv4(),
-          type: "create-group",
+          type: classification.createEventType,
           data: { ...item, entityName: entityData.name, name: item?.name || item?.id },
           timestamp: new Date().toISOString(),
           userId: "admin",
@@ -144,31 +133,28 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
       }
     }
 
-    // Pass 2: dependent entities (individuals) + link to parent group if applicable
+    // Pass 2: dependent entities (individuals and records)
     for (const entityData of config.entityData) {
-      if (isTopLevel(entityData.name)) continue;
-      // Only emit add-member when the parent form is a top-level (group) entity.
-      // Forms like "training" depend on "individual" (not a group), so their
-      // parentId link should not produce add-member events.
-      const parentFormName = formLookup.get(entityData.name)?.dependsOn;
-      const parentIsGroup = parentFormName ? isTopLevel(parentFormName) : false;
+      const classification = classifications.get(entityData.name);
+      if (!classification || classification.entityType === "group") continue;
+
+      const isEntityForm = classification.category === "entity";
 
       for (const item of entityData.data) {
         const entityGuid = item?.id || uuidv4();
         await manager.submitForm({
           guid: uuidv4(),
           entityGuid,
-          type: "create-individual",
+          type: classification.createEventType,
           data: { ...item, entityName: entityData.name, name: item?.name || item?.id },
           timestamp: new Date().toISOString(),
           userId: "admin",
           syncLevel: SyncLevel.REMOTE,
         });
 
-        // Link to parent group only if this form is an entity-creating form (a dependsOn target)
-        // and the parent is a group. Record forms (home_visit, assistance) are not linked as members.
-        const isEntityForm = dependsOnTargets.has(entityData.name);
-        if (item.parentId && parentIsGroup && isEntityForm) {
+        // Link to parent group only if this form is an entity-creating form
+        // and the parent is a group. Record forms are not linked as members.
+        if (item.parentId && classification.parentIsGroup && isEntityForm) {
           await manager.submitForm({
             guid: uuidv4(),
             entityGuid: item.parentId,
