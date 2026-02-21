@@ -27,6 +27,11 @@ import { AppConfig, AppConfigStore, AppInstanceStore, UserStore } from "../types
 import multer from "multer";
 import fs from "fs/promises";
 import { generatePublicArtifacts, getPublicArtifactPaths, resolvePublicBaseUrl } from "../utils/publicArtifacts";
+import rateLimit from "express-rate-limit";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("appConfigRoutes");
+const isTest = process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID !== undefined;
 
 const AppConfigSchema = z.object({
   id: z.string().min(1),
@@ -210,11 +215,29 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
   );
 
   // Public config endpoint — unauthenticated, returns only safe-to-expose fields
+  const publicConfigLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: isTest ? 1000 : 60,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    message: { error: "Too many requests, please try again later" },
+  });
+
   router.get(
     "/:id/public",
+    publicConfigLimiter,
     asyncHandler(async (req, res) => {
       const { id } = req.params;
-      const appConfig = await appConfigStore.getConfig(id);
+      let appConfig;
+      try {
+        appConfig = await appConfigStore.getConfig(id);
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("not found")) {
+          res.status(404).json({ error: "Configuration not found" });
+          return;
+        }
+        throw error;
+      }
 
       const publicConfig: Record<string, unknown> = {
         name: appConfig.name,
@@ -225,6 +248,7 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
         publicConfig.selfService = {
           enabled: appConfig.selfService.enabled,
           authMethods: appConfig.selfService.authMethods,
+          languages: appConfig.selfService.languages || ["en"],
           ...(appConfig.selfService.oidcConfig ? {
             oidcConfig: {
               authority: appConfig.selfService.oidcConfig.authority,

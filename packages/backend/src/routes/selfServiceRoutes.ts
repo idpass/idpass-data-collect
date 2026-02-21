@@ -21,6 +21,7 @@ import { Router, Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
 import rateLimit from "express-rate-limit";
+import { v4 as uuidv4 } from "uuid";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { OtpStore } from "../stores/OtpStore";
 import { ReviewStore } from "../stores/ReviewStore";
@@ -87,11 +88,7 @@ export interface SelfServiceAuthenticatedRequest extends Request {
  * Middleware that verifies a self-service JWT token and ensures the
  * request only accesses the entity associated with the token.
  */
-export function requireSelfServiceScope(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): void {
+export function requireSelfServiceScope(req: Request, res: Response, next: NextFunction): void {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader) {
@@ -100,26 +97,24 @@ export function requireSelfServiceScope(
     }
 
     const [authType, token] = authHeader.split(" ");
-    if (authType.toLowerCase() !== "bearer") {
+    if (authType.toLowerCase() !== "bearer" || !token) {
       res.status(401).json({ error: "Invalid authentication type" });
       return;
     }
 
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET!,
-    ) as SelfServiceDecodedPayload;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as SelfServiceDecodedPayload;
 
     if (decoded.scope !== "self-service") {
       res.status(403).json({ error: "Forbidden: self-service scope required" });
       return;
     }
 
+    // entityGuid is enforced at the handler level, not here, because OTP
+    // verification issues tokens before an entity is associated.
+
     // Verify entityGuid in JWT matches the requested entity (if present in request)
     const requestedEntityGuid =
-      req.params.entityGuid ||
-      (req.body as Record<string, unknown>)?.entityGuid ||
-      req.query.entityGuid;
+      req.params.entityGuid || (req.body as Record<string, unknown>)?.entityGuid || req.query.entityGuid;
 
     if (requestedEntityGuid && decoded.entityGuid && requestedEntityGuid !== decoded.entityGuid) {
       res.status(403).json({ error: "Forbidden: cannot access other entities" });
@@ -184,10 +179,7 @@ export function createSelfServiceRouter(
       // In production, send the code via SMS or email here.
       // For development/testing, the code is stored and can be retrieved
       // from the OTP store directly.
-      log.info(
-        { tenantId, codeId: otpCode.id },
-        "OTP code generated",
-      );
+      log.info({ tenantId, codeId: otpCode.id }, "OTP code generated");
 
       res.json({
         success: true,
@@ -238,10 +230,7 @@ export function createSelfServiceRouter(
 
       const username = `self-service:${identifier}`;
 
-      log.info(
-        { tenantId },
-        "OTP verified successfully, self-service token issued",
-      );
+      log.info({ tenantId }, "OTP verified successfully, self-service token issued");
 
       res.json({ username, token });
     }),
@@ -269,15 +258,13 @@ export function createSelfServiceRouter(
       // Look up the entity with matching national ID and date of birth
       const appInstance = await appInstanceStore.getAppInstance(tenantId);
       if (!appInstance) {
-        return res.status(400).json({ error: "Tenant not found" });
+        return res.status(401).json({ error: "Verification failed" });
       }
 
       const edm = appInstance.edm;
 
       // Search for entities that have a matching nationalId or identifiers
-      const searchResults = await edm.searchEntities([
-        { "data.nationalId": nationalId },
-      ]);
+      const searchResults = await edm.searchEntities([{ "data.nationalId": nationalId }]);
 
       // Filter by date of birth match
       const matchingEntities = searchResults.filter((pair) => {
@@ -290,19 +277,16 @@ export function createSelfServiceRouter(
         // Fallback: search by dateOfBirth to narrow results, then filter
         // by national-id in the identifiers array. This avoids loading all
         // entities which is expensive and a potential DoS vector.
-        const dobResults = await edm.searchEntities([
-          { "data.dateOfBirth": dateOfBirth },
-        ]);
+        const dobResults = await edm.searchEntities([{ "data.dateOfBirth": dateOfBirth }]);
         const identifierMatch = dobResults.filter((pair) => {
           const identifiers = pair.modified.identifiers || [];
           return identifiers.some(
-            (id: { type: string; value: string }) =>
-              id.type === "national-id" && id.value === nationalId,
+            (id: { type: string; value: string }) => id.type === "national-id" && id.value === nationalId,
           );
         });
 
         if (identifierMatch.length === 0) {
-          return res.status(401).json({ error: "Identity not found" });
+          return res.status(401).json({ error: "Verification failed" });
         }
 
         const entity = identifierMatch[0];
@@ -314,11 +298,7 @@ export function createSelfServiceRouter(
     }),
   );
 
-  function respondWithSelfServiceToken(
-    res: Response,
-    entityGuid: string,
-    tenantId: string,
-  ) {
+  function respondWithSelfServiceToken(res: Response, entityGuid: string, tenantId: string) {
     const tokenPayload: SelfServiceDecodedPayload = {
       scope: "self-service",
       identifier: entityGuid,
@@ -332,10 +312,7 @@ export function createSelfServiceRouter(
 
     const username = `self-service:${entityGuid}`;
 
-    log.info(
-      { entityGuid, tenantId },
-      "ID verified successfully, self-service token issued",
-    );
+    log.info({ entityGuid, tenantId }, "ID verified successfully, self-service token issued");
 
     return res.json({ username, token });
   }
@@ -368,7 +345,7 @@ export function createSelfServiceRouter(
       // Load tenant config
       const appInstance = await appInstanceStore.getAppInstance(tenantId);
       if (!appInstance) {
-        return res.status(400).json({ error: "Tenant not found" });
+        return res.status(401).json({ error: "Authentication failed" });
       }
 
       // Validate that OIDC is configured for this tenant
@@ -379,9 +356,6 @@ export function createSelfServiceRouter(
 
       const expectedIssuer = oidcConfig.authority.replace(/\/+$/, "");
       const expectedAudience = oidcConfig.clientId;
-
-      // Dynamically import jose to avoid requiring it at module load time
-      const { createRemoteJWKSet, jwtVerify } = await import("jose");
 
       // Decode the ID token to validate issuer before making any network requests
       const tokenParts = idToken.split(".");
@@ -406,6 +380,9 @@ export function createSelfServiceRouter(
         return res.status(401).json({ error: "Token issuer does not match tenant configuration" });
       }
 
+      // Dynamically import jose to avoid requiring it at module load time
+      const { createRemoteJWKSet, jwtVerify } = await import("jose");
+
       // Fetch JWKS from the trusted authority and verify the token
       try {
         const discoveryUrl = `${expectedIssuer}/.well-known/openid-configuration`;
@@ -413,8 +390,16 @@ export function createSelfServiceRouter(
         if (!discoveryResponse.ok) {
           return res.status(502).json({ error: "Failed to fetch OIDC discovery document" });
         }
-        const discovery = await discoveryResponse.json() as { jwks_uri: string };
-        const JWKS = createRemoteJWKSet(new URL(discovery.jwks_uri));
+        const discovery = (await discoveryResponse.json()) as { jwks_uri: string };
+
+        // Validate JWKS URI origin matches the expected issuer to prevent JWKS spoofing
+        const jwksUrl = new URL(discovery.jwks_uri);
+        const issuerUrl = new URL(expectedIssuer);
+        if (jwksUrl.origin !== issuerUrl.origin) {
+          log.warn({ jwksOrigin: jwksUrl.origin, issuerOrigin: issuerUrl.origin }, "JWKS URI origin mismatch");
+          return res.status(502).json({ error: "OIDC provider configuration error" });
+        }
+        const JWKS = createRemoteJWKSet(jwksUrl);
 
         const { payload: verifiedPayload } = await jwtVerify(idToken, JWKS, {
           issuer: expectedIssuer,
@@ -435,15 +420,11 @@ export function createSelfServiceRouter(
         const edm = appInstance.edm;
 
         // Search by oidcSubject first
-        let searchResults = await edm.searchEntities([
-          { "data.oidcSubject": sub },
-        ]);
+        let searchResults = await edm.searchEntities([{ "data.oidcSubject": sub }]);
 
         if (searchResults.length === 0) {
           // Fallback: search by sub as nationalId
-          searchResults = await edm.searchEntities([
-            { "data.nationalId": sub },
-          ]);
+          searchResults = await edm.searchEntities([{ "data.nationalId": sub }]);
         }
 
         if (searchResults.length === 0) {
@@ -489,11 +470,23 @@ export function createSelfServiceRouter(
       }
 
       // Build available forms from tenant config if selfService is configured
-      const availableForms: Array<{ type: string; label: string }> = [];
-      availableForms.push({
-        type: "update-individual",
-        label: "Update Profile",
-      });
+      const selfServiceConfig = appInstance.config.selfService;
+      const allowedFormNames = selfServiceConfig?.allowedForms || [];
+      const entityForms = appInstance.config.entityForms || [];
+
+      const availableForms: Array<{ type: string; label: string; formio?: object }> = allowedFormNames.map(
+        (formName: string) => {
+          const formConfig = entityForms.find((f) => f.name === formName || f.id === formName);
+          return formConfig
+            ? { type: formName, label: formConfig.title, formio: formConfig.formio }
+            : { type: formName, label: formName };
+        },
+      );
+
+      // Fallback: if no selfService config or no allowedForms, offer a generic update form
+      if (availableForms.length === 0) {
+        availableForms.push({ type: "update-individual", label: "Update Profile" });
+      }
 
       res.json({
         entity: {
@@ -540,7 +533,12 @@ export function createSelfServiceRouter(
         return res.status(404).json({ error: "Tenant not found" });
       }
 
-      const { v4: uuidv4 } = await import("uuid");
+      // Validate formType against tenant's allowed forms
+      const selfServiceConfig = appInstance.config.selfService;
+      const allowedForms = selfServiceConfig?.allowedForms || [];
+      if (allowedForms.length > 0 && !allowedForms.includes(formType)) {
+        return res.status(403).json({ error: "Form type not allowed for this program" });
+      }
 
       const submission = {
         guid: uuidv4(),
@@ -573,10 +571,7 @@ export function createSelfServiceRouter(
       // Apply directly when review is not required or review infrastructure unavailable
       await appInstance.edm.submitForm(submission);
 
-      log.info(
-        { entityGuid, tenantId, formType },
-        "Self-service form submitted",
-      );
+      log.info({ entityGuid, tenantId, formType }, "Self-service form submitted");
 
       res.json({ status: "success", submissionGuid: submission.guid });
     }),

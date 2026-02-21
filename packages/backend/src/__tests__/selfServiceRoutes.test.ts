@@ -317,7 +317,7 @@ describeIfPostgres("Self-Service Routes", () => {
       expect(response.status).toBe(400);
     });
 
-    it("should return 400 when tenant is not found", async () => {
+    it("should return 401 with uniform error when tenant is not found", async () => {
       mockAppInstanceStore.getAppInstance.mockResolvedValue(null);
 
       const response = await request(app)
@@ -328,7 +328,8 @@ describeIfPostgres("Self-Service Routes", () => {
           tenantId: "nonexistent-tenant",
         });
 
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(401);
+      expect(response.body.error).toBe("Verification failed");
     });
   });
 

@@ -86,6 +86,7 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
     );
     this.instances[configId] = {
       configId,
+      config,
       edm: manager,
     };
     return this.instances[configId];

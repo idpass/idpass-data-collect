@@ -162,6 +162,7 @@ export interface AppConfigStore {
 
 export interface AppInstance {
   configId: string;
+  config: AppConfig;
   edm: EntityDataManager;
 }
 
