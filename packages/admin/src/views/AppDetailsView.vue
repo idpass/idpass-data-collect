@@ -20,6 +20,7 @@ interface EntityForm {
   name: string
   title: string
   dependsOn?: string
+  entityType?: 'group' | 'individual' | 'record'
   formio?: Record<string, unknown>
   version?: string
 }
@@ -29,11 +30,26 @@ interface EntityData {
   data?: Array<Record<string, unknown>>
 }
 
+interface FieldMapping {
+  formField: string
+  opensppField: string
+  transformer: { type: string; options?: Record<string, unknown> }
+}
+
 interface ExternalSyncConfig {
   type?: string
   url?: string
   auth?: string
+  adapterConfig?: Record<string, string | number | boolean>
+  fieldMappings?: FieldMapping[]
   [key: string]: unknown
+}
+
+interface SelfServiceConfig {
+  enabled: boolean
+  authMethods: string[]
+  allowedForms: string[]
+  requireReview: boolean
 }
 
 interface AuthConfig {
@@ -51,6 +67,7 @@ interface AppConfig {
   entityData?: EntityData[]
   externalSync?: ExternalSyncConfig
   authConfigs?: AuthConfig[]
+  selfService?: SelfServiceConfig
   createdAt?: string
   updatedAt?: string
 }
@@ -71,7 +88,7 @@ const router = useRouter()
 const app = ref<AppConfig | null>(null)
 const isLoading = ref(true)
 const error = ref<string | null>(null)
-const activeTab = ref<'entities' | 'forms'>('entities')
+const activeTab = ref<'entities' | 'forms' | 'integration' | 'mapping' | 'auth'>('entities')
 const showQrDialog = ref(false)
 const showAuthDialog = ref(false)
 const isSyncing = ref(false)
@@ -266,6 +283,30 @@ const overviewMetrics = computed(() => [
   },
 ])
 
+const syncTypeLabel = computed(() => {
+  const typeMap: Record<string, string> = {
+    'mock-sync-server': 'Mock Sync Server',
+    'openspp-v1-adapter': 'OpenSPP V1',
+    'openspp-v2-adapter': 'OpenSPP V2',
+    'openfn-adapter': 'OpenFn',
+  }
+  return typeMap[app.value?.externalSync?.type || ''] || app.value?.externalSync?.type || 'Not configured'
+})
+
+const fieldMappings = computed(() => app.value?.externalSync?.fieldMappings ?? [])
+
+const authConfigs = computed(() => app.value?.authConfigs ?? [])
+
+const selfServiceConfig = computed(() => app.value?.selfService)
+
+const authTypeLabel = (type: string) => {
+  const typeMap: Record<string, string> = {
+    auth0: 'Auth0',
+    keycloak: 'Keycloak',
+  }
+  return typeMap[type] || type || 'Unknown'
+}
+
 const isLoadingEntities = ref(false)
 
 const fetchApp = async () => {
@@ -352,9 +393,12 @@ const onCredentialsSubmit = async (credentials: { username: string; password: st
   await triggerSync(credentials)
 }
 
-const openEditor = () => {
+const openEditor = (step: string = 'general') => {
   if (!routeId.value) return
-  router.push({ name: 'edit', params: { id: routeId.value } })
+  router.push({
+    name: `wizard-${step}`,
+    query: { mode: 'edit', id: routeId.value },
+  })
 }
 
 const duplicateConfig = () => {
@@ -444,6 +488,15 @@ watch(
         </div>
         <div class="details-header__actions">
           <v-btn
+            class="details-header__action details-header__edit-btn"
+            variant="flat"
+            color="primary"
+            prepend-icon="mdi-pencil"
+            @click="openEditor()"
+          >
+            Edit
+          </v-btn>
+          <v-btn
             class="details-header__action"
             variant="tonal"
             color="primary"
@@ -493,11 +546,6 @@ watch(
             </template>
             <v-list density="compact">
               <v-list-item
-                prepend-icon="mdi-pencil"
-                title="Edit"
-                @click="openEditor"
-              />
-              <v-list-item
                 prepend-icon="mdi-content-copy"
                 title="Duplicate"
                 @click="duplicateConfig"
@@ -525,9 +573,12 @@ watch(
       <v-row class="mt-6" dense>
         <v-col cols="12" lg="8">
           <v-card class="details-content" border="md" elevation="0">
-            <v-tabs v-model="activeTab" class="details-tabs" color="primary" slider-color="primary">
+            <v-tabs v-model="activeTab" class="details-tabs" color="primary" slider-color="primary" show-arrows>
               <v-tab value="entities">Entities</v-tab>
               <v-tab value="forms">Forms</v-tab>
+              <v-tab value="integration">Integration</v-tab>
+              <v-tab value="mapping">Field Mapping</v-tab>
+              <v-tab value="auth">Authentication</v-tab>
             </v-tabs>
 
             <v-window v-model="activeTab" class="details-window">
@@ -580,7 +631,7 @@ watch(
                             <td>{{ (record as any).name || '—' }}</td>
                             <td>
                               <v-chip size="small" variant="outlined">
-                                {{ (record as any).type }}
+                                {{ (record as any).entityName || (record as any).type }}
                               </v-chip>
                             </td>
                             <td class="text-medium-emphasis">
@@ -604,9 +655,20 @@ watch(
 
               <v-window-item value="forms">
                 <div class="forms-panel">
-                  <p class="forms-panel__subtitle">
-                    Review each form schema, track field coverage, and understand entity dependencies.
-                  </p>
+                  <div class="section-panel__header">
+                    <p class="forms-panel__subtitle">
+                      Review each form schema, track field coverage, and understand entity dependencies.
+                    </p>
+                    <v-btn
+                      variant="tonal"
+                      color="primary"
+                      size="small"
+                      prepend-icon="mdi-pencil"
+                      @click="openEditor('forms')"
+                    >
+                      Edit Forms
+                    </v-btn>
+                  </div>
 
                   <v-row class="mt-2" dense>
                     <v-col
@@ -651,6 +713,192 @@ watch(
                       </v-alert>
                     </v-col>
                   </v-row>
+                </div>
+              </v-window-item>
+
+              <v-window-item value="integration">
+                <div class="section-panel">
+                  <div class="section-panel__header">
+                    <p class="section-panel__subtitle">
+                      External system integration configuration for data synchronization.
+                    </p>
+                    <v-btn
+                      variant="tonal"
+                      color="primary"
+                      size="small"
+                      prepend-icon="mdi-pencil"
+                      @click="openEditor('integration')"
+                    >
+                      Edit Integration
+                    </v-btn>
+                  </div>
+
+                  <template v-if="hasExternalSync">
+                    <div class="summary-fields">
+                      <div class="summary-field">
+                        <span class="summary-field__label">Integration Type</span>
+                        <span class="summary-field__value">{{ syncTypeLabel }}</span>
+                      </div>
+                      <div class="summary-field">
+                        <span class="summary-field__label">API URL</span>
+                        <span class="summary-field__value">{{ app.externalSync?.url || '—' }}</span>
+                      </div>
+                      <div class="summary-field">
+                        <span class="summary-field__label">Authentication</span>
+                        <span class="summary-field__value">{{ app.externalSync?.auth || 'None' }}</span>
+                      </div>
+                    </div>
+                  </template>
+
+                  <div v-else class="section-panel__empty">
+                    <v-icon icon="mdi-lan-disconnect" size="48" color="grey-lighten-1" />
+                    <p class="section-panel__empty-text">No integration configured</p>
+                    <p class="section-panel__empty-hint">
+                      Connect to an external system to enable data synchronization.
+                    </p>
+                    <v-btn
+                      variant="tonal"
+                      color="primary"
+                      prepend-icon="mdi-plus"
+                      @click="openEditor('integration')"
+                    >
+                      Configure Integration
+                    </v-btn>
+                  </div>
+                </div>
+              </v-window-item>
+
+              <v-window-item value="mapping">
+                <div class="section-panel">
+                  <div class="section-panel__header">
+                    <p class="section-panel__subtitle">
+                      Map form fields to external system fields for data synchronization.
+                    </p>
+                    <v-btn
+                      variant="tonal"
+                      color="primary"
+                      size="small"
+                      prepend-icon="mdi-pencil"
+                      @click="openEditor('mapping')"
+                    >
+                      Edit Mapping
+                    </v-btn>
+                  </div>
+
+                  <template v-if="fieldMappings.length > 0">
+                    <p class="section-panel__count">
+                      {{ fieldMappings.length }} mapping{{ fieldMappings.length === 1 ? '' : 's' }} configured
+                    </p>
+                    <v-table density="comfortable" class="mapping-table">
+                      <thead>
+                        <tr>
+                          <th>Form Field</th>
+                          <th>External Field</th>
+                          <th>Transformer</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="(mapping, index) in fieldMappings.slice(0, 5)" :key="index">
+                          <td>{{ mapping.formField }}</td>
+                          <td>{{ mapping.opensppField }}</td>
+                          <td>
+                            <v-chip size="x-small" variant="outlined">
+                              {{ mapping.transformer.type }}
+                            </v-chip>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </v-table>
+                    <p v-if="fieldMappings.length > 5" class="section-panel__more">
+                      … and {{ fieldMappings.length - 5 }} more
+                    </p>
+                  </template>
+
+                  <div v-else class="section-panel__empty">
+                    <v-icon icon="mdi-swap-horizontal" size="48" color="grey-lighten-1" />
+                    <p class="section-panel__empty-text">No field mappings configured</p>
+                    <p class="section-panel__empty-hint">
+                      Field mappings are optional and define how form data maps to external system fields.
+                    </p>
+                    <v-btn
+                      variant="tonal"
+                      color="primary"
+                      prepend-icon="mdi-plus"
+                      @click="openEditor('mapping')"
+                    >
+                      Configure Mapping
+                    </v-btn>
+                  </div>
+                </div>
+              </v-window-item>
+
+              <v-window-item value="auth">
+                <div class="section-panel">
+                  <div class="section-panel__header">
+                    <p class="section-panel__subtitle">
+                      Identity provider and self-service authentication settings.
+                    </p>
+                    <v-btn
+                      variant="tonal"
+                      color="primary"
+                      size="small"
+                      prepend-icon="mdi-pencil"
+                      @click="openEditor('auth')"
+                    >
+                      Edit Authentication
+                    </v-btn>
+                  </div>
+
+                  <template v-if="authConfigs.length > 0 || selfServiceConfig?.enabled">
+                    <div v-if="authConfigs.length > 0" class="auth-providers">
+                      <h4 class="auth-providers__title">Identity Providers</h4>
+                      <div
+                        v-for="(auth, index) in authConfigs"
+                        :key="index"
+                        class="auth-provider-item"
+                      >
+                        <v-icon icon="mdi-shield-key" size="small" color="primary" />
+                        <span class="auth-provider-item__type">{{ authTypeLabel(auth.type) }}</span>
+                        <v-chip size="x-small" variant="tonal">
+                          {{ Object.keys(auth.fields).length }} fields
+                        </v-chip>
+                      </div>
+                    </div>
+
+                    <div v-if="selfServiceConfig?.enabled" class="self-service-status">
+                      <h4 class="self-service-status__title">Self-service</h4>
+                      <div class="summary-fields">
+                        <div class="summary-field">
+                          <span class="summary-field__label">Status</span>
+                          <v-chip size="small" color="success" variant="tonal">Enabled</v-chip>
+                        </div>
+                        <div class="summary-field">
+                          <span class="summary-field__label">Review Required</span>
+                          <span class="summary-field__value">{{ selfServiceConfig.requireReview ? 'Yes' : 'No' }}</span>
+                        </div>
+                        <div v-if="selfServiceConfig.allowedForms.length" class="summary-field">
+                          <span class="summary-field__label">Allowed Forms</span>
+                          <span class="summary-field__value">{{ selfServiceConfig.allowedForms.join(', ') }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+
+                  <div v-else class="section-panel__empty">
+                    <v-icon icon="mdi-shield-off-outline" size="48" color="grey-lighten-1" />
+                    <p class="section-panel__empty-text">No authentication configured</p>
+                    <p class="section-panel__empty-hint">
+                      Authentication is optional. Configure identity providers to enable user verification.
+                    </p>
+                    <v-btn
+                      variant="tonal"
+                      color="primary"
+                      prepend-icon="mdi-plus"
+                      @click="openEditor('auth')"
+                    >
+                      Configure Authentication
+                    </v-btn>
+                  </div>
                 </div>
               </v-window-item>
             </v-window>
@@ -972,6 +1220,138 @@ watch(
   font-family: monospace;
   font-size: var(--font-size-sm);
   color: var(--text-main);
+}
+
+.section-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.section-panel__subtitle {
+  margin: 0;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.section-panel__count {
+  margin: 0 0 var(--spacing-md);
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.section-panel__more {
+  margin: var(--spacing-sm) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.section-panel__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xl) var(--spacing-md);
+  text-align: center;
+}
+
+.section-panel__empty-text {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.section-panel__empty-hint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  max-width: 360px;
+}
+
+.summary-fields {
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-field {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-sm) 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.summary-field:last-child {
+  border-bottom: none;
+}
+
+.summary-field__label {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
+.summary-field__value {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  text-align: right;
+  max-width: 60%;
+  word-break: break-word;
+  color: var(--text-main);
+}
+
+.mapping-table {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.mapping-table thead th {
+  font-size: var(--font-size-sm);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding-top: var(--spacing-sm);
+  padding-bottom: var(--spacing-sm);
+}
+
+.mapping-table tbody td {
+  padding-top: var(--spacing-sm);
+  padding-bottom: var(--spacing-sm);
+  vertical-align: middle;
+}
+
+.auth-providers {
+  margin-bottom: var(--spacing-lg);
+}
+
+.auth-providers__title,
+.self-service-status__title {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.auth-provider-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) 0;
+}
+
+.auth-provider-item__type {
+  font-weight: 500;
+  color: var(--text-main);
+  flex: 1;
+}
+
+.self-service-status {
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-light);
 }
 
 .forms-panel {

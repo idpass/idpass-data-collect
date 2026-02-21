@@ -5,6 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/seed-config.json"
 CONFIG_ID="demo-household-registry"
 
+INDIVIDUAL_CONFIG_FILE="$SCRIPT_DIR/seed-individual-registry.json"
+INDIVIDUAL_CONFIG_ID="demo-individual-registry"
+
 BACKEND_URL="${BACKEND_URL:-http://localhost:3000}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@datacollect.lan}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-correct horse battery staple 42!}"
@@ -79,6 +82,34 @@ if [ "$UPLOAD_CODE" != "200" ] && [ "$UPLOAD_CODE" != "201" ]; then
 fi
 
 log "Config uploaded."
+
+# --- Step 3b: Upload individual registry config ---
+
+if [ -f "$INDIVIDUAL_CONFIG_FILE" ]; then
+  log "Checking if config '$INDIVIDUAL_CONFIG_ID' exists ..."
+  IND_CHECK_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BACKEND_URL/api/apps/$INDIVIDUAL_CONFIG_ID" \
+    -H "Authorization: Bearer $TOKEN")
+
+  if [ "$IND_CHECK_STATUS" = "200" ]; then
+    log "WARNING: Config '$INDIVIDUAL_CONFIG_ID' already exists. Deleting ..."
+    curl -s -o /dev/null -w "%{http_code}" -X DELETE "$BACKEND_URL/api/apps/$INDIVIDUAL_CONFIG_ID" \
+      -H "Authorization: Bearer $TOKEN" > /dev/null
+    log "Deleted existing config."
+  fi
+
+  log "Uploading individual registry config ..."
+  IND_UPLOAD_RESPONSE=$(curl -s -w "\n%{http_code}" "$BACKEND_URL/api/apps" \
+    -H "Authorization: Bearer $TOKEN" \
+    -F "config=@$INDIVIDUAL_CONFIG_FILE;type=application/json")
+
+  IND_UPLOAD_CODE=$(echo "$IND_UPLOAD_RESPONSE" | tail -1)
+
+  if [ "$IND_UPLOAD_CODE" = "200" ] || [ "$IND_UPLOAD_CODE" = "201" ]; then
+    log "Individual registry config uploaded."
+  else
+    log "WARNING: Individual registry upload failed (HTTP $IND_UPLOAD_CODE). Continuing anyway."
+  fi
+fi
 
 # --- Step 4: Create field worker user ---
 
@@ -533,7 +564,7 @@ log "  Field worker: $FIELDWORKER_EMAIL / $FIELDWORKER_PASSWORD"
 log "  Supervisor:   $SUPERVISOR_EMAIL / $SUPERVISOR_PASSWORD"
 log "  Enumerator:   $ENUMERATOR_EMAIL / $ENUMERATOR_PASSWORD"
 log ""
-log "  Data:"
+log "  Data (household registry):"
 log "    4 households, 2 cooperatives, 12 individuals (1 standalone)"
 log "    6 home visits, 6 trainings, 5 assistance distributions, 5 referrals"
 log "    8 push events (4 entity updates, 4 cooperative member cross-links)"
@@ -541,3 +572,6 @@ log "    4 users (admin, supervisor, enumerator, fieldworker)"
 log "    8 reviews (4 pending, 2 approved, 1 rejected, 1 update)"
 log "    5 attachments"
 log "    4 review configs"
+log "  Data (individual registry):"
+log "    3 standalone individuals (entityType override)"
+log "    Assessment + referral forms (dependent on person)"

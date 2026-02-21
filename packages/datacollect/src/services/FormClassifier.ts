@@ -37,6 +37,7 @@ export enum FormCategory {
 export interface FormDefinition {
   name: string;
   dependsOn?: string;
+  entityType?: "group" | "individual" | "record";
 }
 
 /**
@@ -80,6 +81,16 @@ export class FormClassifier {
 
     const isTopLevel = (formName: string) => !formLookup.get(formName)?.dependsOn;
 
+    // Determine whether a form resolves to a group. When an entityType override
+    // is present, use it directly; otherwise fall back to the topology rule
+    // (top-level = group).
+    const resolvesToGroup = (formName: string): boolean => {
+      const form = formLookup.get(formName);
+      if (!form) return false;
+      if (form.entityType) return form.entityType === "group";
+      return isTopLevel(formName);
+    };
+
     // Build set of form names referenced as dependsOn targets by other forms.
     const dependsOnTargets = new Set<string>();
     for (const form of forms) {
@@ -96,7 +107,22 @@ export class FormClassifier {
 
     for (const form of forms) {
       const parentFormName = form.dependsOn;
-      const parentIsGroup = parentFormName ? isTopLevel(parentFormName) : false;
+      const parentIsGroup = parentFormName ? resolvesToGroup(parentFormName) : false;
+
+      // When entityType is explicitly set in the config, use it directly
+      // instead of inferring from topology.
+      if (form.entityType) {
+        const category = form.entityType === "record" ? FormCategory.Record : FormCategory.Entity;
+        result.set(form.name, {
+          formName: form.name,
+          category,
+          entityType: form.entityType as EntityType,
+          createEventType: `create-${form.entityType}`,
+          updateEventType: `update-${form.entityType}`,
+          parentIsGroup,
+        });
+        continue;
+      }
 
       if (!form.dependsOn) {
         // Top-level form → Group

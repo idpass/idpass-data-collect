@@ -148,7 +148,7 @@ const getDependsOnOptions = (form: { name: string; title: string; dependsOn: str
                 :error-messages="draftStore.errors.forms.items[form.name]?.title"
               />
             </v-col>
-            <v-col v-if="getDependsOnOptions(form).length > 0" cols="12">
+            <v-col v-if="getDependsOnOptions(form).length > 0" cols="12" sm="6">
               <label class="field-label">Depends On (Optional)</label>
               <v-select
                 v-model="form.dependsOn"
@@ -164,6 +164,36 @@ const getDependsOnOptions = (form: { name: string; title: string; dependsOn: str
                 If this entity belongs to another entity (e.g., Individual belongs to Household),
                 select the parent here.
               </p>
+            </v-col>
+            <v-col cols="12" sm="6">
+              <label class="field-label">Entity Type (Optional)</label>
+              <v-select
+                v-model="form.entityType"
+                :items="[
+                  { title: '(Auto - infer from topology)', value: '' },
+                  { title: 'Group', value: 'group' },
+                  { title: 'Individual', value: 'individual' },
+                  { title: 'Record', value: 'record' },
+                ]"
+                item-title="title"
+                item-value="value"
+                placeholder="Auto"
+                variant="outlined"
+                density="compact"
+              />
+              <p class="field-hint">
+                Override the entity type. Use "Individual" to create standalone individuals
+                without requiring a parent group.
+              </p>
+              <v-alert
+                v-if="form.entityType === 'group' && form.dependsOn"
+                type="warning"
+                variant="tonal"
+                density="compact"
+                class="mt-2"
+              >
+                A dependent form set as "Group" is unusual. Groups are typically top-level entities.
+              </v-alert>
             </v-col>
           </v-row>
 

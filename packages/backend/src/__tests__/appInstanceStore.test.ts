@@ -253,7 +253,7 @@ describe("AppInstanceStore.loadEntityData", () => {
     expect(groupCalls[1].data.entityName).toBe("cooperative");
   });
 
-  test("custom dependent forms are created as individuals with correct entityName", async () => {
+  test("record forms are created with create-record event type", async () => {
     const config: AppConfig = {
       id: "test",
       name: "Test",
@@ -310,21 +310,21 @@ describe("AppInstanceStore.loadEntityData", () => {
     const { store } = await buildStore(config);
     await store.loadEntityData("test");
 
-    const createCalls = submitFormCalls.filter((c) => c.type === "create-individual");
-    expect(createCalls).toHaveLength(2);
+    // Record forms (home_visit, training) are created with create-record, not create-individual
+    const recordCalls = submitFormCalls.filter((c) => c.type === "create-record");
+    expect(recordCalls).toHaveLength(2);
 
-    const homeVisit = createCalls.find((c) => c.data.entityName === "home_visit");
+    const homeVisit = recordCalls.find((c) => c.data.entityName === "home_visit");
     expect(homeVisit).toBeDefined();
     expect(homeVisit!.entityGuid).toBe("hv-001");
     expect(homeVisit!.data.purpose).toBe("assessment");
 
-    const training = createCalls.find((c) => c.data.entityName === "training");
+    const training = recordCalls.find((c) => c.data.entityName === "training");
     expect(training).toBeDefined();
     expect(training!.entityGuid).toBe("tr-001");
     expect(training!.data.status).toBe("completed");
 
-    // Record forms (home_visit, training) should NOT produce add-member events.
-    // Only forms that are themselves dependsOn targets (entity-creating forms) get add-member.
+    // Record forms should NOT produce add-member events.
     const addMemberCalls = submitFormCalls.filter((c) => c.type === "add-member");
     expect(addMemberCalls).toHaveLength(0);
   });
@@ -474,9 +474,13 @@ describe("AppInstanceStore.loadEntityData", () => {
       { guid: "ind-001", name: "Alice", type: "individual" },
     ]);
 
-    // But all dependent entities should still be created as individuals
-    const createCalls = submitFormCalls.filter((c) => c.type === "create-individual");
-    expect(createCalls).toHaveLength(3);
+    // Entity-defining forms (individual) are created as individuals
+    const individualCalls = submitFormCalls.filter((c) => c.type === "create-individual");
+    expect(individualCalls).toHaveLength(1);
+
+    // Record forms (home_visit, assistance) are created as records
+    const recordCalls = submitFormCalls.filter((c) => c.type === "create-record");
+    expect(recordCalls).toHaveLength(2);
   });
 
   test("individual entities ARE added as members when they are dependsOn targets", async () => {
@@ -513,5 +517,147 @@ describe("AppInstanceStore.loadEntityData", () => {
     // "individual" is a dependsOn target (used by "training"), so it gets add-member
     expect(addMemberCalls).toHaveLength(1);
     expect(addMemberCalls[0].entityGuid).toBe("hh-001");
+  });
+
+  test("standalone individual (entityType override) creates create-individual events", async () => {
+    const config: AppConfig = {
+      id: "test",
+      name: "Test",
+      entityForms: [
+        {
+          id: "person",
+          name: "person",
+          title: "Person",
+          entityType: "individual",
+          formio: {},
+        },
+        {
+          id: "assessment",
+          name: "assessment",
+          title: "Assessment",
+          dependsOn: "person",
+          formio: {},
+        },
+      ],
+      entityData: [
+        {
+          name: "person",
+          data: [
+            { id: "p-001", name: "Alice" },
+            { id: "p-002", name: "Bob" },
+          ],
+        },
+      ],
+    };
+
+    const { store } = await buildStore(config);
+    await store.loadEntityData("test");
+
+    // Top-level individuals should use create-individual, not create-group
+    const individualCalls = submitFormCalls.filter((c) => c.type === "create-individual");
+    expect(individualCalls).toHaveLength(2);
+    expect(individualCalls[0].entityGuid).toBe("p-001");
+    expect(individualCalls[1].entityGuid).toBe("p-002");
+
+    // No groups should be created
+    const groupCalls = submitFormCalls.filter((c) => c.type === "create-group");
+    expect(groupCalls).toHaveLength(0);
+
+    // No add-member events (standalone individuals have no parent group)
+    const addMemberCalls = submitFormCalls.filter((c) => c.type === "add-member");
+    expect(addMemberCalls).toHaveLength(0);
+  });
+
+  test("standalone individual is created in pass 1 (before dependent forms)", async () => {
+    const config: AppConfig = {
+      id: "test",
+      name: "Test",
+      entityForms: [
+        {
+          id: "person",
+          name: "person",
+          title: "Person",
+          entityType: "individual",
+          formio: {},
+        },
+        {
+          id: "assessment",
+          name: "assessment",
+          title: "Assessment",
+          dependsOn: "person",
+          formio: {},
+        },
+      ],
+      entityData: [
+        {
+          name: "assessment",
+          data: [{ id: "a-001", name: "Assessment 1", parentId: "p-001" }],
+        },
+        {
+          name: "person",
+          data: [{ id: "p-001", name: "Alice" }],
+        },
+      ],
+    };
+
+    const { store } = await buildStore(config);
+    await store.loadEntityData("test");
+
+    // Person should be created before assessment regardless of entityData order
+    expect(submitFormCalls[0].type).toBe("create-individual");
+    expect(submitFormCalls[0].entityGuid).toBe("p-001");
+  });
+
+  test("mixed config: groups + standalone individuals both in pass 1", async () => {
+    const config: AppConfig = {
+      id: "test",
+      name: "Test",
+      entityForms: [
+        { id: "household", name: "household", title: "Household", formio: {} },
+        {
+          id: "person",
+          name: "person",
+          title: "Person",
+          entityType: "individual",
+          formio: {},
+        },
+        {
+          id: "individual",
+          name: "individual",
+          title: "Individual",
+          dependsOn: "household",
+          formio: {},
+        },
+      ],
+      entityData: [
+        {
+          name: "household",
+          data: [{ id: "hh-001", name: "Test Family" }],
+        },
+        {
+          name: "person",
+          data: [{ id: "p-001", name: "Standalone Alice" }],
+        },
+        {
+          name: "individual",
+          data: [{ id: "ind-001", name: "Family Bob", parentId: "hh-001" }],
+        },
+      ],
+    };
+
+    const { store } = await buildStore(config);
+    await store.loadEntityData("test");
+
+    // Pass 1: household (group) and person (standalone individual) should be created first
+    const pass1Calls = submitFormCalls.slice(0, 2);
+    const pass1Types = pass1Calls.map((c) => c.type).sort();
+    expect(pass1Types).toEqual(["create-group", "create-individual"]);
+
+    // Pass 2: individual (dependent on household)
+    const individualCalls = submitFormCalls.filter(
+      (c) => c.type === "create-individual" && c.data.entityName === "individual",
+    );
+    expect(individualCalls).toHaveLength(1);
+    expect(individualCalls[0].entityGuid).toBe("ind-001");
   });
 });

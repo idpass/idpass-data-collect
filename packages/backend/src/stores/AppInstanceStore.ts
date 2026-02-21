@@ -110,16 +110,19 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
     }
 
     // Classify all forms using the centralized topology algorithm
+    const formByName = new Map((config.entityForms || []).map((f) => [f.name || f.id, f]));
     const formDefs = (config.entityForms || []).map((f) => ({
       name: f.name || f.id,
       dependsOn: f.dependsOn,
+      entityType: f.entityType,
     }));
     const classifications = FormClassifier.classifyAll(formDefs);
 
-    // Pass 1: top-level entities (groups)
+    // Pass 1: top-level entities (groups AND standalone individuals without dependsOn)
     for (const entityData of config.entityData) {
       const classification = classifications.get(entityData.name);
-      if (classification?.entityType !== "group") continue;
+      const form = formByName.get(entityData.name);
+      if (!classification || form?.dependsOn) continue;
       for (const item of entityData.data) {
         await manager.submitForm({
           guid: uuidv4(),
@@ -133,10 +136,11 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
       }
     }
 
-    // Pass 2: dependent entities (individuals and records)
+    // Pass 2: dependent entities (those with dependsOn)
     for (const entityData of config.entityData) {
       const classification = classifications.get(entityData.name);
-      if (!classification || classification.entityType === "group") continue;
+      const form = formByName.get(entityData.name);
+      if (!classification || !form?.dependsOn) continue;
 
       const isEntityForm = classification.category === "entity";
 

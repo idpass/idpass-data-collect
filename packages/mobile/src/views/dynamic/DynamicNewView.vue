@@ -23,6 +23,7 @@ const tenantapp = ref<TenantAppData>()
 const entityForm = ref<EntityForm>()
 const formio = ref<unknown>()
 const isGroup = ref(false)
+const entityTypeLabel = ref('')
 const submissionCount = ref(0)
 const { isOffline } = useNetworkStatus()
 
@@ -44,9 +45,15 @@ onMounted(async () => {
   )
   formio.value = entityForm.value.formio
 
-  isGroup.value = tenantapp.value.entityForms.some(
-    (entity) => entity.dependsOn === entityForm.value.name
-  )
+  const formDefs = tenantapp.value.entityForms.map((f: EntityForm) => ({
+    name: f.name,
+    dependsOn: f.dependsOn,
+    entityType: f.entityType,
+  }))
+  const classification = FormClassifier.classifyForm(entityForm.value.name, formDefs)
+  isGroup.value = classification.entityType === 'group'
+  const typeLabels: Record<string, string> = { group: 'Group', individual: 'Individual', record: 'Record' }
+  entityTypeLabel.value = typeLabels[classification.entityType] || 'Record'
 
   const entities = await store.searchEntities([{ entityName: entityForm.value?.name }])
   submissionCount.value = entities.length
@@ -58,6 +65,7 @@ const onSubmit = async (submission: FormSubmissionEvent) => {
   const formDefs = tenantapp.value.entityForms.map((f: EntityForm) => ({
     name: f.name,
     dependsOn: f.dependsOn,
+    entityType: f.entityType,
   }))
   const classification = FormClassifier.classifyForm(entityForm.value.name, formDefs)
 
@@ -92,7 +100,7 @@ const onBack = () => {
         </svg>
       </button>
       <div class="top-bar__actions">
-        <span class="badge">{{ entityForm?.displayTemplate || (isGroup ? 'Group' : 'Assessment') }}</span>
+        <span class="badge">{{ entityForm?.displayTemplate || entityTypeLabel }}</span>
         <span v-if="isOffline" class="offline-indicator" title="Offline - working locally">
           <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
             <path d="M23.64 7c-.45-.34-4.93-4-11.64-4-1.5 0-2.89.19-4.15.48L18.18 13.8 23.64 7zm-6.6 8.22L3.27 1.44 2 2.72l2.05 2.06C1.91 5.76.59 6.82.36 7l11.63 14.49.01.01.01-.01 3.9-4.86 3.32 3.32 1.27-1.27-3.46-3.46z" fill="currentColor" />

@@ -569,6 +569,7 @@ export function createSelfServiceRouter(
       const entityForms = (appInstance.config.entityForms || []).map((f) => ({
         name: f.name,
         dependsOn: f.dependsOn,
+        entityType: f.entityType,
       }));
       const classification = FormClassifier.classifyForm(formType, entityForms);
       const isEntityUpdate = classification.category === FormCategory.Entity;

@@ -28,6 +28,7 @@ export interface EntityForm {
   name: string
   title: string
   dependsOn: string
+  entityType: '' | 'group' | 'individual' | 'record'
   formio: unknown
 }
 
@@ -268,7 +269,11 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
         name: config.name || '',
         description: config.description || '',
         version: config.version || '1',
-        entityForms: config.entityForms || [],
+        entityForms: (config.entityForms || []).map((f: Record<string, unknown>) => ({
+          ...f,
+          dependsOn: f.dependsOn ?? '',
+          entityType: f.entityType ?? '',
+        })),
         externalSync: {
           type: config.externalSync?.type,
           url: config.externalSync?.url || '',
@@ -303,7 +308,11 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
         name: (config.name || '') + ' Copy',
         description: config.description || '',
         version: config.version || '1',
-        entityForms: config.entityForms || [],
+        entityForms: (config.entityForms || []).map((f: Record<string, unknown>) => ({
+          ...f,
+          dependsOn: f.dependsOn ?? '',
+          entityType: f.entityType ?? '',
+        })),
         externalSync: {
           type: config.externalSync?.type,
           url: config.externalSync?.url || '',
@@ -512,6 +521,7 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
       name: '',
       title: '',
       dependsOn: '',
+      entityType: '',
       formio: null,
     })
   }
@@ -564,7 +574,10 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
         name: draft.value.name,
         description: draft.value.description,
         version: draft.value.version,
-        entityForms: draft.value.entityForms,
+        entityForms: draft.value.entityForms.map((form) => {
+          const { entityType, ...rest } = form
+          return entityType ? { ...rest, entityType } : rest
+        }),
         externalSync: draft.value.externalSync,
         authConfigs: draft.value.authConfigs,
         selfService: draft.value.selfService,
@@ -616,6 +629,7 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
       name: form.name,
       title: form.title,
       dependsOn: form.dependsOn ?? '',
+      entityType: '',
       formio: form.formio,
     }))
     errors.value.forms = { items: {} }

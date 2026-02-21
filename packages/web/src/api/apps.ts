@@ -33,6 +33,7 @@ export interface AppConfig {
     name: string
     title: string
     dependsOn?: string
+    entityType?: 'group' | 'individual' | 'record'
     formio: Record<string, unknown>
   }>
   entityData?: Array<{

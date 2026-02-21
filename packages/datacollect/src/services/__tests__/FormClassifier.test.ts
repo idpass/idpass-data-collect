@@ -192,6 +192,128 @@ describe("FormClassifier", () => {
     });
   });
 
+  describe("entityType override", () => {
+    test("top-level form with entityType 'individual' → Individual (not Group)", () => {
+      const forms: FormDefinition[] = [
+        { name: "person", entityType: "individual" },
+      ];
+      const result = FormClassifier.classifyAll(forms);
+      const person = result.get("person")!;
+
+      expect(person.category).toBe(FormCategory.Entity);
+      expect(person.entityType).toBe(EntityType.Individual);
+      expect(person.createEventType).toBe("create-individual");
+      expect(person.updateEventType).toBe("update-individual");
+      expect(person.parentIsGroup).toBe(false);
+    });
+
+    test("override does not affect sibling forms' topology inference", () => {
+      const forms: FormDefinition[] = [
+        { name: "person", entityType: "individual" },
+        { name: "assessment", dependsOn: "person" },
+      ];
+      const result = FormClassifier.classifyAll(forms);
+
+      // person: overridden to individual
+      expect(result.get("person")!.entityType).toBe(EntityType.Individual);
+
+      // assessment: inferred from topology — person is not top-level by dependsOn,
+      // but has no dependsOn itself, so it IS top-level for topology purposes.
+      // assessment depends on person (top-level), simple config → Individual
+      const assessment = result.get("assessment")!;
+      expect(assessment.entityType).toBe(EntityType.Individual);
+      expect(assessment.parentIsGroup).toBe(false);
+    });
+
+    test("override with dependsOn: individual under a group", () => {
+      const forms: FormDefinition[] = [
+        { name: "family", entityType: "group" },
+        { name: "child", entityType: "individual", dependsOn: "family" },
+      ];
+      const result = FormClassifier.classifyAll(forms);
+
+      const family = result.get("family")!;
+      expect(family.entityType).toBe(EntityType.Group);
+
+      const child = result.get("child")!;
+      expect(child.entityType).toBe(EntityType.Individual);
+      expect(child.createEventType).toBe("create-individual");
+      expect(child.parentIsGroup).toBe(true);
+    });
+
+    test("record override on top-level form", () => {
+      const forms: FormDefinition[] = [
+        { name: "log", entityType: "record" },
+      ];
+      const result = FormClassifier.classifyAll(forms);
+      const log = result.get("log")!;
+
+      expect(log.category).toBe(FormCategory.Record);
+      expect(log.entityType).toBe(EntityType.Record);
+      expect(log.createEventType).toBe("create-record");
+      expect(log.updateEventType).toBe("update-record");
+    });
+
+    test("mixed config: some forms with override, some without — topology inference preserved", () => {
+      const forms: FormDefinition[] = [
+        { name: "household" },
+        { name: "person", entityType: "individual" },
+        { name: "individual", dependsOn: "household" },
+        { name: "training", dependsOn: "individual" },
+      ];
+      const result = FormClassifier.classifyAll(forms);
+
+      // household: inferred as Group (top-level, no override)
+      expect(result.get("household")!.entityType).toBe(EntityType.Group);
+
+      // person: overridden to Individual
+      expect(result.get("person")!.entityType).toBe(EntityType.Individual);
+
+      // individual: inferred — depends on household, IS a target (training depends on it)
+      expect(result.get("individual")!.entityType).toBe(EntityType.Individual);
+
+      // training: inferred — depends on individual, NOT a target → Record
+      expect(result.get("training")!.entityType).toBe(EntityType.Record);
+    });
+
+    test("overridden form's dependsOn still contributes to dependsOnTargets set", () => {
+      // Even when 'child' has an entityType override, the fact that 'activity'
+      // depends on 'child' should still make 'child' a dependsOn target,
+      // which affects classification of sibling forms that lack an override.
+      const forms: FormDefinition[] = [
+        { name: "household" },
+        { name: "child", entityType: "individual", dependsOn: "household" },
+        { name: "activity", dependsOn: "child" },
+        { name: "note", dependsOn: "household" },
+      ];
+      const result = FormClassifier.classifyAll(forms);
+
+      // child: overridden
+      expect(result.get("child")!.entityType).toBe(EntityType.Individual);
+
+      // activity: depends on child (non-top-level target exists → hasNonTopLevelTargets = true)
+      // activity is NOT a target itself → Record
+      expect(result.get("activity")!.entityType).toBe(EntityType.Record);
+
+      // note: depends on household (top-level), NOT a target → Record
+      expect(result.get("note")!.entityType).toBe(EntityType.Record);
+    });
+
+    test("empty string entityType falls through to topology inference", () => {
+      // The admin UI uses '' to mean "auto-infer". Empty string is falsy,
+      // so it should NOT be treated as an override.
+      const forms: FormDefinition[] = [
+        { name: "household", entityType: "" as "group" },
+        { name: "individual", dependsOn: "household", entityType: "" as "group" },
+      ];
+      const result = FormClassifier.classifyAll(forms);
+
+      // Both should be inferred from topology, not overridden
+      expect(result.get("household")!.entityType).toBe(EntityType.Group);
+      expect(result.get("individual")!.entityType).toBe(EntityType.Individual);
+    });
+  });
+
   describe("edge cases", () => {
     test("forms with dependsOn pointing to non-existent form are treated correctly", () => {
       const forms: FormDefinition[] = [

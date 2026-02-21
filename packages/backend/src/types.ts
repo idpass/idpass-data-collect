@@ -77,6 +77,7 @@ export interface EntityForm {
   name: string;
   title: string;
   dependsOn?: string;
+  entityType?: "group" | "individual" | "record";
   formio: object;
 }
 
