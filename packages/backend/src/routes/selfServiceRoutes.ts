@@ -23,7 +23,9 @@ import { z } from "zod";
 import rateLimit from "express-rate-limit";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { OtpStore } from "../stores/OtpStore";
+import { ReviewStore } from "../stores/ReviewStore";
 import { AppInstanceStore } from "../types";
+import { getReviewService } from "./reviewRoutes";
 import { createLogger } from "../utils/logger";
 
 const log = createLogger("selfServiceRoutes");
@@ -143,6 +145,7 @@ export function requireSelfServiceScope(
 export function createSelfServiceRouter(
   otpStore: OtpStore,
   appInstanceStore: AppInstanceStore,
+  reviewStore?: ReviewStore,
 ): Router {
   const router = Router();
 
@@ -549,7 +552,25 @@ export function createSelfServiceRouter(
         syncLevel: 0, // LOCAL
       };
 
-      // Apply the form submission directly through the EDM
+      // Route through review pipeline when requireReview is enabled
+      const requireReview = appInstance.config.selfService?.requireReview;
+      if (requireReview && reviewStore) {
+        const reviewService = await getReviewService(appInstanceStore, reviewStore, tenantId);
+        if (reviewService) {
+          const review = await reviewService.submitForReview(tenantId, submission);
+          log.info(
+            { entityGuid, tenantId, formType, reviewId: review.id, status: review.status },
+            "Self-service form submitted for review",
+          );
+          return res.json({
+            status: review.status === "approved" ? "success" : "pending_review",
+            submissionGuid: submission.guid,
+            reviewId: review.id,
+          });
+        }
+      }
+
+      // Apply directly when review is not required or review infrastructure unavailable
       await appInstance.edm.submitForm(submission);
 
       log.info(
@@ -581,19 +602,58 @@ export function createSelfServiceRouter(
         return res.status(404).json({ error: "Tenant not found" });
       }
 
-      // Get events for this entity to build submission history
+      // Build submission history from both applied events and pending reviews
+      const submissions: Array<{
+        id: string;
+        submissionGuid: string;
+        tenantId: string;
+        status: string;
+        eventType: string;
+        entityGuid: string;
+        createdAt: string;
+      }> = [];
+
+      // Get applied events (already processed submissions)
       const auditTrail = await appInstance.edm.getAuditTrailByEntityGuid(entityGuid);
-      const submissions = auditTrail
-        .filter((event) => event.userId.startsWith("self-service:"))
-        .map((event) => ({
-          id: event.guid,
-          submissionGuid: event.guid,
-          tenantId,
-          status: "approved" as const, // Events in the store are already applied
-          eventType: event.action,
-          entityGuid: event.entityGuid,
-          createdAt: event.timestamp,
-        }));
+      for (const event of auditTrail) {
+        if (event.userId.startsWith("self-service:")) {
+          submissions.push({
+            id: event.guid,
+            submissionGuid: event.guid,
+            tenantId,
+            status: "approved",
+            eventType: event.action,
+            entityGuid: event.entityGuid,
+            createdAt: event.timestamp,
+          });
+        }
+      }
+
+      // Include pending/rejected reviews from the review service
+      if (reviewStore) {
+        const reviewService = await getReviewService(appInstanceStore, reviewStore, tenantId);
+        if (reviewService) {
+          const reviews = reviewService.getReviewQueue(tenantId);
+          for (const review of reviews) {
+            if (review.entityGuid === entityGuid && review.submittedBy.startsWith("self-service:")) {
+              // Skip approved reviews — they're already in the audit trail
+              if (review.status === "approved") continue;
+              submissions.push({
+                id: review.id,
+                submissionGuid: review.submissionGuid,
+                tenantId,
+                status: review.status,
+                eventType: review.eventType,
+                entityGuid: review.entityGuid,
+                createdAt: review.createdAt,
+              });
+            }
+          }
+        }
+      }
+
+      // Sort by creation time descending (most recent first)
+      submissions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
       res.json({ submissions });
     }),

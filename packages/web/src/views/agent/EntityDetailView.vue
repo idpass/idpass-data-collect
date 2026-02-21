@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { getEntities, getEntityEvents, type EntityRecord, type EventRecord } from '@/api/entities'
+import { getEntity, getEntityEvents, type EntityRecord, type EventRecord } from '@/api/entities'
 import LoadingState from '@/components/LoadingState.vue'
 
 const route = useRoute()
@@ -16,11 +16,8 @@ const guid = route.params.guid as string
 
 onMounted(async () => {
   try {
-    const allEntities = await getEntities(tenantId)
-    entity.value = allEntities.find((e) => e.guid === guid) ?? null
-    if (entity.value) {
-      events.value = await getEntityEvents(guid, tenantId)
-    }
+    entity.value = await getEntity(guid, tenantId)
+    events.value = await getEntityEvents(guid, tenantId)
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load entity'
   } finally {

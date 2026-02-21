@@ -48,6 +48,14 @@ export async function getEntities(
   return response.data
 }
 
+export async function getEntity(
+  guid: string,
+  configId: string,
+): Promise<EntityRecord> {
+  const response = await getClient().get(`/api/entities/${guid}?configId=${configId}`)
+  return response.data
+}
+
 export async function getEntityEvents(
   entityGuid: string,
   configId: string,

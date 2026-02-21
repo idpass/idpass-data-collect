@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTenantStore } from '@/stores/tenant'
 import { useFormRenderer } from '@/composables/useFormRenderer'
-import { getEntities, type EntityRecord } from '@/api/entities'
+import { getEntity, type EntityRecord } from '@/api/entities'
 import FormRenderer from '@/components/FormRenderer.vue'
 import LoadingState from '@/components/LoadingState.vue'
 
@@ -23,11 +23,7 @@ const guid = route.params.guid as string
 onMounted(async () => {
   try {
     await tenantStore.loadConfig(tenantId)
-    const allEntities = await getEntities(tenantId)
-    entity.value = allEntities.find((e) => e.guid === guid) ?? null
-    if (!entity.value) {
-      error.value = 'Entity not found'
-    }
+    entity.value = await getEntity(guid, tenantId)
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load entity'
   } finally {

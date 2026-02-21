@@ -17,10 +17,10 @@
  * under the License.
  */
 
-import { ref, watch } from 'vue'
+import { ref, watch, type Ref } from 'vue'
 import type { EntityRecord } from '@/api/entities'
 
-export function useEntitySearch(allEntities: { value: EntityRecord[] }) {
+export function useEntitySearch(allEntities: Ref<EntityRecord[]>) {
   const searchQuery = ref('')
   const filteredEntities = ref<EntityRecord[]>([])
 

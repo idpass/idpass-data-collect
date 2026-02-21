@@ -36,7 +36,7 @@ const log = createLogger("reviewRoutes");
  */
 const reviewServiceCache = new Map<string, ReviewService>();
 
-async function getReviewService(
+export async function getReviewService(
   appInstanceStore: AppInstanceStore,
   reviewStore: ReviewStore,
   tenantId: string,

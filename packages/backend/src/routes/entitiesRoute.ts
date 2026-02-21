@@ -100,6 +100,40 @@ export function createEntitiesRouter(appInstanceStore: AppInstanceStore): Router
   );
 
   router.get(
+    "/:guid",
+    authenticateJWT,
+    validateTenantAccess,
+    asyncHandler(async (req, res) => {
+      const { configId = "default" } = req.query;
+      const { guid } = req.params;
+
+      const appInstance = await appInstanceStore.getAppInstance(configId as string);
+      if (!appInstance) {
+        return res.status(404).json({ error: "Tenant not found", configId });
+      }
+
+      try {
+        const entityPair = await appInstance.edm.getEntity(guid);
+        const entity = entityPair.modified;
+        res.json({
+          guid: entity.guid,
+          id: entity.id,
+          name: entity.data?.name || entity.name,
+          entityName: entity.data?.entityName,
+          type: entity.type,
+          data: entity.data,
+          memberIds: entity.type === "group"
+            ? (entity as GroupDoc).memberIds ?? []
+            : undefined,
+          lastUpdated: entity.lastUpdated,
+        });
+      } catch {
+        return res.status(404).json({ error: "Entity not found", guid });
+      }
+    }),
+  );
+
+  router.get(
     "/:guid/events",
     authenticateJWT,
     validateTenantAccess,

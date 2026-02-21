@@ -244,6 +244,81 @@ describe('useAuthStore', () => {
     })
   })
 
+  describe('refresh timer', () => {
+    it('calls refreshToken after the refresh interval', async () => {
+      const { loginAgent, refreshToken } = await import('@/api/auth')
+      const mockToken = createMockJwt({
+        id: '1',
+        email: 'agent@test.com',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      })
+
+      vi.mocked(loginAgent).mockResolvedValueOnce({ token: mockToken })
+
+      const store = useAuthStore()
+      await store.loginAsAgent({ email: 'agent@test.com', password: 'pass' })
+
+      const refreshedToken = createMockJwt({
+        id: '1',
+        email: 'agent@test.com',
+        exp: Math.floor(Date.now() / 1000) + 7200,
+      })
+      vi.mocked(refreshToken).mockResolvedValueOnce({ token: refreshedToken })
+
+      // Advance to 45 minutes (the refresh interval)
+      await vi.advanceTimersByTimeAsync(45 * 60 * 1000)
+
+      expect(refreshToken).toHaveBeenCalled()
+    })
+
+    it('stops refresh timer on logout', async () => {
+      const { loginAgent, refreshToken } = await import('@/api/auth')
+      const mockToken = createMockJwt({
+        id: '1',
+        email: 'agent@test.com',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      })
+
+      vi.mocked(loginAgent).mockResolvedValueOnce({ token: mockToken })
+
+      const store = useAuthStore()
+      await store.loginAsAgent({ email: 'agent@test.com', password: 'pass' })
+
+      // Logout should stop the timer
+      store.logout()
+      vi.mocked(refreshToken).mockClear()
+
+      // Advance past the refresh interval
+      await vi.advanceTimersByTimeAsync(50 * 60 * 1000)
+
+      // refreshToken should NOT have been called after logout
+      expect(refreshToken).not.toHaveBeenCalled()
+    })
+
+    it('keeps original token when refresh fails', async () => {
+      const { loginAgent, refreshToken } = await import('@/api/auth')
+      const mockToken = createMockJwt({
+        id: '1',
+        email: 'agent@test.com',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      })
+
+      vi.mocked(loginAgent).mockResolvedValueOnce({ token: mockToken })
+
+      const store = useAuthStore()
+      await store.loginAsAgent({ email: 'agent@test.com', password: 'pass' })
+
+      // Simulate refresh failure
+      vi.mocked(refreshToken).mockRejectedValueOnce(new Error('401'))
+
+      await vi.advanceTimersByTimeAsync(45 * 60 * 1000)
+
+      // Store should still be authenticated with the original token
+      expect(store.token).toBe(mockToken)
+      expect(store.isAuthenticated).toBe(true)
+    })
+  })
+
   describe('dual-mode exclusivity', () => {
     it('switching from agent to citizen clears agent state', async () => {
       const { loginAgent } = await import('@/api/auth')
