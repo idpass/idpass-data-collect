@@ -35,6 +35,6 @@ const icon = computed(() => {
 <template>
   <v-chip :color="color" size="small" variant="tonal">
     <v-icon :icon="icon" start size="small" />
-    {{ status }}
+    {{ $t('status.' + status) }}
   </v-chip>
 </template>

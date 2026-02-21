@@ -17,7 +17,9 @@ const entityType = route.params.entity as string
 
 const { searchQuery, filteredEntities } = useEntitySearch(allEntities)
 
-onMounted(async () => {
+async function loadData() {
+  loading.value = true
+  error.value = null
   try {
     allEntities.value = await getEntities(tenantId)
   } catch (err) {
@@ -25,7 +27,9 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(loadData)
 
 function viewEntity(guid: string) {
   router.push(`/agent/${tenantId}/${entityType}/${guid}`)
@@ -53,7 +57,7 @@ function viewEntity(guid: string) {
       class="mb-4"
     />
 
-    <LoadingState :loading="loading" :error="error">
+    <LoadingState :loading="loading" :error="error" @retry="loadData">
       <div v-if="filteredEntities.length">
         <p class="text-caption mb-2">
           {{ filteredEntities.length }} of {{ allEntities.length }} entities

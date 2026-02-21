@@ -74,11 +74,11 @@ export async function handleOidcCallback(): Promise<{
         const config = JSON.parse(savedConfig) as OidcTenantConfig
         manager = createUserManager(config)
       } catch {
-        console.error('Failed to parse saved OIDC config')
+        if (import.meta.env.DEV) console.error('Failed to parse saved OIDC config')
         return null
       }
     } else {
-      console.error('No OIDC configuration available for callback processing')
+      if (import.meta.env.DEV) console.error('No OIDC configuration available for callback processing')
       return null
     }
   }
@@ -98,7 +98,7 @@ export async function handleOidcCallback(): Promise<{
       tenantId,
     }
   } catch (error) {
-    console.error('OIDC callback failed:', error)
+    if (import.meta.env.DEV) console.error('OIDC callback failed:', error)
     return null
   }
 }

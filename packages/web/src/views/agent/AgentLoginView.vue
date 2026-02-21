@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
 
+const { t } = useI18n()
 const authStore = useAuthStore()
 const router = useRouter()
 
@@ -32,10 +34,10 @@ async function handleLogin() {
       // Multi-tenant: show tenant selector on this same page
       showTenantSelector.value = true
     } else {
-      errorMessage.value = 'No programs assigned to this account. Contact your administrator.'
+      errorMessage.value = t('agentLogin.noPrograms')
     }
   } else {
-    errorMessage.value = 'Invalid email or password'
+    errorMessage.value = t('agentLogin.invalidCredentials')
   }
 }
 </script>
@@ -46,8 +48,8 @@ async function handleLogin() {
       <v-col cols="12" sm="8" md="6" lg="4">
         <v-card class="pa-6" elevation="2">
           <template v-if="showTenantSelector">
-            <v-card-title class="text-h5 text-center mb-4">Select Program</v-card-title>
-            <p class="text-body-2 text-center mb-4">Choose a program to work with:</p>
+            <v-card-title class="text-h5 text-center mb-4">{{ $t('agentLogin.selectProgram') }}</v-card-title>
+            <p class="text-body-2 text-center mb-4">{{ $t('agentLogin.chooseProgram') }}</p>
             <v-list>
               <v-list-item
                 v-for="tid in authStore.agentPayload?.tenantIds"
@@ -60,12 +62,12 @@ async function handleLogin() {
             <v-divider class="my-4" />
             <v-btn variant="text" block @click="showTenantSelector = false; authStore.logout()">
               <v-icon start icon="mdi-arrow-left" />
-              Back to login
+              {{ $t('agentLogin.backToLogin') }}
             </v-btn>
           </template>
 
           <template v-else>
-          <v-card-title class="text-h5 text-center mb-4">Agent Login</v-card-title>
+          <v-card-title class="text-h5 text-center mb-4">{{ $t('agentLogin.title') }}</v-card-title>
 
           <v-alert v-if="errorMessage" type="error" class="mb-4" density="compact">
             {{ errorMessage }}
@@ -74,8 +76,9 @@ async function handleLogin() {
           <v-form @submit.prevent="handleLogin">
             <v-text-field
               v-model="email"
-              label="Email"
+              :label="$t('agentLogin.email')"
               type="email"
+              autocomplete="email"
               prepend-inner-icon="mdi-email"
               variant="outlined"
               class="mb-3"
@@ -83,8 +86,9 @@ async function handleLogin() {
             />
             <v-text-field
               v-model="password"
-              label="Password"
+              :label="$t('agentLogin.password')"
               :type="showPassword ? 'text' : 'password'"
+              autocomplete="current-password"
               prepend-inner-icon="mdi-lock"
               :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
               @click:append-inner="showPassword = !showPassword"
@@ -100,7 +104,7 @@ async function handleLogin() {
               :loading="loading"
               :disabled="!email || !password"
             >
-              Login
+              {{ $t('agentLogin.login') }}
             </v-btn>
           </v-form>
 
@@ -108,7 +112,7 @@ async function handleLogin() {
 
           <v-btn variant="text" block to="/">
             <v-icon start icon="mdi-arrow-left" />
-            Back to home
+            {{ $t('common.backToHome') }}
           </v-btn>
           </template>
         </v-card>

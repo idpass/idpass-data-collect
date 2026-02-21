@@ -12,7 +12,9 @@ const error = ref<string | null>(null)
 
 const tenantId = route.params.tenantId as string
 
-onMounted(async () => {
+async function loadData() {
+  loading.value = true
+  error.value = null
   try {
     const result = await getSelfServiceSubmissions()
     submissions.value = result.submissions
@@ -21,7 +23,9 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(loadData)
 
 function formatEventType(type: string): string {
   return type.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
@@ -32,10 +36,10 @@ function formatEventType(type: string): string {
   <div>
     <div class="d-flex align-center mb-4">
       <v-btn icon="mdi-arrow-left" variant="text" :to="`/citizen/${tenantId}`" />
-      <h1 class="text-h4 ml-2">Submission History</h1>
+      <h1 class="text-h4 ml-2">{{ $t('submissionHistory.title') }}</h1>
     </div>
 
-    <LoadingState :loading="loading" :error="error">
+    <LoadingState :loading="loading" :error="error" @retry="loadData">
       <div v-if="submissions.length">
         <v-card
           v-for="submission in submissions"
@@ -49,7 +53,7 @@ function formatEventType(type: string): string {
                 {{ formatEventType(submission.eventType) }}
               </p>
               <p class="text-caption text-grey">
-                Submitted {{ new Date(submission.createdAt).toLocaleString() }}
+                {{ $t('submissionHistory.submitted', { date: new Date(submission.createdAt).toLocaleString() }) }}
               </p>
             </div>
             <StatusBadge :status="submission.status" />
@@ -58,7 +62,7 @@ function formatEventType(type: string): string {
       </div>
 
       <v-alert v-else type="info" variant="tonal">
-        No submissions yet. Submit a change request from your dashboard.
+        {{ $t('submissionHistory.noSubmissions') }}
       </v-alert>
     </LoadingState>
   </div>

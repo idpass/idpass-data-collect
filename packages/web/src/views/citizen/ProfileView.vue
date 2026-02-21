@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { getSelfServiceEntity, type SelfServiceEntity } from '@/api/selfService'
+import { formatLabel } from '@/utils/format'
 import LoadingState from '@/components/LoadingState.vue'
 
 const route = useRoute()
@@ -11,7 +12,9 @@ const error = ref<string | null>(null)
 
 const tenantId = route.params.tenantId as string
 
-onMounted(async () => {
+async function loadData() {
+  loading.value = true
+  error.value = null
   try {
     entityData.value = await getSelfServiceEntity()
   } catch (err) {
@@ -19,7 +22,9 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(loadData)
 
 // Fields to hide from the profile display
 const hiddenFields = new Set(['oidcSubject', 'password', 'passwordHash', 'secret'])
@@ -29,22 +34,28 @@ const hiddenFields = new Set(['oidcSubject', 'password', 'passwordHash', 'secret
   <div>
     <div class="d-flex align-center mb-4">
       <v-btn icon="mdi-arrow-left" variant="text" :to="`/citizen/${tenantId}`" />
-      <h1 class="text-h4 ml-2">My Profile</h1>
+      <h1 class="text-h4 ml-2">{{ $t('profile.title') }}</h1>
     </div>
 
-    <LoadingState :loading="loading" :error="error">
+    <LoadingState :loading="loading" :error="error" @retry="loadData">
       <v-card v-if="entityData" variant="outlined">
         <v-card-text>
           <v-table density="comfortable">
+            <thead class="d-sr-only">
+              <tr>
+                <th scope="col">{{ $t('profile.fieldColumn') }}</th>
+                <th scope="col">{{ $t('profile.valueColumn') }}</th>
+              </tr>
+            </thead>
             <tbody>
               <tr
                 v-for="(value, key) in entityData.entity.data"
                 :key="key"
               >
                 <template v-if="!hiddenFields.has(String(key))">
-                  <td class="font-weight-medium text-capitalize" style="width: 200px;">
-                    {{ String(key).replace(/([A-Z])/g, ' $1').replace(/[_-]/g, ' ') }}
-                  </td>
+                  <th scope="row" class="font-weight-medium text-capitalize" style="width: 200px;">
+                    {{ formatLabel(String(key)) }}
+                  </th>
                   <td>{{ value ?? '-' }}</td>
                 </template>
               </tr>
@@ -54,7 +65,7 @@ const hiddenFields = new Set(['oidcSubject', 'password', 'passwordHash', 'secret
           <v-divider class="my-4" />
 
           <p class="text-caption text-grey">
-            Last updated: {{ new Date(entityData.entity.lastUpdated).toLocaleDateString() }}
+            {{ $t('profile.lastUpdated', { date: new Date(entityData.entity.lastUpdated).toLocaleDateString() }) }}
           </p>
         </v-card-text>
       </v-card>

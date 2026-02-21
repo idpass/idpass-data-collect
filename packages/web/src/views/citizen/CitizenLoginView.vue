@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { getPublicApp, type PublicAppConfig } from '@/api/apps'
 import { startOidcLogin, type OidcTenantConfig } from '@/auth/oidcManager'
+import { setLocaleFromTenant } from '@/i18n'
 import LoadingState from '@/components/LoadingState.vue'
 
 const route = useRoute()
+const { t } = useI18n()
 const tenantId = ref('')
 const tenantIdInput = ref('')
 const publicConfig = ref<PublicAppConfig | null>(null)
@@ -33,11 +36,16 @@ async function loadTenantConfig() {
     tenantId.value = tenantIdInput.value.trim()
     publicConfig.value = await getPublicApp(tenantId.value)
 
+    const languages = publicConfig.value?.selfService?.languages
+    if (languages) {
+      setLocaleFromTenant(languages)
+    }
+
     if (!publicConfig.value.selfService?.enabled) {
-      error.value = 'Self-service is not enabled for this program.'
+      error.value = t('citizenLogin.selfServiceDisabled')
     }
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Program not found or unavailable.'
+    error.value = err instanceof Error ? err.message : t('citizenLogin.programNotFound')
   } finally {
     loading.value = false
   }
@@ -67,7 +75,7 @@ async function handleOidcLogin() {
     await startOidcLogin(oidcConfig, tenantId.value)
     // Browser will redirect to eSignet
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to start login'
+    error.value = err instanceof Error ? err.message : t('citizenLogin.oidcStartFailed')
     oidcLoading.value = false
   }
 }
@@ -78,19 +86,20 @@ async function handleOidcLogin() {
     <v-row justify="center" align="center">
       <v-col cols="12" sm="8" md="6" lg="4">
         <v-card class="pa-6" elevation="2">
-          <v-card-title class="text-h5 text-center mb-4">Citizen Portal</v-card-title>
+          <v-card-title class="text-h5 text-center mb-4">{{ $t('citizenLogin.title') }}</v-card-title>
 
           <v-card-text v-if="!publicConfig">
-            <p class="mb-4">Enter your program ID to access your records.</p>
+            <p class="mb-4">{{ $t('citizenLogin.enterProgramId') }}</p>
 
             <v-form @submit.prevent="loadTenantConfig">
               <v-text-field
                 v-model="tenantIdInput"
-                label="Program ID"
+                :label="$t('citizenLogin.programIdLabel')"
+                autocomplete="off"
                 prepend-inner-icon="mdi-identifier"
                 variant="outlined"
                 class="mb-3"
-                placeholder="e.g., demo-household-registry"
+                :placeholder="$t('citizenLogin.programIdPlaceholder')"
                 required
               />
               <v-btn
@@ -101,7 +110,7 @@ async function handleOidcLogin() {
                 :loading="loading"
                 :disabled="!tenantIdInput.trim()"
               >
-                Continue
+                {{ $t('citizenLogin.continue') }}
               </v-btn>
             </v-form>
           </v-card-text>
@@ -125,11 +134,11 @@ async function handleOidcLogin() {
                 :loading="oidcLoading"
                 @click="handleOidcLogin"
               >
-                Login with eSignet
+                {{ $t('citizenLogin.loginWithEsignet') }}
               </v-btn>
 
               <v-alert v-else type="info" variant="tonal" class="mt-4">
-                OIDC login is not configured for this program. Contact your administrator.
+                {{ $t('citizenLogin.oidcNotConfigured') }}
               </v-alert>
             </div>
 
@@ -139,7 +148,7 @@ async function handleOidcLogin() {
               class="mt-4"
               @click="publicConfig = null; tenantId = ''; tenantIdInput = ''"
             >
-              Choose a different program
+              {{ $t('citizenLogin.chooseDifferentProgram') }}
             </v-btn>
           </v-card-text>
 
@@ -147,7 +156,7 @@ async function handleOidcLogin() {
 
           <v-btn variant="text" block to="/">
             <v-icon start icon="mdi-arrow-left" />
-            Back to home
+            {{ $t('common.backToHome') }}
           </v-btn>
         </v-card>
       </v-col>

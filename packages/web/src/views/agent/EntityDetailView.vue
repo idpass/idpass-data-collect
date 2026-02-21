@@ -14,7 +14,9 @@ const tenantId = route.params.tenantId as string
 const entityType = route.params.entity as string
 const guid = route.params.guid as string
 
-onMounted(async () => {
+async function loadData() {
+  loading.value = true
+  error.value = null
   try {
     entity.value = await getEntity(guid, tenantId)
     events.value = await getEntityEvents(guid, tenantId)
@@ -23,7 +25,9 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(loadData)
 </script>
 
 <template>
@@ -41,7 +45,7 @@ onMounted(async () => {
       </v-btn>
     </div>
 
-    <LoadingState :loading="loading" :error="error">
+    <LoadingState :loading="loading" :error="error" @retry="loadData">
       <v-card v-if="entity" class="mb-4">
         <v-card-title>{{ entity.name || entity.entityName || entity.guid }}</v-card-title>
         <v-card-subtitle>{{ entity.type }} &middot; {{ entity.guid }}</v-card-subtitle>

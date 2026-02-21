@@ -1,33 +1,35 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { exchangeOidcToken } from '@/api/auth'
 import { handleOidcCallback } from '@/auth/oidcManager'
 
 const router = useRouter()
+const { t } = useI18n()
 const authStore = useAuthStore()
-const status = ref('Processing authentication...')
+const status = ref(t('oidcCallback.processing'))
 const error = ref<string | null>(null)
 
 onMounted(async () => {
   try {
     // Process the OIDC callback
-    status.value = 'Verifying identity...'
+    status.value = t('oidcCallback.verifying')
     const callbackResult = await handleOidcCallback()
 
     if (!callbackResult) {
-      error.value = 'Authentication failed. No response from identity provider.'
+      error.value = t('oidcCallback.noResponse')
       return
     }
 
     if (!callbackResult.idToken || !callbackResult.tenantId) {
-      error.value = 'Authentication response is incomplete.'
+      error.value = t('oidcCallback.incomplete')
       return
     }
 
     // Exchange the OIDC token for a DataCollect self-service JWT
-    status.value = 'Exchanging credentials...'
+    status.value = t('oidcCallback.exchanging')
     const exchangeResult = await exchangeOidcToken({
       idToken: callbackResult.idToken,
       accessToken: callbackResult.accessToken,
@@ -38,17 +40,17 @@ onMounted(async () => {
     authStore.loginAsCitizen(exchangeResult.token)
 
     // Redirect to citizen dashboard
-    status.value = 'Login successful! Redirecting...'
+    status.value = t('oidcCallback.success')
     setTimeout(() => {
       router.push(`/citizen/${callbackResult.tenantId}`)
     }, 500)
   } catch (err) {
-    console.error('OIDC callback error:', err)
+    if (import.meta.env.DEV) console.error('OIDC callback error:', err)
     if (err instanceof Error && err.message.includes('404')) {
-      error.value = 'No matching beneficiary record found. Please contact your administrator.'
+      error.value = t('oidcCallback.noRecord')
     } else {
-      console.error('OIDC exchange error details:', err)
-      error.value = 'We were unable to verify your identity. Please try again or contact your program administrator.'
+      if (import.meta.env.DEV) console.error('OIDC exchange error details:', err)
+      error.value = t('oidcCallback.verifyFailed')
     }
   }
 })
@@ -70,7 +72,7 @@ onMounted(async () => {
           </v-alert>
           <v-btn color="primary" to="/citizen/login">
             <v-icon start icon="mdi-arrow-left" />
-            Back to Login
+            {{ $t('oidcCallback.backToLogin') }}
           </v-btn>
         </template>
       </v-col>

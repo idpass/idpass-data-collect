@@ -20,7 +20,9 @@ const tenantId = route.params.tenantId as string
 const entityType = route.params.entity as string
 const guid = route.params.guid as string
 
-onMounted(async () => {
+async function loadData() {
+  loading.value = true
+  error.value = null
   try {
     await tenantStore.loadConfig(tenantId)
     entity.value = await getEntity(guid, tenantId)
@@ -29,7 +31,9 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(loadData)
 
 const entityForm = computed(() => {
   return tenantStore.currentConfig?.entityForms?.find((f) => f.id === entityType) ?? null
@@ -70,7 +74,7 @@ function handleCancel() {
       <h1 class="text-h4 ml-2">Edit Entity</h1>
     </div>
 
-    <LoadingState :loading="loading" :error="error || tenantStore.error">
+    <LoadingState :loading="loading" :error="error || tenantStore.error" @retry="loadData">
       <v-alert v-if="submitSuccess" type="success" class="mb-4">
         Entity updated successfully. Redirecting...
       </v-alert>

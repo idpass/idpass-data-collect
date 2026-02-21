@@ -16,10 +16,16 @@ const submitSuccess = ref(false)
 const tenantId = route.params.tenantId as string
 const entityType = route.params.entity as string
 
-onMounted(async () => {
-  await tenantStore.loadConfig(tenantId)
-  loading.value = false
-})
+async function loadData() {
+  loading.value = true
+  try {
+    await tenantStore.loadConfig(tenantId)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadData)
 
 const entityForm = computed(() => {
   return tenantStore.currentConfig?.entityForms?.find((f) => f.id === entityType) ?? null
@@ -53,7 +59,7 @@ function handleCancel() {
       <h1 class="text-h4 ml-2">{{ entityForm?.title || 'Create Entity' }}</h1>
     </div>
 
-    <LoadingState :loading="loading" :error="tenantStore.error">
+    <LoadingState :loading="loading" :error="tenantStore.error" @retry="loadData">
       <v-alert v-if="submitSuccess" type="success" class="mb-4">
         Entity created successfully. Redirecting...
       </v-alert>

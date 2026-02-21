@@ -11,6 +11,7 @@
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "test:unit": "vitest --run",
+    "test:e2e": "playwright test --config playwright.config.ts",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
     "lint": "eslint . --fix",
@@ -24,11 +25,13 @@
     "pinia": "^3.0.4",
     "uuid": "^10.0.0",
     "vue": "^3.5.28",
+    "vue-i18n": "^10.0.8",
     "vue-router": "^4.6.4",
     "vuetify": "^3.11.8"
   },
   "devDependencies": {
     "@mdi/font": "^7.4.47",
+    "@playwright/test": "^1.58.2",
     "@types/node": "^22.19.11",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-vue": "^5.2.4",

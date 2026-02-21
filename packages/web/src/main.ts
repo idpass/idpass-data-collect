@@ -28,6 +28,7 @@ import * as directives from 'vuetify/directives'
 
 import App from './App.vue'
 import router from './router'
+import { i18n } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import { initializeApiClient } from '@/api/client'
 
@@ -47,7 +48,7 @@ const humanitarianTechTheme = {
     surface: '#FFFFFF',
     'on-primary': '#FFFFFF',
     'on-secondary': '#1A202C',
-    'on-accent': '#1A202C',
+    'on-accent': '#FFFFFF',
     'on-surface': '#1A202C',
     'on-background': '#1A202C',
     'on-error': '#FFFFFF',
@@ -81,6 +82,7 @@ app.use(
   }),
 )
 app.use(router)
+app.use(i18n)
 
 const authStore = useAuthStore()
 authStore.initializeAuth()

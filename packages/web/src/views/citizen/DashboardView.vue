@@ -13,7 +13,9 @@ const error = ref<string | null>(null)
 
 const tenantId = route.params.tenantId as string
 
-onMounted(async () => {
+async function loadData() {
+  loading.value = true
+  error.value = null
   try {
     entityData.value = await getSelfServiceEntity()
   } catch (err) {
@@ -21,7 +23,9 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(loadData)
 
 function getDisplayName(): string {
   if (!entityData.value?.entity.data) return 'Citizen'
@@ -33,11 +37,11 @@ function getDisplayName(): string {
 
 <template>
   <div>
-    <LoadingState :loading="loading" :error="error">
+    <LoadingState :loading="loading" :error="error" @retry="loadData">
       <div v-if="entityData">
-        <h1 class="text-h4 mb-2">Welcome, {{ getDisplayName() }}</h1>
+        <h1 class="text-h4 mb-2">{{ $t('dashboard.welcome', { name: getDisplayName() }) }}</h1>
         <p class="text-body-1 text-grey mb-6">
-          Manage your profile and submit change requests.
+          {{ $t('dashboard.manageProfile') }}
         </p>
 
         <v-row>
@@ -48,8 +52,8 @@ function getDisplayName(): string {
               class="pa-4 text-center"
             >
               <v-icon icon="mdi-account" size="48" color="primary" class="mb-2" />
-              <v-card-title>My Profile</v-card-title>
-              <v-card-subtitle>View your personal information</v-card-subtitle>
+              <v-card-title>{{ $t('dashboard.myProfile') }}</v-card-title>
+              <v-card-subtitle>{{ $t('dashboard.viewPersonalInfo') }}</v-card-subtitle>
             </v-card>
           </v-col>
 
@@ -60,8 +64,8 @@ function getDisplayName(): string {
               class="pa-4 text-center"
             >
               <v-icon icon="mdi-history" size="48" color="primary" class="mb-2" />
-              <v-card-title>Submissions</v-card-title>
-              <v-card-subtitle>View your change request history</v-card-subtitle>
+              <v-card-title>{{ $t('dashboard.submissions') }}</v-card-title>
+              <v-card-subtitle>{{ $t('dashboard.viewHistory') }}</v-card-subtitle>
             </v-card>
           </v-col>
 
@@ -79,7 +83,7 @@ function getDisplayName(): string {
             >
               <v-icon icon="mdi-file-edit" size="48" color="accent" class="mb-2" />
               <v-card-title>{{ form.label }}</v-card-title>
-              <v-card-subtitle>Submit a change request</v-card-subtitle>
+              <v-card-subtitle>{{ $t('dashboard.submitChangeRequest') }}</v-card-subtitle>
             </v-card>
           </v-col>
         </v-row>

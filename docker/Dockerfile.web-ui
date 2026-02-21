@@ -7,12 +7,13 @@ COPY . .
 RUN pnpm -r install --frozen-lockfile
 RUN pnpm run build:datacollect
 
-FROM base as admin-ui
+FROM base AS web-ui
 WORKDIR /app
 COPY --from=build /app .
+ARG VITE_BASE_URL=/web/
+ENV VITE_BASE_URL=${VITE_BASE_URL}
 ARG VITE_API_URL
 ENV VITE_API_URL=${VITE_API_URL}
-RUN pnpm run build:admin
-EXPOSE 4173
-CMD ["pnpm", "--filter", "@idpass/data-collect-admin", "preview", "--host"]
-
+RUN pnpm run build:web
+EXPOSE 4174
+CMD ["pnpm", "--filter", "@idpass/data-collect-web", "preview", "--host", "--port", "4174"]

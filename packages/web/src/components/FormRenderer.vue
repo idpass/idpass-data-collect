@@ -50,7 +50,7 @@ async function renderForm() {
     formReady.value = true
   } catch (error) {
     formError.value = error instanceof Error ? error.message : 'Failed to load form renderer'
-    console.error('Form.io render error:', error)
+    if (import.meta.env.DEV) console.error('Form.io render error:', error)
   }
 }
 
@@ -64,7 +64,7 @@ watch(() => props.schema, renderForm)
     <v-alert v-if="formError" type="error" class="mb-4">
       {{ formError }}
     </v-alert>
-    <div v-show="!formError" ref="formContainer" />
-    <v-progress-linear v-if="!formReady && !formError" indeterminate color="primary" />
+    <v-progress-linear v-if="!formReady && !formError" indeterminate color="primary" class="mb-2" />
+    <div v-show="formReady" ref="formContainer" />
   </div>
 </template>

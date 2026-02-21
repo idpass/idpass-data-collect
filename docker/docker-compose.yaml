@@ -11,6 +11,7 @@ services:
     depends_on:
       - sync-server
       - admin-ui
+      - web-ui
     networks:
       - hdm-network
 
@@ -44,7 +45,20 @@ services:
     image: "hdm-admin-ui:latest"
     build:
       context: ..
-      dockerfile: docker/Dockerfile.admin
+      dockerfile: docker/Dockerfile.admin-ui
+      args:
+        - VITE_API_URL=/sync
+    depends_on:
+      - sync-server
+    networks:
+      - hdm-network
+
+  # Web UI (Vue.js citizen/agent portal)
+  web-ui:
+    image: "hdm-web-ui:latest"
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web-ui
       args:
         - VITE_API_URL=/sync
     depends_on:

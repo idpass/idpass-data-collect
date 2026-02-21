@@ -16,12 +16,12 @@ function handleLogout() {
     <v-container class="d-flex align-center">
       <v-app-bar-title>
         <router-link to="/" class="text-white text-decoration-none">
-          ID PASS DataCollect
+          {{ $t('header.appName') }}
         </router-link>
       </v-app-bar-title>
       <v-spacer />
       <v-chip v-if="authStore.userType" variant="outlined" class="mr-4 text-white">
-        {{ authStore.userType === 'agent' ? 'Agent' : 'Citizen' }}
+        {{ authStore.userType === 'agent' ? $t('common.agent') : $t('common.citizen') }}
       </v-chip>
       <v-menu>
         <template v-slot:activator="{ props }">
@@ -31,7 +31,7 @@ function handleLogout() {
           <v-list-item @click="handleLogout">
             <v-list-item-title>
               <v-icon icon="mdi-logout" class="mr-2" />
-              Logout
+              {{ $t('common.logout') }}
             </v-list-item-title>
           </v-list-item>
         </v-list>
