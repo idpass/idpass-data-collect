@@ -31,6 +31,8 @@ export enum EntityType {
   Individual = "individual",
   /** Group/household containing multiple individuals */
   Group = "group",
+  /** Activity record (training, referral, home visit, assistance, etc.) */
+  Record = "record",
 }
 
 /**
@@ -160,6 +162,18 @@ export interface GroupDoc extends EntityDoc {
  */
 export interface IndividualDoc extends EntityDoc {
   type: EntityType.Individual;
+}
+
+/**
+ * Activity record entity (training, referral, home visit, assistance, etc.).
+ *
+ * Records are entities that capture activities or services linked to
+ * an individual or group, but are not themselves people or households.
+ */
+export interface RecordDoc extends EntityDoc {
+  type: EntityType.Record;
+  /** GUID of the parent entity this record belongs to (optional) */
+  parentEntityGuid?: string;
 }
 
 /**

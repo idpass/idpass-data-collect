@@ -239,7 +239,10 @@ describe("EntityDataManager", () => {
     const expectedEntities = [
       {
         guid: expect.any(String),
-        initial: null,
+        initial: expect.objectContaining({
+          type: EntityType.Individual,
+          version: 1,
+        }),
         modified: {
           id: expect.any(String),
           guid: expect.any(String),
@@ -299,7 +302,10 @@ describe("EntityDataManager", () => {
     const expectedEntities = [
       {
         guid: expect.any(String),
-        initial: null,
+        initial: expect.objectContaining({
+          type: EntityType.Group,
+          version: 1,
+        }),
         modified: {
           id: expect.any(String),
           guid: expect.any(String),
@@ -471,7 +477,10 @@ describe("EntityDataManager", () => {
     const expectedEntities = [
       {
         guid: expect.any(String),
-        initial: null,
+        initial: expect.objectContaining({
+          type: EntityType.Individual,
+          version: 1,
+        }),
         modified: {
           id: expect.any(String),
           guid: expect.any(String),
@@ -484,7 +493,9 @@ describe("EntityDataManager", () => {
       },
       {
         guid: expect.any(String),
-        initial: null,
+        initial: expect.objectContaining({
+          type: EntityType.Group,
+        }),
         modified: {
           id: "group-id",
           guid: expect.any(String),
@@ -575,7 +586,10 @@ describe("EntityDataManager", () => {
 
     const expectedEntity1 = {
       guid: expect.any(String),
-      initial: null,
+      initial: expect.objectContaining({
+        type: EntityType.Individual,
+        version: 1,
+      }),
       modified: {
         id: expect.any(String),
         guid: expect.any(String),
@@ -589,7 +603,10 @@ describe("EntityDataManager", () => {
 
     const expectedEntity2 = {
       guid: expect.any(String),
-      initial: null,
+      initial: expect.objectContaining({
+        type: EntityType.Individual,
+        version: 1,
+      }),
       modified: {
         id: expect.any(String),
         guid: expect.any(String),
@@ -603,7 +620,10 @@ describe("EntityDataManager", () => {
 
     const expectedEntity3 = {
       guid: expect.any(String),
-      initial: null,
+      initial: expect.objectContaining({
+        type: EntityType.Group,
+        version: 1,
+      }),
       modified: {
         id: expect.any(String),
         guid: expect.any(String),

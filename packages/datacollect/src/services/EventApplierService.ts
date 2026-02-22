@@ -30,6 +30,7 @@ import {
   FormSubmission,
   GroupDoc,
   IndividualDoc,
+  RecordDoc,
   SearchCriteria,
   SyncLevel,
 } from "../interfaces/types";
@@ -428,6 +429,12 @@ export class EventApplierService {
         baseEntity as IndividualDoc | undefined,
         formData,
       );
+    } else if (formData.type === "create-record" || formData.type === "update-record") {
+      updatedEntity = await this.createOrUpdateRecord(
+        eventGuid,
+        baseEntity as RecordDoc | undefined,
+        formData,
+      );
     } else if (formData.type === "add-member") {
       // log.debug(`Adding member: ${JSON.stringify(formData)}`);
       updatedEntity = await this.addMemberToGroup(eventGuid, entityGuid, formData);
@@ -473,6 +480,12 @@ export class EventApplierService {
           return;
         },
       );
+    }
+
+    // After applying a remote event, reset the baseline so subsequent remote
+    // events don't see stale differences and trigger false conflicts.
+    if (updatedEntity && this.isRemoteEvent(formData)) {
+      await this.entityStore.saveEntity(cloneDeep(updatedEntity), updatedEntity);
     }
 
     // log.debug(`Updated entity: ${JSON.stringify(updatedEntity)}`);
@@ -611,10 +624,56 @@ export class EventApplierService {
     individual.version += 1;
     individual.lastUpdated = new Date().toISOString();
 
-    await this.entityStore.saveEntity(existingIndividual ?? null, individual);
+    await this.entityStore.saveEntity(existingIndividual ?? cloneDeep(individual), individual);
     await this.logAudit(formData.userId, formData.type, eventGuid, individual.guid, formData.data);
 
     return individual;
+  }
+
+  /**
+   * Creates a new record or updates an existing one based on form data.
+   *
+   * Records represent activity data (training, referral, home visit, assistance)
+   * that are linked to an entity but are not themselves people or households.
+   *
+   * @param eventGuid GUID of the event triggering this operation.
+   * @param existingRecord Current record entity, if any.
+   * @param formData Form submission containing the changes.
+   * @returns The updated record entity.
+   *
+   * @private
+   */
+  private async createOrUpdateRecord(
+    eventGuid: string,
+    existingRecord: RecordDoc | undefined,
+    formData: FormSubmission,
+  ): Promise<RecordDoc> {
+    validateFormSubmission(formData);
+    const record: RecordDoc = existingRecord
+      ? cloneDeep(existingRecord)
+      : {
+          id: formData.entityGuid,
+          guid: formData.entityGuid,
+          type: EntityType.Record,
+          name: formData.data.name || formData.data.entityName || "Unnamed Record",
+          version: 0,
+          data: { name: "Unnamed Record" },
+          lastUpdated: new Date().toISOString(),
+          parentEntityGuid: formData.data.parentId,
+        };
+    record.data = { ...record.data, ...formData.data };
+    record.name = record.data.name || record.name;
+    if (formData.data.parentId) {
+      record.parentEntityGuid = formData.data.parentId;
+    }
+
+    record.version += 1;
+    record.lastUpdated = new Date().toISOString();
+
+    await this.entityStore.saveEntity(existingRecord ?? cloneDeep(record), record);
+    await this.logAudit(formData.userId, formData.type, eventGuid, record.guid, formData.data);
+
+    return record;
   }
 
   /**
@@ -712,17 +771,23 @@ export class EventApplierService {
     delete group.data.members;
 
     log.debug(`Saving group: ${JSON.stringify(group)}`);
-    await this.entityStore.saveEntity(existingGroup ?? null, group);
+    await this.entityStore.saveEntity(existingGroup ?? cloneDeep(group), group);
     await this.logAudit(formData.userId, formData.type, eventGuid, group.guid, formData.data);
 
     return group;
   }
 
   private createNewEntity(entityGuid: string, formData: FormSubmission): EntityDoc {
+    const type =
+      formData.type === "create-group"
+        ? EntityType.Group
+        : formData.type === "create-record"
+          ? EntityType.Record
+          : EntityType.Individual;
     return {
       id: entityGuid,
       guid: entityGuid,
-      type: formData.type === "create-group" ? EntityType.Group : EntityType.Individual,
+      type,
       version: 1,
       data: { name: "Unnamed Entity" },
       lastUpdated: formData.timestamp,

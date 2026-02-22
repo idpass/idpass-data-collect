@@ -172,6 +172,31 @@ export class ReviewService {
    * @param formData The form submission to process.
    * @returns The submission review record.
    */
+  /**
+   * Store a submission as a pending review record without applying entity events.
+   * Used for standalone form types (e.g. grievances, assistance requests) that
+   * don't map to entity updates.
+   */
+  createPendingReview(tenantId: string, formData: FormSubmission): SubmissionReview {
+    const review: SubmissionReview = {
+      id: uuidv4(),
+      submissionGuid: formData.guid,
+      tenantId,
+      status: "pending",
+      submittedBy: formData.userId,
+      reviewedBy: null,
+      reviewedAt: null,
+      rejectionReason: null,
+      eventType: formData.type,
+      entityGuid: formData.entityGuid,
+      formData,
+      createdAt: new Date().toISOString(),
+    };
+
+    this.reviews.set(review.id, review);
+    return review;
+  }
+
   async submitForReview(tenantId: string, formData: FormSubmission): Promise<SubmissionReview> {
     const config = this.getReviewConfig(tenantId, formData.type);
 
