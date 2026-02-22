@@ -17,62 +17,53 @@
  * under the License.
  */
 
-import { getClient } from './client'
+import { getClient } from "./client";
 
 export interface EntityRecord {
-  guid: string
-  id: string
-  name?: string
-  entityName?: string
-  type: string
-  data: Record<string, unknown>
-  memberIds?: string[]
-  lastUpdated: string
+  guid: string;
+  id: string;
+  name?: string;
+  entityName?: string;
+  type: string;
+  data: Record<string, unknown>;
+  memberIds?: string[];
+  lastUpdated: string;
 }
 
 export interface EventRecord {
-  guid: string
-  entityGuid: string
-  type: string
-  data: Record<string, unknown>
-  timestamp: string
-  userId: string
-  syncLevel: number
+  guid: string;
+  entityGuid: string;
+  type: string;
+  data: Record<string, unknown>;
+  timestamp: string;
+  userId: string;
+  syncLevel: number;
 }
 
-export async function getEntities(
-  configId: string,
-  limit = 100,
-): Promise<EntityRecord[]> {
-  const response = await getClient().get(`/api/entities?configId=${configId}&limit=${limit}`)
-  return response.data
+export async function getEntities(configId: string, limit = 100): Promise<EntityRecord[]> {
+  const response = await getClient().get(`/api/entities?configId=${configId}&limit=${limit}`);
+  return response.data;
 }
 
-export async function getEntity(
-  guid: string,
-  configId: string,
-): Promise<EntityRecord> {
-  const response = await getClient().get(`/api/entities/${guid}?configId=${configId}`)
-  return response.data
+export async function getEntity(guid: string, configId: string): Promise<EntityRecord> {
+  const response = await getClient().get(`/api/entities/${guid}?configId=${configId}`);
+  return response.data;
 }
 
-export async function getEntityEvents(
-  entityGuid: string,
-  configId: string,
-): Promise<EventRecord[]> {
-  const response = await getClient().get(
-    `/api/entities/${entityGuid}/events?configId=${configId}`,
-  )
-  return response.data
+export async function getEntityEvents(entityGuid: string, configId: string): Promise<EventRecord[]> {
+  const response = await getClient().get(`/api/entities/${entityGuid}/events?configId=${configId}`);
+  return response.data;
 }
 
-export async function searchEntities(
-  configId: string,
-  criteria: Record<string, unknown>[],
-): Promise<EntityRecord[]> {
-  const response = await getClient().post('/api/entities/search', {
+export async function getEntityMembers(guid: string, configId: string): Promise<EntityRecord[]> {
+  const response = await getClient().get(`/api/entities/${guid}/members?configId=${configId}`);
+  return response.data;
+}
+
+export async function searchEntities(configId: string, criteria: Record<string, unknown>[]): Promise<EntityRecord[]> {
+  const response = await getClient().post("/api/entities/search", {
     configId,
     criteria,
-  })
-  return response.data
+  });
+  return response.data;
 }

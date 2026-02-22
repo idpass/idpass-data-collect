@@ -1,16 +1,48 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { useTenantStore } from '@/stores/tenant'
-import LoadingState from '@/components/LoadingState.vue'
+import { ref, computed, onMounted } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
+import { useTenantStore } from "@/stores/tenant";
+import { useServerSearch } from "@/composables/useServerSearch";
+import { getEntities, type EntityRecord } from "@/api/entities";
+import LoadingState from "@/components/LoadingState.vue";
+import EntityCard from "@/components/EntityCard.vue";
 
-const route = useRoute()
-const tenantStore = useTenantStore()
+const route = useRoute();
+const router = useRouter();
+const { t } = useI18n();
+const tenantStore = useTenantStore();
 
-onMounted(async () => {
-  const tenantId = route.params.tenantId as string
-  await tenantStore.loadConfig(tenantId)
-})
+const tenantId = route.params.tenantId as string;
+const recentEntities = ref<EntityRecord[]>([]);
+const recentLoading = ref(false);
+const recentError = ref<string | null>(null);
+
+const { searchQuery, searchResults, searching, searchError } = useServerSearch(tenantId);
+
+// Top-level forms are those without dependsOn — these are the register buttons
+const topLevelForms = computed(() => {
+  return tenantStore.currentConfig?.entityForms?.filter((f) => !f.dependsOn) ?? [];
+});
+
+async function loadData() {
+  await tenantStore.loadConfig(tenantId);
+  recentLoading.value = true;
+  recentError.value = null;
+  try {
+    recentEntities.value = await getEntities(tenantId, 10);
+  } catch (err) {
+    recentError.value = err instanceof Error ? err.message : "Failed to load recent entities";
+  } finally {
+    recentLoading.value = false;
+  }
+}
+
+onMounted(loadData);
+
+function viewEntity(guid: string) {
+  router.push(`/agent/${tenantId}/entity/${guid}`);
+}
 </script>
 
 <template>
@@ -21,40 +53,81 @@ onMounted(async () => {
         {{ tenantStore.currentConfig.description }}
       </p>
 
-      <h2 class="text-h6 mb-3">Entity Forms</h2>
-      <v-row v-if="tenantStore.currentConfig.entityForms?.length">
-        <v-col
-          v-for="form in tenantStore.currentConfig.entityForms"
-          :key="form.id"
-          cols="12"
-          sm="6"
-          md="4"
-        >
-          <v-card variant="outlined">
-            <v-card-title>{{ form.title || form.name }}</v-card-title>
-            <v-card-subtitle>{{ form.id }}</v-card-subtitle>
-            <v-card-actions>
-              <v-btn
-                color="primary"
-                variant="text"
-                :to="`/agent/${route.params.tenantId}/${form.id}`"
-              >
-                View Entities
-              </v-btn>
-              <v-btn
-                color="accent"
-                variant="text"
-                :to="`/agent/${route.params.tenantId}/${form.id}/new`"
-              >
-                Create
-              </v-btn>
-            </v-card-actions>
-          </v-card>
-        </v-col>
-      </v-row>
-      <v-alert v-else type="info" variant="tonal">
-        No entity forms configured for this program.
+      <!-- Search bar -->
+      <v-text-field
+        v-model="searchQuery"
+        prepend-inner-icon="mdi-magnify"
+        :label="t('agentDashboard.searchEntities')"
+        variant="outlined"
+        clearable
+        class="mb-4"
+        :loading="searching"
+      />
+
+      <!-- Search error -->
+      <v-alert v-if="searchError" type="error" variant="tonal" class="mb-4">
+        {{ searchError }}
       </v-alert>
+
+      <!-- Search results -->
+      <div v-if="searchQuery?.trim()">
+        <p class="text-caption mb-2">
+          {{ t("agentDashboard.searchResultsCount", searchResults.length, { count: searchResults.length }) }}
+        </p>
+        <EntityCard
+          v-for="entity in searchResults"
+          :key="entity.guid"
+          :guid="entity.guid"
+          :type="entity.type"
+          :name="entity.name"
+          :entity-name="entity.entityName"
+          :last-updated="entity.lastUpdated"
+          @click="viewEntity(entity.guid)"
+        />
+        <v-alert v-if="!searching && searchResults.length === 0" type="info" variant="tonal">
+          {{ t("agentDashboard.noSearchResults") }}
+        </v-alert>
+      </div>
+
+      <!-- Register buttons + Recent entities (shown when not searching) -->
+      <div v-else>
+        <!-- Register buttons -->
+        <div v-if="topLevelForms.length" class="mb-6">
+          <h2 class="text-h6 mb-3">{{ t("agentDashboard.register") }}</h2>
+          <v-row>
+            <v-col v-for="form in topLevelForms" :key="form.id" cols="12" sm="6" md="4">
+              <v-card variant="outlined" :to="`/agent/${tenantId}/entity/new/${form.id}`" class="pa-4 text-center">
+                <v-icon icon="mdi-plus-circle-outline" size="large" class="mb-2" />
+                <v-card-title class="text-body-1">
+                  {{ form.title || form.name }}
+                </v-card-title>
+              </v-card>
+            </v-col>
+          </v-row>
+        </div>
+
+        <!-- Recent entities -->
+        <div>
+          <h2 class="text-h6 mb-3">{{ t("agentDashboard.recentEntities") }}</h2>
+          <LoadingState :loading="recentLoading" :error="recentError" @retry="loadData">
+            <div v-if="recentEntities.length">
+              <EntityCard
+                v-for="entity in recentEntities"
+                :key="entity.guid"
+                :guid="entity.guid"
+                :type="entity.type"
+                :name="entity.name"
+                :entity-name="entity.entityName"
+                :last-updated="entity.lastUpdated"
+                @click="viewEntity(entity.guid)"
+              />
+            </div>
+            <v-alert v-else type="info" variant="tonal">
+              {{ t("agentDashboard.noEntities") }}
+            </v-alert>
+          </LoadingState>
+        </div>
+      </div>
     </div>
   </LoadingState>
 </template>

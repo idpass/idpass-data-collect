@@ -17,110 +17,129 @@
  * under the License.
  */
 
-import { useAuthStore } from '@/stores/auth'
-import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from "@/stores/auth";
+import { createRouter, createWebHistory } from "vue-router";
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL || '/'),
+  history: createWebHistory(import.meta.env.BASE_URL || "/"),
   routes: [
     {
-      path: '/',
-      name: 'home',
-      component: () => import('@/views/LoginView.vue'),
+      path: "/",
+      name: "home",
+      component: () => import("@/views/LoginView.vue"),
     },
     {
-      path: '/callback',
-      name: 'oidc-callback',
-      component: () => import('@/views/OidcCallbackView.vue'),
+      path: "/callback",
+      name: "oidc-callback",
+      component: () => import("@/views/OidcCallbackView.vue"),
     },
     // Agent routes
     {
-      path: '/agent/login',
-      name: 'agent-login',
-      component: () => import('@/views/agent/AgentLoginView.vue'),
+      path: "/agent/login",
+      name: "agent-login",
+      component: () => import("@/views/agent/AgentLoginView.vue"),
     },
     {
-      path: '/agent/:tenantId',
-      name: 'agent-dashboard',
-      component: () => import('@/views/agent/DashboardView.vue'),
-      meta: { requiresAuth: true, userType: 'agent' },
+      path: "/agent/:tenantId",
+      name: "agent-dashboard",
+      component: () => import("@/views/agent/DashboardView.vue"),
+      meta: { requiresAuth: true, userType: "agent" },
     },
     {
-      path: '/agent/:tenantId/:entity',
-      name: 'agent-entity-list',
-      component: () => import('@/views/agent/EntityListView.vue'),
-      meta: { requiresAuth: true, userType: 'agent' },
+      path: "/agent/:tenantId/entity/new/:formId",
+      name: "agent-entity-create",
+      component: () => import("@/views/agent/EntityCreateView.vue"),
+      meta: { requiresAuth: true, userType: "agent" },
     },
     {
-      path: '/agent/:tenantId/:entity/new',
-      name: 'agent-entity-create',
-      component: () => import('@/views/agent/EntityCreateView.vue'),
-      meta: { requiresAuth: true, userType: 'agent' },
+      path: "/agent/:tenantId/entity/:guid",
+      name: "agent-entity-detail",
+      component: () => import("@/views/agent/EntityDetailView.vue"),
+      meta: { requiresAuth: true, userType: "agent" },
     },
     {
-      path: '/agent/:tenantId/:entity/:guid',
-      name: 'agent-entity-detail',
-      component: () => import('@/views/agent/EntityDetailView.vue'),
-      meta: { requiresAuth: true, userType: 'agent' },
+      path: "/agent/:tenantId/entity/:guid/edit",
+      name: "agent-entity-edit",
+      component: () => import("@/views/agent/EntityEditView.vue"),
+      meta: { requiresAuth: true, userType: "agent" },
+    },
+    // Redirects for old URL patterns
+    {
+      path: "/agent/:tenantId/:entity/new",
+      redirect: (to) => ({
+        path: `/agent/${to.params.tenantId}/entity/new/${to.params.entity}`,
+      }),
     },
     {
-      path: '/agent/:tenantId/:entity/:guid/edit',
-      name: 'agent-entity-edit',
-      component: () => import('@/views/agent/EntityEditView.vue'),
-      meta: { requiresAuth: true, userType: 'agent' },
+      path: "/agent/:tenantId/:entity/:guid/edit",
+      redirect: (to) => ({
+        path: `/agent/${to.params.tenantId}/entity/${to.params.guid}/edit`,
+      }),
+    },
+    {
+      path: "/agent/:tenantId/:entity/:guid",
+      redirect: (to) => ({
+        path: `/agent/${to.params.tenantId}/entity/${to.params.guid}`,
+      }),
+    },
+    {
+      path: "/agent/:tenantId/:entity",
+      redirect: (to) => ({
+        path: `/agent/${to.params.tenantId}`,
+      }),
     },
     // Citizen routes
     {
-      path: '/citizen/login',
-      name: 'citizen-login',
-      component: () => import('@/views/citizen/CitizenLoginView.vue'),
+      path: "/citizen/login",
+      name: "citizen-login",
+      component: () => import("@/views/citizen/CitizenLoginView.vue"),
     },
     {
-      path: '/citizen/:tenantId',
-      name: 'citizen-dashboard',
-      component: () => import('@/views/citizen/DashboardView.vue'),
-      meta: { requiresAuth: true, userType: 'citizen' },
+      path: "/citizen/:tenantId",
+      name: "citizen-dashboard",
+      component: () => import("@/views/citizen/DashboardView.vue"),
+      meta: { requiresAuth: true, userType: "citizen" },
     },
     {
-      path: '/citizen/:tenantId/profile',
-      name: 'citizen-profile',
-      component: () => import('@/views/citizen/ProfileView.vue'),
-      meta: { requiresAuth: true, userType: 'citizen' },
+      path: "/citizen/:tenantId/profile",
+      name: "citizen-profile",
+      component: () => import("@/views/citizen/ProfileView.vue"),
+      meta: { requiresAuth: true, userType: "citizen" },
     },
     {
-      path: '/citizen/:tenantId/change-request/:formType',
-      name: 'citizen-change-request',
-      component: () => import('@/views/citizen/ChangeRequestView.vue'),
-      meta: { requiresAuth: true, userType: 'citizen' },
+      path: "/citizen/:tenantId/change-request/:formType",
+      name: "citizen-change-request",
+      component: () => import("@/views/citizen/ChangeRequestView.vue"),
+      meta: { requiresAuth: true, userType: "citizen" },
     },
     {
-      path: '/citizen/:tenantId/submissions',
-      name: 'citizen-submissions',
-      component: () => import('@/views/citizen/SubmissionHistoryView.vue'),
-      meta: { requiresAuth: true, userType: 'citizen' },
+      path: "/citizen/:tenantId/submissions",
+      name: "citizen-submissions",
+      component: () => import("@/views/citizen/SubmissionHistoryView.vue"),
+      meta: { requiresAuth: true, userType: "citizen" },
     },
   ],
-})
+});
 
 router.beforeEach((to, _from, next) => {
-  const authStore = useAuthStore()
+  const authStore = useAuthStore();
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    const requiredType = to.meta.userType as string | undefined
-    if (requiredType === 'citizen') {
-      next({ name: 'citizen-login' })
+    const requiredType = to.meta.userType as string | undefined;
+    if (requiredType === "citizen") {
+      next({ name: "citizen-login" });
     } else {
-      next({ name: 'agent-login' })
+      next({ name: "agent-login" });
     }
-    return
+    return;
   }
 
   if (to.meta.userType && authStore.userType !== to.meta.userType) {
-    next({ name: 'home' })
-    return
+    next({ name: "home" });
+    return;
   }
 
-  next()
-})
+  next();
+});
 
-export default router
+export default router;

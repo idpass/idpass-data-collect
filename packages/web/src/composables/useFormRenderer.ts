@@ -17,58 +17,71 @@
  * under the License.
  */
 
-import { ref } from 'vue'
-import { v4 as uuidv4 } from 'uuid'
-import { useAuthStore } from '@/stores/auth'
-import { getClient } from '@/api/client'
+import { ref } from "vue";
+import { v4 as uuidv4 } from "uuid";
+import { useAuthStore } from "@/stores/auth";
+import { getClient } from "@/api/client";
+
+// Matches SyncLevel.SYNCED from @idpass/data-collect-core
+const SYNC_LEVEL_SYNCED = 1;
 
 export interface FormSubmission {
-  guid: string
-  entityGuid: string
-  type: string
-  data: Record<string, unknown>
-  timestamp: string
-  userId: string
-  syncLevel: number
+  guid: string;
+  entityGuid: string;
+  type: string;
+  data: Record<string, unknown>;
+  timestamp: string;
+  userId: string;
+  syncLevel: number;
 }
 
 export function useFormRenderer() {
-  const submitting = ref(false)
-  const submitError = ref<string | null>(null)
+  const submitting = ref(false);
+  const submitError = ref<string | null>(null);
 
   async function submitForm(params: {
-    tenantId: string
-    entityGuid: string | null
-    formType: string
-    formData: Record<string, unknown>
-  }): Promise<{ success: boolean; submissionGuid?: string }> {
-    submitting.value = true
-    submitError.value = null
+    tenantId: string;
+    entityGuid: string | null;
+    formType: string;
+    formData: Record<string, unknown>;
+    entityName?: string;
+  }): Promise<{ success: boolean; submissionGuid?: string; entityGuid?: string }> {
+    submitting.value = true;
+    submitError.value = null;
 
-    const authStore = useAuthStore()
-    const userId = authStore.agentPayload?.email || authStore.agentPayload?.id || 'unknown'
+    const authStore = useAuthStore();
+    const userId = authStore.agentPayload?.email || authStore.agentPayload?.id || "unknown";
+
+    const entityGuid = params.entityGuid || uuidv4();
+
+    // Inject entityName into form data so the backend can associate
+    // the entity with its originating form definition.
+    const data = { ...params.formData };
+    if (params.entityName) {
+      data.entityName = params.entityName;
+    }
 
     const submission: FormSubmission = {
       guid: uuidv4(),
-      entityGuid: params.entityGuid || uuidv4(),
+      entityGuid,
       type: params.formType,
-      data: params.formData,
+      data,
       timestamp: new Date().toISOString(),
       userId,
-      syncLevel: 1, // SYNCED
-    }
+      syncLevel: SYNC_LEVEL_SYNCED,
+    };
 
     try {
-      await getClient().post('/api/reviews/submit', {
+      await getClient().post("/api/reviews/submit", {
         tenantId: params.tenantId,
         formData: submission,
-      })
-      return { success: true, submissionGuid: submission.guid }
+      });
+      return { success: true, submissionGuid: submission.guid, entityGuid };
     } catch (error) {
-      submitError.value = error instanceof Error ? error.message : 'Submission failed'
-      return { success: false }
+      submitError.value = error instanceof Error ? error.message : "Submission failed";
+      return { success: false };
     } finally {
-      submitting.value = false
+      submitting.value = false;
     }
   }
 
@@ -76,5 +89,5 @@ export function useFormRenderer() {
     submitting,
     submitError,
     submitForm,
-  }
+  };
 }
