@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import 'bootstrap/dist/css/bootstrap.min.css'
+import 'formiojs/dist/formio.full.min.css'
 
 const props = defineProps<{
   schema: Record<string, unknown>
@@ -15,6 +17,31 @@ const formContainer = ref<HTMLElement | null>(null)
 const formReady = ref(false)
 const formError = ref<string | null>(null)
 let formInstance: unknown = null
+
+function ensureSubmitButton(schema: Record<string, unknown>): Record<string, unknown> {
+  const components = schema.components as Array<Record<string, unknown>> | undefined
+  if (!components) return schema
+
+  const hasSubmit = components.some(
+    (c) => c.type === 'button' && c.action === 'submit',
+  )
+  if (hasSubmit) return schema
+
+  return {
+    ...schema,
+    components: [
+      ...components,
+      {
+        key: 'submit',
+        type: 'button',
+        input: true,
+        label: 'Submit',
+        action: 'submit',
+        theme: 'primary',
+      },
+    ],
+  }
+}
 
 async function renderForm() {
   if (!formContainer.value || !props.schema) return
@@ -36,7 +63,8 @@ async function renderForm() {
       readOnly: props.readOnly || false,
     }
 
-    const form = await Formio.createForm(formContainer.value, props.schema, formOptions)
+    const schemaWithButton = props.readOnly ? props.schema : ensureSubmitButton(props.schema)
+    const form = await Formio.createForm(formContainer.value, schemaWithButton, formOptions)
 
     if (props.submission) {
       form.submission = { data: props.submission }

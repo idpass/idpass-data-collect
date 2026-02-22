@@ -43,3 +43,29 @@ export async function exchangeOidcToken(params: {
   const response = await axios.post(`${API_URL}/api/auth/oidc/exchange`, params)
   return response.data
 }
+
+export async function requestOtp(params: {
+  identifier: string
+  tenantId: string
+}): Promise<{ success: boolean; expiresIn: number; devCode?: string }> {
+  const response = await axios.post(`${API_URL}/api/auth/otp/request`, params)
+  return response.data
+}
+
+export async function verifyOtp(params: {
+  identifier: string
+  otp: string
+  tenantId: string
+}): Promise<{ username: string; token: string }> {
+  const response = await axios.post(`${API_URL}/api/auth/otp/verify`, params)
+  return response.data
+}
+
+export async function verifyNationalId(params: {
+  nationalId: string
+  dateOfBirth: string
+  tenantId: string
+}): Promise<{ username: string; token: string }> {
+  const response = await axios.post(`${API_URL}/api/auth/id/verify`, params)
+  return response.data
+}
