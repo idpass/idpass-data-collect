@@ -87,10 +87,11 @@ describeIfPostgres("Self-Service Routes", () => {
         .send({ identifier: "+1234567890", tenantId: "tenant-1" });
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual({
-        success: true,
-        expiresIn: 300,
-      });
+      expect(response.body.success).toBe(true);
+      expect(response.body.expiresIn).toBe(300);
+      // In non-production mode, devCode is included for testing
+      expect(response.body.devCode).toBeDefined();
+      expect(response.body.devCode).toMatch(/^\d{6}$/);
     });
 
     it("should return 400 when identifier is missing", async () => {

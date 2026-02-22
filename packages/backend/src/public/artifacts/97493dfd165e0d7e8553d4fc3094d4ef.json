@@ -1,6 +1,6 @@
 {
   "id": "demo-household-registry",
-  "artifactId": "c13bba55962928e18843290abc26da0f",
+  "artifactId": "97493dfd165e0d7e8553d4fc3094d4ef",
   "name": "Demo Household Registry",
   "description": "Demo app configuration with households and individuals for development and testing.",
   "version": "1.0.0",
@@ -210,6 +210,14 @@
                 }
               ]
             }
+          },
+          {
+            "key": "submit",
+            "type": "button",
+            "input": true,
+            "label": "Submit Change Request",
+            "action": "submit",
+            "theme": "primary"
           }
         ]
       }
@@ -544,6 +552,338 @@
           }
         ]
       }
+    },
+    {
+      "id": "life_event",
+      "name": "life_event",
+      "title": "Report Life Event",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "event_type",
+            "type": "select",
+            "input": true,
+            "label": "Type of Event",
+            "validate": {
+              "required": true
+            },
+            "data": {
+              "values": [
+                {
+                  "label": "Birth of a child",
+                  "value": "birth"
+                },
+                {
+                  "label": "Death of a family member",
+                  "value": "death"
+                },
+                {
+                  "label": "Marriage",
+                  "value": "marriage"
+                },
+                {
+                  "label": "Divorce / Separation",
+                  "value": "divorce"
+                },
+                {
+                  "label": "Relocation / Change of address",
+                  "value": "relocation"
+                },
+                {
+                  "label": "Disability status change",
+                  "value": "disability"
+                },
+                {
+                  "label": "Other",
+                  "value": "other"
+                }
+              ]
+            }
+          },
+          {
+            "key": "event_date",
+            "type": "datetime",
+            "input": true,
+            "label": "Date of Event",
+            "format": "yyyy-MM-dd",
+            "enableTime": false,
+            "enableDate": true,
+            "validate": {
+              "required": true
+            }
+          },
+          {
+            "key": "affected_person",
+            "type": "textfield",
+            "input": true,
+            "label": "Name of Person Affected",
+            "validate": {
+              "required": true
+            }
+          },
+          {
+            "key": "description",
+            "type": "textarea",
+            "input": true,
+            "label": "Description",
+            "placeholder": "Please provide details about the event...",
+            "rows": 4,
+            "validate": {
+              "required": true
+            }
+          },
+          {
+            "key": "supporting_documents",
+            "type": "textarea",
+            "input": true,
+            "label": "Supporting Documents (list any documents you can provide)",
+            "placeholder": "e.g., birth certificate, marriage certificate, medical report...",
+            "rows": 2
+          },
+          {
+            "key": "submit",
+            "type": "button",
+            "input": true,
+            "label": "Submit Report",
+            "action": "submit",
+            "theme": "primary"
+          }
+        ]
+      }
+    },
+    {
+      "id": "assistance_request",
+      "name": "assistance_request",
+      "title": "Request Assistance",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "assistance_type",
+            "type": "select",
+            "input": true,
+            "label": "Type of Assistance Needed",
+            "validate": {
+              "required": true
+            },
+            "data": {
+              "values": [
+                {
+                  "label": "Financial / Cash assistance",
+                  "value": "financial"
+                },
+                {
+                  "label": "Food / Nutrition support",
+                  "value": "food"
+                },
+                {
+                  "label": "Medical / Health services",
+                  "value": "health"
+                },
+                {
+                  "label": "Education / School fees",
+                  "value": "education"
+                },
+                {
+                  "label": "Housing / Shelter",
+                  "value": "housing"
+                },
+                {
+                  "label": "Legal aid",
+                  "value": "legal"
+                },
+                {
+                  "label": "Livelihood / Employment support",
+                  "value": "livelihood"
+                },
+                {
+                  "label": "Other",
+                  "value": "other"
+                }
+              ]
+            }
+          },
+          {
+            "key": "urgency",
+            "type": "select",
+            "input": true,
+            "label": "How urgent is this request?",
+            "validate": {
+              "required": true
+            },
+            "data": {
+              "values": [
+                {
+                  "label": "Emergency — need help immediately",
+                  "value": "emergency"
+                },
+                {
+                  "label": "Urgent — need help within a week",
+                  "value": "urgent"
+                },
+                {
+                  "label": "Normal — can wait a few weeks",
+                  "value": "normal"
+                }
+              ]
+            }
+          },
+          {
+            "key": "number_of_people",
+            "type": "number",
+            "input": true,
+            "label": "Number of People Affected",
+            "validate": {
+              "required": true,
+              "min": 1,
+              "max": 50
+            }
+          },
+          {
+            "key": "description",
+            "type": "textarea",
+            "input": true,
+            "label": "Describe Your Situation",
+            "placeholder": "Please explain why you need assistance and any relevant details...",
+            "rows": 5,
+            "validate": {
+              "required": true
+            }
+          },
+          {
+            "key": "preferred_contact",
+            "type": "select",
+            "input": true,
+            "label": "Preferred Contact Method",
+            "data": {
+              "values": [
+                {
+                  "label": "Phone call",
+                  "value": "phone"
+                },
+                {
+                  "label": "SMS / Text message",
+                  "value": "sms"
+                },
+                {
+                  "label": "In-person visit",
+                  "value": "in-person"
+                }
+              ]
+            }
+          },
+          {
+            "key": "submit",
+            "type": "button",
+            "input": true,
+            "label": "Submit Request",
+            "action": "submit",
+            "theme": "primary"
+          }
+        ]
+      }
+    },
+    {
+      "id": "grievance",
+      "name": "grievance",
+      "title": "Report a Grievance",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "grievance_type",
+            "type": "select",
+            "input": true,
+            "label": "What is this about?",
+            "validate": {
+              "required": true
+            },
+            "data": {
+              "values": [
+                {
+                  "label": "Incorrect personal information in the system",
+                  "value": "data_error"
+                },
+                {
+                  "label": "Missed or delayed assistance payment",
+                  "value": "missed_payment"
+                },
+                {
+                  "label": "Unfair treatment by staff",
+                  "value": "staff_conduct"
+                },
+                {
+                  "label": "Exclusion from a program I should qualify for",
+                  "value": "exclusion"
+                },
+                {
+                  "label": "Service quality issue",
+                  "value": "service_quality"
+                },
+                {
+                  "label": "Other",
+                  "value": "other"
+                }
+              ]
+            }
+          },
+          {
+            "key": "incident_date",
+            "type": "datetime",
+            "input": true,
+            "label": "When did this happen?",
+            "format": "yyyy-MM-dd",
+            "enableTime": false,
+            "enableDate": true
+          },
+          {
+            "key": "description",
+            "type": "textarea",
+            "input": true,
+            "label": "Describe the Issue",
+            "placeholder": "Please provide as much detail as possible so we can help you...",
+            "rows": 5,
+            "validate": {
+              "required": true
+            }
+          },
+          {
+            "key": "desired_resolution",
+            "type": "textarea",
+            "input": true,
+            "label": "What outcome would you like?",
+            "placeholder": "What would resolve this issue for you?",
+            "rows": 3
+          },
+          {
+            "key": "anonymous",
+            "type": "select",
+            "input": true,
+            "label": "Would you like this report to be anonymous?",
+            "data": {
+              "values": [
+                {
+                  "label": "No — include my name",
+                  "value": "no"
+                },
+                {
+                  "label": "Yes — keep my identity confidential",
+                  "value": "yes"
+                }
+              ]
+            }
+          },
+          {
+            "key": "submit",
+            "type": "button",
+            "input": true,
+            "label": "Submit Grievance",
+            "action": "submit",
+            "theme": "primary"
+          }
+        ]
+      }
     }
   ],
   "entityData": [
@@ -610,6 +950,8 @@
           "last_name": "Nguyen",
           "date_of_birth": "1985-03-15",
           "gender": "male",
+          "nationalId": "LA-1985-001",
+          "phone": "+856-20-1111111",
           "parentId": "hh-001"
         },
         {
@@ -619,6 +961,8 @@
           "last_name": "Nguyen",
           "date_of_birth": "1988-07-22",
           "gender": "female",
+          "nationalId": "LA-1988-002",
+          "phone": "+856-20-2222222",
           "parentId": "hh-001"
         },
         {
@@ -637,6 +981,8 @@
           "last_name": "Santos",
           "date_of_birth": "1990-11-05",
           "gender": "female",
+          "nationalId": "KH-1990-004",
+          "phone": "+855-12-4444444",
           "parentId": "hh-002"
         },
         {
@@ -646,6 +992,8 @@
           "last_name": "Santos",
           "date_of_birth": "1992-04-18",
           "gender": "male",
+          "nationalId": "KH-1992-005",
+          "phone": "+855-12-5555555",
           "parentId": "hh-002"
         },
         {
@@ -655,6 +1003,8 @@
           "last_name": "Sithong",
           "date_of_birth": "1978-09-30",
           "gender": "male",
+          "nationalId": "LA-1978-006",
+          "phone": "+856-20-6666666",
           "parentId": "hh-003"
         },
         {
@@ -965,5 +1315,24 @@
   ],
   "externalSync": null,
   "authConfigs": null,
+  "selfService": {
+    "enabled": true,
+    "authMethods": [
+      "otp",
+      "id"
+    ],
+    "allowedForms": [
+      "individual",
+      "household",
+      "life_event",
+      "assistance_request",
+      "grievance"
+    ],
+    "languages": [
+      "en",
+      "fr"
+    ],
+    "requireReview": true
+  },
   "syncServerUrl": "http://localhost:3000"
 }
