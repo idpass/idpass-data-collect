@@ -18,7 +18,7 @@
 -->
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { AxiosError } from 'axios'
 import { getEntities, getEntityEvents, getReviews, getAttachmentDownloadUrl } from '@/api'
@@ -187,13 +187,18 @@ const goBack = () => {
   router.push({ name: 'app-details', params: { id: routeId.value } })
 }
 
-onMounted(() => {
+const loadEntity = () => {
   fetchEntityAndEvents()
   fetchPendingReviews()
   if (entityGuid.value && routeId.value) {
     attachmentsStore.fetchForEntity(entityGuid.value, routeId.value)
   }
-})
+}
+
+onMounted(loadEntity)
+
+// Re-fetch when navigating between entity details (same component, different params)
+watch(entityGuid, loadEntity)
 </script>
 
 <template>
@@ -221,7 +226,7 @@ onMounted(() => {
           <p class="detail-header__subtitle">{{ entity.entityName }}</p>
         </div>
         <v-chip :color="entity.type === 'individual' ? 'primary' : 'secondary'" variant="tonal">
-          {{ entity.type }}
+          {{ entity.entityName || entity.type }}
         </v-chip>
       </div>
 
@@ -244,7 +249,7 @@ onMounted(() => {
                 </div>
                 <div class="info-item">
                   <span class="info-label">Type</span>
-                  <span class="info-value">{{ entity.type }}</span>
+                  <span class="info-value">{{ entity.entityName || entity.type }}</span>
                 </div>
                 <div class="info-item">
                   <span class="info-label">Last Updated</span>
@@ -280,7 +285,7 @@ onMounted(() => {
                 <v-list-item
                   v-for="member in members"
                   :key="member.guid"
-                  :to="member.type !== 'unknown' ? { name: 'entity-detail', params: { id: routeId, guid: member.guid } } : undefined"
+                  :to="member.type !== 'unknown' ? { name: 'entity-details', params: { id: routeId, guid: member.guid } } : undefined"
                 >
                   <template #prepend>
                     <v-icon :icon="member.type === 'group' ? 'mdi-account-group' : 'mdi-account'" />
