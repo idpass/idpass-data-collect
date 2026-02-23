@@ -111,7 +111,7 @@
   --focus-outline-offset: 2px;
 
   /* Typography */
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  --font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;
   --font-size-base: 1rem;
@@ -142,7 +142,7 @@
   --color-bg: var(--primary);
   --color-heading: var(--text-main);
   --color-text: var(--text-muted);
-  --color-btn-primary: var(--text-main);
+  --color-btn-primary: #ffffff;
   --color-btn-primary-bg: var(--brand);
   --color-btn-default: var(--text-muted);
   --color-btn-default-bg: var(--neutral-100);

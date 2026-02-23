@@ -27,7 +27,7 @@ const { isOffline } = useNetworkStatus()
 <style scoped>
 .app-shell {
   min-height: 100vh;
-  background: linear-gradient(180deg, var(--surface) 0%, var(--background) 100%);
+  background: var(--background);
   color: var(--text-main);
 }
 
@@ -51,7 +51,7 @@ const { isOffline } = useNetworkStatus()
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
-  background: linear-gradient(135deg, var(--status-warning-light) 0%, #fde68a 100%);
+  background: var(--status-warning-light);
   border-bottom: 1px solid var(--status-warning);
   color: var(--status-warning);
   font-size: var(--font-size-sm);

@@ -21,7 +21,7 @@ import Claim169ScannerOverlay from '@/components/Claim169ScannerOverlay.vue'
 
 <style scoped>
 main {
-  padding: var(--spacing-md);
+  /* padding: var(--spacing-md); */
   background: var(--background);
 }
 

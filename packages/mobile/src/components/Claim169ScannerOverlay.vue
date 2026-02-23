@@ -395,8 +395,8 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.75rem;
   padding: 0.875rem 1.5rem;
-  background: linear-gradient(135deg, #2563eb 0%, #9333ea 100%);
-  color: white;
+  background: var(--brand, #ff6d37);
+  color: #ffffff;
   border: none;
   border-radius: 14px;
   font-size: 1rem;
@@ -471,7 +471,7 @@ onUnmounted(() => {
   left: 10px;
   right: 10px;
   height: 2px;
-  background: linear-gradient(90deg, transparent, #2563eb, transparent);
+  background: linear-gradient(90deg, transparent, var(--brand, #ff6d37), transparent);
   animation: scan 2s ease-in-out infinite;
 }
 

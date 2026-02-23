@@ -643,9 +643,9 @@ const toggleRawData = () => {
 }
 
 .action-button.primary {
-  background: linear-gradient(135deg, #2563eb 0%, #9333ea 100%);
-  color: white;
-  box-shadow: 0 10px 30px rgba(79, 70, 229, 0.3);
+  background: var(--brand, #ff6d37);
+  color: #ffffff;
+  box-shadow: none;
 }
 
 .action-button.primary:disabled {
@@ -755,9 +755,11 @@ const toggleRawData = () => {
 .app-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0;
   overflow-y: auto;
   margin-bottom: 1rem;
+  background: #ffffff;
+  border-top: 1px solid #e5e7eb;
 }
 
 .app-item {
@@ -766,17 +768,18 @@ const toggleRawData = () => {
   align-items: flex-start;
   gap: 0.25rem;
   padding: 0.875rem 1rem;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  background: #ffffff;
+  border: none;
+  border-bottom: 1px solid #e5e7eb;
+  border-radius: 0;
   cursor: pointer;
   text-align: left;
   width: 100%;
+  transition: background 0.15s ease;
 }
 
 .app-item:active {
-  background: #eff6ff;
-  border-color: #2563eb;
+  background: #f9fafb;
 }
 
 .app-item-name {
