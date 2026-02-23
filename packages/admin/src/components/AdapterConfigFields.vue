@@ -2,9 +2,8 @@
 import { computed, ref, watch } from 'vue'
 import {
   ADAPTER_CONFIGS,
-  type AdapterConfigSchema,
   type AdapterFieldDefinition,
-} from '@idpass/data-collect-core/adapter-configs'
+} from '@idpass/data-collect-core'
 
 interface Props {
   adapterType: string

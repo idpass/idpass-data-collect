@@ -26,8 +26,8 @@ import type { IndividualResource, GroupResource, SearchResult } from "../compone
 const mockV2ClientImplementation = {
   authenticate: jest.fn().mockResolvedValue(undefined),
   isAuthenticated: jest.fn().mockReturnValue(true),
-  formatIdentifier: jest.fn((value: string) => `urn:datacollect:entity|${value}`),
-  createIdentifier: jest.fn((value: string) => ({ system: "urn:datacollect:entity", value })),
+  formatIdentifier: jest.fn((system: string, value: string) => `${system}|${value}`),
+  createIdentifier: jest.fn((system: string, value: string) => ({ system, value })),
   getIndividual: jest.fn().mockResolvedValue(null),
   searchIndividuals: jest.fn().mockResolvedValue({
     data: [],
@@ -100,7 +100,6 @@ describe("OpenSppV2SyncAdapter", () => {
       adapterConfig: {
         clientId: "test-client-id",
         clientSecret: "test-client-secret",
-        identifierNamespace: "urn:datacollect:entity",
         batchSize: 50,
         includeStudioExtensions: "true",
       },
@@ -174,7 +173,7 @@ describe("OpenSppV2SyncAdapter", () => {
           type: "Individual",
           identifier: expect.arrayContaining([
             expect.objectContaining({
-              system: "urn:datacollect:entity",
+              system: "urn:openspp:vocab:id-type#national_id",
               value: "individual-1",
             }),
           ]),
@@ -221,7 +220,7 @@ describe("OpenSppV2SyncAdapter", () => {
       await expect(adapter.pushData()).resolves.toBeUndefined();
 
       expect(mockV2ClientImplementation.patchIndividual).toHaveBeenCalledWith(
-        "urn:datacollect:entity|individual-1",
+        "urn:openspp:vocab:id-type#national_id|individual-1",
         expect.objectContaining({
           name: expect.objectContaining({ family: "Smith" }),
         }),
@@ -323,7 +322,7 @@ describe("OpenSppV2SyncAdapter", () => {
       await expect(adapter.pushData()).resolves.toBeUndefined();
 
       expect(mockV2ClientImplementation.patchGroup).toHaveBeenCalledWith(
-        "urn:datacollect:entity|group-1",
+        "urn:openspp:vocab:id-type#national_id|group-1",
         expect.objectContaining({ name: "New Name" }),
       );
     });
@@ -335,7 +334,7 @@ describe("OpenSppV2SyncAdapter", () => {
         data: [
           {
             type: "Individual",
-            identifier: [{ system: "urn:datacollect:entity", value: "pulled-individual-1" }],
+            identifier: [{ system: "urn:openspp:vocab:id-type#national_id", value: "pulled-individual-1" }],
             name: { given: "John", family: "Doe", text: "Doe, John" },
             birthDate: "1990-05-15",
             gender: { coding: [{ system: "urn:iso:std:iso:5218", code: "1", display: "Male" }] },
@@ -404,7 +403,7 @@ describe("OpenSppV2SyncAdapter", () => {
       mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce({
         data: [{
           type: "Individual",
-          identifier: [{ system: "urn:datacollect:entity", value: "pulled-individual-1" }],
+          identifier: [{ system: "urn:openspp:vocab:id-type#national_id", value: "pulled-individual-1" }],
           name: { given: "Updated", family: "Name" },
         }],
         meta: { total: 1, count: 1, offset: 0 },
@@ -478,7 +477,7 @@ describe("OpenSppV2SyncAdapter", () => {
         data: [
           {
             type: "Group",
-            identifier: [{ system: "urn:datacollect:entity", value: "pulled-group-1" }],
+            identifier: [{ system: "urn:openspp:vocab:id-type#national_id", value: "pulled-group-1" }],
             groupType: "household",
             name: "Santos Household",
           },
@@ -519,7 +518,6 @@ describe("OpenSppV2SyncAdapter", () => {
         adapterConfig: {
           clientId: "custom-client",
           clientSecret: "custom-secret",
-          identifierNamespace: "urn:custom:namespace",
           batchSize: 100,
           includeStudioExtensions: "false",
         },
@@ -537,7 +535,6 @@ describe("OpenSppV2SyncAdapter", () => {
         extraFields: [
           { name: "clientId", value: "legacy-client" },
           { name: "clientSecret", value: "legacy-secret" },
-          { name: "identifierNamespace", value: "urn:legacy:namespace" },
         ],
       };
 

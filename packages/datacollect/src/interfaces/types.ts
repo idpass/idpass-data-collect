@@ -640,7 +640,6 @@ export interface Conflict {
  *   adapterConfig: {
  *     clientId: "my-client-id",
  *     clientSecret: "my-secret",
- *     identifierNamespace: "urn:datacollect:entity"
  *   }
  * };
  * ```

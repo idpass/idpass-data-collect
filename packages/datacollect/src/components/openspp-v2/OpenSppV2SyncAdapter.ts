@@ -45,6 +45,12 @@ const SYNC_USER_ID = "openspp-v2-sync";
 /** Extension key for Studio individual custom fields (OpenSPP V2 API) */
 const STUDIO_INDIVIDUAL_EXTENSION_KEY = "urn:openspp:extension:studio-individual";
 
+/** OpenSPP identifier type vocabulary prefix */
+const ID_TYPE_PREFIX = "urn:openspp:vocab:id-type#";
+
+/** Default identifier type code when not specified in form data */
+const DEFAULT_ID_TYPE_CODE = "national_id";
+
 /**
  * Gender codes per ISO/IEC 5218 (representation of human sexes).
  * Push: text -> code; Pull: code -> text.
@@ -82,7 +88,6 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   private readonly url: string;
   private readonly clientId: string;
   private readonly clientSecret: string;
-  private readonly identifierNamespace: string;
   private readonly includeStudioExtensions: boolean;
   private readonly batchSize: number;
   private readonly batchDelayMs: number;
@@ -96,8 +101,6 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     this.url = config.url ?? "";
     this.clientId = getAdapterConfigValue<string>(config, "clientId") ?? "";
     this.clientSecret = getAdapterConfigValue<string>(config, "clientSecret") ?? "";
-    this.identifierNamespace =
-      getAdapterConfigValue<string>(config, "identifierNamespace") ?? "urn:datacollect:entity";
     this.includeStudioExtensions =
       getAdapterConfigValue<string>(config, "includeStudioExtensions") !== "false";
     this.batchSize = getAdapterConfigValue<number>(config, "batchSize", 50) ?? 50;
@@ -113,7 +116,10 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       await this.ensureClient();
       return true;
     } catch (error) {
-      console.error("OpenSPP V2 authentication error:", error);
+      console.error(
+        "[OpenSppV2SyncAdapter] Authentication failed:",
+        error instanceof Error ? error.message : error,
+      );
       return false;
     }
   }
@@ -239,9 +245,10 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     externalId?: string,
   ): Promise<void> {
     const resource = this.buildIndividualResource(guid, data);
+    const system = this.resolveIdentifierSystem(data);
 
     if (externalId) {
-      const identifier = this.getClient().formatIdentifier(guid);
+      const identifier = this.getClient().formatIdentifier(system, guid);
       await this.getClient().patchIndividual(identifier, {
         name: resource.name,
         birthDate: resource.birthDate,
@@ -261,9 +268,10 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     externalId?: string,
   ): Promise<void> {
     const resource = this.buildGroupResource(guid, data);
+    const system = this.resolveIdentifierSystem(data);
 
     if (externalId) {
-      const identifier = this.getClient().formatIdentifier(guid);
+      const identifier = this.getClient().formatIdentifier(system, guid);
       await this.getClient().patchGroup(identifier, {
         name: resource.name,
         groupType: resource.groupType,
@@ -384,7 +392,6 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       baseUrl: this.url,
       clientId: this.clientId,
       clientSecret: this.clientSecret,
-      identifierNamespace: this.identifierNamespace,
       includeStudioExtensions: this.includeStudioExtensions,
     });
 
@@ -403,6 +410,25 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   }
 
   /**
+   * Resolve the OpenSPP identifier system URI from entity data.
+   * Checks for an `identifierType` field in the form data, falling back to `national_id`.
+   */
+  private resolveIdentifierSystem(data: Record<string, unknown>): string {
+    const code = (data.identifierType as string) || DEFAULT_ID_TYPE_CODE;
+    if (code.startsWith(ID_TYPE_PREFIX)) {
+      return code;
+    }
+    return `${ID_TYPE_PREFIX}${code}`;
+  }
+
+  /**
+   * Check if an identifier system matches the OpenSPP vocab format.
+   */
+  private isOpenSppIdentifier(system: string): boolean {
+    return system.startsWith(ID_TYPE_PREFIX);
+  }
+
+  /**
    * Build an IndividualResource from entity data.
    * Uses `type` discriminator per ADR-019.
    */
@@ -411,9 +437,10 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     data: Record<string, unknown>,
   ): IndividualResource {
     const fieldMappings = this.getFieldMappings();
+    const system = this.resolveIdentifierSystem(data);
     const resource: IndividualResource = {
       type: "Individual",
-      identifier: [this.getClient().createIdentifier(guid)],
+      identifier: [this.getClient().createIdentifier(system, guid)],
       active: true,
     };
 
@@ -471,9 +498,10 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     guid: string,
     data: Record<string, unknown>,
   ): GroupResource {
+    const system = this.resolveIdentifierSystem(data);
     const resource: GroupResource = {
       type: "Group",
-      identifier: [this.getClient().createIdentifier(guid)],
+      identifier: [this.getClient().createIdentifier(system, guid)],
       active: true,
       groupType: "household",
     };
@@ -547,14 +575,14 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
   private extractIdentifier(individual: IndividualResource): string | undefined {
     const matchingId = individual.identifier.find(
-      (id) => id.system === this.identifierNamespace,
+      (id) => this.isOpenSppIdentifier(id.system),
     );
     return matchingId?.value;
   }
 
   private extractGroupIdentifier(group: GroupResource): string | undefined {
     const matchingId = group.identifier.find(
-      (id) => id.system === this.identifierNamespace,
+      (id) => this.isOpenSppIdentifier(id.system),
     );
     return matchingId?.value;
   }

@@ -17,6 +17,7 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
+    "@idpass/data-collect-core": "workspace:*",
     "axios": "^1.13.5",
     "js-yaml": "^4.1.1",
     "lodash": "^4.17.23",
