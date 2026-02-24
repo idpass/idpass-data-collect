@@ -18,6 +18,8 @@
  */
 
 import { useAuthStore } from '@/stores/auth'
+import { useProgramDraftStore } from '@/stores/programDraft'
+import { useSnackBarStore } from '@/stores/snackBar'
 import { createRouter, createWebHistory } from 'vue-router'
 import AppManagerView from '../views/AppManagerView.vue'
 
@@ -53,36 +55,117 @@ const router = createRouter({
       name: 'login',
       component: () => import('../views/LoginView.vue'),
     },
+    // Legacy routes - redirect to new wizard
     {
       path: '/create',
       name: 'create',
-      component: () => import('../views/ConfigCreateView.vue'),
+      redirect: { name: 'wizard-general' },
       meta: { requiresAuth: true },
     },
     {
       path: '/edit/:id',
       name: 'edit',
-      component: () => import('../views/ConfigCreateView.vue'),
+      redirect: (to) => ({ name: 'wizard-general', query: { mode: 'edit', id: to.params.id as string } }),
       meta: { requiresAuth: true },
     },
     {
       path: '/copy/:id',
       name: 'copy',
-      component: () => import('../views/ConfigCreateView.vue'),
+      redirect: (to) => ({ name: 'wizard-general', query: { mode: 'copy', id: to.params.id as string } }),
       meta: { requiresAuth: true },
+    },
+    // New Wizard Routes
+    // Flow: General -> Integration -> Forms -> Mapping -> Auth -> Review
+    {
+      path: '/programs/wizard',
+      component: () => import('../layouts/WizardLayout.vue'),
+      meta: { requiresAuth: true },
+      children: [
+        {
+          path: '',
+          redirect: { name: 'wizard-general' },
+        },
+        {
+          path: 'general',
+          name: 'wizard-general',
+          component: () => import('../views/wizard/GeneralStep.vue'),
+        },
+        {
+          path: 'integration',
+          name: 'wizard-integration',
+          component: () => import('../views/wizard/IntegrationStep.vue'),
+        },
+        {
+          path: 'forms',
+          name: 'wizard-forms',
+          component: () => import('../views/wizard/FormsStep.vue'),
+        },
+        {
+          path: 'forms/:formIndex/design',
+          name: 'wizard-form-design',
+          component: () => import('../views/wizard/FormDesigner.vue'),
+        },
+        {
+          path: 'mapping',
+          name: 'wizard-mapping',
+          component: () => import('../views/wizard/MappingStep.vue'),
+        },
+        {
+          path: 'auth',
+          name: 'wizard-auth',
+          component: () => import('../views/wizard/AuthStep.vue'),
+        },
+        {
+          path: 'review',
+          name: 'wizard-review',
+          component: () => import('../views/wizard/ReviewStep.vue'),
+        },
+      ],
     },
   ],
 })
 
-// Navigation guard to check authentication
-router.beforeEach((to, from, next) => {
+// Navigation guard to check authentication and initialize wizard
+router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next({ name: 'login' })
-  } else {
-    next()
+    return
   }
+
+  // Initialize wizard draft store when entering wizard routes
+  if (to.path.startsWith('/programs/wizard')) {
+    const draftStore = useProgramDraftStore()
+
+    // Check if we're entering the wizard from outside
+    const isEnteringWizard = !from.path.startsWith('/programs/wizard')
+
+    if (isEnteringWizard) {
+      const mode = to.query.mode as string | undefined
+      const id = to.query.id as string | undefined
+
+      try {
+        if (mode === 'edit' && id) {
+          await draftStore.initEditDraft(id)
+        } else if (mode === 'copy' && id) {
+          await draftStore.initCopyDraft(id)
+        } else {
+          if (draftStore.hasRecoverableDraft) {
+            draftStore.pendingRecovery = true
+          }
+          draftStore.initNewDraft(false)
+        }
+      } catch {
+        const snackBarStore = useSnackBarStore()
+        snackBarStore.showSnackbar('Failed to load collection program configuration', 'error')
+        next({ name: 'home' })
+        return
+      }
+    }
+  }
+
+  next()
 })
 
 // Handle unauthorized responses

@@ -6,6 +6,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   createApp as createAppApi,
+  fetchOpenSppFieldsFromAPI,
   getApp,
   getApps as getAppsApi,
   updateApp as updateAppApi,
@@ -14,7 +15,7 @@ import {
 } from '@/api'
 import FormBuilderDialog from '@/components/FormBuilderDialog.vue'
 import FieldsInput from '@/components/FieldsInput.vue'
-import OpenSppFieldInputDialog from '@/components/OpenSppFieldInputDialog.vue'
+import AdapterConfigFields from '@/components/AdapterConfigFields.vue'
 import FieldMappingDialog from '@/components/FieldMappingDialog.vue'
 import { parseOpenSppProgramSpecification } from '@/utils/openSppImport'
 import { useSnackBarStore } from '@/stores/snackBar'
@@ -30,7 +31,10 @@ type EntityForm = {
 type ExternalSync = {
   type?: string
   url: string
+  /** @deprecated Use adapterConfig instead */
   extraFields: ExternalSyncField[]
+  /** Typed adapter configuration */
+  adapterConfig?: Record<string, string | number | boolean>
   fieldMappings?: FieldMapping[]
 }
 
@@ -69,6 +73,7 @@ const form = ref<ConfigSchema>({
     type: undefined,
     url: '',
     extraFields: [],
+    adapterConfig: {},
   },
   authConfigs: [],
 })
@@ -97,8 +102,8 @@ const jsonFileError = ref<string | null>(null)
 const isUploadingJson = ref(false)
 
 // OpenSPP Field Mapping
-const showOpenSppFieldInput = ref(false)
 const showFieldMapping = ref(false)
+const isFetchingOpenSppFields = ref(false)
 const opensppFields = ref<ParsedOpenSppField[]>([])
 const selectedFormForMapping = ref<EntityForm | null>(null)
 
@@ -509,9 +514,45 @@ const uploadJsonConfig = async () => {
 }
 
 // OpenSPP Field Mapping handlers
-const onOpenSppFieldsParsed = (fields: ParsedOpenSppField[]) => {
-  opensppFields.value = fields
-  snackBarStore.showSnackbar(`Loaded ${fields.length} OpenSPP fields`, 'success')
+const v1SyncConfig = computed(() => {
+  const sync = form.value.externalSync
+  const config = (sync?.adapterConfig as Record<string, string | number | boolean> | undefined) || {}
+  return {
+    url: sync?.url || '',
+    database: (config.database as string) || '',
+    username: (config.username as string) || '',
+    password: (config.password as string) || '',
+  }
+})
+
+const isV1SyncConfigComplete = computed(() => {
+  const { url, database, username, password } = v1SyncConfig.value
+  return !!(url && database && username && password)
+})
+
+const fetchOpenSppFields = async () => {
+  if (!isV1SyncConfigComplete.value) {
+    snackBarStore.showSnackbar('Complete the OpenSPP connection settings first', 'warning')
+    return
+  }
+  try {
+    isFetchingOpenSppFields.value = true
+    const result = await fetchOpenSppFieldsFromAPI({
+      url: v1SyncConfig.value.url,
+      database: v1SyncConfig.value.database,
+      username: v1SyncConfig.value.username,
+      password: v1SyncConfig.value.password,
+    })
+    opensppFields.value = result.fields
+    snackBarStore.showSnackbar(`Fetched ${result.fields.length} OpenSPP fields`, 'success')
+  } catch (error) {
+    snackBarStore.showSnackbar(
+      error instanceof Error ? error.message : 'Failed to fetch OpenSPP fields',
+      'error',
+    )
+  } finally {
+    isFetchingOpenSppFields.value = false
+  }
 }
 
 const openFieldMappingForForm = (entityForm: EntityForm) => {
@@ -525,6 +566,7 @@ const onFieldMappingsSave = (mappings: FieldMapping[]) => {
       type: undefined,
       url: '',
       extraFields: [],
+      adapterConfig: {},
     }
   }
   form.value.externalSync.fieldMappings = mappings
@@ -595,9 +637,12 @@ const getFormFields = (formio: unknown): Array<{ key: string; label: string }> =
 }
 
 const isOpenSppSync = () => {
+  const type = form.value.externalSync?.type
   return (
-    form.value.externalSync?.type === 'openspp-adapter' ||
-    form.value.externalSync?.type === 'openspp'
+    type === 'openspp-adapter' ||
+    type === 'openspp-v1-adapter' ||
+    type === 'openspp-v2-adapter' ||
+    type === 'openspp'
   )
 }
 
@@ -629,7 +674,7 @@ const goBack = () => {
       <v-tabs v-model="activeTab" color="primary" grow>
         <v-tab value="form">
           <v-icon start icon="mdi-form-select" />
-          Create from Form
+          Create Form
         </v-tab>
         <v-tab value="json">
           <v-icon start icon="mdi-code-json" />
@@ -891,7 +936,8 @@ const goBack = () => {
               v-model="form.externalSync.type"
               :items="[
                 { title: 'Mock Sync Server', value: 'mock-sync-server' },
-                { title: 'OpenSPP', value: 'openspp-adapter' },
+                { title: 'OpenSPP V1', value: 'openspp-v1-adapter' },
+                { title: 'OpenSPP V2', value: 'openspp-v2-adapter' },
                 { title: 'OpenFn', value: 'openfn-adapter' },
               ]"
               label="Sync Type"
@@ -907,7 +953,27 @@ const goBack = () => {
               v-trim
               variant="outlined"
             />
-            <FieldsInput v-model="form.externalSync.extraFields" :as-array="true" />
+
+            <!-- Adapter-specific configuration fields -->
+            <AdapterConfigFields
+              v-if="form.externalSync.type"
+              :adapter-type="form.externalSync.type"
+              v-model="form.externalSync.adapterConfig!"
+            />
+
+            <!-- Legacy extra fields (for backwards compatibility) -->
+            <v-expansion-panels v-if="form.externalSync.extraFields?.length" class="mt-4">
+              <v-expansion-panel>
+                <v-expansion-panel-title>
+                  <span class="text-body-2 text-medium-emphasis">
+                    Legacy Extra Fields ({{ form.externalSync.extraFields.length }})
+                  </span>
+                </v-expansion-panel-title>
+                <v-expansion-panel-text>
+                  <FieldsInput v-model="form.externalSync.extraFields" :as-array="true" />
+                </v-expansion-panel-text>
+              </v-expansion-panel>
+            </v-expansion-panels>
 
             <!-- OpenSPP Field Mapping -->
             <div v-if="isOpenSppSync()" class="mt-6">
@@ -918,22 +984,55 @@ const goBack = () => {
                   color="primary"
                   variant="outlined"
                   size="small"
-                  @click="showOpenSppFieldInput = true"
+                  :loading="isFetchingOpenSppFields"
+                  :disabled="!isV1SyncConfigComplete"
+                  @click="fetchOpenSppFields"
                 >
-                  <v-icon start icon="mdi-upload" />
-                  Import Fields
+                  <v-icon start icon="mdi-refresh" />
+                  Fetch Fields
                 </v-btn>
               </div>
 
+              <v-card variant="outlined" density="compact" class="mb-4" color="grey-lighten-4">
+                <v-card-text class="pa-3">
+                  <p class="text-caption text-medium-emphasis font-weight-bold text-uppercase mb-2">
+                    Fetching from:
+                  </p>
+                  <div class="d-flex flex-column ga-1">
+                    <div class="d-flex align-center ga-2 text-body-2">
+                      <span class="text-medium-emphasis" style="min-width: 80px">URL</span>
+                      <code class="text-caption">{{ v1SyncConfig.url || '—' }}</code>
+                    </div>
+                    <div class="d-flex align-center ga-2 text-body-2">
+                      <span class="text-medium-emphasis" style="min-width: 80px">Database</span>
+                      <code class="text-caption">{{ v1SyncConfig.database || '—' }}</code>
+                    </div>
+                    <div class="d-flex align-center ga-2 text-body-2">
+                      <span class="text-medium-emphasis" style="min-width: 80px">Username</span>
+                      <code class="text-caption">{{ v1SyncConfig.username || '—' }}</code>
+                    </div>
+                  </div>
+                  <v-alert
+                    v-if="!isV1SyncConfigComplete"
+                    type="warning"
+                    variant="tonal"
+                    density="compact"
+                    class="mt-2"
+                  >
+                    Complete the URL, database, username and password fields above to enable field fetching.
+                  </v-alert>
+                </v-card-text>
+              </v-card>
+
               <v-alert
-                v-if="opensppFields.length === 0"
+                v-if="isV1SyncConfigComplete && opensppFields.length === 0"
                 type="info"
                 variant="tonal"
                 density="compact"
               >
-                Import OpenSPP fields from a sample payload to enable field mapping.
+                Click "Fetch Fields" to load available OpenSPP fields for mapping.
               </v-alert>
-              <v-alert v-else type="success" variant="tonal" density="compact">
+              <v-alert v-else-if="opensppFields.length > 0" type="success" variant="tonal" density="compact">
                 {{ opensppFields.length }} OpenSPP field{{ opensppFields.length === 1 ? '' : 's' }}
                 loaded.
               </v-alert>
@@ -1056,11 +1155,6 @@ const goBack = () => {
       @submit="saveFormio"
     />
 
-    <OpenSppFieldInputDialog
-      v-model="showOpenSppFieldInput"
-      @fields-parsed="onOpenSppFieldsParsed"
-    />
-
     <FieldMappingDialog
       v-model="showFieldMapping"
       :form-fields="selectedFormForMapping ? getFormFields(selectedFormForMapping.formio) : []"
@@ -1074,27 +1168,28 @@ const goBack = () => {
 <style scoped>
 .config-create {
   max-width: 900px;
-  padding-bottom: 64px;
+  padding-bottom: var(--spacing-2xl);
 }
 
 .config-header {
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-lg);
 }
 
 .config-title {
-  font-size: 1.75rem;
+  font-size: var(--font-size-3xl);
   font-weight: 600;
-  margin: 0 0 8px;
+  margin: 0 0 var(--spacing-sm);
+  color: var(--text-main);
 }
 
 .config-subtitle {
-  font-size: 0.95rem;
-  color: rgba(0, 0, 0, 0.6);
+  font-size: var(--font-size-base);
+  color: var(--text-muted);
   margin: 0;
 }
 
 .method-card {
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
@@ -1103,30 +1198,31 @@ const goBack = () => {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 24px 0;
+  padding: var(--spacing-lg) 0;
   max-width: 500px;
   margin: 0 auto;
 }
 
 .import-title {
-  font-size: 1.25rem;
+  font-size: var(--font-size-xl);
   font-weight: 600;
-  margin: 0 0 8px;
+  margin: 0 0 var(--spacing-sm);
+  color: var(--text-main);
 }
 
 .import-description {
-  font-size: 0.95rem;
-  color: rgba(0, 0, 0, 0.6);
+  font-size: var(--font-size-base);
+  color: var(--text-muted);
   margin: 0;
 }
 
 .config-form-card {
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
 .config-form-tabs {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid var(--border-light);
 }
 
 .config-form-window {
@@ -1139,8 +1235,8 @@ const goBack = () => {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 48px 24px;
-  color: rgba(0, 0, 0, 0.6);
+  padding: var(--spacing-2xl) var(--spacing-lg);
+  color: var(--text-muted);
 }
 
 .entity-forms-list {
@@ -1149,6 +1245,6 @@ const goBack = () => {
 }
 
 .auth-config-item {
-  margin-bottom: 16px;
+  margin-bottom: var(--spacing-md);
 }
 </style>

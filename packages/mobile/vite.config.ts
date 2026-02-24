@@ -2,6 +2,8 @@ import { defineConfig } from 'vite'
 import { resolve } from 'path'
 import { execSync } from 'child_process'
 import vue from '@vitejs/plugin-vue'
+import wasm from 'vite-plugin-wasm'
+import topLevelAwait from 'vite-plugin-top-level-await'
 import fs from 'fs'
 
 // Get git info
@@ -28,7 +30,7 @@ const getGitInfo = () => {
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [vue(), wasm(), topLevelAwait()],
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),

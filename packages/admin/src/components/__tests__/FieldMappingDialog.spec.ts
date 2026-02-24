@@ -175,23 +175,23 @@ describe('FieldMappingDialog', () => {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const component = wrapper.vm as any
-    if (component.addMapping) {
-      component.addMapping()
-      component.mappings[0] = {
-        formField: 'birth_date',
-        opensppField: 'birthdate',
-        transformer: {
-          type: 'text',
-          options: {},
-        },
-      }
+    expect(component.addMapping).toBeDefined()
 
-      // Update transformer type to date
-      component.mappings[0].transformer.type = 'date'
-      await wrapper.vm.$nextTick()
-
-      expect(component.mappings[0].transformer.type).toBe('date')
+    component.addMapping()
+    component.mappings[0] = {
+      formField: 'birth_date',
+      opensppField: 'birthdate',
+      transformer: {
+        type: 'text',
+        options: {},
+      },
     }
+
+    // Update transformer type to date
+    component.mappings[0].transformer.type = 'date'
+    await wrapper.vm.$nextTick()
+
+    expect(component.mappings[0].transformer.type).toBe('date')
   })
 
   it('configures transformer options for multiselect', async () => {
@@ -205,22 +205,22 @@ describe('FieldMappingDialog', () => {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const component = wrapper.vm as any
-    if (component.addMapping) {
-      component.addMapping()
-      component.mappings[0] = {
-        formField: 'tags',
-        opensppField: 'tag_ids',
-        transformer: {
-          type: 'multiselect',
-          options: {},
-        },
-      }
+    expect(component.addMapping).toBeDefined()
 
-      await wrapper.vm.$nextTick()
-
-      // Check that delimiter is set
-      expect(component.mappings[0].transformer.options.delimiter).toBe(',')
+    component.addMapping()
+    component.mappings[0] = {
+      formField: 'tags',
+      opensppField: 'tag_ids',
+      transformer: {
+        type: 'multiselect',
+        options: {},
+      },
     }
+
+    await wrapper.vm.$nextTick()
+
+    // Check that delimiter is set
+    expect(component.mappings[0].transformer.options.delimiter).toBe(',')
   })
 
   it('configures transformer options for boolean', async () => {
@@ -234,23 +234,23 @@ describe('FieldMappingDialog', () => {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const component = wrapper.vm as any
-    if (component.addMapping) {
-      component.addMapping()
-      component.mappings[0] = {
-        formField: 'is_active',
-        opensppField: 'active',
-        transformer: {
-          type: 'boolean',
-          options: {},
-        },
-      }
+    expect(component.addMapping).toBeDefined()
 
-      await wrapper.vm.$nextTick()
-
-      // Check that truthy/falsy values are set
-      expect(component.mappings[0].transformer.options.truthyValue).toBe('true')
-      expect(component.mappings[0].transformer.options.falsyValue).toBe('false')
+    component.addMapping()
+    component.mappings[0] = {
+      formField: 'is_active',
+      opensppField: 'active',
+      transformer: {
+        type: 'boolean',
+        options: {},
+      },
     }
+
+    await wrapper.vm.$nextTick()
+
+    // Check that truthy/falsy values are set
+    expect(component.mappings[0].transformer.options.truthyValue).toBe('true')
+    expect(component.mappings[0].transformer.options.falsyValue).toBe('false')
   })
 })
 

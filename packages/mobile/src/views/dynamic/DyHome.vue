@@ -10,6 +10,7 @@ import { Capacitor } from '@capacitor/core'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { registerIssuerKey } from '@/services/claim169Service'
 
 interface AppStats {
   totalRecords: number
@@ -41,6 +42,14 @@ const isSuccessMessage = ref(false)
 const tenantappsDb = database.tenantapps.find()
 const tenantappsSub = tenantappsDb.$.subscribe((results) => {
   tenantapps.value = results
+  // Register trusted issuers from all tenant apps
+  results.forEach(app => {
+    if (app.trustedIssuers) {
+      app.trustedIssuers.forEach(issuer => {
+        registerIssuerKey(issuer.issuerId, issuer.publicKey)
+      })
+    }
+  })
 })
 
 onMounted(() => {
@@ -175,31 +184,58 @@ const scan = async () => {
   return url
 }
 
+const parseVersion = (version: string | undefined): number[] => {
+  if (!version) return [0]
+  return version.split('.').map((part) => parseInt(part, 10) || 0)
+}
+
+const isNewerVersion = (incoming: string | undefined, existing: string | undefined): boolean => {
+  const incomingParts = parseVersion(incoming)
+  const existingParts = parseVersion(existing)
+  const length = Math.max(incomingParts.length, existingParts.length)
+  for (let i = 0; i < length; i++) {
+    const a = incomingParts[i] ?? 0
+    const b = existingParts[i] ?? 0
+    if (a > b) return true
+    if (a < b) return false
+  }
+  return false
+}
+
 const saveTenantApp = async (config: TenantAppData, sourceUrl = '') => {
   if (!config?.id || !config?.name || !config?.entityForms) {
     throw new Error('Invalid Collection Program configuration: missing required fields')
   }
 
-  // Check if a collection program with the same id or name already exists
-  const existingById = await database.tenantapps
-    .find({
-      selector: {
-        id: config.id
-      }
-    })
-    .exec()
+  const [existingById, existingByName] = await Promise.all([
+    database.tenantapps.find({ selector: { id: config.id } }).exec(),
+    database.tenantapps.find({ selector: { name: config.name } }).exec(),
+  ])
 
-  const existingByName = await database.tenantapps
-    .find({
-      selector: {
-        name: config.name
-      }
-    })
-    .exec()
+  const existing = existingById[0] ?? existingByName[0] ?? null
 
-  if (existingById.length > 0 || existingByName.length > 0) {
-    const existingName = existingById.length > 0 ? existingById[0].name : existingByName[0].name
-    throw new Error(`A Collection Program with the name "${existingName}" already exists. Please use a different program.`)
+  if (existing) {
+    if (!isNewerVersion(config.version, existing.version)) {
+      throw new Error(
+        `"${existing.name}" is already at version ${existing.version ?? '(unknown)'}. ` +
+        `The incoming version ${config.version ?? '(unknown)'} is not newer.`
+      )
+    }
+
+    // Update only config fields — entities are stored separately and are unaffected
+    await existing.patch({
+      id: config.id,
+      name: config.name,
+      description: config.description,
+      version: config.version,
+      url: config.url || sourceUrl || existing.url,
+      entityForms: config.entityForms,
+      entityData: config.entityData,
+      syncServerUrl: config.syncServerUrl,
+      externalSync: config.externalSync,
+      trustedIssuers: config.trustedIssuers,
+    })
+    return
   }
 
   await database.tenantapps.upsert({
@@ -241,10 +277,10 @@ const loadAppFromUrl = async (url: string) => {
 
 const handleLoadAppFromInput = async () => {
   try {
-    await loadAppFromUrl(appUrl.value)
-    // Only close dialog if successful (no error thrown)
+    const savedConfig = await loadAppFromUrl(appUrl.value)
     openInputAppDialog.value = false
-    appUrl.value = '' // Clear the input on success
+    appUrl.value = ''
+    displayError(`Successfully loaded "${savedConfig?.name || 'Collection Program'}"`, 3000, true)
   } catch {
     // Error already handled by loadAppFromUrl via displayError
     // Keep dialog open so user can fix the URL
@@ -265,8 +301,9 @@ const handleFileChange = async (event: Event) => {
 
   try {
     const text = await file.text()
-    const json = JSON.parse(text)
+    const json = JSON.parse(text) as TenantAppData
     await saveTenantApp(json)
+    displayError(`Successfully imported "${json?.name || 'Collection Program'}"`, 3000, true)
   } catch (error) {
     console.error(error)
     const message = error instanceof Error ? error.message : 'Unable to import the selected file. Please verify it is a valid Collection Program JSON.'
@@ -316,6 +353,11 @@ const handleClickApp = (appId: string) => {
 
 const toggleAddOptions = () => {
   showAddOptions.value = !showAddOptions.value
+}
+
+const handleScanIdentity = () => {
+  showAddOptions.value = false
+  router.push({ name: 'scan-claim169' })
 }
 </script>
 
@@ -473,6 +515,25 @@ const toggleAddOptions = () => {
               <span class="option__subtitle">Choose a Collection Program JSON file from your device</span>
             </div>
           </button>
+
+          <div class="options-divider">
+            <span>or verify identity</span>
+          </div>
+
+          <button class="option option--identity" type="button" @click="handleScanIdentity">
+            <span class="option__icon option__icon--identity" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path
+                  d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+                  fill="currentColor"
+                />
+              </svg>
+            </span>
+            <div>
+              <span class="option__title">Scan Identity QR</span>
+              <span class="option__subtitle">Verify a Claim-169 identity QR code from MOSIP Inji</span>
+            </div>
+          </button>
         </div>
       </div>
     </div>
@@ -514,55 +575,58 @@ const toggleAddOptions = () => {
 .home-screen {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: var(--spacing-lg);
 }
 
 .home-header {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md)
 }
 
 .home-header h1 {
-  font-size: 1.75rem;
+  font-size: var(--font-size-3xl);
   font-weight: 700;
-  color: #1f2937;
+  color: var(--text-main);
 }
 
 .home-header p {
-  color: #6b7280;
-  font-size: 0.95rem;
+  color: var(--text-muted);
+  font-size: var(--font-size-base);
 }
 
 .search-bar {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  background: #ffffff;
-  border-radius: 14px;
-  padding: 0.65rem 1rem;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  gap: var(--spacing-sm);
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-sm) var(--spacing-md);
+  box-shadow: none;
+  border: 1px solid var(--border-light);
+  min-height: var(--touch-target);
 }
 
 .search-bar input {
   flex: 1;
   border: none;
   outline: none;
-  font-size: 0.95rem;
-  color: #1f2937;
+  font-size: var(--font-size-base);
+  color: var(--text-main);
   background: transparent;
+  font-family: var(--font-family);
 }
 
 .search-bar input::placeholder {
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .icon {
   width: 1.25rem;
   height: 1.25rem;
   display: block;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .icon path {
@@ -572,164 +636,171 @@ const toggleAddOptions = () => {
 .forms-section {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-md);
 }
 
 .section-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 0 var(--spacing-md);
 }
 
 .section-heading h2 {
-  font-size: 1.1rem;
+  font-size: var(--font-size-lg);
   font-weight: 700;
-  color: #1f2937;
+  color: var(--text-main);
 }
 
 .section-hint {
-  font-size: 0.85rem;
-  color: #6b7280;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
 }
 
 .empty-state {
-  color: #6b7280;
-  font-size: 0.95rem;
+  color: var(--text-muted);
+  font-size: var(--font-size-base);
 }
 
 .form-card-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0;
   padding: 0;
   margin: 0;
   list-style: none;
+  background: var(--surface);
+  border-top: 1px solid var(--border-light);
 }
 
 .form-card {
-  background: #ffffff;
-  border-radius: 18px;
-  padding: 1.25rem;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  transition: transform 0.2s ease;
+  background: var(--surface);
+  border-radius: 0;
+  padding: var(--spacing-md) var(--spacing-md);
+  border: none;
+  border-bottom: 1px solid var(--border-light);
+  transition: background var(--transition-fast);
   cursor: pointer;
 }
 
 .form-card:active {
-  transform: scale(0.99);
+  background: var(--neutral-50);
+}
+
+.form-card:hover {
+  background: var(--neutral-50);
 }
 
 .form-card__header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 1rem;
+  gap: var(--spacing-md);
 }
 
 .form-card__title {
-  font-size: 1.15rem;
+  font-size: var(--font-size-lg);
   font-weight: 700;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .form-card__meta {
   display: flex;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
   flex-wrap: wrap;
 }
 
 .pill {
   display: inline-flex;
   align-items: center;
-  padding: 0.2rem 0.65rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .pill--muted {
-  background: #eef2ff;
-  color: #4c51bf;
+  background: var(--brand-100);
+  color: var(--brand-dark);
 }
 
 .pill--success {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--status-success-light);
+  color: var(--status-success);
 }
 
 .form-card__icon {
-  color: #9ca3af;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
 .form-card__description {
-  margin: 1rem 0 1.25rem;
-  color: #6b7280;
-  font-size: 0.95rem;
+  margin: var(--spacing-md) 0 var(--spacing-lg);
+  color: var(--text-muted);
+  font-size: var(--font-size-base);
 }
 
 .form-card__stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
+  gap: var(--spacing-sm);
 }
 
 .stat {
-  background: #f3f4f6;
-  border-radius: 12px;
-  padding: 0.75rem;
+  background: transparent;
+  border-radius: 0;
+  padding: var(--spacing-sm) 0;
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-xs);
 }
 
 .stat__label {
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #6b7280;
+  color: var(--text-muted);
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--spacing-xs);
 }
 
 .stat__label-hint {
-  font-size: 0.65rem;
+  font-size: var(--font-size-xs);
   font-weight: 400;
-  color: #f59e0b;
+  color: var(--status-warning);
 }
 
 .stat__value {
-  font-size: 0.95rem;
+  font-size: var(--font-size-base);
   font-weight: 700;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .form-card__footer {
-  margin-top: 1.25rem;
+  margin-top: var(--spacing-lg);
   display: flex;
   justify-content: flex-end;
-  font-size: 0.75rem;
-  color: #9ca3af;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
 }
 
 .fab {
   position: fixed;
-  right: 1.5rem;
-  bottom: 1.5rem;
+  right: var(--spacing-lg);
+  bottom: var(--spacing-lg);
   width: 56px;
   height: 56px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #2563eb 0%, #9333ea 100%);
-  color: white;
+  border-radius: var(--radius-full);
+  background: var(--brand);
+  color: #ffffff;
   border: none;
   display: grid;
   place-items: center;
-  box-shadow: 0 18px 40px rgba(79, 70, 229, 0.35);
+  box-shadow: var(--shadow-floating);
   z-index: 5;
 }
 
@@ -742,7 +813,7 @@ const toggleAddOptions = () => {
 .overlay__backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(15, 23, 42, 0.4);
+  background: rgba(26, 32, 44, 0.4);
 }
 
 .overlay__panel {
@@ -751,88 +822,101 @@ const toggleAddOptions = () => {
   bottom: 0;
   transform: translateX(-50%);
   width: min(480px, 100%);
-  background: #ffffff;
-  border-radius: 24px 24px 0 0;
-  padding: 1.5rem;
-  box-shadow: 0 -20px 40px rgba(15, 23, 42, 0.16);
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-modal);
 }
 
 .overlay__panel header h3 {
-  font-size: 1.25rem;
+  font-size: var(--font-size-xl);
   font-weight: 700;
-  color: #111827;
+  color: var(--text-main);
 }
 
 .overlay__panel header p {
-  color: #6b7280;
-  margin-top: 0.5rem;
-  font-size: 0.95rem;
+  color: var(--text-muted);
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-base);
 }
 
 .overlay__options {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  margin-top: 1.5rem;
+  gap: 0;
+  margin-top: var(--spacing-lg);
+  border-top: 1px solid var(--border-light);
 }
 
 .option {
   display: flex;
   align-items: center;
-  gap: 0.9rem;
+  gap: var(--spacing-sm);
   width: 100%;
-  padding: 0.9rem 1rem;
-  border-radius: 14px;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: 0;
   border: none;
-  background: #f9fafb;
+  border-bottom: 1px solid var(--border-light);
+  background: var(--surface);
   text-align: left;
-  transition: transform 0.2s ease, background 0.2s ease;
+  transition: background var(--transition-fast);
+  min-height: var(--touch-target);
 }
 
 .option:active {
-  transform: scale(0.99);
+  background: var(--neutral-50);
 }
 
 .option__icon {
   width: 42px;
   height: 42px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   display: grid;
   place-items: center;
-  background: rgba(59, 130, 246, 0.12);
-  color: #2563eb;
+  background: var(--brand-100);
+  color: var(--brand-dark);
 }
 
 .option__title {
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-main);
   display: block;
 }
 
 .option__subtitle {
   display: block;
-  font-size: 0.85rem;
-  color: #6b7280;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
   margin-top: 0.15rem;
 }
 
 .form-field {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--spacing-xs);
 }
 
 .form-field label {
-  font-size: 0.9rem;
-  color: #374151;
+  font-size: var(--font-size-sm);
+  color: var(--text-main);
   font-weight: 600;
 }
 
 .form-field input {
-  padding: 0.65rem 0.85rem;
-  border-radius: 12px;
-  border: 1px solid #d1d5db;
-  font-size: 0.95rem;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  font-size: var(--font-size-base);
+  min-height: var(--touch-target);
+  font-family: var(--font-family);
+}
+
+.form-field input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: var(--focus-ring);
 }
 
 .visually-hidden {
@@ -848,52 +932,52 @@ const toggleAddOptions = () => {
 }
 
 .dev-reset {
-  margin-top: 1rem;
+  margin-top: var(--spacing-md);
   align-self: center;
   background: transparent;
   border: none;
-  color: #dc2626;
+  color: var(--status-danger);
   font-weight: 600;
   text-decoration: underline;
+  min-height: var(--touch-target);
 }
 
 .error-message {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem 1.25rem;
-  background: #fee2e2;
-  border: 1px solid #fecaca;
-  border-radius: 14px;
-  color: #991b1b;
-  font-size: 0.95rem;
-  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.1);
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--status-danger-light);
+  border: 1px solid var(--status-danger);
+  border-radius: var(--radius-xl);
+  color: var(--status-danger);
+  font-size: var(--font-size-base);
+  box-shadow: var(--shadow-subtle);
 }
 
 .success-message {
-  background: #dcfce7;
-  border: 1px solid #bbf7d0;
-  color: #166534;
-  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.1);
+  background: var(--status-success-light);
+  border: 1px solid var(--status-success);
+  color: var(--status-success);
 }
 
 .success-message .error-icon {
-  color: #166534;
+  color: var(--status-success);
 }
 
 .success-message .error-close {
-  color: #166534;
+  color: var(--status-success);
 }
 
 .success-message .error-close:hover {
-  background: rgba(22, 101, 52, 0.1);
+  background: rgba(45, 138, 86, 0.1);
 }
 
 .error-icon {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
-  color: #dc2626;
+  color: var(--status-danger);
 }
 
 .error-message span {
@@ -903,22 +987,55 @@ const toggleAddOptions = () => {
 .error-close {
   background: transparent;
   border: none;
-  padding: 0.25rem;
+  padding: var(--spacing-xs);
   cursor: pointer;
-  color: #991b1b;
+  color: var(--status-danger);
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  border-radius: 6px;
-  transition: background 0.2s ease;
+  border-radius: var(--radius-md);
+  transition: background var(--transition-fast);
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
 }
 
 .error-close:hover {
-  background: rgba(153, 27, 27, 0.1);
+  background: rgba(229, 62, 62, 0.1);
 }
 
 .error-close svg {
   width: 18px;
   height: 18px;
+}
+
+.options-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin: var(--spacing-sm) 0;
+}
+
+.options-divider::before,
+.options-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-light);
+}
+
+.options-divider span {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.option--identity {
+  background: rgba(44, 62, 80, 0.03);
+}
+
+.option__icon--identity {
+  background: rgba(44, 62, 80, 0.12);
+  color: var(--primary);
 }
 </style>

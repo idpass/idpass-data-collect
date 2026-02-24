@@ -255,8 +255,8 @@ const formattedVersion = computed(() => `v${tenantapp.value?.version ?? '—'}`)
   border: none;
   border-radius: 999px;
   padding: 0.55rem 1.25rem;
-  background: linear-gradient(135deg, #2563eb 0%, #9333ea 100%);
-  color: white;
+  background: var(--brand, #ff6d37);
+  color: #ffffff;
   font-weight: 600;
 }
 
@@ -402,7 +402,7 @@ const formattedVersion = computed(() => `v${tenantapp.value?.version ?? '—'}`)
 .forms-list {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.5rem;
 }
 
 .section-title h2 {
@@ -415,23 +415,25 @@ const formattedVersion = computed(() => `v${tenantapp.value?.version ?? '—'}`)
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0;
   padding: 0;
   margin: 0;
+  background: #ffffff;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .card-item {
   background: #ffffff;
-  border-radius: 18px;
-  padding: 1.25rem;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 0;
+  padding: 1rem;
+  border: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   cursor: pointer;
-  transition: transform 0.2s ease;
+  transition: background 0.15s ease;
 }
 
 .card-item:active {
-  transform: scale(0.99);
+  background: #f9fafb;
 }
 
 .card-item__header {

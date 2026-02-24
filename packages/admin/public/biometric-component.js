@@ -251,4 +251,160 @@ if (typeof Formio !== 'undefined') {
 
   // Register the component
   Formio.Components.addComponent('biometricCapture', BiometricCapture);
+
+  class Claim169Scanner extends Field {
+    static schema(...extend) {
+      return Field.schema({
+        type: 'claim169Scanner',
+        label: 'Scan Identity',
+        key: 'claim169Scanner',
+        inputType: 'hidden',
+        protected: false,
+        unique: false,
+        persistent: true,
+        // Custom properties
+        trustedIssuers: [],
+        fieldMappings: [],
+        storeOriginalData: true,
+        validate: {
+          required: false
+        }
+      }, ...extend);
+    }
+
+    static get builderInfo() {
+      return {
+        title: 'Claim-169 Scanner',
+        group: 'advanced',
+        icon: 'qrcode',
+        weight: 10,
+        documentation: '#',
+        schema: Claim169Scanner.schema()
+      };
+    }
+
+    constructor(component, options, data) {
+      super(component, options, data);
+    }
+
+    static editForm() {
+      return {
+        components: [
+          {
+            key: 'display',
+            components: [
+              {
+                type: 'checkbox',
+                key: 'storeOriginalData',
+                label: 'Store Original Data',
+                tooltip: 'If checked, the full verified identity data will be stored in this field.',
+                defaultValue: true
+              },
+              {
+                type: 'panel',
+                title: 'Trusted Issuers',
+                key: 'trustedIssuersPanel',
+                collapsible: true,
+                collapsed: false,
+                components: [
+                  {
+                    type: 'datagrid',
+                    key: 'trustedIssuers',
+                    label: 'Trusted Issuers',
+                    addAnother: 'Add Issuer',
+                    components: [
+                      {
+                        type: 'textfield',
+                        key: 'issuerId',
+                        label: 'Issuer ID',
+                        placeholder: 'https://identity.example.org',
+                        tooltip: 'The issuer identifier from the Claim-169 QR code (usually a URL)',
+                        validate: { required: true }
+                      },
+                      {
+                        type: 'textarea',
+                        key: 'ed25519Key',
+                        label: 'Ed25519 Public Key (Base64)',
+                        tooltip: 'Base64-encoded 32-byte Ed25519 public key',
+                        rows: 2
+                      },
+                      {
+                        type: 'textarea',
+                        key: 'es256Key',
+                        label: 'ES256 Public Key (Base64)',
+                        tooltip: 'Base64-encoded ES256/P-256 public key',
+                        rows: 2
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                type: 'panel',
+                title: 'Field Mappings',
+                key: 'fieldMappingsPanel',
+                collapsible: true,
+                collapsed: false,
+                components: [
+                  {
+                    type: 'datagrid',
+                    key: 'fieldMappings',
+                    label: 'Map Identity Fields to Form',
+                    addAnother: 'Add Mapping',
+                    components: [
+                      {
+                        type: 'select',
+                        key: 'claimField',
+                        label: 'Identity Field',
+                        data: {
+                          values: [
+                            { label: 'Full Name', value: 'fullName' },
+                            { label: 'First Name', value: 'firstName' },
+                            { label: 'Last Name', value: 'lastName' },
+                            { label: 'Date of Birth', value: 'dateOfBirth' },
+                            { label: 'Gender', value: 'gender' },
+                            { label: 'Nationality', value: 'nationality' },
+                            { label: 'Address', value: 'address' },
+                            { label: 'Phone', value: 'phone' },
+                            { label: 'Email', value: 'email' },
+                            { label: 'Photo', value: 'photo' },
+                            { label: 'ID', value: 'id' }
+                          ]
+                        },
+                        validate: { required: true }
+                      },
+                      {
+                        type: 'textfield',
+                        key: 'formField',
+                        label: 'Form Field Key',
+                        placeholder: 'firstName',
+                        tooltip: 'The key of the form component to populate.',
+                        validate: { required: true }
+                      },
+                      {
+                        type: 'checkbox',
+                        key: 'overwrite',
+                        label: 'Overwrite',
+                        tooltip: 'Overwrite existing value if present.',
+                        defaultValue: true
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          { key: 'data', ignore: true },
+          {
+            key: 'validation',
+            components: [
+              { key: 'unique', ignore: true }
+            ]
+          }
+        ]
+      };
+    }
+  }
+
+  Formio.Components.addComponent('claim169Scanner', Claim169Scanner);
 }

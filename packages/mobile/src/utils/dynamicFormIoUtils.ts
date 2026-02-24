@@ -49,6 +49,15 @@ export interface Config {
   entityData: EntityData[]
   syncServerUrl: string
   externalSync?: ExternalSync
+  trustedIssuers?: TrustedIssuer[]
+}
+
+export interface TrustedIssuer {
+  issuerId: string
+  publicKey: {
+    ed25519?: string // Base64 encoded
+    es256?: string // Base64 encoded
+  }
 }
 
 export interface EntityForm {

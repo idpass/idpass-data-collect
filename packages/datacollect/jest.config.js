@@ -10,6 +10,7 @@ module.exports = {
     ],
   },
   testMatch: ["**/*.spec.ts", "**/*.test.ts"],
+  testPathIgnorePatterns: ["/node_modules/", "\\.integration\\.test\\.ts$"],
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json"],
   setupFilesAfterEnv: ["jest-fetch-mock"],
 };

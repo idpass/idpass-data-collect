@@ -292,7 +292,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .app-dashboard {
-  padding-bottom: 64px;
+  padding-bottom: var(--spacing-2xl);
 }
 
 .dashboard-header {
@@ -300,52 +300,54 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
 }
 
 .dashboard-header__text {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-xs);
 }
 
 .dashboard-title {
   font-size: clamp(1.5rem, 1.4rem + 0.5vw, 1.875rem);
   font-weight: 600;
   margin: 0;
+  color: var(--text-main);
 }
 
 .dashboard-subtitle {
   margin: 0;
-  font-size: 0.9rem;
-  color: rgba(0, 0, 0, 0.6);
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
 }
 
 .dashboard-header__actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .filters-card {
-  border-radius: 14px;
+  border-radius: var(--radius-xl);
+  background: var(--surface);
 }
 
 .filters-card__meta {
-  font-size: 0.8rem;
-  color: rgba(0, 0, 0, 0.5);
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
   margin: 0;
 }
 
 .apps-grid {
-  margin-top: 16px;
+  margin-top: var(--spacing-md);
 }
 
 .pagination {
   display: flex;
   justify-content: center;
-  margin-top: 20px;
+  margin-top: var(--spacing-lg);
 }
 
 .sidebar {
@@ -356,7 +358,7 @@ onBeforeUnmount(() => {
 @media (max-width: 1280px) {
   .sidebar {
     position: static;
-    margin-top: 24px;
+    margin-top: var(--spacing-lg);
   }
 }
 

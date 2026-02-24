@@ -13,6 +13,11 @@ services:
     networks:
       - datacollect-network-dev
     command: ["postgres"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-admin}"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
 
   # # pgAdmin for database management (optional)
   # pgadmin:
@@ -55,7 +60,8 @@ services:
       - "9229:9229" # Node.js debugger port
     restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
       - datacollect-network-dev
 
@@ -80,6 +86,11 @@ services:
     restart: unless-stopped
     environment:
       - VITE_API_URL=${ADMIN_API_URL:-http://localhost:3000}
+      # Proxy target for OpenSPP API calls (use host.docker.internal to reach host-exposed services)
+      - OPENSPP_PROXY_TARGET=${OPENSPP_PROXY_TARGET:-http://host.docker.internal:8069}
+    # Required for host.docker.internal to work on Linux
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "5173:5173"
     depends_on:

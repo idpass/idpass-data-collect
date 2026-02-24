@@ -24,6 +24,7 @@ export * from "./components/InternalSyncManager";
 export * from "./components/SyncAdapter";
 export * from "./components/ExternalSyncManager";
 export * from "./interfaces/types";
+export * from "./interfaces/adapter-configs";
 export * from "./services/EventApplierService";
 export * from "./storage/IndexedDbEntityStorageAdapter";
 export * from "./storage/IndexedDbEventStorageAdapter";

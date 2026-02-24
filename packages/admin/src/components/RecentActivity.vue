@@ -151,21 +151,23 @@ const handleActivityClick = (activity: ActivityItem) => {
 
 <style scoped>
 .recent-activity {
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
+  background: var(--surface);
 }
 
 .recent-activity__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
 }
 
 .recent-activity__title {
-  font-size: 1.1rem;
+  font-size: var(--font-size-lg);
   font-weight: 600;
   margin: 0;
+  color: var(--text-main);
 }
 
 .recent-activity__empty {
@@ -173,14 +175,14 @@ const handleActivityClick = (activity: ActivityItem) => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px 16px;
-  color: rgba(0, 0, 0, 0.4);
-  gap: 8px;
+  padding: var(--spacing-lg) var(--spacing-md);
+  color: var(--text-muted);
+  gap: var(--spacing-sm);
 }
 
 .recent-activity__empty p {
   margin: 0;
-  font-size: 0.875rem;
+  font-size: var(--font-size-sm);
 }
 
 .recent-activity__list {
@@ -191,21 +193,21 @@ const handleActivityClick = (activity: ActivityItem) => {
 
 .activity-item {
   display: flex;
-  gap: 12px;
-  padding: 10px;
-  border-radius: 10px;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background-color var(--transition-fast);
 }
 
 .activity-item:hover {
-  background-color: rgba(0, 0, 0, 0.04);
+  background-color: var(--neutral-50);
 }
 
 .activity-item__icon {
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -213,28 +215,28 @@ const handleActivityClick = (activity: ActivityItem) => {
 }
 
 .activity-icon--success {
-  background: rgba(76, 175, 80, 0.12);
-  color: rgb(56, 142, 60);
+  background: var(--status-success-light);
+  color: var(--status-success);
 }
 
 .activity-icon--info {
-  background: rgba(33, 150, 243, 0.12);
-  color: rgb(25, 118, 210);
+  background: var(--status-info-light);
+  color: var(--status-info);
 }
 
 .activity-icon--primary {
-  background: rgba(33, 150, 243, 0.12);
-  color: rgb(25, 118, 210);
+  background: var(--brand-100);
+  color: var(--brand-dark);
 }
 
 .activity-icon--secondary {
-  background: rgba(103, 58, 183, 0.12);
-  color: rgb(81, 45, 168);
+  background: rgba(44, 62, 80, 0.12);
+  color: var(--primary);
 }
 
 .activity-icon--grey {
-  background: rgba(96, 125, 139, 0.12);
-  color: rgb(69, 90, 100);
+  background: var(--neutral-100);
+  color: var(--neutral-400);
 }
 
 .activity-item__content {
@@ -243,9 +245,9 @@ const handleActivityClick = (activity: ActivityItem) => {
 }
 
 .activity-item__description {
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
   margin: 0;
-  color: rgba(0, 0, 0, 0.85);
+  color: var(--text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -254,10 +256,10 @@ const handleActivityClick = (activity: ActivityItem) => {
 .activity-item__meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 4px 0 0;
-  font-size: 0.75rem;
-  color: rgba(0, 0, 0, 0.5);
+  gap: var(--spacing-sm);
+  margin: var(--spacing-xs) 0 0;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
 }
 
 .activity-item__program {
@@ -273,6 +275,6 @@ const handleActivityClick = (activity: ActivityItem) => {
 
 .activity-item__time::before {
   content: '\2022';
-  margin-right: 8px;
+  margin-right: var(--spacing-sm);
 }
 </style>

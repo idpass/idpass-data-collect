@@ -94,3 +94,4 @@ website/docs/packages/datacollect/api/
 website/docs/packages/backend/api-reference-generated/
 
 .cursor/
+*storybook.log

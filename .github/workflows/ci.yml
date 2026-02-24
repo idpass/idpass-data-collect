@@ -95,6 +95,9 @@ jobs:
       - name: Install dependencies
         run: HUSKY=0 pnpm run ci:install
 
+      - name: Build datacollect (required by admin type-check)
+        run: pnpm run build:datacollect
+
       - name: Run linting
         run: pnpm run lint
 

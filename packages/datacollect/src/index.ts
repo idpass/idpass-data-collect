@@ -223,6 +223,7 @@ export * from "./storage/PostgresEventStorageAdapter";
 
 // Type Definitions and Interfaces
 export * from "./interfaces/types";
+export * from "./interfaces/adapter-configs";
 
 // Authentication Components
 
@@ -230,8 +231,11 @@ export * from "./components/AuthManager";
 export * from "./storage/IndexedDbAuthStorageAdapter";
 export * from "./services/SingleAuthStorageImpl";
 
-// OpenSPP/Odoo Components
+// OpenSPP/Odoo Components (V1)
 export * from "./components/openspp";
+
+// OpenSPP V2 Components
+export * from "./components/openspp-v2";
 
 // Field Transformers
 export * from "./utils/fieldTransformers";

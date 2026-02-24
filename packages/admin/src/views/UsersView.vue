@@ -87,7 +87,6 @@ const saveUser = async () => {
   try {
     if (editedIndex.value > -1) {
       // Update existing user
-      console.log('updateUserApi', editedItem)
       await updateUserApi(editedItem)
       Object.assign(users.value[editedIndex.value], editedItem)
     } else {
@@ -205,6 +204,8 @@ onMounted(() => {
 
 <style scoped>
 .v-data-table {
-  margin-top: 1rem;
+  margin-top: var(--spacing-md);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
 }
 </style>

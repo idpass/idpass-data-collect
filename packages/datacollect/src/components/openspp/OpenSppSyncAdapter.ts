@@ -25,6 +25,7 @@ import {
   FormSubmission,
   SyncLevel,
   getExternalField,
+  getAdapterConfigValue,
   EntityType,
 } from "../../interfaces/types";
 import OdooClient from "./OdooClient";
@@ -439,9 +440,10 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
 
   /**
    * Gets a required field from the external sync config.
+   * Checks adapterConfig first, then falls back to legacy extraFields.
    */
   private getRequiredField(name: string): string {
-    const value = getExternalField(this.config, name);
+    const value = getAdapterConfigValue<string>(this.config, name);
     if (!value) {
       throw new Error(`Required field '${name}' is missing from external sync config`);
     }
@@ -450,9 +452,10 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
 
   /**
    * Gets an optional field from the external sync config.
+   * Checks adapterConfig first, then falls back to legacy extraFields.
    */
   private getOptionalField(name: string): string | undefined {
-    return getExternalField(this.config, name);
+    return getAdapterConfigValue<string>(this.config, name);
   }
 
   /**

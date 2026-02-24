@@ -240,17 +240,17 @@ watch(showQrDialog, (isOpen) => {
 
 <style scoped>
 .app-card {
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
-  background: var(--v-theme-surface);
+  background: var(--surface);
   cursor: pointer;
   transition:
-    box-shadow 0.2s ease,
-    transform 0.15s ease;
+    box-shadow var(--transition-normal),
+    transform var(--transition-fast);
 }
 
 .app-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-floating);
   transform: translateY(-2px);
 }
 
@@ -258,14 +258,14 @@ watch(showQrDialog, (isOpen) => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  padding-bottom: 8px;
+  gap: var(--spacing-sm);
+  padding-bottom: var(--spacing-sm);
 }
 
 .app-card__header-main {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-sm);
   min-width: 0;
   flex: 1;
 }
@@ -273,11 +273,11 @@ watch(showQrDialog, (isOpen) => {
 .app-card__avatar {
   width: 40px;
   height: 40px;
-  border-radius: 10px;
-  background: rgba(33, 150, 243, 0.12);
-  color: rgb(25, 118, 210);
+  border-radius: var(--radius-lg);
+  background: var(--brand-100);
+  color: var(--brand-dark);
   font-weight: 600;
-  font-size: 1rem;
+  font-size: var(--font-size-base);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -290,17 +290,18 @@ watch(showQrDialog, (isOpen) => {
 }
 
 .app-card__name {
-  font-size: 1rem;
+  font-size: var(--font-size-base);
   font-weight: 600;
   margin: 0;
+  color: var(--text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .app-card__id {
-  font-size: 0.75rem;
-  color: rgba(0, 0, 0, 0.5);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
   margin: 2px 0 0;
   white-space: nowrap;
   overflow: hidden;
@@ -309,29 +310,29 @@ watch(showQrDialog, (isOpen) => {
 
 .app-card__body {
   padding-top: 0;
-  padding-bottom: 12px;
+  padding-bottom: var(--spacing-sm);
 }
 
 .app-card__metrics {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 10px;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-sm);
 }
 
 .app-card__description {
-  font-size: 0.85rem;
-  color: rgba(0, 0, 0, 0.6);
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
   margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  line-height: 1.4;
+  line-height: var(--line-height-normal);
 }
 
 .app-card__actions {
   padding-top: 0;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  border-top: 1px solid var(--border-light);
 }
 </style>

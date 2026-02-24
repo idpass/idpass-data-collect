@@ -634,34 +634,107 @@ export interface Conflict {
  * @example
  * ```typescript
  * const openSppConfig: ExternalSyncConfig = {
- *   type: "openspp",
+ *   type: "openspp-v2-adapter",
  *   url: "http://openspp.example.com",
- *   database: "openspp_db",
- *   auth: "basic"
+ *   auth: "oauth2",
+ *   adapterConfig: {
+ *     clientId: "my-client-id",
+ *     clientSecret: "my-secret",
+ *   }
  * };
  * ```
  */
 export type ExternalSyncField = { name: string; value: string };
 
+/**
+ * Field mapping configuration for external sync.
+ * Maps form fields to external system fields with optional transformation.
+ */
+export interface FieldMapping {
+  /** The form field key */
+  formField: string;
+  /** The external system field name */
+  opensppField: string;
+  /** Transformer configuration for value conversion */
+  transformer: {
+    type: string;
+    options?: Record<string, unknown>;
+  };
+}
+
 export type ExternalSyncConfig = {
-  /** Type of external system (e.g., 'openspp', 'mock-sync-server') */
+  /** Type of external system (e.g., 'openspp-v2-adapter', 'mock-sync-server') */
   type: string;
-  /** Authentication method (e.g., 'basic', 'token') */
+  /** Authentication method (e.g., 'basic', 'oauth2') */
   auth?: string;
   /** URL of the external system */
   url: string;
-  /** Extra fields for the external system */
+  /**
+   * @deprecated Use adapterConfig instead. Kept for backwards compatibility.
+   * Extra fields for the external system as name/value pairs.
+   */
   extraFields?: ExternalSyncField[];
+  /**
+   * Typed adapter configuration object.
+   * Preferred over extraFields for new configurations.
+   */
+  adapterConfig?: Record<string, string | number | boolean>;
+  /** Field mappings for data transformation between systems */
+  fieldMappings?: FieldMapping[];
 };
 
 /**
  * Helper to query strongly typed values from ExternalSyncConfig.extraFields.
+ * @deprecated Use getAdapterConfigValue instead for new code.
  */
 export function getExternalField(
   config: ExternalSyncConfig,
   fieldName: string,
 ): string | undefined {
   return config.extraFields?.find((field) => field.name === fieldName)?.value;
+}
+
+/**
+ * Helper to get adapter configuration values with fallback to legacy extraFields.
+ * Tries adapterConfig first, then falls back to extraFields for backwards compatibility.
+ *
+ * @param config The external sync configuration
+ * @param fieldName The field name to retrieve
+ * @param defaultValue Optional default value if field is not found
+ * @returns The field value or default value
+ *
+ * @example
+ * ```typescript
+ * const clientId = getAdapterConfigValue<string>(config, "clientId");
+ * const batchSize = getAdapterConfigValue<number>(config, "batchSize", 50);
+ * ```
+ */
+export function getAdapterConfigValue<T extends string | number | boolean>(
+  config: ExternalSyncConfig,
+  fieldName: string,
+  defaultValue?: T,
+): T | undefined {
+  // Try new adapterConfig first
+  if (config.adapterConfig && fieldName in config.adapterConfig) {
+    return config.adapterConfig[fieldName] as T;
+  }
+  // Fall back to extraFields for backwards compatibility
+  const extraField = config.extraFields?.find((f) => f.name === fieldName);
+  if (extraField) {
+    // Try to parse as number if defaultValue is a number
+    if (typeof defaultValue === "number") {
+      const parsed = parseFloat(extraField.value);
+      if (!isNaN(parsed)) {
+        return parsed as T;
+      }
+    }
+    // Try to parse as boolean if defaultValue is a boolean
+    if (typeof defaultValue === "boolean") {
+      return (extraField.value === "true") as T;
+    }
+    return extraField.value as T;
+  }
+  return defaultValue;
 }
 
 /**

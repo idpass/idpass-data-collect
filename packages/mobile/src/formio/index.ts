@@ -18,10 +18,12 @@
  */
 
 import Formio from 'formiojs';
-import BiometricCapture from './components/BiometricCapture';
+// import BiometricCapture from './components/BiometricCapture';
+// import Claim169Scanner from './components/Claim169Scanner';
 
 export function registerCustomComponents() {
   if (Formio?.Components?.addComponent) {
-    Formio.Components.addComponent('biometricCapture', BiometricCapture);
+    // Formio.Components.addComponent('biometricCapture', BiometricCapture);
+    // Formio.Components.addComponent('claim169Scanner', Claim169Scanner);
   }
 }

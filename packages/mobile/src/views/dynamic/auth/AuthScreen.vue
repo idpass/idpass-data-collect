@@ -175,7 +175,7 @@ const onLogin = async () => {
 </script>
 
 <template>
-  <div class="d-flex justify-content-between">
+  <div class="d-flex justify-content-between px-3">
     <a class="primary mb-2" @click="onBack" v-if="!isCallback">Back</a>
   </div>
   <AuthContainer>

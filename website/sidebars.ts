@@ -416,6 +416,10 @@ const developerSidebarItems = [
           },
           {
             type: "doc",
+            id: "adapters/openspp-v2-adapter",
+          },
+          {
+            type: "doc",
             id: "adapters/openfn-adapter",
           },
           {

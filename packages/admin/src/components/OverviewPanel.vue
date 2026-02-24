@@ -109,42 +109,44 @@ const stats = computed(() => [
 
 <style scoped>
 .overview-panel {
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
+  background: var(--surface);
 }
 
 .overview-panel__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
 }
 
 .overview-panel__title {
-  font-size: 1.1rem;
+  font-size: var(--font-size-lg);
   font-weight: 600;
   margin: 0;
+  color: var(--text-main);
 }
 
 .overview-panel__stats {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  gap: var(--spacing-sm);
 }
 
 .overview-panel__stat {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px;
-  background: rgba(0, 0, 0, 0.02);
-  border-radius: 12px;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background: var(--neutral-50);
+  border-radius: var(--radius-lg);
 }
 
 .overview-panel__stat-icon {
   width: 36px;
   height: 36px;
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -152,23 +154,23 @@ const stats = computed(() => [
 }
 
 .stat-icon--primary {
-  background: rgba(33, 150, 243, 0.12);
-  color: rgb(25, 118, 210);
+  background: var(--brand-100);
+  color: var(--brand-dark);
 }
 
 .stat-icon--secondary {
-  background: rgba(103, 58, 183, 0.12);
-  color: rgb(81, 45, 168);
+  background: rgba(44, 62, 80, 0.12);
+  color: var(--primary);
 }
 
 .stat-icon--success {
-  background: rgba(76, 175, 80, 0.12);
-  color: rgb(56, 142, 60);
+  background: var(--status-success-light);
+  color: var(--status-success);
 }
 
 .stat-icon--grey {
-  background: rgba(96, 125, 139, 0.12);
-  color: rgb(69, 90, 100);
+  background: var(--neutral-100);
+  color: var(--neutral-400);
 }
 
 .overview-panel__stat-content {
@@ -176,15 +178,16 @@ const stats = computed(() => [
 }
 
 .overview-panel__stat-value {
-  font-size: 1.25rem;
+  font-size: var(--font-size-xl);
   font-weight: 600;
   margin: 0;
-  line-height: 1.2;
+  line-height: var(--line-height-tight);
+  color: var(--text-main);
 }
 
 .overview-panel__stat-label {
-  font-size: 0.75rem;
-  color: rgba(0, 0, 0, 0.6);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
   margin: 2px 0 0;
   white-space: nowrap;
   overflow: hidden;
@@ -194,19 +197,19 @@ const stats = computed(() => [
 .overview-panel__info {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .overview-panel__info-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .overview-panel__info-label {
-  font-size: 0.85rem;
-  color: rgba(0, 0, 0, 0.6);
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
 }
 
 @media (max-width: 1280px) {
