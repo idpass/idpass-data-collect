@@ -399,6 +399,65 @@ describe("IndexedDbEventStorageAdapter", () => {
     expect(nextCursorWithCursor).toBe("2023-05-03T14:00:00.000Z");
   });
 
+  test("saveEvents with metadata should round-trip through IndexedDB", async () => {
+    const event: FormSubmission = {
+      guid: "meta-idb-1",
+      entityGuid: "entity-1",
+      timestamp: "2024-06-15T10:00:00.000Z",
+      type: "create-individual",
+      data: { name: "Geo Test" },
+      userId: "user-1",
+      syncLevel: SyncLevel.LOCAL,
+      metadata: {
+        capturedLocation: {
+          latitude: -6.2088,
+          longitude: 106.8456,
+          accuracy: 10.5,
+          altitude: 50,
+          altitudeAccuracy: 5,
+          speed: 0,
+          heading: null,
+          capturedAt: "2024-06-15T10:30:00.000Z",
+        },
+      },
+    };
+
+    await adapter.saveEvents([event]);
+    const savedEvents = await adapter.getEvents();
+
+    expect(savedEvents).toHaveLength(1);
+    expect(savedEvents[0].metadata).toEqual({
+      capturedLocation: {
+        latitude: -6.2088,
+        longitude: 106.8456,
+        accuracy: 10.5,
+        altitude: 50,
+        altitudeAccuracy: 5,
+        speed: 0,
+        heading: null,
+        capturedAt: "2024-06-15T10:30:00.000Z",
+      },
+    });
+  });
+
+  test("saveEvents without metadata should still work (backward compat)", async () => {
+    const event: FormSubmission = {
+      guid: "no-meta-idb-1",
+      entityGuid: "entity-1",
+      timestamp: "2024-06-15T10:00:00.000Z",
+      type: "create-individual",
+      data: { name: "No Meta" },
+      userId: "user-1",
+      syncLevel: SyncLevel.LOCAL,
+    };
+
+    await adapter.saveEvents([event]);
+    const savedEvents = await adapter.getEvents();
+
+    expect(savedEvents).toHaveLength(1);
+    expect(savedEvents[0].metadata).toBeUndefined();
+  });
+
   test("saveEntity should save an entity to IndexedDB with tenantId", async () => {
     const adapter = new IndexedDbEventStorageAdapter("tenant1");
     await adapter.initialize();
