@@ -493,9 +493,8 @@ describeIfPostgres("PostgresEventStorageAdapter", () => {
     await adapter.saveEvents([event]);
 
     // Query the geometry column directly
-    const { Pool } = require("pg");
-    const pool = new Pool({ connectionString: getConnectionString() });
-    const client = await pool.connect();
+    const client = new Client({ connectionString: getConnectionString() });
+    await client.connect();
     try {
       const result = await client.query(
         "SELECT ST_AsGeoJSON(captured_location) as geojson FROM events WHERE guid = $1",
@@ -507,8 +506,7 @@ describeIfPostgres("PostgresEventStorageAdapter", () => {
       expect(geojson.coordinates[0]).toBeCloseTo(106.8456, 4);
       expect(geojson.coordinates[1]).toBeCloseTo(-6.2088, 4);
     } finally {
-      client.release();
-      await pool.end();
+      await client.end();
     }
   });
 
