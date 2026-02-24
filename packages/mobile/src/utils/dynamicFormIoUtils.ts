@@ -26,6 +26,7 @@ export interface Config {
   entityForms: EntityForm[]
   entityData: EntityData[]
   syncServerUrl: string
+  captureSubmissionLocation?: boolean
 }
 
 export interface EntityForm {
@@ -35,6 +36,7 @@ export interface EntityForm {
   description?: string
   dependsOn?: string
   formio?: unknown
+  captureLocation?: boolean
 }
 
 export interface EntityData {
