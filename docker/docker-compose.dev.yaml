@@ -2,7 +2,7 @@ name: idpass-data-collection-dev
 services:
   # PostgreSQL database
   postgres:
-    image: postgres:15
+    image: postgis/postgis:15-3.5
     restart: always
     env_file: ./.env
     volumes:

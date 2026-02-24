@@ -31,7 +31,7 @@ services:
 
   # PostgreSQL database for HDM Sync Server
   postgres:
-    image: postgres:15
+    image: postgis/postgis:15-3.5
     restart: always
     env_file: ./.env
     volumes:
