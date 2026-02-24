@@ -3,6 +3,7 @@ import ChevronRight from '@/components/icons/ChevronRight.vue'
 import { TenantAppData } from '@/schemas/tenantApp.schema'
 import { store } from '@/store'
 import { EntityForm } from '@/utils/dynamicFormIoUtils'
+import { requestLocationPermissionIfNeeded } from '@/utils/geolocation'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTenantStore } from '@/store/tenant'
@@ -84,6 +85,12 @@ onMounted(async () => {
   const tenant = await tenantStore.getTenant(route.params.id as string)
   tenantapp.value = tenant
   highLevelEntities.value = tenantapp.value.entityForms.filter((entity) => !entity.dependsOn)
+
+  // Pre-request location permission if any form or the tenant config enables capture.
+  // This avoids a jarring permission dialog mid-flow when opening a form.
+  if (tenantapp.value.captureSubmissionLocation || tenantapp.value.entityForms.some((f) => f.captureLocation)) {
+    requestLocationPermissionIfNeeded()
+  }
 
   await refreshCounts()
 

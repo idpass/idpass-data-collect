@@ -84,6 +84,23 @@ function getWebPosition(): Promise<CapturedLocation | null> {
   })
 }
 
+/**
+ * Pre-request location permission on mobile so the OS dialog appears
+ * early (at app startup) rather than mid-flow when opening a form.
+ * Fire-and-forget — does not block and never throws.
+ */
+export async function requestLocationPermissionIfNeeded(): Promise<void> {
+  try {
+    if (detectPlatform() !== 'mobile') return
+    const permissions = await Geolocation.checkPermissions()
+    if (permissions.location !== 'granted') {
+      await Geolocation.requestPermissions()
+    }
+  } catch {
+    // Permission request failed — will be retried when form opens
+  }
+}
+
 function coordsToCapturedLocation(
   coords: { latitude: number; longitude: number; accuracy: number | null; altitude: number | null; altitudeAccuracy: number | null; speed: number | null; heading: number | null },
   timestamp: number,
