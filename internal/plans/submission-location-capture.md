@@ -117,10 +117,32 @@
 ### Phase 14: Final verification
 
 - [x] **14.1** Run `npm run build` in datacollect
-- [x] **14.2** Run `npm run test` in datacollect — all green (174 passed, 43 skipped Postgres-only)
+- [x] **14.2** Run `npm run test` in datacollect — all green (192 passed, 43 skipped Postgres-only)
 - [ ] **14.3** Run `npm run test` in backend — requires running Postgres with PostGIS
-- [x] **14.4** Run `npm run test:unit` in mobile — all green (114 passed)
+- [x] **14.4** Run `npm run test:unit` in mobile — all green (136 passed)
 - [x] **14.5** Run `npm run type-check` in mobile — no errors
 - [x] **14.6** Run `npm run lint` in mobile — no errors
 - [ ] **14.7** Manual smoke test if device available
 - [x] **14.8** Commit any final fixes
+
+### Phase 15: Expert review fixes
+
+- [x] **15.1** Add `validCoordinates()` guard: reject NaN, Infinity, out-of-range coordinates before ST_MakePoint
+- [x] **15.2** Remove debug `console.log` from `PostgresEventStorageAdapter.saveEvents()`
+- [x] **15.3** Extract `useLocationCapture` composable to eliminate duplication between DynamicNewView and DynamicEditView
+- [x] **15.4** Fix race condition: `resolveLocation()` awaits in-flight GPS promise instead of silently dropping location
+- [x] **15.5** Add 'failed' GPS status for user feedback when GPS fails
+- [x] **15.6** Scope disclosure localStorage key per tenant ID (`locationDisclosureShown_${tenantId}`)
+- [x] **15.7** Add accessibility to LocationDisclosure: `role="dialog"`, `aria-modal`, `aria-labelledby`
+- [x] **15.8** Fix disclosure text: "when opened" (accurate) instead of "when submitted"
+- [x] **15.9** Align DynamicEditView visual design with DynamicNewView card pattern
+- [x] **15.10** Add 16 `validCoordinates` unit tests (NaN, Infinity, boundary values, null/undefined)
+- [x] **15.11** Add 12 `useLocationCapture` composable tests (race condition, failure, retry, disclosure scoping)
+- [x] **15.12** Add `requestLocationPermissionIfNeeded` tests (4 cases: request, already granted, web noop, error)
+- [x] **15.13** Add `capturedAt` ISO verification and boundary coordinate tests for geolocation
+- [x] **15.14** Add IndexedDB `getEventsSince`/`getEventsSincePagination` metadata round-trip tests
+- [x] **15.15** Add LocationDisclosure accessibility attribute test
+- [x] **15.16** Add locationConfig null-handling edge case tests
+- [x] **15.17** Verify all tests pass: datacollect 192 passed, mobile 136 passed
+- [x] **15.18** Verify type-check and lint pass
+- [x] **15.19** Commit: `fix: harden location capture with validation, race-condition fix, and accessibility`
