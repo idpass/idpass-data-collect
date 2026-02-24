@@ -225,8 +225,8 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
     const guids: string[] = [];
     try {
       await client.query("BEGIN");
-      console.log("Saving events: ", events);
       for (const event of events) {
+        const coords = validCoordinates(event.metadata?.capturedLocation);
         await client.query(
           `INSERT INTO events (guid, tenant_id, entity_guid, type, data, timestamp, user_id, sync_level, metadata, captured_location)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
@@ -244,8 +244,8 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
             event.userId,
             event.syncLevel,
             event.metadata ? JSON.stringify(event.metadata) : null,
-            event.metadata?.capturedLocation?.longitude ?? null,
-            event.metadata?.capturedLocation?.latitude ?? null,
+            coords?.longitude ?? null,
+            coords?.latitude ?? null,
           ],
         );
         guids.push(event.guid);
@@ -826,4 +826,21 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
       client.release();
     }
   }
+}
+
+/**
+ * Return the latitude/longitude from a CapturedLocation only if both
+ * values are finite numbers within valid WGS-84 ranges. Returns null
+ * when coordinates are missing, NaN, Infinity, or out of range, which
+ * causes the INSERT to store NULL for the geometry column.
+ */
+export function validCoordinates(
+  loc: { latitude: number; longitude: number } | undefined | null,
+): { latitude: number; longitude: number } | null {
+  if (!loc) return null;
+  const { latitude, longitude } = loc;
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  if (latitude < -90 || latitude > 90) return null;
+  if (longitude < -180 || longitude > 180) return null;
+  return { latitude, longitude };
 }

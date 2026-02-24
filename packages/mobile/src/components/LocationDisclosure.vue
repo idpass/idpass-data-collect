@@ -9,7 +9,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div v-if="visible" class="location-disclosure-overlay">
+  <div v-if="visible" class="location-disclosure-overlay" role="dialog" aria-modal="true" aria-labelledby="location-disclosure-title">
     <div class="location-disclosure">
       <div class="location-disclosure__icon">
         <svg viewBox="0 0 24 24" width="32" height="32" focusable="false" aria-hidden="true">
@@ -19,9 +19,9 @@ const emit = defineEmits<{
           />
         </svg>
       </div>
-      <h2 class="location-disclosure__title">Location Access</h2>
+      <h2 id="location-disclosure-title" class="location-disclosure__title">Location Access</h2>
       <p class="location-disclosure__text">
-        This form records your GPS location when submitted. Your organization uses this to verify
+        This form captures your GPS location when opened. Your organization uses this to verify
         where data was collected.
       </p>
       <button class="location-disclosure__button" type="button" @click="emit('acknowledged')">

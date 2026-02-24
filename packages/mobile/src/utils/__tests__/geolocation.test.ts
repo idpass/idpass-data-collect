@@ -14,7 +14,7 @@ vi.mock('../device', () => ({
   detectPlatform: vi.fn(),
 }))
 
-import { getCurrentPosition } from '../geolocation'
+import { getCurrentPosition, requestLocationPermissionIfNeeded } from '../geolocation'
 import { Geolocation } from '@capacitor/geolocation'
 import { detectPlatform } from '../device'
 
@@ -158,5 +158,162 @@ describe('getCurrentPosition', () => {
     const result = await getCurrentPosition()
 
     expect(result).toBeNull()
+  })
+
+  it('returns capturedAt as a valid ISO 8601 timestamp', async () => {
+    mockDetectPlatform.mockReturnValue('mobile')
+    mockCapacitor.checkPermissions.mockResolvedValue({ location: 'granted', coarseLocation: 'granted' })
+    const fixTimestamp = 1718444400000 // 2024-06-15T13:00:00.000Z
+    mockCapacitor.getCurrentPosition.mockResolvedValue({
+      coords: {
+        latitude: 0,
+        longitude: 0,
+        accuracy: 5,
+        altitude: null,
+        altitudeAccuracy: null,
+        speed: null,
+        heading: null,
+      },
+      timestamp: fixTimestamp,
+    })
+
+    const result = await getCurrentPosition()
+
+    expect(result).not.toBeNull()
+    expect(result!.capturedAt).toBe(new Date(fixTimestamp).toISOString())
+    // Verify it's a valid ISO string by parsing it back
+    expect(new Date(result!.capturedAt).getTime()).toBe(fixTimestamp)
+  })
+
+  it('handles boundary coordinates correctly (poles and antimeridian)', async () => {
+    mockDetectPlatform.mockReturnValue('mobile')
+    mockCapacitor.checkPermissions.mockResolvedValue({ location: 'granted', coarseLocation: 'granted' })
+
+    // North Pole
+    mockCapacitor.getCurrentPosition.mockResolvedValue({
+      coords: {
+        latitude: 90,
+        longitude: 0,
+        accuracy: 100,
+        altitude: null,
+        altitudeAccuracy: null,
+        speed: null,
+        heading: null,
+      },
+      timestamp: 1718444400000,
+    })
+
+    let result = await getCurrentPosition()
+    expect(result).not.toBeNull()
+    expect(result!.latitude).toBe(90)
+
+    // South Pole
+    mockCapacitor.getCurrentPosition.mockResolvedValue({
+      coords: {
+        latitude: -90,
+        longitude: 180,
+        accuracy: 100,
+        altitude: null,
+        altitudeAccuracy: null,
+        speed: null,
+        heading: null,
+      },
+      timestamp: 1718444400000,
+    })
+
+    result = await getCurrentPosition()
+    expect(result).not.toBeNull()
+    expect(result!.latitude).toBe(-90)
+    expect(result!.longitude).toBe(180)
+
+    // Antimeridian
+    mockCapacitor.getCurrentPosition.mockResolvedValue({
+      coords: {
+        latitude: 0,
+        longitude: -180,
+        accuracy: 50,
+        altitude: null,
+        altitudeAccuracy: null,
+        speed: null,
+        heading: null,
+      },
+      timestamp: 1718444400000,
+    })
+
+    result = await getCurrentPosition()
+    expect(result).not.toBeNull()
+    expect(result!.longitude).toBe(-180)
+  })
+
+  it('returns null on web when geolocation error callback fires', async () => {
+    mockDetectPlatform.mockReturnValue('web')
+
+    const mockGeolocation = {
+      getCurrentPosition: vi.fn((_success: PositionCallback, error: PositionErrorCallback) => {
+        error({
+          code: 1,
+          message: 'User denied Geolocation',
+          PERMISSION_DENIED: 1,
+          POSITION_UNAVAILABLE: 2,
+          TIMEOUT: 3,
+        })
+      }),
+    }
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { geolocation: mockGeolocation },
+      writable: true,
+      configurable: true,
+    })
+
+    const result = await getCurrentPosition()
+
+    expect(result).toBeNull()
+  })
+})
+
+describe('requestLocationPermissionIfNeeded', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('requests permissions on mobile when not yet granted', async () => {
+    mockDetectPlatform.mockReturnValue('mobile')
+    mockCapacitor.checkPermissions.mockResolvedValue({ location: 'prompt', coarseLocation: 'prompt' })
+    mockCapacitor.requestPermissions.mockResolvedValue({ location: 'granted', coarseLocation: 'granted' })
+
+    await requestLocationPermissionIfNeeded()
+
+    expect(mockCapacitor.checkPermissions).toHaveBeenCalled()
+    expect(mockCapacitor.requestPermissions).toHaveBeenCalled()
+  })
+
+  it('does not request permissions when already granted', async () => {
+    mockDetectPlatform.mockReturnValue('mobile')
+    mockCapacitor.checkPermissions.mockResolvedValue({ location: 'granted', coarseLocation: 'granted' })
+
+    await requestLocationPermissionIfNeeded()
+
+    expect(mockCapacitor.checkPermissions).toHaveBeenCalled()
+    expect(mockCapacitor.requestPermissions).not.toHaveBeenCalled()
+  })
+
+  it('does nothing on web platform', async () => {
+    mockDetectPlatform.mockReturnValue('web')
+
+    await requestLocationPermissionIfNeeded()
+
+    expect(mockCapacitor.checkPermissions).not.toHaveBeenCalled()
+    expect(mockCapacitor.requestPermissions).not.toHaveBeenCalled()
+  })
+
+  it('never throws even if Capacitor fails', async () => {
+    mockDetectPlatform.mockReturnValue('mobile')
+    mockCapacitor.checkPermissions.mockRejectedValue(new Error('Plugin not available'))
+
+    await expect(requestLocationPermissionIfNeeded()).resolves.toBeUndefined()
   })
 })

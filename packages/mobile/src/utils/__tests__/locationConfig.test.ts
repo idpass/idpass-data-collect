@@ -55,4 +55,17 @@ describe('shouldCaptureLocation', () => {
     const form = makeEntityForm({ captureLocation: true })
     expect(shouldCaptureLocation(config, form)).toBe(true)
   })
+
+  it('returns false when tenant captureSubmissionLocation is explicitly false', () => {
+    const config = makeConfig({ captureSubmissionLocation: false })
+    const form = makeEntityForm()
+    expect(shouldCaptureLocation(config, form)).toBe(false)
+  })
+
+  it('treats null-ish config values as false (defensive)', () => {
+    // Simulate a config that came from JSON where the field might be null
+    const config = makeConfig({ captureSubmissionLocation: null as unknown as boolean })
+    const form = makeEntityForm()
+    expect(shouldCaptureLocation(config, form)).toBe(false)
+  })
 })

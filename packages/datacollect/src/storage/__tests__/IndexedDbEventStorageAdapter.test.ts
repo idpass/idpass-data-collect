@@ -440,6 +440,102 @@ describe("IndexedDbEventStorageAdapter", () => {
     });
   });
 
+  test("getEventsSince should preserve metadata in returned events", async () => {
+    const events: FormSubmission[] = [
+      {
+        guid: "since-no-meta",
+        entityGuid: "entity-1",
+        timestamp: "2024-06-14T10:00:00.000Z",
+        type: "create-individual",
+        data: { name: "Old" },
+        userId: "user-1",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: "since-with-meta",
+        entityGuid: "entity-2",
+        timestamp: "2024-06-16T10:00:00.000Z",
+        type: "create-individual",
+        data: { name: "New" },
+        userId: "user-1",
+        syncLevel: SyncLevel.LOCAL,
+        metadata: {
+          capturedLocation: {
+            latitude: 48.8566,
+            longitude: 2.3522,
+            accuracy: 15,
+            altitude: null,
+            altitudeAccuracy: null,
+            speed: null,
+            heading: null,
+            capturedAt: "2024-06-16T09:59:00.000Z",
+          },
+        },
+      },
+    ];
+
+    await adapter.saveEvents(events);
+    const result = await adapter.getEventsSince("2024-06-15T00:00:00.000Z");
+
+    expect(result).toHaveLength(1);
+    expect(result[0].guid).toBe("since-with-meta");
+    expect(result[0].metadata).toEqual({
+      capturedLocation: {
+        latitude: 48.8566,
+        longitude: 2.3522,
+        accuracy: 15,
+        altitude: null,
+        altitudeAccuracy: null,
+        speed: null,
+        heading: null,
+        capturedAt: "2024-06-16T09:59:00.000Z",
+      },
+    });
+  });
+
+  test("getEventsSincePagination should preserve metadata in returned events", async () => {
+    const events: FormSubmission[] = [
+      {
+        guid: "page-meta-idb-1",
+        entityGuid: "entity-1",
+        timestamp: "2024-06-16T10:00:00.000Z",
+        type: "create-individual",
+        data: { name: "Page Test" },
+        userId: "user-1",
+        syncLevel: SyncLevel.LOCAL,
+        metadata: {
+          capturedLocation: {
+            latitude: -33.8688,
+            longitude: 151.2093,
+            accuracy: 8,
+            altitude: 20,
+            altitudeAccuracy: 3,
+            speed: 0,
+            heading: null,
+            capturedAt: "2024-06-16T09:59:00.000Z",
+          },
+        },
+      },
+    ];
+
+    await adapter.saveEvents(events);
+    const { events: result } = await adapter.getEventsSincePagination("2024-06-15T00:00:00.000Z", 10);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].metadata).toEqual({
+      capturedLocation: {
+        latitude: -33.8688,
+        longitude: 151.2093,
+        accuracy: 8,
+        altitude: 20,
+        altitudeAccuracy: 3,
+        speed: 0,
+        heading: null,
+        capturedAt: "2024-06-16T09:59:00.000Z",
+      },
+    });
+  });
+
   test("saveEvents without metadata should still work (backward compat)", async () => {
     const event: FormSubmission = {
       guid: "no-meta-idb-1",

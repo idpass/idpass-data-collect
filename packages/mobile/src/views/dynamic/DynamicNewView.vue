@@ -3,17 +3,14 @@ import { useDatabase } from '@/database'
 import { TenantAppData } from '@/schemas/tenantApp.schema'
 import { store } from '@/store'
 import { EntityForm, getBreadcrumbFromPath } from '@/utils/dynamicFormIoUtils'
-import { getCurrentPosition } from '@/utils/geolocation'
-import { shouldCaptureLocation } from '@/utils/locationConfig'
+import { useLocationCapture } from '@/composables/useLocationCapture'
 import LocationDisclosure from '@/components/LocationDisclosure.vue'
 import { Form as FormIO } from '@formio/vue/lib/index'
-import type { CapturedLocation, FormSubmission as FormSubmissionType } from '@idpass/data-collect-core'
+import type { FormSubmission as FormSubmissionType } from '@idpass/data-collect-core'
 import { SyncLevel } from '@idpass/data-collect-core'
 import { v4 as uuidv4 } from 'uuid'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-
-const DISCLOSURE_KEY = 'locationDisclosureShown'
 
 const props = defineProps<{
   id: string
@@ -31,25 +28,16 @@ const isGroup = ref(false)
 const submissionCount = ref(0)
 const isSavingDraft = ref(false)
 
-const pendingLocation = ref<CapturedLocation | null>(null)
-const locationStatus = ref<'idle' | 'acquiring' | 'locked'>('idle')
-const showDisclosure = ref(false)
+const {
+  locationStatus,
+  showDisclosure,
+  onDisclosureAcknowledged,
+  initIfEnabled,
+  resolveLocation,
+} = useLocationCapture(route.params.id as string)
 
 type FormSubmissionEvent = {
   data: Record<string, unknown>
-}
-
-async function startLocationCapture() {
-  locationStatus.value = 'acquiring'
-  const location = await getCurrentPosition()
-  pendingLocation.value = location
-  locationStatus.value = location ? 'locked' : 'idle'
-}
-
-function onDisclosureAcknowledged() {
-  showDisclosure.value = false
-  localStorage.setItem(DISCLOSURE_KEY, 'true')
-  startLocationCapture()
 }
 
 onMounted(async () => {
@@ -73,13 +61,8 @@ onMounted(async () => {
   const entities = await store.searchEntities([{ entityName: entityForm.value?.name }])
   submissionCount.value = entities.length
 
-  if (tenantapp.value && entityForm.value && shouldCaptureLocation(tenantapp.value, entityForm.value)) {
-    const disclosed = localStorage.getItem(DISCLOSURE_KEY)
-    if (!disclosed) {
-      showDisclosure.value = true
-    } else {
-      startLocationCapture()
-    }
+  if (tenantapp.value && entityForm.value) {
+    initIfEnabled(tenantapp.value, entityForm.value)
   }
 })
 
@@ -99,8 +82,9 @@ const onSubmit = async (submission: FormSubmissionEvent) => {
     userId: 'admin',
     syncLevel: SyncLevel.LOCAL
   }
-  if (pendingLocation.value) {
-    form.metadata = { capturedLocation: pendingLocation.value }
+  const location = await resolveLocation()
+  if (location) {
+    form.metadata = { capturedLocation: location }
   }
   await store.submitForm(form)
   router.go(-1)
@@ -144,9 +128,9 @@ const goToSubmissions = () => {
           </svg>
           Save Draft
         </button>
-        <span v-if="locationStatus !== 'idle'" class="gps-indicator" :class="{ 'gps-indicator--locked': locationStatus === 'locked' }" :title="locationStatus === 'acquiring' ? 'Acquiring GPS...' : 'GPS locked'">
+        <span v-if="locationStatus !== 'idle'" class="gps-indicator" :class="{ 'gps-indicator--locked': locationStatus === 'locked', 'gps-indicator--failed': locationStatus === 'failed' }" :title="locationStatus === 'acquiring' ? 'Acquiring GPS...' : locationStatus === 'locked' ? 'GPS locked' : 'GPS unavailable'">
           <svg viewBox="0 0 24 24" width="20" height="20" focusable="false" aria-hidden="true">
-            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z" :fill="locationStatus === 'locked' ? 'currentColor' : 'none'" :stroke="locationStatus === 'acquiring' ? 'currentColor' : 'none'" stroke-width="1.5" />
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z" :fill="locationStatus === 'locked' ? 'currentColor' : 'none'" :stroke="locationStatus !== 'locked' ? 'currentColor' : 'none'" stroke-width="1.5" />
           </svg>
         </span>
         <span class="badge">{{ entityForm?.displayTemplate || (isGroup ? 'Group' : 'Assessment') }}</span>
@@ -305,5 +289,10 @@ const goToSubmissions = () => {
 .gps-indicator--locked {
   background: #d1fae5;
   color: #065f46;
+}
+
+.gps-indicator--failed {
+  background: #fee2e2;
+  color: #991b1b;
 }
 </style>
