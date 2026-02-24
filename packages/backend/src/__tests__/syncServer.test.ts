@@ -343,6 +343,163 @@ describeIfPostgres("Sync Server", () => {
     });
   });
 
+  describe("POST /sync/push with metadata", () => {
+    it("should accept and store a FormSubmission with metadata.capturedLocation", async () => {
+      const currentApp = requireApp();
+      const adminLoginResponse = await axios.post(baseUrl + "/api/users/login", {
+        email: "admin@example.com",
+        password: "admin1@",
+      });
+      const adminToken = get(adminLoginResponse.data, "token") ?? "";
+
+      const entityGuid = uuidv4();
+      const events: FormSubmission[] = [
+        {
+          guid: uuidv4(),
+          entityGuid,
+          type: "create-individual",
+          data: { name: "Geo User" },
+          timestamp: "2024-06-15T10:00:00.000Z",
+          userId: "user-1",
+          syncLevel: SyncLevel.LOCAL,
+          metadata: {
+            capturedLocation: {
+              latitude: -6.2088,
+              longitude: 106.8456,
+              accuracy: 10.5,
+              altitude: 50,
+              altitudeAccuracy: 5,
+              speed: 0,
+              heading: null,
+              capturedAt: "2024-06-15T10:00:00.000Z",
+            },
+          },
+        },
+      ];
+
+      const pushResponse = await request(currentApp.httpServer)
+        .post("/api/sync/push")
+        .send({ events, configId: mockConfig.id })
+        .set("Authorization", `Bearer ${adminToken}`);
+
+      expect(pushResponse.status).toBe(200);
+      expect(pushResponse.body).toEqual({ status: "success" });
+
+      // Pull it back and verify metadata round-trips
+      const pullResponse = await request(currentApp.httpServer)
+        .get(`/api/sync/pull?since=2024-06-01T00:00:00.000Z&configId=${mockConfig.id}`)
+        .set("Authorization", `Bearer ${adminToken}`);
+
+      expect(pullResponse.status).toBe(200);
+      expect(pullResponse.body.events).toHaveLength(1);
+      expect(pullResponse.body.events[0].metadata).toEqual({
+        capturedLocation: {
+          latitude: -6.2088,
+          longitude: 106.8456,
+          accuracy: 10.5,
+          altitude: 50,
+          altitudeAccuracy: 5,
+          speed: 0,
+          heading: null,
+          capturedAt: "2024-06-15T10:00:00.000Z",
+        },
+      });
+    });
+
+    it("should accept a FormSubmission without metadata (backward compat)", async () => {
+      const currentApp = requireApp();
+      const adminLoginResponse = await axios.post(baseUrl + "/api/users/login", {
+        email: "admin@example.com",
+        password: "admin1@",
+      });
+      const adminToken = get(adminLoginResponse.data, "token") ?? "";
+
+      const events: FormSubmission[] = [
+        {
+          guid: uuidv4(),
+          entityGuid: uuidv4(),
+          type: "create-individual",
+          data: { name: "No Geo" },
+          timestamp: "2024-06-15T10:00:00.000Z",
+          userId: "user-1",
+          syncLevel: SyncLevel.LOCAL,
+        },
+      ];
+
+      const pushResponse = await request(currentApp.httpServer)
+        .post("/api/sync/push")
+        .send({ events, configId: mockConfig.id })
+        .set("Authorization", `Bearer ${adminToken}`);
+
+      expect(pushResponse.status).toBe(200);
+      expect(pushResponse.body).toEqual({ status: "success" });
+
+      const pullResponse = await request(currentApp.httpServer)
+        .get(`/api/sync/pull?since=2024-06-01T00:00:00.000Z&configId=${mockConfig.id}`)
+        .set("Authorization", `Bearer ${adminToken}`);
+
+      expect(pullResponse.status).toBe(200);
+      expect(pullResponse.body.events).toHaveLength(1);
+      expect(pullResponse.body.events[0].metadata).toBeUndefined();
+    });
+
+    it("should populate the geometry column for spatial queries", async () => {
+      const currentApp = requireApp();
+      const adminLoginResponse = await axios.post(baseUrl + "/api/users/login", {
+        email: "admin@example.com",
+        password: "admin1@",
+      });
+      const adminToken = get(adminLoginResponse.data, "token") ?? "";
+
+      const eventGuid = uuidv4();
+      const events: FormSubmission[] = [
+        {
+          guid: eventGuid,
+          entityGuid: uuidv4(),
+          type: "create-individual",
+          data: { name: "Spatial Test" },
+          timestamp: "2024-06-15T10:00:00.000Z",
+          userId: "user-1",
+          syncLevel: SyncLevel.LOCAL,
+          metadata: {
+            capturedLocation: {
+              latitude: -6.2088,
+              longitude: 106.8456,
+              accuracy: 10,
+              altitude: null,
+              altitudeAccuracy: null,
+              speed: null,
+              heading: null,
+              capturedAt: "2024-06-15T10:00:00.000Z",
+            },
+          },
+        },
+      ];
+
+      await request(currentApp.httpServer)
+        .post("/api/sync/push")
+        .send({ events, configId: mockConfig.id })
+        .set("Authorization", `Bearer ${adminToken}`);
+
+      // Verify geometry column via raw SQL
+      const client = new Client({ connectionString: postgresUrl });
+      await client.connect();
+      try {
+        const result = await client.query(
+          "SELECT ST_AsGeoJSON(captured_location) as geojson FROM events WHERE guid = $1",
+          [eventGuid],
+        );
+        expect(result.rows).toHaveLength(1);
+        const geojson = JSON.parse(result.rows[0].geojson);
+        expect(geojson.type).toBe("Point");
+        expect(geojson.coordinates[0]).toBeCloseTo(106.8456, 4);
+        expect(geojson.coordinates[1]).toBeCloseTo(-6.2088, 4);
+      } finally {
+        await client.end();
+      }
+    });
+  });
+
   describe("Public artifacts fallback", () => {
     const artifactPaths = () => {
       const publicFolder = path.join(__dirname, "..", "public", "artifacts");
