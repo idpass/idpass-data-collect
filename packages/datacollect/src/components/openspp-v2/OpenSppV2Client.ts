@@ -68,7 +68,7 @@ export class OpenSppV2Client {
 
   /**
    * Format an identifier for use in API URLs.
-   * Uses the format: {system}|{value}
+   * Uses the format: `system|value`
    */
   formatIdentifier(system: string, value: string): string {
     return `${system}|${value}`;
@@ -189,7 +189,7 @@ export class OpenSppV2Client {
   /**
    * Get an individual by their external identifier.
    *
-   * @param identifier Full identifier in format {namespace}|{value}
+   * @param identifier Full identifier in format `namespace|value`
    * @returns The individual resource or null if not found
    */
   async getIndividual(identifier: string): Promise<IndividualResource | null> {
@@ -267,7 +267,7 @@ export class OpenSppV2Client {
   /**
    * Update an existing individual.
    *
-   * @param identifier Full identifier in format {namespace}|{value}
+   * @param identifier Full identifier in format `namespace|value`
    * @param individual The updated individual resource
    * @returns The updated individual
    */
@@ -295,7 +295,7 @@ export class OpenSppV2Client {
    * Partially update an individual using JSON Merge Patch (RFC 7396).
    * Only specified fields are updated; omitted fields remain unchanged.
    *
-   * @param identifier Full identifier in format {namespace}|{value}
+   * @param identifier Full identifier in format `namespace|value`
    * @param patch Partial individual fields to update
    * @param versionId Optional versionId for optimistic locking (If-Match header)
    * @returns The updated individual
@@ -329,7 +329,7 @@ export class OpenSppV2Client {
   /**
    * Get a group by its external identifier.
    *
-   * @param identifier Full identifier in format {namespace}|{value}
+   * @param identifier Full identifier in format `namespace|value`
    * @returns The group resource or null if not found
    */
   async getGroup(identifier: string): Promise<GroupResource | null> {
@@ -401,7 +401,7 @@ export class OpenSppV2Client {
   /**
    * Update an existing group.
    *
-   * @param identifier Full identifier in format {namespace}|{value}
+   * @param identifier Full identifier in format `namespace|value`
    * @param group The updated group resource
    * @returns The updated group
    */
@@ -425,7 +425,7 @@ export class OpenSppV2Client {
   /**
    * Partially update a group using JSON Merge Patch (RFC 7396).
    *
-   * @param identifier Full identifier in format {namespace}|{value}
+   * @param identifier Full identifier in format `namespace|value`
    * @param patch Partial group fields to update
    * @param versionId Optional versionId for optimistic locking (If-Match header)
    * @returns The updated group
