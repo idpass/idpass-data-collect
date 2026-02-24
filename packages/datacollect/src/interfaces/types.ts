@@ -183,6 +183,34 @@ export interface DetailGroupDoc extends GroupDoc {
 }
 
 /**
+ * Geographic coordinates captured at the time of a form submission.
+ *
+ * Spoofing detection: The standard Web/Capacitor Geolocation API does not
+ * expose whether a position was provided by a mock provider. On Android,
+ * `Location.isMock()` (API 18+) and satellite count via `GnssStatus` are
+ * available through native APIs but require a custom Capacitor plugin.
+ * Consider adding `isMocked?: boolean` and `satelliteCount?: number` fields
+ * when native spoofing detection is implemented. Until then, server-side
+ * analytics on accuracy, altitude, and velocity between submissions can
+ * flag suspicious patterns.
+ */
+export interface CapturedLocation {
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+  altitude?: number | null;
+  altitudeAccuracy?: number | null;
+  speed?: number | null;
+  heading?: number | null;
+  /** ISO timestamp of GPS fix */
+  capturedAt: string;
+}
+
+export interface FormSubmissionMetadata {
+  capturedLocation?: CapturedLocation;
+}
+
+/**
  * Form submission representing a command/event in the event sourcing system.
  *
  * Every change to entities is captured as a FormSubmission, enabling complete
@@ -217,6 +245,8 @@ export interface FormSubmission {
   userId: string;
   /** Current synchronization level of this event */
   syncLevel: SyncLevel;
+  /** Optional metadata such as GPS location captured at submission time */
+  metadata?: FormSubmissionMetadata;
 }
 
 /**
