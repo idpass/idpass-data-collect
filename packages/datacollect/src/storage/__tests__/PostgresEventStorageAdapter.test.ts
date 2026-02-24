@@ -423,6 +423,175 @@ describeIfPostgres("PostgresEventStorageAdapter", () => {
     ]);
     expect(nextCursorWithCursor).toBe("2023-05-03T14:00:00.000Z");
   });
+
+  test("saveEvents with metadata.capturedLocation should round-trip correctly", async () => {
+    const timeStamp = new Date().toISOString();
+    const event: FormSubmission = {
+      guid: "meta-event-1",
+      entityGuid: "entity-1",
+      timestamp: timeStamp,
+      type: "create-individual",
+      data: { name: "Geo Test" },
+      userId: "user-1",
+      syncLevel: SyncLevel.LOCAL,
+      metadata: {
+        capturedLocation: {
+          latitude: -6.2088,
+          longitude: 106.8456,
+          accuracy: 10.5,
+          altitude: 50,
+          altitudeAccuracy: 5,
+          speed: 0,
+          heading: null,
+          capturedAt: "2024-06-15T10:30:00.000Z",
+        },
+      },
+    };
+
+    await adapter.saveEvents([event]);
+
+    const savedEvents = await adapter.getEvents();
+    expect(savedEvents).toHaveLength(1);
+    expect(savedEvents[0].metadata).toEqual({
+      capturedLocation: {
+        latitude: -6.2088,
+        longitude: 106.8456,
+        accuracy: 10.5,
+        altitude: 50,
+        altitudeAccuracy: 5,
+        speed: 0,
+        heading: null,
+        capturedAt: "2024-06-15T10:30:00.000Z",
+      },
+    });
+  });
+
+  test("saveEvents with metadata.capturedLocation should populate geometry column", async () => {
+    const timeStamp = new Date().toISOString();
+    const event: FormSubmission = {
+      guid: "geo-event-1",
+      entityGuid: "entity-1",
+      timestamp: timeStamp,
+      type: "create-individual",
+      data: { name: "Geo Column Test" },
+      userId: "user-1",
+      syncLevel: SyncLevel.LOCAL,
+      metadata: {
+        capturedLocation: {
+          latitude: -6.2088,
+          longitude: 106.8456,
+          accuracy: 10.5,
+          altitude: null,
+          altitudeAccuracy: null,
+          speed: null,
+          heading: null,
+          capturedAt: "2024-06-15T10:30:00.000Z",
+        },
+      },
+    };
+
+    await adapter.saveEvents([event]);
+
+    // Query the geometry column directly
+    const { Pool } = require("pg");
+    const pool = new Pool({ connectionString: getConnectionString() });
+    const client = await pool.connect();
+    try {
+      const result = await client.query(
+        "SELECT ST_AsGeoJSON(captured_location) as geojson FROM events WHERE guid = $1",
+        ["geo-event-1"],
+      );
+      expect(result.rows).toHaveLength(1);
+      const geojson = JSON.parse(result.rows[0].geojson);
+      expect(geojson.type).toBe("Point");
+      expect(geojson.coordinates[0]).toBeCloseTo(106.8456, 4);
+      expect(geojson.coordinates[1]).toBeCloseTo(-6.2088, 4);
+    } finally {
+      client.release();
+      await pool.end();
+    }
+  });
+
+  test("saveEvents without metadata should return undefined metadata", async () => {
+    const timeStamp = new Date().toISOString();
+    const event: FormSubmission = {
+      guid: "no-meta-event-1",
+      entityGuid: "entity-1",
+      timestamp: timeStamp,
+      type: "create-individual",
+      data: { name: "No Meta" },
+      userId: "user-1",
+      syncLevel: SyncLevel.LOCAL,
+    };
+
+    await adapter.saveEvents([event]);
+
+    const savedEvents = await adapter.getEvents();
+    expect(savedEvents).toHaveLength(1);
+    expect(savedEvents[0].metadata).toBeUndefined();
+  });
+
+  test("getEventsSince should include metadata in returned events", async () => {
+    const event: FormSubmission = {
+      guid: "since-meta-1",
+      entityGuid: "entity-1",
+      timestamp: "2023-06-01T10:00:00.000Z",
+      type: "create-individual",
+      data: { name: "Since Test" },
+      userId: "user-1",
+      syncLevel: SyncLevel.LOCAL,
+      metadata: {
+        capturedLocation: {
+          latitude: 1.0,
+          longitude: 2.0,
+          capturedAt: "2023-06-01T09:59:00.000Z",
+        },
+      },
+    };
+
+    await adapter.saveEvents([event]);
+
+    const events = await adapter.getEventsSince("2023-05-01T00:00:00.000Z");
+    expect(events).toHaveLength(1);
+    expect(events[0].metadata).toEqual({
+      capturedLocation: {
+        latitude: 1.0,
+        longitude: 2.0,
+        capturedAt: "2023-06-01T09:59:00.000Z",
+      },
+    });
+  });
+
+  test("getEventsSincePagination should include metadata in returned events", async () => {
+    const event: FormSubmission = {
+      guid: "page-meta-1",
+      entityGuid: "entity-1",
+      timestamp: "2023-06-01T10:00:00.000Z",
+      type: "create-individual",
+      data: { name: "Pagination Test" },
+      userId: "user-1",
+      syncLevel: SyncLevel.LOCAL,
+      metadata: {
+        capturedLocation: {
+          latitude: 3.0,
+          longitude: 4.0,
+          capturedAt: "2023-06-01T09:59:00.000Z",
+        },
+      },
+    };
+
+    await adapter.saveEvents([event]);
+
+    const { events } = await adapter.getEventsSincePagination("2023-05-01T00:00:00.000Z", 10);
+    expect(events).toHaveLength(1);
+    expect(events[0].metadata).toEqual({
+      capturedLocation: {
+        latitude: 3.0,
+        longitude: 4.0,
+        capturedAt: "2023-06-01T09:59:00.000Z",
+      },
+    });
+  });
 });
 
 const describeTenantTests = process.env.POSTGRES_TEST ? describe : describe.skip;

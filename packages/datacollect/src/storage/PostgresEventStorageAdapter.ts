@@ -126,6 +126,8 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
   async initialize() {
     const client = await this.pool.connect();
     try {
+      await client.query("CREATE EXTENSION IF NOT EXISTS postgis");
+
       await client.query(`
         CREATE TABLE IF NOT EXISTS events (
           guid TEXT PRIMARY KEY,
@@ -135,7 +137,9 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
           data JSONB,
           timestamp TIMESTAMPTZ,
           user_id TEXT,
-          sync_level INTEGER
+          sync_level INTEGER,
+          metadata JSONB,
+          captured_location geometry(Point, 4326)
         )
       `);
       await client.query(`
@@ -194,6 +198,13 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
       // Add indexes for tenant_id
       await client.query("CREATE INDEX IF NOT EXISTS idx_events_tenant_id ON events(tenant_id)");
       await client.query("CREATE INDEX IF NOT EXISTS idx_audit_log_tenant_id ON audit_log(tenant_id)");
+
+      // Spatial index for captured location queries
+      await client.query(`
+        CREATE INDEX IF NOT EXISTS idx_events_captured_location
+          ON events USING GIST(captured_location)
+          WHERE captured_location IS NOT NULL
+      `);
     } finally {
       client.release();
     }
@@ -217,7 +228,12 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
       console.log("Saving events: ", events);
       for (const event of events) {
         await client.query(
-          "INSERT INTO events (guid, tenant_id, entity_guid, type, data, timestamp, user_id, sync_level) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+          `INSERT INTO events (guid, tenant_id, entity_guid, type, data, timestamp, user_id, sync_level, metadata, captured_location)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+             CASE WHEN $10::float IS NOT NULL AND $11::float IS NOT NULL
+               THEN ST_SetSRID(ST_MakePoint($10::float, $11::float), 4326)
+               ELSE NULL
+             END)`,
           [
             event.guid,
             this.tenantId,
@@ -227,6 +243,9 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
             event.timestamp,
             event.userId,
             event.syncLevel,
+            event.metadata ? JSON.stringify(event.metadata) : null,
+            event.metadata?.capturedLocation?.longitude ?? null,
+            event.metadata?.capturedLocation?.latitude ?? null,
           ],
         );
         guids.push(event.guid);
@@ -253,13 +272,13 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
     const client = await this.pool.connect();
     try {
       const result = await client.query(
-        "SELECT guid, entity_guid, type, data, timestamp, user_id, sync_level FROM events WHERE tenant_id = $1",
+        "SELECT guid, entity_guid, type, data, timestamp, user_id, sync_level, metadata FROM events WHERE tenant_id = $1",
         [this.tenantId],
       );
       return result.rows.map((row) => {
         // const timestamp: string = row.timestamp ? row.timestamp.toISOString() : null;
         const timestamp: string = row.timestamp ? new Date(row.timestamp).toISOString() : "";
-        return {
+        const submission: FormSubmission = {
           guid: row.guid,
           entityGuid: row.entity_guid,
           type: row.type,
@@ -268,6 +287,10 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
           userId: row.user_id,
           syncLevel: row.sync_level,
         };
+        if (row.metadata) {
+          submission.metadata = row.metadata;
+        }
+        return submission;
       });
     } finally {
       client.release();
@@ -432,19 +455,25 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
     const client = await this.pool.connect();
     try {
       const result = await client.query(
-        "SELECT guid, entity_guid, type, data, timestamp, user_id, sync_level FROM events WHERE timestamp > $1 AND tenant_id = $2 ORDER BY timestamp ASC",
+        "SELECT guid, entity_guid, type, data, timestamp, user_id, sync_level, metadata FROM events WHERE timestamp > $1 AND tenant_id = $2 ORDER BY timestamp ASC",
         [timestampString, this.tenantId],
       );
 
-      return result.rows.map((row) => ({
-        guid: row.guid,
-        entityGuid: row.entity_guid,
-        type: row.type,
-        data: row.data,
-        timestamp: row.timestamp,
-        userId: row.user_id,
-        syncLevel: row.sync_level,
-      }));
+      return result.rows.map((row) => {
+        const submission: FormSubmission = {
+          guid: row.guid,
+          entityGuid: row.entity_guid,
+          type: row.type,
+          data: row.data,
+          timestamp: row.timestamp,
+          userId: row.user_id,
+          syncLevel: row.sync_level,
+        };
+        if (row.metadata) {
+          submission.metadata = row.metadata;
+        }
+        return submission;
+      });
     } finally {
       client.release();
     }
@@ -471,23 +500,29 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
     const client = await this.pool.connect();
     try {
       const query = `
-          SELECT guid, entity_guid, type, data, timestamp, user_id, sync_level
+          SELECT guid, entity_guid, type, data, timestamp, user_id, sync_level, metadata
           FROM events
-          WHERE timestamp > $1 
+          WHERE timestamp > $1
           AND tenant_id = $2
           ORDER BY timestamp ASC
           LIMIT $3
         `;
       const result = await client.query(query, [timestampString, this.tenantId, limit]);
-      const events = result.rows.map((row) => ({
-        guid: row.guid,
-        entityGuid: row.entity_guid,
-        type: row.type,
-        data: row.data,
-        timestamp: row.timestamp.toISOString(),
-        userId: row.user_id,
-        syncLevel: row.sync_level,
-      }));
+      const events = result.rows.map((row) => {
+        const submission: FormSubmission = {
+          guid: row.guid,
+          entityGuid: row.entity_guid,
+          type: row.type,
+          data: row.data,
+          timestamp: row.timestamp.toISOString(),
+          userId: row.user_id,
+          syncLevel: row.sync_level,
+        };
+        if (row.metadata) {
+          submission.metadata = row.metadata;
+        }
+        return submission;
+      });
       const nextCursor =
         result.rows.length === limit ? result.rows[result.rows.length - 1].timestamp.toISOString() : null;
       return { events, nextCursor };
