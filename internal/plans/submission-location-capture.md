@@ -116,11 +116,11 @@
 
 ### Phase 14: Final verification
 
-- [ ] **14.1** Run `npm run build` in datacollect
-- [ ] **14.2** Run `npm run test` in datacollect — all green
-- [ ] **14.3** Run `npm run test` in backend — all green
-- [ ] **14.4** Run `npm run test:unit` in mobile — all green
-- [ ] **14.5** Run `npm run type-check` in mobile — no errors
-- [ ] **14.6** Run `npm run lint` in mobile — no errors
+- [x] **14.1** Run `npm run build` in datacollect
+- [x] **14.2** Run `npm run test` in datacollect — all green (174 passed, 43 skipped Postgres-only)
+- [ ] **14.3** Run `npm run test` in backend — requires running Postgres with PostGIS
+- [x] **14.4** Run `npm run test:unit` in mobile — all green (114 passed)
+- [x] **14.5** Run `npm run type-check` in mobile — no errors
+- [x] **14.6** Run `npm run lint` in mobile — no errors
 - [ ] **14.7** Manual smoke test if device available
-- [ ] **14.8** Commit any final fixes
+- [x] **14.8** Commit any final fixes
