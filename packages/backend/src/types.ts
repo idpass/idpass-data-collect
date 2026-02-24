@@ -70,6 +70,7 @@ export interface EntityForm {
   title: string;
   dependsOn?: string;
   formio: object;
+  captureLocation?: boolean;
 }
 
 export interface EntityDataItem {
@@ -100,6 +101,7 @@ export interface AppConfig {
   entityData?: EntityData[];
   externalSync?: ExternalSyncConfig;
   authConfigs?: AuthConfig[];
+  captureSubmissionLocation?: boolean;
 }
 
 export interface AppConfigStore {
