@@ -62,7 +62,7 @@ const formTitle = computed(() => {
   return editedIndex.value === -1 ? 'Create User' : 'Edit User'
 })
 
-const tenantNames = computed(() => {
+const _tenantNames = computed(() => {
   const map: Record<string, string> = {}
   for (const t of tenants.value) {
     map[t.id] = t.name
@@ -189,7 +189,7 @@ onMounted(() => {
 
         <!-- Users Table -->
         <v-data-table :headers="headers" :items="users" :loading="loading" class="elevation-1">
-          <template #item.tenantCount="{ item }">
+          <template #[`item.tenantCount`]="{ item }">
             <v-chip size="small" variant="tonal">
               {{ getTenantCount(item) }} tenant(s)
             </v-chip>

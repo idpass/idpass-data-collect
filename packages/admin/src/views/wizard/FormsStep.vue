@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { useProgramDraftStore } from '@/stores/programDraft'
+import { useProgramDraftStore, type EntityForm } from '@/stores/programDraft'
 
 const router = useRouter()
 const draftStore = useProgramDraftStore()
@@ -49,7 +49,7 @@ const getStatusText = (status: string) => {
   }
 }
 
-const getDependsOnOptions = (form: { name: string; title: string; dependsOn: string; formio: unknown }) => {
+const getDependsOnOptions = (form: EntityForm) => {
   return draftStore.getDependsOnOptions(form)
 }
 </script>

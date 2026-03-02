@@ -100,7 +100,7 @@ onMounted(async () => {
       :loading="loading"
       class="elevation-1"
     >
-      <template #item.policy="{ item }">
+      <template #[`item.policy`]="{ item }">
         <v-chip
           :color="item.policy === 'auto-approve' ? 'success' : item.policy === 'internal-review' ? 'warning' : 'info'"
           size="small"
@@ -110,12 +110,12 @@ onMounted(async () => {
         </v-chip>
       </template>
 
-      <template #item.requiredRole="{ item }">
+      <template #[`item.requiredRole`]="{ item }">
         <span v-if="item.requiredRole">{{ item.requiredRole }}</span>
         <span v-else class="text-medium-emphasis">--</span>
       </template>
 
-      <template #item.actions="{ item }">
+      <template #[`item.actions`]="{ item }">
         <v-btn
           variant="text"
           icon="mdi-pencil"

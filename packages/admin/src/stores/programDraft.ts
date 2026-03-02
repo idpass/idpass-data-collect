@@ -51,6 +51,7 @@ export interface SelfServiceConfig {
   enabled: boolean
   authMethods: string[]
   allowedForms: string[]
+  languages: string[]
   requireReview: boolean
 }
 
@@ -122,6 +123,7 @@ const getEmptyDraft = (): ProgramDraft => ({
     enabled: false,
     authMethods: [],
     allowedForms: [],
+    languages: [],
     requireReview: false,
   },
   opensppV2Fields: [],
@@ -282,12 +284,15 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
           fieldMappings: config.externalSync?.fieldMappings || [],
         },
         authConfigs: config.authConfigs || [],
-        selfService: config.selfService || {
-          enabled: false,
-          authMethods: [],
-          allowedForms: [],
-          requireReview: false,
-        },
+        selfService: config.selfService
+          ? { languages: [], ...config.selfService }
+          : {
+              enabled: false,
+              authMethods: [],
+              allowedForms: [],
+              languages: [],
+              requireReview: false,
+            },
       }
       errors.value = getEmptyErrors()
       mode.value = 'edit'
@@ -321,12 +326,15 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
           fieldMappings: config.externalSync?.fieldMappings || [],
         },
         authConfigs: config.authConfigs || [],
-        selfService: config.selfService || {
-          enabled: false,
-          authMethods: [],
-          allowedForms: [],
-          requireReview: false,
-        },
+        selfService: config.selfService
+          ? { languages: [], ...config.selfService }
+          : {
+              enabled: false,
+              authMethods: [],
+              allowedForms: [],
+              languages: [],
+              requireReview: false,
+            },
       }
       errors.value = getEmptyErrors()
       mode.value = 'copy'
@@ -576,11 +584,12 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
         version: draft.value.version,
         entityForms: draft.value.entityForms.map((form) => {
           const { entityType, ...rest } = form
-          return entityType ? { ...rest, entityType } : rest
+          const withId = { id: form.name, ...rest }
+          return entityType ? { ...withId, entityType } : withId
         }),
         externalSync: draft.value.externalSync,
         authConfigs: draft.value.authConfigs,
-        selfService: draft.value.selfService,
+        selfService: { languages: [], ...draft.value.selfService },
       }
 
       const formData = new FormData()

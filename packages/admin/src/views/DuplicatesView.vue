@@ -75,19 +75,19 @@ onMounted(() => {
       :loading="duplicatesStore.loading"
       class="elevation-1"
     >
-      <template #item.entityGuid="{ item }">
+      <template #[`item.entityGuid`]="{ item }">
         <span class="entity-guid" :title="item.entityGuid">
           {{ item.entityGuid.substring(0, 12) }}...
         </span>
       </template>
 
-      <template #item.duplicateGuid="{ item }">
+      <template #[`item.duplicateGuid`]="{ item }">
         <span class="entity-guid" :title="item.duplicateGuid">
           {{ item.duplicateGuid.substring(0, 12) }}...
         </span>
       </template>
 
-      <template #item.actions="{ item }">
+      <template #[`item.actions`]="{ item }">
         <v-btn
           variant="tonal"
           color="primary"

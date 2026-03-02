@@ -233,23 +233,23 @@ onMounted(() => {
       class="elevation-1 reviews-table"
       @click:row="handleRowClick"
     >
-      <template #item.entityGuid="{ item }">
+      <template #[`item.entityGuid`]="{ item }">
         <span class="entity-guid" :title="item.entityGuid">
           {{ item.entityGuid.substring(0, 8) }}...
         </span>
       </template>
 
-      <template #item.createdAt="{ item }">
+      <template #[`item.createdAt`]="{ item }">
         {{ formatDate(item.createdAt) }}
       </template>
 
-      <template #item.status="{ item }">
+      <template #[`item.status`]="{ item }">
         <v-chip :color="statusColor(item.status)" size="small" variant="tonal">
           {{ item.status }}
         </v-chip>
       </template>
 
-      <template #item.actions="{ item }">
+      <template #[`item.actions`]="{ item }">
         <template v-if="item.status === 'pending'">
           <v-btn
             variant="text"
