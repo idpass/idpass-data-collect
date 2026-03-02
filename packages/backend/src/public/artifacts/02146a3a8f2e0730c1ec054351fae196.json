@@ -49,11 +49,11 @@
     "type": "openspp-v2-adapter",
     "extraFields": [],
     "adapterConfig": {
-      "clientId": "client_n7EsV6Tj8EbsVx6zNu8XaA",
+      "clientId": "REPLACE_WITH_YOUR_CLIENT_ID",
       "batchSize": 50,
       "maxRetries": 2,
       "batchDelayMs": 1000,
-      "clientSecret": "HmZFDpLrps6tJomJl-FiuGW6VopMxdTLVAhgK3sou_A",
+      "clientSecret": "REPLACE_WITH_YOUR_CLIENT_SECRET",
       "identifierNamespace": "urn:openspp:vocab:id-type#national_id",
       "includeStudioExtensions": "true"
     },
