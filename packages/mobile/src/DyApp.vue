@@ -13,7 +13,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div id="dy-app">
+  <div id="dy-app" @touchstart="AppLockService.resetInactivityTimer" @click="AppLockService.resetInactivityTimer">
     <LockScreen v-if="AppLockService.locked.value" />
     <header>
       <nav class="safe-top navbar p-3 d-flex justify-content-center border-bottom align-items-center">

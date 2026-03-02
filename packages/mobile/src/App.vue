@@ -14,7 +14,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div id="app" class="app-shell safe-top safe-bottom">
+  <div id="app" class="app-shell safe-top safe-bottom" @touchstart="AppLockService.resetInactivityTimer" @click="AppLockService.resetInactivityTimer">
     <LockScreen v-if="AppLockService.locked.value" />
     <div v-if="isOffline" class="offline-banner" role="alert">
       <svg class="offline-banner__icon" viewBox="0 0 24 24" focusable="false">

@@ -147,8 +147,8 @@ async function handlePasswordMismatch() {
       indexedDB.deleteDatabase(dbName)
       await new Promise((resolve) => setTimeout(resolve, 100))
     }
-    // Clear the stale key so a new one is generated on retry
-    await SecureStorageService.remove(DB_ENCRYPTION_KEY)
+    // Clear all storage including secure storage tokens to avoid an inconsistent state
+    await SecureStorageService.clear()
     // Reset the promise lock so getOrCreateDbPassword generates a fresh key
     dbPasswordPromise = null
     localStorage.clear()

@@ -99,11 +99,11 @@ export const AppLockService = {
       const info = await BiometricAuth.checkBiometry()
       if (!info.isAvailable && !info.deviceIsSecure) {
         console.warn('AppLockService: device has no screen lock — allowing access without authentication')
-      lockedRef.value = false
-      await persistLockState(false)
-      resetInactivityTimer()
-      return true
-    }
+        lockedRef.value = false
+        await persistLockState(false)
+        resetInactivityTimer()
+        return true
+      }
 
       await BiometricAuth.authenticate({
         reason: 'Verify your identity to access beneficiary data',
