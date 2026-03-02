@@ -283,7 +283,11 @@ describeIfPostgres("Sync Server", () => {
       expect(pushedEntities).toEqual(expect.arrayContaining([
         expect.objectContaining({
           guid: expect.any(String),
-          initial: null,
+          initial: expect.objectContaining({
+            name: "John Doe",
+            type: "individual",
+            data: { name: "John Doe", age: 30, email: "john.doe@example.com" },
+          }),
           modified: expect.objectContaining({
             name: "John Doe",
             type: "individual",
@@ -292,7 +296,11 @@ describeIfPostgres("Sync Server", () => {
         }),
         expect.objectContaining({
           guid: expect.any(String),
-          initial: null,
+          initial: expect.objectContaining({
+            name: "Jane Smith",
+            type: "individual",
+            data: { name: "Jane Smith", age: 40, email: "jane.smith@test.com" },
+          }),
           modified: expect.objectContaining({
             name: "Jane Smith",
             type: "individual",
@@ -423,7 +431,11 @@ describeIfPostgres("Sync Server", () => {
       expect(entitiesAfter).toEqual([
         {
           guid: entityGuid1,
-          initial: null,
+          initial: expect.objectContaining({
+            type: "individual",
+            name: "John Doe",
+            data: { name: "John Doe", age: 30, email: "john.doe@example.com" },
+          }),
           modified: {
             id: expect.any(String),
             guid: expect.any(String),

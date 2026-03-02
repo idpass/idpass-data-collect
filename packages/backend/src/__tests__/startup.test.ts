@@ -5,6 +5,10 @@
  * required environment variables before starting.
  */
 
+// Prevent dotenv from re-loading .env values when require("../index") runs,
+// which would override the env var deletions that each test sets up.
+jest.mock("dotenv/config", () => {});
+
 describe("Server startup validation", () => {
   const originalEnv = process.env;
 

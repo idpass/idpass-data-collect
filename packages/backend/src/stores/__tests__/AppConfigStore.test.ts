@@ -225,7 +225,7 @@ describeIfPostgres("AppConfigStore", () => {
       await pool.query("DROP TABLE IF EXISTS app_configs");
 
       // Create a new adapter and initialize
-      const newAdapter = new AppConfigStoreImpl(process.env.POSTGRES_TEST || "");
+      const newAdapter = new AppConfigStoreImpl(getConnectionString());
       await newAdapter.initialize();
 
       // Try to save a config to verify table exists
