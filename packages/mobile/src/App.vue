@@ -1,13 +1,21 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
+import { onMounted } from 'vue'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import Claim169ScannerOverlay from '@/components/Claim169ScannerOverlay.vue'
+import LockScreen from '@/components/LockScreen.vue'
+import { AppLockService } from '@/services/AppLockService'
 
 const { isOffline } = useNetworkStatus()
+
+onMounted(async () => {
+  await AppLockService.init()
+})
 </script>
 
 <template>
   <div id="app" class="app-shell safe-top safe-bottom">
+    <LockScreen v-if="AppLockService.locked.value" />
     <div v-if="isOffline" class="offline-banner" role="alert">
       <svg class="offline-banner__icon" viewBox="0 0 24 24" focusable="false">
         <path

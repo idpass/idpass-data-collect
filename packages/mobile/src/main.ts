@@ -37,6 +37,8 @@ import { useAuthManagerStore } from './store/authManager'
 
 import { createPinia } from 'pinia'
 import { registerCustomComponents } from './formio'
+import { App as CapacitorApp } from '@capacitor/app'
+import { AppLockService } from './services/AppLockService'
 
 async function initApp() {
   registerCustomComponents()
@@ -50,6 +52,19 @@ async function initApp() {
   // Set up Capacitor URL listener for OAuth callbacks
   const authManager = useAuthManagerStore()
   await authManager.setupCapacitorUrlListener()
+
+  // Background state listener: blur UI and lock app when backgrounded.
+  // NOTE (iOS): the OS takes the task-switcher screenshot before this JS event
+  // fires (~100-300ms window). The CSS blur is partial protection only on iOS.
+  // Full iOS protection requires a native UIView overlay — tracked as follow-up.
+  CapacitorApp.addListener('appStateChange', async ({ isActive }) => {
+    if (!isActive) {
+      document.body.classList.add('app-backgrounded')
+      await AppLockService.lock()
+    } else {
+      document.body.classList.remove('app-backgrounded')
+    }
+  })
 
   app.mount('#app')
 }
