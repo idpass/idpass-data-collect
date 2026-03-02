@@ -6,7 +6,7 @@ import bodyParser from "body-parser";
 import jwt from "jsonwebtoken";
 import { createSelfServiceRouter } from "../routes/selfServiceRoutes";
 import { OtpStoreImpl } from "../stores/OtpStore";
-import { AppInstanceStore, AppConfigStore, UserStore } from "../types";
+import { AppInstanceStore } from "../types";
 import { Client } from "pg";
 
 const JWT_SECRET = "test-secret-for-self-service";

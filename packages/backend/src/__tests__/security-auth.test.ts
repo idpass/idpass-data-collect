@@ -15,8 +15,10 @@ import request from "supertest";
 import { Client } from "pg";
 import { run } from "../syncServer";
 import { SyncServerInstance, AppConfig } from "../types";
+import { createDynamicAuthMiddleware, validateTenantAccess } from "../middlewares/authentication";
 
 jest.mock("../utils/logger", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const pino = require("pino");
   const silentLogger = pino({ level: "silent" });
   return {
@@ -194,8 +196,6 @@ describeIfPostgres("SECURITY: Authentication vulnerabilities", () => {
       // a self-service token should be rejected at the AUTH level, not deferred
       // to RBAC. The middleware should check the scope claim.
 
-      const { createDynamicAuthMiddleware } = require("../middlewares/authentication");
-
       const middleware = createDynamicAuthMiddleware(app!.appInstanceStore);
 
       const selfServiceToken = jwt.sign(
@@ -234,9 +234,6 @@ describeIfPostgres("SECURITY: Authentication vulnerabilities", () => {
 
   describe("validateTenantAccess bypass", () => {
     test("validateTenantAccess should NOT call next() when req.user is absent", () => {
-      // Import the middleware directly to test it in isolation
-      const { validateTenantAccess } = require("../middlewares/authentication");
-
       const req = {
         headers: {},
         query: { configId: "some-tenant" },
@@ -261,8 +258,6 @@ describeIfPostgres("SECURITY: Authentication vulnerabilities", () => {
     });
 
     test("unauthenticated request should not bypass tenant validation via missing user", () => {
-      const { validateTenantAccess } = require("../middlewares/authentication");
-
       // Simulate a request that somehow reaches validateTenantAccess
       // without going through any auth middleware first
       const req = {

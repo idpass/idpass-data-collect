@@ -13,6 +13,7 @@ import { run } from "../syncServer";
 import { SyncServerInstance } from "../types";
 
 jest.mock("../utils/logger", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const pino = require("pino");
   const silentLogger = pino({ level: "silent" });
   return {

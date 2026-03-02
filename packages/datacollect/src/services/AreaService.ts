@@ -18,10 +18,10 @@
  */
 
 import { v4 as uuidv4 } from "uuid";
-import { eq, isNull, sql } from "drizzle-orm";
+import { eq, isNull } from "drizzle-orm";
 import { Pool } from "pg";
 import { createDrizzleFromPool, DrizzleDatabase } from "../db/connection";
-import { areas, entities } from "../db/schema";
+import { areas } from "../db/schema";
 import { createLogger } from "../utils/logger";
 
 const log = createLogger("AreaService");

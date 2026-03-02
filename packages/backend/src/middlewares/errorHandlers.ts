@@ -37,6 +37,7 @@ export const asyncHandler = (fn: AsyncRequestHandler) => {
   };
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const errorHandler = (err: CustomError, req: Request, res: Response, _next: NextFunction): void => {
   log.error({ err }, "Request error");
 

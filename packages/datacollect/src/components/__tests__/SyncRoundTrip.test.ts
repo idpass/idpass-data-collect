@@ -85,7 +85,7 @@ async function pushPull(
     if (!exists) {
       // Strip the storage-layer `id` field so the destination's autoIncrement
       // assigns its own key and doesn't overwrite unrelated records.
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+       
       const { id: _id, ...eventWithoutId } = event as FormSubmission & { id?: number };
       await destination.eventApplierService.submitForm({
         ...eventWithoutId,
@@ -208,7 +208,7 @@ describe("Sync Round-Trip Integration Tests", () => {
       for (const event of result.events) {
         const exists = await clientB.eventStore.isEventExisted(event.guid);
         if (!exists) {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+           
           const { id: _id, ...eventWithoutId } = event as FormSubmission & { id?: number };
           await clientB.eventApplierService.submitForm({
             ...eventWithoutId,

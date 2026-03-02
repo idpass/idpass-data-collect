@@ -84,28 +84,26 @@ export class NetworkSimulator {
    * Returns a wrapped version of fetch that applies the configured network conditions.
    */
   wrapFetch(originalFetch: typeof fetch): typeof fetch {
-    const self = this;
-
     const wrappedFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-      self.requestCount++;
+      this.requestCount++;
 
       // Deterministic failure after N requests
       if (
-        self.condition.failAfterRequests !== undefined &&
-        self.requestCount > self.condition.failAfterRequests
+        this.condition.failAfterRequests !== undefined &&
+        this.requestCount > this.condition.failAfterRequests
       ) {
-        self.failedCount++;
+        this.failedCount++;
         throw new TypeError("NetworkSimulator: connection refused after request limit");
       }
 
       // Probabilistic failure
       if (
-        self.condition.failureProbability !== undefined &&
-        self.condition.failureProbability > 0 &&
-        Math.random() < self.condition.failureProbability
+        this.condition.failureProbability !== undefined &&
+        this.condition.failureProbability > 0 &&
+        Math.random() < this.condition.failureProbability
       ) {
-        self.failedCount++;
-        const statusCode = self.condition.failureStatusCode ?? 500;
+        this.failedCount++;
+        const statusCode = this.condition.failureStatusCode ?? 500;
         return new Response("NetworkSimulator: simulated failure", {
           status: statusCode,
           statusText: "Simulated Failure",
@@ -113,18 +111,18 @@ export class NetworkSimulator {
       }
 
       // Add latency
-      if (self.condition.latencyMs && self.condition.latencyMs > 0) {
-        await new Promise((resolve) => setTimeout(resolve, self.condition.latencyMs));
+      if (this.condition.latencyMs && this.condition.latencyMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, this.condition.latencyMs));
       }
 
       // Make the real request
       const response = await originalFetch(input, init);
 
       // Truncate response body if dropAfterBytes is configured
-      if (self.condition.dropAfterBytes !== undefined && self.condition.dropAfterBytes >= 0) {
-        self.droppedCount++;
+      if (this.condition.dropAfterBytes !== undefined && this.condition.dropAfterBytes >= 0) {
+        this.droppedCount++;
         const body = await response.arrayBuffer();
-        const truncated = body.slice(0, self.condition.dropAfterBytes);
+        const truncated = body.slice(0, this.condition.dropAfterBytes);
         return new Response(truncated, {
           status: response.status,
           statusText: response.statusText,
@@ -145,18 +143,16 @@ export class NetworkSimulator {
    * status codes, or pass through to the next handler.
    */
   createMiddleware(): (req: unknown, res: { status: (code: number) => { json: (body: unknown) => void } }, next: () => void) => void {
-    const self = this;
-
     return (_req, res, next) => {
-      self.requestCount++;
+      this.requestCount++;
 
       // Deterministic failure after N requests
       if (
-        self.condition.failAfterRequests !== undefined &&
-        self.requestCount > self.condition.failAfterRequests
+        this.condition.failAfterRequests !== undefined &&
+        this.requestCount > this.condition.failAfterRequests
       ) {
-        self.failedCount++;
-        const statusCode = self.condition.failureStatusCode ?? 500;
+        this.failedCount++;
+        const statusCode = this.condition.failureStatusCode ?? 500;
         res.status(statusCode).json({
           error: "NetworkSimulator: request limit exceeded",
         });
@@ -165,12 +161,12 @@ export class NetworkSimulator {
 
       // Probabilistic failure
       if (
-        self.condition.failureProbability !== undefined &&
-        self.condition.failureProbability > 0 &&
-        Math.random() < self.condition.failureProbability
+        this.condition.failureProbability !== undefined &&
+        this.condition.failureProbability > 0 &&
+        Math.random() < this.condition.failureProbability
       ) {
-        self.failedCount++;
-        const statusCode = self.condition.failureStatusCode ?? 500;
+        this.failedCount++;
+        const statusCode = this.condition.failureStatusCode ?? 500;
         res.status(statusCode).json({
           error: "NetworkSimulator: simulated failure",
         });
@@ -178,10 +174,10 @@ export class NetworkSimulator {
       }
 
       // Add latency
-      if (self.condition.latencyMs && self.condition.latencyMs > 0) {
+      if (this.condition.latencyMs && this.condition.latencyMs > 0) {
         setTimeout(() => {
           next();
-        }, self.condition.latencyMs);
+        }, this.condition.latencyMs);
         return;
       }
 

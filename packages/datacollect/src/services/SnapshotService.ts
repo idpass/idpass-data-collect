@@ -18,11 +18,11 @@
  */
 
 import { v4 as uuidv4 } from "uuid";
-import { and, eq, desc, asc, gt, sql, count } from "drizzle-orm";
+import { and, eq, desc, asc, sql, count } from "drizzle-orm";
 import { Pool } from "pg";
 import { createDrizzleFromPool, DrizzleDatabase } from "../db/connection";
 import { entitySnapshots, events, entities } from "../db/schema";
-import { EntityDoc, EntityPair, FormSubmission, SyncLevel } from "../interfaces/types";
+import { EntityDoc, FormSubmission, SyncLevel } from "../interfaces/types";
 import { EventApplierService } from "./EventApplierService";
 import { createLogger } from "../utils/logger";
 

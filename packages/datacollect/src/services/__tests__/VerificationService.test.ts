@@ -8,11 +8,9 @@ import "fake-indexeddb/auto";
 import { v4 as uuidv4 } from "uuid";
 import {
   VerificationService,
-  VerificationStatus,
   VerificationResult,
-  DuplicateCheckResult,
 } from "../VerificationService";
-import { EntityStore, EntityType, EventStore, SyncLevel } from "../../interfaces/types";
+import { EntityStore, EntityType, EventStore } from "../../interfaces/types";
 import { EntityStoreImpl } from "../../components/EntityStore";
 import { EventStoreImpl } from "../../components/EventStore";
 import { IndexedDbEntityStorageAdapter } from "../../storage/IndexedDbEntityStorageAdapter";

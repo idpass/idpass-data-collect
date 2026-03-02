@@ -248,8 +248,8 @@ describeIfPostgres("EventStore hash chain round-trip", () => {
     // Simulates the exact processTransactionalBatch flow: a shared Pool is used
     // to create fresh EventStoreImpl instances inside Drizzle transactions.
     // This is the pattern that fails in the live Docker environment.
-    const { Pool } = require("pg");
-    const { createDrizzleFromPool } = require("../../db/connection");
+    const { Pool } = await import("pg");
+    const { createDrizzleFromPool } = await import("../../db/connection");
 
     const pool = new Pool({ connectionString: getConnectionString() });
 

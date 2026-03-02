@@ -17,13 +17,8 @@ jest.mock("../../utils/logger", () => ({
   }),
 }));
 
-import { v4 as uuidv4 } from "uuid";
 import {
-  EntityDoc,
-  EntityPair,
   EntityType,
-  FormSubmission,
-  SyncLevel,
 } from "../../interfaces/types";
 import { AreaRecord } from "../../services/AreaService";
 import { UserAssignmentRecord, EntityOverrideRecord } from "../../services/AssignmentService";
@@ -363,7 +358,7 @@ describe("SelectiveSync", () => {
       assignmentService.addEntity({ guid: "entity-2", tenantId: "t1", areaId: "area-new", data: {}, type: EntityType.Individual });
 
       // Initial assignment to old area
-      const oldAssignment = await assignmentService.assignUserToArea("user-1", "t1", "area-old", "enumerator", false);
+      const _oldAssignment = await assignmentService.assignUserToArea("user-1", "t1", "area-old", "enumerator", false);
       let guids = await assignmentService.getAssignedEntityGuids("user-1", "t1");
       expect(guids).toEqual(["entity-1"]);
 

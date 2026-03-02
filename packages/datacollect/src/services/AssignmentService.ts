@@ -18,14 +18,11 @@
  */
 
 import { v4 as uuidv4 } from "uuid";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { Pool } from "pg";
 import { createDrizzleFromPool, DrizzleDatabase } from "../db/connection";
-import { userAssignments, entityOverrides, areas } from "../db/schema";
+import { userAssignments, entityOverrides } from "../db/schema";
 import { AreaService } from "./AreaService";
-import { createLogger } from "../utils/logger";
-
-const log = createLogger("AssignmentService");
 
 /**
  * Represents a user assignment record as stored in the database.

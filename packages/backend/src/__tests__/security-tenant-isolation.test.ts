@@ -9,15 +9,17 @@
  * These tests MUST FAIL against the current codebase.
  */
 import "dotenv/config";
-import jwt from "jsonwebtoken";
+import fs from "fs";
+import path from "path";
 import request from "supertest";
 import { Client } from "pg";
 import { v4 as uuidv4 } from "uuid";
 import { FormSubmission, SyncLevel } from "@idpass/data-collect-core";
 import { run } from "../syncServer";
-import { SyncServerInstance, AppConfig, Role } from "../types";
+import { SyncServerInstance, AppConfig } from "../types";
 
 jest.mock("../utils/logger", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const pino = require("pino");
   const silentLogger = pino({ level: "silent" });
   return {
@@ -284,13 +286,11 @@ describeIfPostgres("SECURITY: Tenant isolation vulnerabilities", () => {
       // The dynamic import of ReviewService fails in test (needs --experimental-vm-modules),
       // so we verify the vulnerability by inspecting the route handler source.
 
-      const reviewRoutesSource = require("fs").readFileSync(
-        require("path").join(__dirname, "..", "routes", "reviewRoutes.ts"),
+      const reviewRoutesSource = fs.readFileSync(
+        path.join(__dirname, "..", "routes", "reviewRoutes.ts"),
         "utf8",
       );
 
-      // Find the approve handler -- it should check the user's tenantIds
-      // before iterating reviewServiceCache
       const approveSection = reviewRoutesSource.substring(
         reviewRoutesSource.indexOf("/:id/approve"),
         reviewRoutesSource.indexOf("/:id/reject"),
@@ -304,12 +304,11 @@ describeIfPostgres("SECURITY: Tenant isolation vulnerabilities", () => {
     });
 
     test("review reject endpoint iterates ALL tenants without filtering by user access", () => {
-      const reviewRoutesSource = require("fs").readFileSync(
-        require("path").join(__dirname, "..", "routes", "reviewRoutes.ts"),
+      const reviewRoutesSource = fs.readFileSync(
+        path.join(__dirname, "..", "routes", "reviewRoutes.ts"),
         "utf8",
       );
 
-      // Find the reject handler
       const rejectSection = reviewRoutesSource.substring(
         reviewRoutesSource.indexOf("/:id/reject"),
         reviewRoutesSource.indexOf("// List all reviews") ||

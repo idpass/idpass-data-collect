@@ -454,7 +454,7 @@ export class ExternalSyncManager {
           combinedResult.success = true;
           combinedResult.errors = [];
           combinedResult.failed = 0;
-        } catch (error) {
+        } catch {
           // Keep the original errors
         }
       }

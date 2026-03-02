@@ -24,6 +24,7 @@ describe("Server startup validation", () => {
     delete process.env.ADMIN_PASSWORD;
 
     expect(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       require("../index");
     }).toThrow("Initial admin credentials must be set");
   });
@@ -35,6 +36,7 @@ describe("Server startup validation", () => {
     delete process.env.ADMIN_EMAIL;
 
     expect(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       require("../index");
     }).toThrow("Initial admin credentials must be set");
   });
@@ -46,6 +48,7 @@ describe("Server startup validation", () => {
     delete process.env.JWT_SECRET;
 
     expect(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       require("../index");
     }).toThrow("JWT_SECRET must be set");
   });
@@ -57,6 +60,7 @@ describe("Server startup validation", () => {
     process.env.POSTGRES = "postgresql://admin:admin@localhost:5432/postgres";
 
     expect(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       require("../index");
     }).toThrow("JWT_SECRET must be at least 32 characters long");
   });
@@ -69,6 +73,7 @@ describe("Server startup validation", () => {
     delete process.env.DATABASE_URL;
 
     expect(() => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       require("../index");
     }).toThrow("PostgreSQL connection string must be set");
   });

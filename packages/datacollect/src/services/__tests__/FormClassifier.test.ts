@@ -1,6 +1,6 @@
 import { EntityType } from "../../interfaces/types";
 import { FormClassifier, FormCategory } from "../FormClassifier";
-import type { FormDefinition, FormClassification } from "../FormClassifier";
+import type { FormDefinition } from "../FormClassifier";
 
 describe("FormClassifier", () => {
   // Full seed config forms (matches scripts/seed-config.json)

@@ -18,7 +18,7 @@ jest.mock("../../utils/logger", () => ({
 }));
 
 import { v4 as uuidv4 } from "uuid";
-import { EntityDoc, EntityType, EntityStore, EventStore, FormSubmission, SyncLevel } from "../../interfaces/types";
+import { EntityDoc, EntityStore, EventStore, FormSubmission, SyncLevel } from "../../interfaces/types";
 import { EntityStoreImpl } from "../../components/EntityStore";
 import { EventStoreImpl } from "../../components/EventStore";
 import { EventApplierService } from "../EventApplierService";
@@ -194,7 +194,7 @@ class InMemorySnapshotService {
       try {
         const result = await this.eventApplierService.submitForm(event);
         if (result) currentEntity = result;
-      } catch (err) {
+      } catch {
         // Continue on error
       }
     }

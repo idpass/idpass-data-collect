@@ -15,6 +15,8 @@ import { createSelfServiceRouter } from "../routes/selfServiceRoutes";
 import { OtpStoreImpl } from "../stores/OtpStore";
 import { AppInstanceStore } from "../types";
 import { Client } from "pg";
+import { verifyRoleFromDatabase } from "../middlewares/rbac";
+import { createReviewRoutes } from "../routes/reviewRoutes";
 
 const JWT_SECRET = "test-secret-phase1-security-fixes-32chars!";
 
@@ -150,15 +152,11 @@ describeIfPostgres("L15: Per-identifier OTP rate limiting", () => {
 
 describe("G21: verifyRoleFromDatabase middleware exists and is exported", () => {
   it("should be importable from rbac module", () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const rbac = require("../middlewares/rbac");
-    expect(rbac.verifyRoleFromDatabase).toBeDefined();
-    expect(typeof rbac.verifyRoleFromDatabase).toBe("function");
+    expect(verifyRoleFromDatabase).toBeDefined();
+    expect(typeof verifyRoleFromDatabase).toBe("function");
   });
 
   it("should return a middleware function when called with a store", () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { verifyRoleFromDatabase } = require("../middlewares/rbac");
     const mockStore = { getUser: jest.fn() };
     const middleware = verifyRoleFromDatabase(mockStore);
     expect(typeof middleware).toBe("function");
@@ -167,10 +165,7 @@ describe("G21: verifyRoleFromDatabase middleware exists and is exported", () => 
 
 describe("C1: validateTenantAccess is imported in reviewRoutes", () => {
   it("reviewRoutes module should export createReviewRoutes that accepts userStore", () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { createReviewRoutes } = require("../routes/reviewRoutes");
     expect(createReviewRoutes).toBeDefined();
-    // createReviewRoutes now takes 3 params: appInstanceStore, reviewStore, userStore
     expect(createReviewRoutes.length).toBe(3);
   });
 });

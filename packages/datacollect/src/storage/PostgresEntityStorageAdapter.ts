@@ -348,7 +348,7 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
 
     // Detects nested quantifiers that can cause catastrophic backtracking (ReDoS).
     // Matches patterns like (a+)+, (a*)+, (a+)*, (a{2,})+ etc.
-    const NESTED_QUANTIFIER_PATTERN = /[+*}\?]\s*\)[\s]*[+*{?]/;
+    const NESTED_QUANTIFIER_PATTERN = /[+*}?]\s*\)[\s]*[+*{?]/;
 
     // Build parameterized SQL conditions for JSONB search.
     // Field keys are validated against an allowlist and then used with sql.raw()

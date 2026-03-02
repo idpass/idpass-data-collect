@@ -17,7 +17,7 @@ jest.mock("../../utils/logger", () => ({
   }),
 }));
 
-import { AreaService, AreaRecord, HdxAreaImportRecord } from "../AreaService";
+import { AreaRecord, HdxAreaImportRecord } from "../AreaService";
 
 /**
  * In-memory mock for AreaService that avoids requiring PostgreSQL.
@@ -276,7 +276,7 @@ describe("AreaService", () => {
 
   describe("getArea()", () => {
     it("returns the area when it exists", async () => {
-      const created = await service.createArea({
+      const _created = await service.createArea({
         id: "get-test",
         name: "Get Test",
         type: "region",
@@ -496,7 +496,7 @@ describe("AreaService", () => {
   describe("getRootAreas()", () => {
     it("returns only areas with no parent", async () => {
       const country1 = await service.createArea({ name: "Country 1", type: "country", level: 0 });
-      const country2 = await service.createArea({ name: "Country 2", type: "country", level: 0 });
+      const _country2 = await service.createArea({ name: "Country 2", type: "country", level: 0 });
       await service.createArea({ name: "Region", type: "region", level: 1, parentId: country1.id });
 
       const roots = await service.getRootAreas();
