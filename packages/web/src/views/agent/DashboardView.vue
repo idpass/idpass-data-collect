@@ -72,7 +72,7 @@ function viewEntity(guid: string) {
       <!-- Search results -->
       <div v-if="searchQuery?.trim()">
         <p class="text-caption mb-2">
-          {{ t("agentDashboard.searchResultsCount", searchResults.length, { count: searchResults.length }) }}
+          {{ t("agentDashboard.searchResultsCount", { count: searchResults.length }) }}
         </p>
         <EntityCard
           v-for="entity in searchResults"
