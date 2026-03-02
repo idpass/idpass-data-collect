@@ -589,7 +589,7 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
         }),
         externalSync: draft.value.externalSync,
         authConfigs: draft.value.authConfigs,
-        selfService: { languages: [], ...draft.value.selfService },
+        selfService: { ...draft.value.selfService },
       }
 
       const formData = new FormData()
