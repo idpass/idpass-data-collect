@@ -28,9 +28,6 @@ import multer from "multer";
 import fs from "fs/promises";
 import { generatePublicArtifacts, getPublicArtifactPaths, resolvePublicBaseUrl } from "../utils/publicArtifacts";
 import rateLimit from "express-rate-limit";
-import { createLogger } from "../utils/logger";
-
-const log = createLogger("appConfigRoutes");
 const isTest = process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID !== undefined;
 
 const AppConfigSchema = z.object({

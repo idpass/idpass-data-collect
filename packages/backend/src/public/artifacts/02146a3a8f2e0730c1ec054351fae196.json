@@ -1,0 +1,94 @@
+{
+  "id": "asdfasfsafasdfasdf",
+  "artifactId": "02146a3a8f2e0730c1ec054351fae196",
+  "name": "asdfasfsafasdfasdf",
+  "description": "testsadfasdfasfadsf",
+  "version": "1",
+  "url": null,
+  "entityForms": [
+    {
+      "id": "individual",
+      "name": "individual",
+      "title": "Individual",
+      "dependsOn": "",
+      "formio": {
+        "components": [
+          {
+            "label": "First Name",
+            "applyMaskOn": "change",
+            "tableView": true,
+            "validateWhenHidden": false,
+            "key": "firstName",
+            "type": "textfield",
+            "input": true
+          },
+          {
+            "label": "Last Name",
+            "applyMaskOn": "change",
+            "tableView": true,
+            "validateWhenHidden": false,
+            "key": "lastName",
+            "type": "textfield",
+            "input": true
+          },
+          {
+            "type": "button",
+            "label": "Submit",
+            "key": "submit",
+            "disableOnInvalid": true,
+            "input": true,
+            "tableView": false
+          }
+        ]
+      }
+    }
+  ],
+  "entityData": null,
+  "externalSync": {
+    "url": "http://host.docker.internal:8069",
+    "type": "openspp-v2-adapter",
+    "extraFields": [],
+    "adapterConfig": {
+      "clientId": "client_n7EsV6Tj8EbsVx6zNu8XaA",
+      "batchSize": 50,
+      "maxRetries": 2,
+      "batchDelayMs": 1000,
+      "clientSecret": "HmZFDpLrps6tJomJl-FiuGW6VopMxdTLVAhgK3sou_A",
+      "identifierNamespace": "urn:openspp:vocab:id-type#national_id",
+      "includeStudioExtensions": "true"
+    },
+    "fieldMappings": [
+      {
+        "formField": "firstName",
+        "transformer": {
+          "type": "text",
+          "options": {}
+        },
+        "opensppField": "name.given"
+      },
+      {
+        "formField": "lastName",
+        "transformer": {
+          "type": "text",
+          "options": {}
+        },
+        "opensppField": "name.family"
+      }
+    ]
+  },
+  "authConfigs": [],
+  "selfService": {
+    "enabled": true,
+    "authMethods": [
+      "otp",
+      "qr",
+      "id"
+    ],
+    "allowedForms": [
+      "individual"
+    ],
+    "languages": [],
+    "requireReview": true
+  },
+  "syncServerUrl": "http://localhost:3000"
+}
