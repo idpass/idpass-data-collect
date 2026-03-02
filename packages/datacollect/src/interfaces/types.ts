@@ -455,19 +455,6 @@ export interface EventApplier {
 }
 
 /**
- * Encryption adapter interface for data protection.
- *
- * Provides encryption capabilities for sensitive data fields.
- * Currently not fully implemented (data parameter is 'never').
- */
-export interface EncryptionAdapter {
-  /** Encrypt data (not implemented) */
-  encrypt(data: never): Promise<string>;
-  /** Decrypt encrypted data */
-  decrypt(data: string): Promise<unknown>;
-}
-
-/**
  * Export/import manager interface for data portability.
  *
  * Enables exporting all entity and event data for backup, migration,
