@@ -56,26 +56,75 @@ if (isDevelop) {
 }
 
 import { keySchema } from '@/schemas/keys.schema'
+import { SecureStorageService } from '@/services/SecureStorageService'
+
 const KEY_DATABASE = Symbol('database')
 
 const encryptedDexieStorage = wrappedKeyEncryptionCryptoJsStorage({
   storage: getRxStorageDexie()
 })
 
+const DB_ENCRYPTION_KEY = 'rxdb_encryption_key'
+
+/**
+ * Module-level promise lock — ensures concurrent calls during startup share
+ * the same promise and never generate duplicate keys.
+ */
+let dbPasswordPromise: Promise<string> | null = null
+
+/**
+ * Returns the database encryption key, generating and persisting a new random
+ * 256-bit key on first launch.
+ *
+ * On native platforms the key lives in iOS Keychain / Android Keystore.
+ * On web/dev it falls back to localStorage (same as before this change).
+ *
+ * VITE_DB_ENCRYPTION_PASSWORD is kept as a web-only override for local dev.
+ */
+async function getOrCreateDbPassword(): Promise<string> {
+  if (dbPasswordPromise) return dbPasswordPromise
+
+  dbPasswordPromise = (async () => {
+    let key = await SecureStorageService.get(DB_ENCRYPTION_KEY)
+    if (!key) {
+      // Web-only dev fallback: honour the env var if set
+      const envPassword = import.meta.env.VITE_DB_ENCRYPTION_PASSWORD
+      if (envPassword && !('Capacitor' in window)) {
+        key = envPassword
+      } else {
+        const bytes = new Uint8Array(32)
+        crypto.getRandomValues(bytes)
+        key = Array.from(bytes)
+          .map((b) => b.toString(16).padStart(2, '0'))
+          .join('')
+      }
+      await SecureStorageService.set(DB_ENCRYPTION_KEY, key)
+    }
+    return key
+  })()
+
+  return dbPasswordPromise
+}
+
 // Check if first install and clear storage if needed
 async function clearStorageIfFirstInstall() {
   const INSTALL_KEY = 'app_installed'
-  const PASSWORD = import.meta.env.VITE_DB_ENCRYPTION_PASSWORD
+  // app_installed is not a secret — plain localStorage is intentional here
   if (!localStorage.getItem(INSTALL_KEY)) {
+    // Obtain (or generate) the encryption key before clearing localStorage so
+    // it is persisted in secure storage and survives the clear below
+    const password = await getOrCreateDbPassword()
     try {
-      await removeRxDatabase('idpass-data-collect', encryptedDexieStorage, PASSWORD)
+      await removeRxDatabase('idpass-data-collect', encryptedDexieStorage, password)
       localStorage.clear()
       sessionStorage.clear()
+      await SecureStorageService.clear()
+      // Re-persist the key after the clear so the DB can open
+      await SecureStorageService.set(DB_ENCRYPTION_KEY, password)
       localStorage.setItem(INSTALL_KEY, 'true')
       console.log('First install: Storage cleared')
     } catch (err) {
       console.log('Error clearing storage on first install:', err)
-      // If removal fails (e.g., password mismatch), try clearing IndexedDB directly
       try {
         const dbName = 'idpass-data-collect'
         if ('indexedDB' in window) {
@@ -93,17 +142,17 @@ async function clearStorageIfFirstInstall() {
 async function handlePasswordMismatch() {
   console.log('Password mismatch detected, clearing database...')
   try {
-    // Try to clear the database directly from IndexedDB
     const dbName = 'idpass-data-collect'
     if ('indexedDB' in window) {
       indexedDB.deleteDatabase(dbName)
-      // Wait a bit for the deletion to complete
       await new Promise((resolve) => setTimeout(resolve, 100))
     }
-    // Clear all storage
+    // Clear the stale key so a new one is generated on retry
+    await SecureStorageService.remove(DB_ENCRYPTION_KEY)
+    // Reset the promise lock so getOrCreateDbPassword generates a fresh key
+    dbPasswordPromise = null
     localStorage.clear()
     sessionStorage.clear()
-    // Remove the install key so it will be reset on next launch
     localStorage.removeItem('app_installed')
     console.log('Database cleared due to password mismatch')
   } catch (err) {
@@ -134,7 +183,7 @@ export function getCurrentDatabase(): RxDatabase | null {
 }
 
 export async function getDatabase(): Promise<RxDatabase> {
-  const PASSWORD = import.meta.env.VITE_DB_ENCRYPTION_PASSWORD
+  const PASSWORD = await getOrCreateDbPassword()
 
   await clearStorageIfFirstInstall()
 
@@ -148,7 +197,6 @@ export async function getDatabase(): Promise<RxDatabase> {
       ignoreDuplicate: true
     })
   } catch (error: unknown) {
-    // Check if it's a password mismatch error (DB1)
     if (
       error &&
       typeof error === 'object' &&
@@ -157,13 +205,14 @@ export async function getDatabase(): Promise<RxDatabase> {
     ) {
       console.warn('Database password mismatch detected, clearing and retrying...')
       await handlePasswordMismatch()
-      // Retry creating the database after clearing
+      // Fetch the newly generated key after the mismatch handler reset the promise
+      const newPassword = await getOrCreateDbPassword()
       dbInstance = await createRxDatabase({
         name: 'idpass-data-collect',
         storage: encryptedDexieStorage,
         eventReduce: true,
         multiInstance: false,
-        password: PASSWORD,
+        password: newPassword,
         ignoreDuplicate: true
       })
     } else {
@@ -213,7 +262,6 @@ export async function getDatabase(): Promise<RxDatabase> {
     })
   } catch (error) {
     console.error('Error adding collections:', error)
-    // Check if it's a password mismatch error (DB1)
     if (
       error &&
       typeof error === 'object' &&
@@ -222,7 +270,6 @@ export async function getDatabase(): Promise<RxDatabase> {
     ) {
       console.warn('Password mismatch during collection setup, clearing database...')
       await handlePasswordMismatch()
-      // Close existing instance if any
       if (dbInstance) {
         try {
           await dbInstance.destroy()
@@ -231,7 +278,6 @@ export async function getDatabase(): Promise<RxDatabase> {
         }
         dbInstance = null
       }
-      // Retry the entire database creation
       return await getDatabase()
     }
     throw error
@@ -249,17 +295,26 @@ export async function createDatabase(): Promise<Plugin> {
     autoStart: true,
     push: {
       async handler(docs) {
+        const token = await SecureStorageService.get('replication_auth_token')
+        if (!token) {
+          throw new Error('No replication auth token available')
+        }
         const rawResponse = await fetch(
           `${import.meta.env.VITE_BACKEND_API_URL}/api/registration/mobile/upload`,
           {
             method: 'POST',
             headers: {
               Accept: 'application/json',
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
             },
             body: JSON.stringify({ docs })
           }
         )
+        if (rawResponse.status === 401) {
+          await SecureStorageService.remove('replication_auth_token')
+          throw new Error('Replication auth token expired or invalid')
+        }
         const response = await rawResponse.json()
         return response
       },

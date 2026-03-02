@@ -11,6 +11,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { registerIssuerKey } from '@/services/claim169Service'
+import { SecureStorageService } from '@/services/SecureStorageService'
 
 interface AppStats {
   totalRecords: number
@@ -121,6 +122,10 @@ const devHandleClickClearData = async () => {
   await database.tenantapps.remove()
   localStorage.clear()
   sessionStorage.clear()
+  // Also clear native secure storage so the DB encryption key is reset alongside
+  // the data. Without this, a stale key in secure storage would cause a DB1
+  // password mismatch on the next launch.
+  await SecureStorageService.clear()
   window.location.reload()
 }
 

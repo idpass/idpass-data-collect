@@ -22,39 +22,38 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import get from 'lodash/get'
 import { getSyncServerUrlByAppId } from '@/utils/getSyncServerByAppId'
+import { SecureStorageService } from '@/services/SecureStorageService'
 
 export const useAuthStore = defineStore('auth', () => {
-  // State
+  // In-memory cache — reads from secure storage only on cache miss
   const tokens = ref<Record<string, string>>({})
   const userIds = ref<Record<string, string>>({})
   const fullSyncServerUrls = ref<Record<string, string>>({})
 
-  // Actions
-
-  const setSyncServerToken = (server: string, newToken: string | null) => {
+  const setSyncServerToken = async (server: string, newToken: string | null) => {
     tokens.value[server] = newToken
     if (newToken) {
-      localStorage.setItem(`syncServerToken_${server}`, newToken)
+      await SecureStorageService.set(`syncServerToken_${server}`, newToken)
     } else {
-      localStorage.removeItem(`syncServerToken_${server}`)
+      await SecureStorageService.remove(`syncServerToken_${server}`)
     }
   }
 
-  const setSyncServerUserId = (server: string, newUserId: string | null) => {
+  const setSyncServerUserId = async (server: string, newUserId: string | null) => {
     userIds.value[server] = newUserId
     if (newUserId) {
-      localStorage.setItem(`syncServerUserId_${server}`, newUserId)
+      await SecureStorageService.set(`syncServerUserId_${server}`, newUserId)
     } else {
-      localStorage.removeItem(`syncServerUserId_${server}`)
+      await SecureStorageService.remove(`syncServerUserId_${server}`)
     }
   }
 
-  const setFullSyncServerUrl = (server: string, newUrl: string | null) => {
+  const setFullSyncServerUrl = async (server: string, newUrl: string | null) => {
     fullSyncServerUrls.value[server] = newUrl
     if (newUrl) {
-      localStorage.setItem(`fullSyncServerUrl_${server}`, newUrl)
+      await SecureStorageService.set(`fullSyncServerUrl_${server}`, newUrl)
     } else {
-      localStorage.removeItem(`fullSyncServerUrl_${server}`)
+      await SecureStorageService.remove(`fullSyncServerUrl_${server}`)
     }
   }
 
@@ -62,36 +61,35 @@ export const useAuthStore = defineStore('auth', () => {
     server: string,
     credentials: { email: string; password: string }
   ) => {
-    let res
-    let fullSyncServerUrl
-    try {
-      // First try with HTTPS
-      res = await axios.post('https://' + server + '/api/users/login', {
-        email: credentials.email,
-        password: credentials.password
-      })
-      fullSyncServerUrl = 'https://' + server
-    } catch (error) {
-      console.error('Try HTTPS failed', error)
-      // If HTTPS fails, try with HTTP
-      res = await axios.post('http://' + server + '/api/users/login', {
-        email: credentials.email,
-        password: credentials.password
-      })
-      fullSyncServerUrl = 'http://' + server
+    // Preserve explicit scheme if provided; otherwise default to HTTPS
+    let fullSyncServerUrl: string
+    if (server.startsWith('http://') || server.startsWith('https://')) {
+      fullSyncServerUrl = server
+    } else {
+      fullSyncServerUrl = `https://${server}`
     }
+
+    const res = await axios.post(`${fullSyncServerUrl}/api/users/login`, {
+      email: credentials.email,
+      password: credentials.password
+    })
+
     const token = get(res.data, 'token')
     const userId = get(res.data, 'userId')
-    setSyncServerToken(server, token)
-    setSyncServerUserId(server, userId)
-    setFullSyncServerUrl(server, fullSyncServerUrl)
+    await setSyncServerToken(server, token)
+    await setSyncServerUserId(server, userId)
+    await setFullSyncServerUrl(server, fullSyncServerUrl)
+    // Store a fixed-key token for the replication handler which does not know
+    // which server URL to key on at push time
+    await SecureStorageService.set('replication_auth_token', token)
   }
 
   const logoutSyncServer = async (appId: string) => {
     const server = await getSyncServerUrlByAppId(appId)
-    setSyncServerToken(server, null)
-    setSyncServerUserId(server, null)
-    setFullSyncServerUrl(server, null)
+    await setSyncServerToken(server, null)
+    await setSyncServerUserId(server, null)
+    await setFullSyncServerUrl(server, null)
+    await SecureStorageService.remove('replication_auth_token')
   }
 
   const getSyncServerAuth = async (appId: string) => {
@@ -101,16 +99,16 @@ export const useAuthStore = defineStore('auth', () => {
     let fullSyncServerUrl = fullSyncServerUrls.value[server]
 
     if (!token) {
-      token = localStorage.getItem(`syncServerToken_${server}`)
-      setSyncServerToken(server, token)
+      token = await SecureStorageService.get(`syncServerToken_${server}`)
+      await setSyncServerToken(server, token)
     }
     if (!userId) {
-      userId = localStorage.getItem(`syncServerUserId_${server}`)
-      setSyncServerUserId(server, userId)
+      userId = await SecureStorageService.get(`syncServerUserId_${server}`)
+      await setSyncServerUserId(server, userId)
     }
     if (!fullSyncServerUrl) {
-      fullSyncServerUrl = localStorage.getItem(`fullSyncServerUrl_${server}`)
-      setFullSyncServerUrl(server, fullSyncServerUrl)
+      fullSyncServerUrl = await SecureStorageService.get(`fullSyncServerUrl_${server}`)
+      await setFullSyncServerUrl(server, fullSyncServerUrl)
     }
     return { token, userId, fullSyncServerUrl }
   }
