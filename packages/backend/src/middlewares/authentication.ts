@@ -36,27 +36,34 @@ export interface AuthenticatedRequest extends Request {
   user: DecodedPayload;
 }
 
-export const authenticateJWT = async (req: Request, res: Response, next: NextFunction) => {
+/**
+ * Extracts and verifies a Bearer JWT from the request's Authorization header.
+ * Returns the raw token and decoded payload, or null if extraction/verification fails.
+ */
+export function extractBearerToken(req: Request): { token: string; decoded: DecodedPayload } | null {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return null;
+
+  const [authType, token] = authHeader.split(" ");
+  if (authType.toLowerCase() !== "bearer" || !token) return null;
+
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      res.status(401).json({ error: "Authorization header missing" });
-      return;
-    }
-
-    const [authType, token] = authHeader.split(" ");
-    if (authType.toLowerCase() !== "bearer") {
-      res.status(401).json({ error: "Invalid authentication type" });
-      return;
-    }
-
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as DecodedPayload;
-    (req as AuthenticatedRequest).user = decoded;
-    next();
-  } catch (error) {
-    log.error({ err: error }, "JWT authentication failed");
-    res.status(401).json({ error: "Invalid token" });
+    return { token, decoded };
+  } catch {
+    return null;
   }
+}
+
+export const authenticateJWT = async (req: Request, res: Response, next: NextFunction) => {
+  const result = extractBearerToken(req);
+  if (!result) {
+    res.status(401).json({ error: "Invalid token" });
+    return;
+  }
+
+  (req as AuthenticatedRequest).user = result.decoded;
+  next();
 };
 export async function authenticateJWTBackend(token: string): Promise<DecodedPayload | null> {
   try {
@@ -126,28 +133,20 @@ export function createDynamicAuthMiddleware(appInstanceStore: AppInstanceStore) 
 export function createAuthAdminMiddleware(userStore: UserStore) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const authHeader = req.headers.authorization;
-      if (!authHeader) {
-        res.status(401).json({ error: "Authorization header missing" });
+      const result = extractBearerToken(req);
+      if (!result) {
+        res.status(401).json({ error: "Invalid token" });
         return;
       }
 
-      const [authType, token] = authHeader.split(" ");
-      if (authType.toLowerCase() !== "bearer") {
-        res.status(401).json({ error: "Invalid authentication type" });
-        return;
-      }
-
-      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as DecodedPayload;
-      const user = await userStore.getUser(decoded.email);
+      const user = await userStore.getUser(result.decoded.email);
 
       if (!user || user.role !== Role.ADMIN) {
         res.status(403).json({ error: "Forbidden: Admin access required" });
         return;
       }
 
-      // req.user = decoded;
-      (req as AuthenticatedRequest).user = decoded;
+      (req as AuthenticatedRequest).user = result.decoded;
       next();
     } catch (error) {
       log.error({ err: error }, "Admin auth middleware failed");

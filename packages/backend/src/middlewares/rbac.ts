@@ -19,7 +19,7 @@
 
 import { Request, Response, NextFunction } from "express";
 import { RbacService, RbacAction, ROLE_HIERARCHY, SystemRole } from "@idpass/data-collect-core";
-import { AuthenticatedRequest } from "./authentication";
+import { AuthenticatedRequest, DecodedPayload } from "./authentication";
 import { Role, UserStore } from "../types";
 import { createLogger } from "../utils/logger";
 
@@ -71,29 +71,47 @@ function getEffectiveRole(req: Request): SystemRole | null {
  * @param minimumRole The minimum SystemRole required to access the route.
  * @returns Express middleware function.
  */
+/**
+ * Extracts the authenticated user and their effective role from the request.
+ * Returns null (and sends a 401) if no user is found, or "admin" if the user
+ * is a legacy admin (callers should bypass further checks).
+ */
+function getAuthorizedUser(
+  req: Request,
+  res: Response,
+): { user: DecodedPayload; effectiveRole: SystemRole } | "admin" | null {
+  const user = (req as AuthenticatedRequest).user;
+  if (!user) {
+    res.status(401).json({ error: "Authentication required" });
+    return null;
+  }
+
+  if (user.role === Role.ADMIN) {
+    return "admin";
+  }
+
+  const effectiveRole = getEffectiveRole(req);
+  if (!effectiveRole) {
+    return { user, effectiveRole: null as unknown as SystemRole };
+  }
+
+  return { user, effectiveRole };
+}
+
 export function requireRole(minimumRole: SystemRole) {
   return (req: Request, res: Response, next: NextFunction): void => {
-    const user = (req as AuthenticatedRequest).user;
-    if (!user) {
-      res.status(401).json({ error: "Authentication required" });
-      return;
-    }
+    const auth = getAuthorizedUser(req, res);
+    if (!auth) return;
+    if (auth === "admin") { next(); return; }
 
-    // Legacy admin users bypass role checks
-    if (user.role === Role.ADMIN) {
-      next();
-      return;
-    }
-
-    const effectiveRole = getEffectiveRole(req);
-    if (!effectiveRole) {
-      log.warn({ userId: user.id, minimumRole }, "No role assignments found for user");
+    if (!auth.effectiveRole) {
+      log.warn({ userId: auth.user.id, minimumRole }, "No role assignments found for user");
       res.status(403).json({ error: "Forbidden: Insufficient role", required: minimumRole });
       return;
     }
 
-    if (!rbacService.hasPermission(effectiveRole, minimumRole)) {
-      log.warn({ userId: user.id, effectiveRole, minimumRole }, "Insufficient role");
+    if (!rbacService.hasPermission(auth.effectiveRole, minimumRole)) {
+      log.warn({ userId: auth.user.id, effectiveRole: auth.effectiveRole, minimumRole }, "Insufficient role");
       res.status(403).json({ error: "Forbidden: Insufficient role", required: minimumRole });
       return;
     }
@@ -113,27 +131,18 @@ export function requireRole(minimumRole: SystemRole) {
  */
 export function requireAction(action: RbacAction) {
   return (req: Request, res: Response, next: NextFunction): void => {
-    const user = (req as AuthenticatedRequest).user;
-    if (!user) {
-      res.status(401).json({ error: "Authentication required" });
-      return;
-    }
+    const auth = getAuthorizedUser(req, res);
+    if (!auth) return;
+    if (auth === "admin") { next(); return; }
 
-    // Legacy admin users can perform any action
-    if (user.role === Role.ADMIN) {
-      next();
-      return;
-    }
-
-    const effectiveRole = getEffectiveRole(req);
-    if (!effectiveRole) {
-      log.warn({ userId: user.id, action }, "No role assignments found for user");
+    if (!auth.effectiveRole) {
+      log.warn({ userId: auth.user.id, action }, "No role assignments found for user");
       res.status(403).json({ error: "Forbidden: Insufficient permission", action });
       return;
     }
 
-    if (!rbacService.canPerformAction(effectiveRole, action)) {
-      log.warn({ userId: user.id, effectiveRole, action }, "Insufficient permission for action");
+    if (!rbacService.canPerformAction(auth.effectiveRole, action)) {
+      log.warn({ userId: auth.user.id, effectiveRole: auth.effectiveRole, action }, "Insufficient permission for action");
       res.status(403).json({ error: "Forbidden: Insufficient permission", action });
       return;
     }
