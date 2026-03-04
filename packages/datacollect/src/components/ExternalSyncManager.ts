@@ -41,23 +41,15 @@ type AdapterConstructor = new (
 ) => ExternalSyncAdapter;
 
 /**
- * Built-in adapter registry. Contains only adapters that are bundled with the core package.
+ * Legacy (V1) adapter registry. Maps adapter type strings to constructor classes.
  *
- * External adapters (OpenSPP, OpenFn) are registered at application startup using
- * ExternalSyncManager.registerAdapter() to avoid circular dependencies between packages.
- *
- * Adapter types:
- * - mock-sync-server: Mock adapter for testing
+ * Built-in adapters (mock-sync-server) are pre-registered here. External adapters
+ * (OpenSPP, OpenFn) can be added at application startup via
+ * ExternalSyncManager.registerAdapter().
  */
-const builtInAdaptersMapping: Record<string, AdapterConstructor> = {
+const legacyAdapterRegistry: Record<string, AdapterConstructor> = {
   "mock-sync-server": MockSyncServerAdapter as unknown as AdapterConstructor,
 };
-
-/**
- * Runtime adapter registry. External adapters are registered here at application startup.
- * Keys are adapter type strings (e.g., "openspp-v2-adapter", "openfn-adapter").
- */
-const runtimeAdapterRegistry: Record<string, AdapterConstructor> = {};
 
 /**
  * Creates an empty SyncResult with the given duration.
@@ -282,7 +274,7 @@ export class ExternalSyncManager {
    * ```
    */
   static registerAdapter(type: string, adapterClass: AdapterConstructor): void {
-    runtimeAdapterRegistry[type] = adapterClass;
+    legacyAdapterRegistry[type] = adapterClass;
   }
 
   /**
@@ -353,13 +345,11 @@ export class ExternalSyncManager {
     }
 
     // Fall back to legacy adapter registries
-    const adapterModule =
-      builtInAdaptersMapping[this.config.type] ??
-      runtimeAdapterRegistry[this.config.type];
+    const adapterModule = legacyAdapterRegistry[this.config.type];
 
     if (!adapterModule) {
       log.warn(
-        { type: this.config.type, builtIn: Object.keys(builtInAdaptersMapping), runtime: Object.keys(runtimeAdapterRegistry) },
+        { type: this.config.type, registered: Object.keys(legacyAdapterRegistry) },
         "No adapter registered for type; external sync disabled",
       );
       return;

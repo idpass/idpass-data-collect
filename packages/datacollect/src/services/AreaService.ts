@@ -20,7 +20,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { eq, isNull } from "drizzle-orm";
 import { Pool } from "pg";
-import { createDrizzleFromPool, DrizzleDatabase } from "../db/connection";
+import { createDrizzleFromPool, DrizzleDatabase, withClient } from "../db/connection";
 import { areas } from "../db/schema";
 import { createLogger } from "../utils/logger";
 
@@ -86,8 +86,7 @@ export class AreaService {
    * Initializes the areas table in the database.
    */
   async initialize(): Promise<void> {
-    const client = await this.pool.connect();
-    try {
+    await withClient(this.pool, async (client) => {
       await client.query(`
         CREATE TABLE IF NOT EXISTS areas (
           id TEXT PRIMARY KEY,
@@ -106,9 +105,7 @@ export class AreaService {
       await client.query("CREATE INDEX IF NOT EXISTS idx_areas_level ON areas(level)");
       await client.query("CREATE INDEX IF NOT EXISTS idx_areas_type ON areas(type)");
       await client.query("CREATE INDEX IF NOT EXISTS idx_areas_pcode ON areas(pcode)");
-    } finally {
-      client.release();
-    }
+    });
   }
 
   /**
@@ -228,8 +225,7 @@ export class AreaService {
    * @returns Array of all descendant area records.
    */
   async getDescendants(areaId: string): Promise<AreaRecord[]> {
-    const client = await this.pool.connect();
-    try {
+    return withClient(this.pool, async (client) => {
       const result = await client.query(
         `
         WITH RECURSIVE descendants AS (
@@ -258,9 +254,7 @@ export class AreaService {
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       }));
-    } finally {
-      client.release();
-    }
+    });
   }
 
   /**
@@ -318,8 +312,7 @@ export class AreaService {
    * @param tenantId - The tenant ID for multi-tenant isolation.
    */
   async assignEntityToArea(entityGuid: string, areaId: string, tenantId: string = "default"): Promise<void> {
-    const client = await this.pool.connect();
-    try {
+    await withClient(this.pool, async (client) => {
       await client.query(
         `UPDATE entities
          SET modified = jsonb_set(
@@ -332,9 +325,7 @@ export class AreaService {
          WHERE guid = $2 AND tenant_id = $3`,
         [areaId, entityGuid, tenantId],
       );
-    } finally {
-      client.release();
-    }
+    });
   }
 
   /**
@@ -357,8 +348,7 @@ export class AreaService {
    * @param id - The area ID to delete.
    */
   async deleteArea(id: string): Promise<void> {
-    const client = await this.pool.connect();
-    try {
+    await withClient(this.pool, async (client) => {
       // Delete descendants first (bottom-up via CTE)
       await client.query(
         `
@@ -373,9 +363,7 @@ export class AreaService {
       );
       // Delete the area itself
       await client.query("DELETE FROM areas WHERE id = $1", [id]);
-    } finally {
-      client.release();
-    }
+    });
   }
 
   /**

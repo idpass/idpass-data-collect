@@ -19,193 +19,69 @@
 
 import { Pool } from "pg";
 import { createLogger } from "../utils/logger";
+import { PostgresEntityStorageAdapter } from "../storage/PostgresEntityStorageAdapter";
+import { PostgresEventStorageAdapter } from "../storage/PostgresEventStorageAdapter";
+import { PostgresAttachmentStorageAdapter } from "../storage/PostgresAttachmentStorageAdapter";
+import { AreaService } from "../services/AreaService";
+import { AssignmentService } from "../services/AssignmentService";
+import { SnapshotService } from "../services/SnapshotService";
+import { EventApplierService } from "../services/EventApplierService";
 
 const log = createLogger("db:initialize");
 
 /**
- * Consolidates all datacollect CREATE TABLE statements into a single
- * initialization function. Runs all DDL in dependency order so that
- * individual storage adapter initialize() methods become lightweight.
+ * Orchestrates datacollect database initialization by delegating to each
+ * service/adapter's own initialize() method. This ensures DDL is defined
+ * in exactly one place (the owning service) and run in dependency order.
  *
  * All statements use IF NOT EXISTS so this function is idempotent and
  * safe to call on every startup.
  *
- * Table order:
- *   1. entities             (core entity storage)
- *   2. potential_duplicates (duplicate detection)
- *   3. events               (event sourcing)
- *   4. audit_log            (audit trail)
- *   5. sync_metadata        (sync timestamps)
- *   6. areas                (geographic hierarchy)
- *   7. user_assignments     (RBAC area assignments, depends on areas)
- *   8. entity_overrides     (per-entity access overrides)
- *   9. entity_snapshots     (event sourcing optimization)
+ * Initialization order (respects FK dependencies):
+ *   1. entities + potential_duplicates  (PostgresEntityStorageAdapter)
+ *   2. events + audit_log + sync_metadata (PostgresEventStorageAdapter)
+ *   3. attachments + attachment_data    (PostgresAttachmentStorageAdapter)
+ *   4. areas                            (AreaService)
+ *   5. user_assignments + entity_overrides (AssignmentService, depends on areas)
+ *   6. entity_snapshots                 (SnapshotService)
  */
 export async function initializeDatacollectDatabase(postgresUrl: string): Promise<void> {
+  // Share a single pool across all adapters/services for initialization
   const pool = new Pool({ connectionString: postgresUrl });
-  const client = await pool.connect();
 
   try {
     log.info("Initializing datacollect database schema");
 
-    // ── 1. entities ───────────────────────────────────────────────────
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS entities (
-        id TEXT,
-        guid TEXT,
-        initial JSONB,
-        modified JSONB,
-        sync_level TEXT,
-        last_updated TIMESTAMP,
-        tenant_id TEXT NOT NULL DEFAULT 'default',
-        PRIMARY KEY (id, tenant_id),
-        UNIQUE (guid, tenant_id)
-      )
-    `);
+    const entityAdapter = new PostgresEntityStorageAdapter(pool);
+    await entityAdapter.initialize();
 
-    // ── 2. potential_duplicates ───────────────────────────────────────
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS potential_duplicates (
-        entity_guid TEXT,
-        duplicate_guid TEXT,
-        tenant_id TEXT NOT NULL DEFAULT 'default',
-        PRIMARY KEY (entity_guid, duplicate_guid, tenant_id)
-      )
-    `);
+    const eventAdapter = new PostgresEventStorageAdapter(pool);
+    await eventAdapter.initialize();
 
-    // ── 3. events ─────────────────────────────────────────────────────
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS events (
-        guid TEXT PRIMARY KEY,
-        tenant_id TEXT NOT NULL DEFAULT 'default',
-        entity_guid TEXT,
-        type TEXT,
-        data JSONB,
-        timestamp TIMESTAMPTZ,
-        user_id TEXT,
-        sync_level INTEGER
-      )
-    `);
-    await client.query("CREATE INDEX IF NOT EXISTS idx_events_tenant_id ON events(tenant_id)");
-    await client.query("CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp)");
-    await client.query("CREATE INDEX IF NOT EXISTS idx_events_entity_guid ON events(entity_guid)");
-    await client.query("CREATE INDEX IF NOT EXISTS idx_events_tenant_timestamp ON events(tenant_id, timestamp)");
-    await client.query("CREATE INDEX IF NOT EXISTS idx_events_sync_level ON events(sync_level)");
+    const attachmentAdapter = new PostgresAttachmentStorageAdapter(postgresUrl);
+    await attachmentAdapter.initialize();
+    await attachmentAdapter.closeConnection();
 
-    // ── 4. audit_log ──────────────────────────────────────────────────
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS audit_log (
-        id SERIAL PRIMARY KEY,
-        tenant_id TEXT NOT NULL DEFAULT 'default',
-        action TEXT,
-        guid TEXT,
-        entity_guid TEXT,
-        event_guid TEXT,
-        changes JSONB,
-        signature TEXT,
-        user_id TEXT,
-        timestamp TIMESTAMPTZ
-      )
-    `);
-    await client.query("CREATE INDEX IF NOT EXISTS idx_audit_log_tenant_id ON audit_log(tenant_id)");
-    await client.query("CREATE INDEX IF NOT EXISTS idx_audit_log_entity_guid ON audit_log(entity_guid)");
-    await client.query("CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp)");
+    const areaService = new AreaService(postgresUrl);
+    await areaService.initialize();
 
-    // ── 5. sync_metadata ──────────────────────────────────────────────
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS sync_metadata (
-        tenant_id TEXT NOT NULL DEFAULT 'default',
-        key TEXT NOT NULL,
-        value TEXT,
-        updated_at TIMESTAMPTZ DEFAULT NOW(),
-        PRIMARY KEY (tenant_id, key)
-      )
-    `);
+    const assignmentService = new AssignmentService(postgresUrl, areaService);
+    await assignmentService.initialize();
 
-    // ── 6. areas ──────────────────────────────────────────────────────
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS areas (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        pcode TEXT UNIQUE,
-        type TEXT NOT NULL,
-        level INTEGER NOT NULL,
-        parent_id TEXT,
-        geometry JSONB,
-        metadata JSONB,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
-    await client.query("CREATE INDEX IF NOT EXISTS idx_areas_parent_id ON areas(parent_id)");
-    await client.query("CREATE INDEX IF NOT EXISTS idx_areas_level ON areas(level)");
-    await client.query("CREATE INDEX IF NOT EXISTS idx_areas_type ON areas(type)");
-    await client.query("CREATE INDEX IF NOT EXISTS idx_areas_pcode ON areas(pcode)");
-
-    // ── 7. user_assignments ───────────────────────────────────────────
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS user_assignments (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        tenant_id TEXT NOT NULL,
-        area_id TEXT REFERENCES areas(id),
-        role TEXT NOT NULL,
-        include_descendants BOOLEAN DEFAULT TRUE,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
-    await client.query("CREATE INDEX IF NOT EXISTS idx_user_assignments_user_id ON user_assignments(user_id)");
-    await client.query("CREATE INDEX IF NOT EXISTS idx_user_assignments_tenant_id ON user_assignments(tenant_id)");
-    await client.query("CREATE INDEX IF NOT EXISTS idx_user_assignments_area_id ON user_assignments(area_id)");
-    await client.query(
-      "CREATE INDEX IF NOT EXISTS idx_user_assignments_user_tenant ON user_assignments(user_id, tenant_id)",
+    // SnapshotService.initialize() only runs DDL; it does not use eventApplierService.
+    const snapshotService = new SnapshotService(
+      postgresUrl,
+      null as unknown as EventApplierService,
     );
+    await snapshotService.initialize();
 
-    // ── 8. entity_overrides ───────────────────────────────────────────
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS entity_overrides (
-        id TEXT PRIMARY KEY,
-        entity_guid TEXT NOT NULL,
-        user_id TEXT NOT NULL,
-        tenant_id TEXT NOT NULL,
-        action TEXT NOT NULL,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
-    await client.query("CREATE INDEX IF NOT EXISTS idx_entity_overrides_user_id ON entity_overrides(user_id)");
-    await client.query("CREATE INDEX IF NOT EXISTS idx_entity_overrides_tenant_id ON entity_overrides(tenant_id)");
-    await client.query(
-      "CREATE INDEX IF NOT EXISTS idx_entity_overrides_entity_guid ON entity_overrides(entity_guid)",
-    );
-    await client.query(
-      "CREATE INDEX IF NOT EXISTS idx_entity_overrides_user_tenant ON entity_overrides(user_id, tenant_id)",
-    );
-
-    // ── 9. entity_snapshots ───────────────────────────────────────────
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS entity_snapshots (
-        id TEXT PRIMARY KEY,
-        entity_guid TEXT NOT NULL,
-        tenant_id TEXT NOT NULL DEFAULT 'default',
-        data JSONB NOT NULL,
-        event_sequence INTEGER NOT NULL,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      )
-    `);
-    await client.query(
-      "CREATE INDEX IF NOT EXISTS idx_entity_snapshots_entity_guid ON entity_snapshots(entity_guid)",
-    );
-    await client.query(
-      "CREATE INDEX IF NOT EXISTS idx_entity_snapshots_tenant_id ON entity_snapshots(tenant_id)",
-    );
-    await client.query(
-      "CREATE INDEX IF NOT EXISTS idx_entity_snapshots_entity_tenant ON entity_snapshots(entity_guid, tenant_id)",
-    );
+    // Close service-owned pools (adapters using shared pool don't own it)
+    await areaService.closeConnection();
+    await assignmentService.closeConnection();
+    await snapshotService.closeConnection();
 
     log.info("Datacollect database schema initialized successfully");
   } finally {
-    client.release();
     await pool.end();
   }
 }

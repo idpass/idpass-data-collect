@@ -21,7 +21,7 @@ import { Pool } from "pg";
 import { and, eq, gt, or, sql } from "drizzle-orm";
 import { EntityPair, EntityStorageAdapter, SearchCriteria } from "../interfaces/types";
 import { createLogger } from "../utils/logger";
-import { createDrizzleFromPool, DrizzleDatabase } from "../db/connection";
+import { createDrizzleFromPool, DrizzleDatabase, withClient } from "../db/connection";
 import { entities, potentialDuplicates } from "../db/schema";
 
 const log = createLogger("PostgresEntityStorageAdapter");
@@ -248,8 +248,7 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * ```
    */
   async initialize() {
-    const client = await this.pool.connect();
-    try {
+    await withClient(this.pool, async (client) => {
       await client.query(`
         CREATE TABLE IF NOT EXISTS entities (
           id TEXT,
@@ -271,9 +270,7 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
           PRIMARY KEY (entity_guid, duplicate_guid, tenant_id)
         )
       `);
-    } finally {
-      client.release();
-    }
+    });
   }
 
   /**

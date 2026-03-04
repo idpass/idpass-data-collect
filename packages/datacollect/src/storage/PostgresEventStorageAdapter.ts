@@ -20,7 +20,7 @@
 import { Pool } from "pg";
 import { and, eq, gt, sql, asc, desc, count } from "drizzle-orm";
 import { AuditLogEntry, EventStorageAdapter, FormSubmission, SyncLevel } from "../interfaces/types";
-import { createDrizzleFromPool, DrizzleDatabase } from "../db/connection";
+import { createDrizzleFromPool, DrizzleDatabase, withClient } from "../db/connection";
 import { events, auditLog, syncMetadata } from "../db/schema";
 import { createLogger } from "../utils/logger";
 
@@ -160,8 +160,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
    * @throws {Error} When database connection fails or table creation fails.
    */
   async initialize() {
-    const client = await this.pool.connect();
-    try {
+    await withClient(this.pool, async (client) => {
       await client.query(`
         CREATE TABLE IF NOT EXISTS events (
           guid TEXT PRIMARY KEY,
@@ -217,9 +216,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
       await client.query("CREATE INDEX IF NOT EXISTS idx_events_sync_level ON events(sync_level)");
       await client.query("CREATE INDEX IF NOT EXISTS idx_audit_log_entity_guid ON audit_log(entity_guid)");
       await client.query("CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp)");
-    } finally {
-      client.release();
-    }
+    });
   }
 
   /**
@@ -437,8 +434,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
     nextCursor: string | Date | null;
   }> {
     const cursorString = timestamp ? String(timestamp) : new Date(0).toISOString();
-    const client = await this.pool.connect();
-    try {
+    return withClient(this.pool, async (client) => {
       let query: string;
       let params: unknown[];
 
@@ -485,9 +481,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
       }
 
       return { events: eventList, nextCursor };
-    } finally {
-      client.release();
-    }
+    });
   }
 
   /**

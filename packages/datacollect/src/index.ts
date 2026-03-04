@@ -278,10 +278,11 @@ export * from "./db/connection";
 export { initializeDatacollectDatabase } from "./db/initialize";
 
 // Conflict Detection and Resolution
-export { ConflictService, InMemoryConflictStore } from "./services/ConflictService";
+export { ConflictService } from "./services/ConflictService";
 export type { ConflictRecord, ConflictStore, RecordConflictParams } from "./services/ConflictService";
 
 // Testing Utilities
+export { InMemoryConflictStore } from "./testing/InMemoryConflictStore";
 export { NetworkSimulator } from "./testing/NetworkSimulator";
 export type { NetworkCondition, NetworkStats } from "./testing/NetworkSimulator";
 export { StorageFaultInjector } from "./testing/StorageFaultInjector";

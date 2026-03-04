@@ -20,7 +20,7 @@
 import { v4 as uuidv4 } from "uuid";
 import { and, eq } from "drizzle-orm";
 import { Pool } from "pg";
-import { createDrizzleFromPool, DrizzleDatabase } from "../db/connection";
+import { createDrizzleFromPool, DrizzleDatabase, withClient } from "../db/connection";
 import { userAssignments, entityOverrides } from "../db/schema";
 import { AreaService } from "./AreaService";
 
@@ -74,8 +74,7 @@ export class AssignmentService {
    * Initializes the assignment tables in the database.
    */
   async initialize(): Promise<void> {
-    const client = await this.pool.connect();
-    try {
+    await withClient(this.pool, async (client) => {
       await client.query(`
         CREATE TABLE IF NOT EXISTS user_assignments (
           id TEXT PRIMARY KEY,
@@ -113,9 +112,7 @@ export class AssignmentService {
       await client.query(
         "CREATE INDEX IF NOT EXISTS idx_entity_overrides_user_tenant ON entity_overrides(user_id, tenant_id)",
       );
-    } finally {
-      client.release();
-    }
+    });
   }
 
   /**
@@ -326,8 +323,7 @@ export class AssignmentService {
 
     // Get entities from assigned areas
     if (areaIds.length > 0) {
-      const client = await this.pool.connect();
-      try {
+      await withClient(this.pool, async (client) => {
         const placeholders = areaIds.map((_, i) => `$${i + 2}`).join(", ");
         const result = await client.query(
           `SELECT guid FROM entities
@@ -340,9 +336,7 @@ export class AssignmentService {
         for (const row of result.rows) {
           entityGuidSet.add(row.guid);
         }
-      } finally {
-        client.release();
-      }
+      });
     }
 
     // Apply overrides
