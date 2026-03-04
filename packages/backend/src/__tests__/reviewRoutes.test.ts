@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from "uuid";
 import { SyncLevel } from "@idpass/data-collect-core";
 import { run } from "../syncServer";
 import { SyncServerInstance, AppConfig } from "../types";
-import { Client } from "pg";
+import { getConnectionString, ensureDatabaseExists, describeIfPostgres } from "./helpers/testDb";
 
 const mockConfig: AppConfig = {
   id: "review-test-config",
@@ -27,38 +27,7 @@ const mockConfig: AppConfig = {
   ],
 };
 
-const getConnectionString = () => {
-  const url = process.env.POSTGRES_TEST;
-  if (!url) return "";
-  const parsed = new URL(url.replace(/ /g, "%20"));
-  const baseName = parsed.pathname.replace(/^\//, "");
-  const dbName = baseName ? `${baseName}_review_routes` : "datacollect_review_routes";
-  parsed.pathname = `/${dbName}`;
-  return parsed.toString();
-};
-
-const postgresUrl = getConnectionString();
-const describeIfPostgres = process.env.POSTGRES_TEST ? describe : describe.skip;
-
-const ensureDatabaseExists = async (connectionString: string) => {
-  if (!connectionString) return;
-
-  const parsed = new URL(connectionString);
-  const dbName = parsed.pathname.replace(/^\//, "");
-  if (!dbName) return;
-
-  const adminUrl = new URL(connectionString);
-  adminUrl.pathname = "/postgres";
-
-  const client = new Client({ connectionString: adminUrl.toString() });
-  await client.connect();
-  const result = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
-  if (result.rowCount === 0) {
-    const escapedName = dbName.replace(/"/g, '""');
-    await client.query(`CREATE DATABASE "${escapedName}"`);
-  }
-  await client.end();
-};
+const postgresUrl = getConnectionString("review_routes");
 
 describeIfPostgres("Review Routes", () => {
   let app: SyncServerInstance | null = null;

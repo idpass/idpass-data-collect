@@ -12,10 +12,10 @@ import "dotenv/config";
 import jwt from "jsonwebtoken";
 import { Request, Response, NextFunction } from "express";
 import request from "supertest";
-import { Client } from "pg";
 import { run } from "../syncServer";
 import { SyncServerInstance, AppConfig } from "../types";
 import { createDynamicAuthMiddleware, validateTenantAccess } from "../middlewares/authentication";
+import { getConnectionString, ensureDatabaseExists, describeIfPostgres } from "./helpers/testDb";
 
 jest.mock("../utils/logger", () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -47,37 +47,7 @@ const mockConfig: AppConfig = {
   ],
 };
 
-const getConnectionString = () => {
-  const url = process.env.POSTGRES_TEST;
-  if (!url) return "";
-  const parsed = new URL(url.replace(/ /g, "%20"));
-  const baseName = parsed.pathname.replace(/^\//, "");
-  const dbName = baseName ? `${baseName}_sec_auth` : "datacollect_sec_auth";
-  parsed.pathname = `/${dbName}`;
-  return parsed.toString();
-};
-
-const postgresUrl = getConnectionString();
-const describeIfPostgres = process.env.POSTGRES_TEST ? describe : describe.skip;
-
-const ensureDatabaseExists = async (connectionString: string) => {
-  if (!connectionString) return;
-  const parsed = new URL(connectionString);
-  const dbName = parsed.pathname.replace(/^\//, "");
-  if (!dbName) return;
-
-  const adminUrl = new URL(connectionString);
-  adminUrl.pathname = "/postgres";
-
-  const client = new Client({ connectionString: adminUrl.toString() });
-  await client.connect();
-  const result = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
-  if (result.rowCount === 0) {
-    const escapedName = dbName.replace(/"/g, '""');
-    await client.query(`CREATE DATABASE "${escapedName}"`);
-  }
-  await client.end();
-};
+const postgresUrl = getConnectionString("sec_auth");
 
 describeIfPostgres("SECURITY: Authentication vulnerabilities", () => {
   let app: SyncServerInstance | null = null;

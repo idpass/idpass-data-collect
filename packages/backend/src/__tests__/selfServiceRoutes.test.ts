@@ -7,42 +7,11 @@ import jwt from "jsonwebtoken";
 import { createSelfServiceRouter } from "../routes/selfServiceRoutes";
 import { OtpStoreImpl } from "../stores/OtpStore";
 import { AppInstanceStore } from "../types";
-import { Client } from "pg";
+import { getConnectionString, ensureDatabaseExists, describeIfPostgres } from "./helpers/testDb";
 
 const JWT_SECRET = "test-secret-for-self-service";
 
-const getConnectionString = () => {
-  const url = process.env.POSTGRES_TEST;
-  if (!url) return "";
-  const parsed = new URL(url.replace(/ /g, "%20"));
-  const baseName = parsed.pathname.replace(/^\//, "");
-  const dbName = baseName ? `${baseName}_self_service` : "datacollect_self_service";
-  parsed.pathname = `/${dbName}`;
-  return parsed.toString();
-};
-
-const postgresUrl = getConnectionString();
-const describeIfPostgres = process.env.POSTGRES_TEST ? describe : describe.skip;
-
-const ensureDatabaseExists = async (connectionString: string) => {
-  if (!connectionString) return;
-
-  const parsed = new URL(connectionString);
-  const dbName = parsed.pathname.replace(/^\//, "");
-  if (!dbName) return;
-
-  const adminUrl = new URL(connectionString);
-  adminUrl.pathname = "/postgres";
-
-  const client = new Client({ connectionString: adminUrl.toString() });
-  await client.connect();
-  const result = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
-  if (result.rowCount === 0) {
-    const escapedName = dbName.replace(/"/g, '""');
-    await client.query(`CREATE DATABASE "${escapedName}"`);
-  }
-  await client.end();
-};
+const postgresUrl = getConnectionString("self_service");
 
 describeIfPostgres("Self-Service Routes", () => {
   let app: express.Express;

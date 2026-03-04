@@ -27,43 +27,12 @@ import { createSelfServiceRouter } from "../routes/selfServiceRoutes";
 import { createAppConfigRoutes } from "../routes/appConfigRoutes";
 import { OtpStoreImpl } from "../stores/OtpStore";
 import { AppInstanceStore, AppConfigStore, AppConfig } from "../types";
-import { Client } from "pg";
 import { errorHandler } from "../middlewares/errorHandlers";
+import { getConnectionString, ensureDatabaseExists, describeIfPostgres } from "./helpers/testDb";
 
 const JWT_SECRET = "test-secret-for-endpoints";
 
-const getConnectionString = () => {
-  const url = process.env.POSTGRES_TEST;
-  if (!url) return "";
-  const parsed = new URL(url.replace(/ /g, "%20"));
-  const baseName = parsed.pathname.replace(/^\//, "");
-  const dbName = baseName ? `${baseName}_self_svc_endpoints` : "datacollect_self_svc_endpoints";
-  parsed.pathname = `/${dbName}`;
-  return parsed.toString();
-};
-
-const postgresUrl = getConnectionString();
-const describeIfPostgres = process.env.POSTGRES_TEST ? describe : describe.skip;
-
-const ensureDatabaseExists = async (connectionString: string) => {
-  if (!connectionString) return;
-
-  const parsed = new URL(connectionString);
-  const dbName = parsed.pathname.replace(/^\//, "");
-  if (!dbName) return;
-
-  const adminUrl = new URL(connectionString);
-  adminUrl.pathname = "/postgres";
-
-  const client = new Client({ connectionString: adminUrl.toString() });
-  await client.connect();
-  const result = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
-  if (result.rowCount === 0) {
-    const escapedName = dbName.replace(/"/g, '""');
-    await client.query(`CREATE DATABASE "${escapedName}"`);
-  }
-  await client.end();
-};
+const postgresUrl = getConnectionString("self_svc_endpoints");
 
 // ─── Test data ───
 
