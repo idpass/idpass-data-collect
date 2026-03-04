@@ -55,6 +55,15 @@ function getAttachmentService(postgresUrl: string, tenantId: string): Attachment
   return service;
 }
 
+/**
+ * Extracts configId from query string or request body, defaulting to "default".
+ */
+function getConfigId(req: import("express").Request): string {
+  return (req.query.configId as string)
+    || ((req.body as Record<string, unknown>)?.configId as string)
+    || "default";
+}
+
 export function createAttachmentRoutes(appInstanceStore: AppInstanceStore, postgresUrl: string): Router {
   const router = Router();
 
@@ -85,13 +94,13 @@ export function createAttachmentRoutes(appInstanceStore: AppInstanceStore, postg
         return res.status(400).json({ error: "No file provided" });
       }
 
-      const { entityGuid, configId } = req.body;
+      const { entityGuid } = req.body;
 
       if (!entityGuid) {
         return res.status(400).json({ error: "entityGuid is required" });
       }
 
-      const tenantId = configId || "default";
+      const tenantId = getConfigId(req);
 
       // Verify the app instance exists
       const appInstance = await appInstanceStore.getAppInstance(tenantId);
@@ -136,7 +145,7 @@ export function createAttachmentRoutes(appInstanceStore: AppInstanceStore, postg
     validateTenantAccess,
     asyncHandler(async (req, res) => {
       const { guid } = req.params;
-      const configId = (req.query.configId as string) || "default";
+      const configId = getConfigId(req);
 
       const service = getAttachmentService(postgresUrl, configId);
       const result = await service.getAttachment(guid);
@@ -163,7 +172,7 @@ export function createAttachmentRoutes(appInstanceStore: AppInstanceStore, postg
     validateTenantAccess,
     asyncHandler(async (req, res) => {
       const { entityGuid } = req.params;
-      const configId = (req.query.configId as string) || "default";
+      const configId = getConfigId(req);
 
       const service = getAttachmentService(postgresUrl, configId);
       const attachments = await service.listAttachments(entityGuid);
@@ -182,7 +191,7 @@ export function createAttachmentRoutes(appInstanceStore: AppInstanceStore, postg
     validateTenantAccess,
     asyncHandler(async (req, res) => {
       const { guid } = req.params;
-      const configId = (req.query.configId as string) || ((req.body as Record<string, unknown>)?.configId as string) || "default";
+      const configId = getConfigId(req);
 
       const service = getAttachmentService(postgresUrl, configId);
 

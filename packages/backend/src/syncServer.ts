@@ -42,7 +42,6 @@ import { AppConfigStoreImpl } from "./stores/AppConfigStore";
 import { AppInstanceStoreImpl } from "./stores/AppInstanceStore";
 import { UserStoreImpl } from "./stores/UserStore";
 import { OtpStoreImpl } from "./stores/OtpStore";
-import { VerificationStoreImpl } from "./stores/VerificationStore";
 import { ReviewStoreImpl } from "./stores/ReviewStore";
 import { Role, SyncServerConfig, SyncServerInstance } from "./types";
 import { generatePublicArtifacts, resolvePublicBaseUrl } from "./utils/publicArtifacts";
@@ -64,8 +63,6 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   await appInstanceStore.initialize();
   const otpStore = new OtpStoreImpl(config.postgresUrl);
   await otpStore.initialize();
-  const verificationStore = new VerificationStoreImpl(config.postgresUrl);
-  await verificationStore.initialize();
   const reviewStore = new ReviewStoreImpl(config.postgresUrl);
   await reviewStore.initialize();
 
@@ -235,7 +232,6 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
     await appConfigStore.clearStore();
     await appInstanceStore.clearStore();
     await otpStore.clearStore();
-    await verificationStore.clearStore();
     clearReviewState();
     await reviewStore.clearStore();
 
@@ -261,7 +257,6 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
     await appConfigStore.closeConnection();
     await appInstanceStore.closeConnection();
     await otpStore.closeConnection();
-    await verificationStore.closeConnection();
     await reviewStore.closeConnection();
     await healthCheckPool.end();
     await new Promise<void>((resolve) => {

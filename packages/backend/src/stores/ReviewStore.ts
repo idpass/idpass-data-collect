@@ -20,6 +20,7 @@
 import { Pool } from "pg";
 import { v4 as uuidv4 } from "uuid";
 import { createLogger } from "../utils/logger";
+import { withClient } from "../utils/db";
 
 const log = createLogger("ReviewStore");
 
@@ -53,8 +54,7 @@ export class ReviewStoreImpl implements ReviewStore {
   }
 
   async initialize(): Promise<void> {
-    const client = await this.pool.connect();
-    try {
+    await withClient(this.pool, async (client) => {
       await client.query(`
         CREATE TABLE IF NOT EXISTS review_configs (
           id TEXT PRIMARY KEY,
@@ -72,15 +72,12 @@ export class ReviewStoreImpl implements ReviewStore {
         CREATE INDEX IF NOT EXISTS idx_review_configs_tenant_id
         ON review_configs (tenant_id)
       `);
-    } finally {
-      client.release();
-    }
+    });
     log.info("Review store initialized");
   }
 
   async getConfig(tenantId: string, eventType: string): Promise<ReviewConfigRecord | null> {
-    const client = await this.pool.connect();
-    try {
+    return withClient(this.pool, async (client) => {
       const result = await client.query(
         `SELECT id, tenant_id, event_type, policy, required_role, external_adapter_type
          FROM review_configs
@@ -89,14 +86,11 @@ export class ReviewStoreImpl implements ReviewStore {
       );
       if (result.rows.length === 0) return null;
       return this.mapRow(result.rows[0]);
-    } finally {
-      client.release();
-    }
+    });
   }
 
   async getConfigsByTenant(tenantId: string): Promise<ReviewConfigRecord[]> {
-    const client = await this.pool.connect();
-    try {
+    return withClient(this.pool, async (client) => {
       const result = await client.query(
         `SELECT id, tenant_id, event_type, policy, required_role, external_adapter_type
          FROM review_configs
@@ -104,9 +98,7 @@ export class ReviewStoreImpl implements ReviewStore {
         [tenantId],
       );
       return result.rows.map((row) => this.mapRow(row));
-    } finally {
-      client.release();
-    }
+    });
   }
 
   async setConfig(
@@ -114,8 +106,7 @@ export class ReviewStoreImpl implements ReviewStore {
     eventType: string,
     config: { policy: string; requiredRole?: string; externalAdapterType?: string },
   ): Promise<ReviewConfigRecord> {
-    const client = await this.pool.connect();
-    try {
+    return withClient(this.pool, async (client) => {
       const id = uuidv4();
       const result = await client.query(
         `INSERT INTO review_configs (id, tenant_id, event_type, policy, required_role, external_adapter_type, updated_at)
@@ -126,18 +117,11 @@ export class ReviewStoreImpl implements ReviewStore {
         [id, tenantId, eventType, config.policy, config.requiredRole || null, config.externalAdapterType || null],
       );
       return this.mapRow(result.rows[0]);
-    } finally {
-      client.release();
-    }
+    });
   }
 
   async clearStore(): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query(`DELETE FROM review_configs`);
-    } finally {
-      client.release();
-    }
+    await withClient(this.pool, (client) => client.query(`DELETE FROM review_configs`));
   }
 
   async closeConnection(): Promise<void> {
