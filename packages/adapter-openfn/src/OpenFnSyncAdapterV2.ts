@@ -18,7 +18,6 @@
  */
 
 import axios from "axios";
-import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
 import type {
   ExternalSyncAdapterV2,
@@ -30,12 +29,12 @@ import type {
 } from "@idpass/data-collect-core";
 import type {
   EventStore,
-  FormSubmission,
 } from "@idpass/data-collect-core";
 import {
   SyncLevel,
 } from "@idpass/data-collect-core";
 import { EventApplierService } from "@idpass/data-collect-core";
+import { convertPulledDataToEvents } from "./shared";
 
 /**
  * Zod config schema for the OpenFn adapter.
@@ -199,7 +198,7 @@ export class OpenFnSyncAdapterV2 implements ExternalSyncAdapterV2 {
       }
 
       const response = await axios.get(this.config.url, { params, headers });
-      const events = this.convertPulledDataToEvents(response.data);
+      const events = convertPulledDataToEvents(response.data);
 
       if (events.length === 0) {
         return {
@@ -338,33 +337,4 @@ export class OpenFnSyncAdapterV2 implements ExternalSyncAdapterV2 {
     }
   }
 
-  private convertPulledDataToEvents(payload: unknown): FormSubmission[] {
-    if (!payload) {
-      return [];
-    }
-
-    const events = Array.isArray(payload)
-      ? payload
-      : Array.isArray((payload as { events?: unknown[] }).events)
-      ? (payload as { events: unknown[] }).events
-      : [];
-
-    return events.map((event) => this.toFormSubmission(event));
-  }
-
-  private toFormSubmission(event: unknown): FormSubmission {
-    const record = (event as Record<string, unknown>) || {};
-    const timestamp = typeof record.timestamp === "string" ? record.timestamp : new Date().toISOString();
-    const entityGuid = typeof record.entityGuid === "string" ? record.entityGuid : undefined;
-
-    return {
-      type: (record.type as string) || "external-pull",
-      guid: (record.guid as string) || uuidv4(),
-      entityGuid: entityGuid || ((record.id as string) ?? uuidv4()),
-      data: record,
-      timestamp,
-      userId: (record.userId as string) || "external-system",
-      syncLevel: SyncLevel.REMOTE,
-    };
-  }
 }

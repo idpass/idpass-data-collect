@@ -64,6 +64,11 @@ export const initializeInstance = () => {
   )
 }
 
+function api(): AxiosInstance {
+  if (!instance) throw new Error('Instance not initialized')
+  return instance
+}
+
 export interface AppListParams {
   page?: number
   pageSize?: number
@@ -98,51 +103,34 @@ export interface AppListResponse {
 }
 
 export const getApps = async (params: AppListParams = {}): Promise<AppListResponse> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.get(APPS_URL, {
+  const response = await api().get(APPS_URL, {
     params,
   })
   return response.data
 }
 
 export const getApp = async (id: string) => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.get(`${APPS_URL}/${id}`)
+  const response = await api().get(`${APPS_URL}/${id}`)
   return response.data
 }
 
 export const createApp = async (formData: FormData) => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.post(APPS_URL, formData)
+  const response = await api().post(APPS_URL, formData)
   return response.data
 }
 
 export const updateApp = async (id: string, formData: FormData) => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.put(`${APPS_URL}/${id}`, formData)
+  const response = await api().put(`${APPS_URL}/${id}`, formData)
   return response.data
 }
 
 export const deleteApp = async (id: string) => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.delete(`${APPS_URL}/${id}`)
+  const response = await api().delete(`${APPS_URL}/${id}`)
   return response.data
 }
 
 export const getAppConfigJsonUrl = (artifactId: string) => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
+  api() // ensure initialized
   if (!artifactId) {
     throw new Error('Artifact id is required')
   }
@@ -151,9 +139,7 @@ export const getAppConfigJsonUrl = (artifactId: string) => {
 }
 
 export const getAppQrCodeUrl = (artifactId: string) => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
+  api() // ensure initialized
   if (!artifactId) {
     throw new Error('Artifact id is required')
   }
@@ -162,18 +148,12 @@ export const getAppQrCodeUrl = (artifactId: string) => {
 }
 
 export const getEntitiesCount = async (configId: string) => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.get(`${ENTITIES_URL}/count?configId=${configId}`)
+  const response = await api().get(`${ENTITIES_URL}/count?configId=${configId}`)
   return response.data
 }
 
 export const getEntitiesCountByForm = async (configId: string): Promise<Record<string, number>> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.get(`${ENTITIES_URL}/count-by-form?configId=${configId}`)
+  const response = await api().get(`${ENTITIES_URL}/count-by-form?configId=${configId}`)
   return response.data
 }
 
@@ -189,10 +169,7 @@ export interface EntityRecord {
 }
 
 export const getEntities = async (configId: string, limit = 100): Promise<EntityRecord[]> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.get(`${ENTITIES_URL}?configId=${configId}&limit=${limit}`)
+  const response = await api().get(`${ENTITIES_URL}?configId=${configId}&limit=${limit}`)
   return response.data
 }
 
@@ -207,34 +184,22 @@ export interface EventRecord {
 }
 
 export const getEntityEvents = async (entityGuid: string, configId: string): Promise<EventRecord[]> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.get(`${ENTITIES_URL}/${entityGuid}/events?configId=${configId}`)
+  const response = await api().get(`${ENTITIES_URL}/${entityGuid}/events?configId=${configId}`)
   return response.data
 }
 
 export const externalSync = async (configId: string, credentials?: unknown) => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.post(EXTERNAL_SYNC_URL, { configId, credentials })
+  const response = await api().post(EXTERNAL_SYNC_URL, { configId, credentials })
   return response.data
 }
 
 export const getUsers = async (): Promise<{ id: string; email: string; role: string }[]> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.get(USERS_URL)
+  const response = await api().get(USERS_URL)
   return response.data
 }
 
 export const createUser = async (user: { email: string; password: string; role: string; tenantIds?: string[] }) => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.post(USERS_URL, user)
+  const response = await api().post(USERS_URL, user)
   return response.data
 }
 
@@ -245,18 +210,12 @@ export const updateUser = async (user: {
   role: string
   tenantIds?: string[]
 }) => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.put(`${USERS_URL}/${user.id}`, user)
+  const response = await api().put(`${USERS_URL}/${user.id}`, user)
   return response.data
 }
 
 export const deleteUser = async (userId: string) => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.delete(`${USERS_URL}/${userId}`)
+  const response = await api().delete(`${USERS_URL}/${userId}`)
   return response.data
 }
 
@@ -290,12 +249,9 @@ export interface FieldMapping {
 }
 
 export const parseOpenSppFieldsFromFile = async (file: File): Promise<{ fields: ParsedOpenSppField[] }> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
   const formData = new FormData()
   formData.append('payload', file)
-  const response = await instance.post(`${OPENSPP_FIELDS_URL}/parse-file`, formData, {
+  const response = await api().post(`${OPENSPP_FIELDS_URL}/parse-file`, formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },
@@ -304,10 +260,7 @@ export const parseOpenSppFieldsFromFile = async (file: File): Promise<{ fields: 
 }
 
 export const parseOpenSppFieldsFromPayload = async (payload: unknown): Promise<{ fields: ParsedOpenSppField[] }> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.post(`${OPENSPP_FIELDS_URL}/parse`, payload)
+  const response = await api().post(`${OPENSPP_FIELDS_URL}/parse`, payload)
   return response.data
 }
 
@@ -322,10 +275,7 @@ export interface FetchOpenSppFieldsParams {
 }
 
 export const fetchOpenSppFieldsFromAPI = async (params: FetchOpenSppFieldsParams): Promise<{ fields: ParsedOpenSppField[] }> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.post(`${OPENSPP_FIELDS_URL}/fetch`, params)
+  const response = await api().post(`${OPENSPP_FIELDS_URL}/fetch`, params)
   return response.data
 }
 
@@ -367,14 +317,11 @@ export const getReviews = async (
   tenantId: string,
   status?: 'pending' | 'approved' | 'rejected',
 ): Promise<{ reviews: ReviewRecord[] }> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
   const params: Record<string, string> = { tenantId }
   if (status) {
     params.status = status
   }
-  const response = await instance.get(REVIEWS_URL, { params })
+  const response = await api().get(REVIEWS_URL, { params })
   return response.data
 }
 
@@ -382,10 +329,7 @@ export const approveReview = async (
   id: string,
   tenantId: string,
 ): Promise<{ review: ReviewRecord }> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.post(`${REVIEWS_URL}/${id}/approve`, { tenantId })
+  const response = await api().post(`${REVIEWS_URL}/${id}/approve`, { tenantId })
   return response.data
 }
 
@@ -394,10 +338,7 @@ export const rejectReview = async (
   tenantId: string,
   reason: string,
 ): Promise<{ review: ReviewRecord }> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.post(`${REVIEWS_URL}/${id}/reject`, { tenantId, reason })
+  const response = await api().post(`${REVIEWS_URL}/${id}/reject`, { tenantId, reason })
   return response.data
 }
 
@@ -405,20 +346,14 @@ export const bulkApproveReviews = async (
   reviewIds: string[],
   tenantId: string,
 ): Promise<{ approved: number; failed: number; errors: Array<{ reviewId: string; error: string }> }> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.post(`${REVIEWS_URL}/bulk-approve`, { reviewIds, tenantId })
+  const response = await api().post(`${REVIEWS_URL}/bulk-approve`, { reviewIds, tenantId })
   return response.data
 }
 
 export const getReviewConfigs = async (
   tenantId: string,
 ): Promise<{ configs: ReviewConfigRecord[] }> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.get(`${REVIEWS_URL}/config/${tenantId}`)
+  const response = await api().get(`${REVIEWS_URL}/config/${tenantId}`)
   return response.data
 }
 
@@ -427,10 +362,7 @@ export const setReviewConfig = async (
   eventType: string,
   config: { policy: string; requiredRole?: string; externalAdapterType?: string },
 ): Promise<{ status: string; config: ReviewConfigRecord }> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.put(`${REVIEWS_URL}/config/${tenantId}/${eventType}`, config)
+  const response = await api().put(`${REVIEWS_URL}/config/${tenantId}/${eventType}`, config)
   return response.data
 }
 
@@ -444,10 +376,7 @@ export interface PotentialDuplicate {
 export const getPotentialDuplicates = async (
   configId: string,
 ): Promise<PotentialDuplicate[]> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.get(DUPLICATES_URL, { params: { configId } })
+  const response = await api().get(DUPLICATES_URL, { params: { configId } })
   return response.data
 }
 
@@ -457,10 +386,7 @@ export const resolveDuplicate = async (params: {
   shouldDeleteNewItem: boolean
   configId: string
 }): Promise<{ status: string }> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.post(`${DUPLICATES_URL}/resolve`, params)
+  const response = await api().post(`${DUPLICATES_URL}/resolve`, params)
   return response.data
 }
 
@@ -480,14 +406,11 @@ export const uploadAttachment = async (
   entityGuid: string,
   configId: string,
 ): Promise<{ status: string; attachment: AttachmentMetadata }> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
   const formData = new FormData()
   formData.append('file', file)
   formData.append('entityGuid', entityGuid)
   formData.append('configId', configId)
-  const response = await instance.post(`${ATTACHMENTS_URL}/upload`, formData, {
+  const response = await api().post(`${ATTACHMENTS_URL}/upload`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
   return response.data
@@ -497,10 +420,7 @@ export const getEntityAttachments = async (
   entityGuid: string,
   configId: string,
 ): Promise<{ status: string; attachments: AttachmentMetadata[] }> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.get(`${ATTACHMENTS_URL}/entity/${entityGuid}`, {
+  const response = await api().get(`${ATTACHMENTS_URL}/entity/${entityGuid}`, {
     params: { configId },
   })
   return response.data
@@ -510,10 +430,7 @@ export const deleteAttachment = async (
   guid: string,
   configId: string,
 ): Promise<{ status: string }> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.delete(`${ATTACHMENTS_URL}/${guid}`, {
+  const response = await api().delete(`${ATTACHMENTS_URL}/${guid}`, {
     params: { configId },
   })
   return response.data
@@ -527,10 +444,7 @@ export const getAttachmentDownloadUrl = (guid: string, configId: string): string
 // --- User Token Management ---
 
 export const refreshToken = async (): Promise<{ token: string; userId: string }> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.post(`${USERS_URL}/refresh`)
+  const response = await api().post(`${USERS_URL}/refresh`)
   return response.data
 }
 
@@ -541,9 +455,6 @@ export const getCurrentUser = async (): Promise<{
   tenantIds: string[]
   roleAssignments?: Array<{ tenantId: string; role: string; areaId?: string }>
 }> => {
-  if (!instance) {
-    throw new Error('Instance not initialized')
-  }
-  const response = await instance.get(`${USERS_URL}/me`)
+  const response = await api().get(`${USERS_URL}/me`)
   return response.data
 }
