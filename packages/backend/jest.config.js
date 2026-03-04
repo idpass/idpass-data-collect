@@ -6,6 +6,7 @@ module.exports = {
   moduleNameMapper: {
     "^@idpass/data-collect-core$": "<rootDir>/../datacollect/src",
   },
+  testPathIgnorePatterns: ["/node_modules/", "/dist/", "/__tests__/helpers/"],
   // Run tests sequentially to avoid race conditions: multiple test suites
   // share the same PostgreSQL server and the public/artifacts/ directory on disk.
   maxWorkers: 1,
