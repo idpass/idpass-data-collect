@@ -126,7 +126,7 @@ describeIfPostgres("Health and Security endpoints", () => {
       const response = await request(currentApp.httpServer).get("/api/users/check-token");
 
       expect(response.status).toBe(401);
-      expect(response.body.error).toBe("Authorization header missing");
+      expect(response.body.error).toBe("Invalid token");
     });
 
     it("returns 401 when an invalid token is provided", async () => {
@@ -161,7 +161,7 @@ describeIfPostgres("Health and Security endpoints", () => {
         .set("Authorization", "Basic dXNlcjpwYXNz");
 
       expect(response.status).toBe(401);
-      expect(response.body.error).toBe("Invalid authentication type");
+      expect(response.body.error).toBe("Invalid token");
     });
   });
 

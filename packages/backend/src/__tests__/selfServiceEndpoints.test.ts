@@ -497,7 +497,7 @@ describe("GET /api/auth/self-service/entity (without PostgreSQL)", () => {
     const response = await request(app).get("/api/auth/self-service/entity");
 
     expect(response.status).toBe(401);
-    expect(response.body.error).toBe("Authorization header missing");
+    expect(response.body.error).toBe("Invalid token");
   });
 
   it("should return 400 when token has no entityGuid", async () => {
@@ -618,7 +618,7 @@ describe("POST /api/auth/self-service/submit (without PostgreSQL)", () => {
       });
 
     expect(response.status).toBe(401);
-    expect(response.body.error).toBe("Authorization header missing");
+    expect(response.body.error).toBe("Invalid token");
   });
 
   it("should return 400 when token has no entityGuid", async () => {
@@ -902,7 +902,7 @@ describe("GET /api/auth/self-service/submissions (without PostgreSQL)", () => {
     const response = await request(app).get("/api/auth/self-service/submissions");
 
     expect(response.status).toBe(401);
-    expect(response.body.error).toBe("Authorization header missing");
+    expect(response.body.error).toBe("Invalid token");
   });
 
   it("should return 400 when token has no entityGuid", async () => {
@@ -1056,7 +1056,7 @@ describe("Scope hardening", () => {
     const response = await request(app).get("/api/auth/self-service/entity").set("Authorization", "Basic dXNlcjpwYXNz");
 
     expect(response.status).toBe(401);
-    expect(response.body.error).toBe("Invalid authentication type");
+    expect(response.body.error).toBe("Invalid token");
   });
 
   it("should reject requests with expired token", async () => {
