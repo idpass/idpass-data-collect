@@ -55,7 +55,12 @@ export const errorHandler = (err: CustomError, req: Request, res: Response, _nex
   res.status(statusCode).json(errorResponse);
 };
 
+let uncaughtHandlersRegistered = false;
+
 export const setupUncaughtHandlers = (): void => {
+  if (uncaughtHandlersRegistered) return;
+  uncaughtHandlersRegistered = true;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   process.on("unhandledRejection", (reason: any, promise: Promise<any>) => {
     log.error({ reason, promise }, "Unhandled rejection");
