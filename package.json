@@ -37,7 +37,7 @@
     "ci:setup": "echo 'enable-pre-post-scripts=true' > .npmrc && echo 'auto-install-peers=true' >> .npmrc && echo 'strict-peer-dependencies=false' >> .npmrc",
     "ci:install": "pnpm run ci:setup && pnpm install",
     "prepare": "[ \"$CI\" != \"true\" ] && husky install || echo 'Skipping husky in CI'",
-    "pr-check": "pnpm run type-check && pnpm run lint && pnpm run test && pnpm run check-licenses --fix"
+    "pr-check": "pnpm run type-check && pnpm run lint && pnpm --filter @idpass/data-collect-backend run validate-api && pnpm run test && pnpm run build && pnpm run check-licenses --fix"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",

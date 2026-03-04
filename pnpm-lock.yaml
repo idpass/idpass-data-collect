@@ -54,6 +54,9 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
+      '@eslint/js':
+        specifier: ^9.39.2
+        version: 9.39.2
       '@types/jest':
         specifier: ^29.5.14
         version: 29.5.14
@@ -66,6 +69,12 @@ importers:
       '@types/uuid':
         specifier: ^10.0.0
         version: 10.0.0
+      eslint:
+        specifier: ^9.27.0
+        version: 9.39.2(jiti@2.5.1)
+      globals:
+        specifier: ^15.15.0
+        version: 15.15.0
       jest:
         specifier: ^29.7.0
         version: 29.7.0(@types/node@20.19.33)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.17))(@swc/wasm@1.15.11)(@types/node@20.19.33)(typescript@5.9.3))
@@ -78,6 +87,9 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+      typescript-eslint:
+        specifier: ^8.55.0
+        version: 8.55.0(eslint@9.39.2(jiti@2.5.1))(typescript@5.9.3)
 
   packages/adapter-openfn:
     dependencies:
@@ -94,6 +106,9 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
+      '@eslint/js':
+        specifier: ^9.39.2
+        version: 9.39.2
       '@types/jest':
         specifier: ^29.5.14
         version: 29.5.14
@@ -103,6 +118,12 @@ importers:
       '@types/uuid':
         specifier: ^10.0.0
         version: 10.0.0
+      eslint:
+        specifier: ^9.27.0
+        version: 9.39.2(jiti@2.5.1)
+      globals:
+        specifier: ^15.15.0
+        version: 15.15.0
       jest:
         specifier: ^29.7.0
         version: 29.7.0(@types/node@20.19.33)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.17))(@swc/wasm@1.15.11)(@types/node@20.19.33)(typescript@5.9.3))
@@ -115,6 +136,9 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+      typescript-eslint:
+        specifier: ^8.55.0
+        version: 8.55.0(eslint@9.39.2(jiti@2.5.1))(typescript@5.9.3)
 
   packages/adapter-openspp:
     dependencies:
@@ -131,6 +155,9 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
+      '@eslint/js':
+        specifier: ^9.39.2
+        version: 9.39.2
       '@types/jest':
         specifier: ^29.5.14
         version: 29.5.14
@@ -140,6 +167,12 @@ importers:
       '@types/uuid':
         specifier: ^10.0.0
         version: 10.0.0
+      eslint:
+        specifier: ^9.27.0
+        version: 9.39.2(jiti@2.5.1)
+      globals:
+        specifier: ^15.15.0
+        version: 15.15.0
       jest:
         specifier: ^29.7.0
         version: 29.7.0(@types/node@20.19.33)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.17))(@swc/wasm@1.15.11)(@types/node@20.19.33)(typescript@5.9.3))
@@ -152,6 +185,9 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+      typescript-eslint:
+        specifier: ^8.55.0
+        version: 8.55.0(eslint@9.39.2(jiti@2.5.1))(typescript@5.9.3)
 
   packages/admin:
     dependencies:
@@ -17021,10 +17057,10 @@ snapshots:
     dependencies:
       '@types/yargs-parser': 21.0.3
 
-  '@typescript-eslint/eslint-plugin@8.55.0(@typescript-eslint/parser@8.55.0(eslint@9.39.2(jiti@2.5.1))(typescript@5.8.3))(eslint@9.39.2(jiti@2.5.1))(typescript@5.8.3)':
+  '@typescript-eslint/eslint-plugin@8.55.0(@typescript-eslint/parser@8.55.0(eslint@9.39.2(jiti@2.5.1))(typescript@5.9.3))(eslint@9.39.2(jiti@2.5.1))(typescript@5.8.3)':
     dependencies:
       '@eslint-community/regexpp': 4.12.2
-      '@typescript-eslint/parser': 8.55.0(eslint@9.39.2(jiti@2.5.1))(typescript@5.8.3)
+      '@typescript-eslint/parser': 8.55.0(eslint@9.39.2(jiti@2.5.1))(typescript@5.9.3)
       '@typescript-eslint/scope-manager': 8.55.0
       '@typescript-eslint/type-utils': 8.55.0(eslint@9.39.2(jiti@2.5.1))(typescript@5.8.3)
       '@typescript-eslint/utils': 8.55.0(eslint@9.39.2(jiti@2.5.1))(typescript@5.8.3)
@@ -25149,7 +25185,7 @@ snapshots:
 
   typescript-eslint@8.55.0(eslint@9.39.2(jiti@2.5.1))(typescript@5.8.3):
     dependencies:
-      '@typescript-eslint/eslint-plugin': 8.55.0(@typescript-eslint/parser@8.55.0(eslint@9.39.2(jiti@2.5.1))(typescript@5.8.3))(eslint@9.39.2(jiti@2.5.1))(typescript@5.8.3)
+      '@typescript-eslint/eslint-plugin': 8.55.0(@typescript-eslint/parser@8.55.0(eslint@9.39.2(jiti@2.5.1))(typescript@5.9.3))(eslint@9.39.2(jiti@2.5.1))(typescript@5.8.3)
       '@typescript-eslint/parser': 8.55.0(eslint@9.39.2(jiti@2.5.1))(typescript@5.8.3)
       '@typescript-eslint/typescript-estree': 8.55.0(typescript@5.8.3)
       '@typescript-eslint/utils': 8.55.0(eslint@9.39.2(jiti@2.5.1))(typescript@5.8.3)
