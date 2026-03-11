@@ -16,6 +16,7 @@
     "test:backend": "pnpm --filter @idpass/data-collect-backend test",
     "test:e2e:backend": "pnpm --filter @idpass/data-collect-backend test:e2e",
     "test:admin": "pnpm --filter @idpass/data-collect-admin test:unit",
+    "test:e2e:admin": "pnpm --filter @idpass/data-collect-admin test:e2e",
     "test:adapter-openspp": "pnpm --filter @idpass/adapter-openspp test",
     "test:adapter-openfn": "pnpm --filter @idpass/adapter-openfn test",
     "build": "pnpm -r --if-present run build",
