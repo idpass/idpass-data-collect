@@ -13,6 +13,7 @@
     "test": "pnpm -r --if-present run test",
     "test:datacollect": "pnpm --filter @idpass/data-collect-core test",
     "test:backend": "pnpm --filter @idpass/data-collect-backend test",
+    "test:e2e:backend": "pnpm --filter @idpass/data-collect-backend test:e2e",
     "test:admin": "pnpm --filter @idpass/data-collect-admin test:unit",
     "build": "pnpm -r --if-present run build",
     "build:datacollect": "pnpm --filter @idpass/data-collect-core build",
