@@ -53,6 +53,7 @@
     "pino": "^10.3.1",
     "postgres": "^3.4.8",
     "uuid": "^10.0.0",
+    "xstate": "^5.28.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
