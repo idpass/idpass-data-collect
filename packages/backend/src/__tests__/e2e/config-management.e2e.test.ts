@@ -43,9 +43,16 @@ describeIfPostgres("Config management e2e", () => {
     await teardown(ctx);
   });
 
+  const tmpDirs: string[] = [];
+
+  afterAll(async () => {
+    await Promise.all(tmpDirs.map((d) => fs.rm(d, { recursive: true, force: true })));
+  });
+
   /** Write a config JSON to a temp file and return the path. */
   async function writeTempConfig(config: AppConfig): Promise<string> {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "e2e-cfg-"));
+    tmpDirs.push(tmpDir);
     const filePath = path.join(tmpDir, "config.json");
     await fs.writeFile(filePath, JSON.stringify(config));
     return filePath;

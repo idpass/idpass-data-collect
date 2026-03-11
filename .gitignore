@@ -94,6 +94,6 @@ website/docs/packages/datacollect/api/
 website/docs/packages/backend/api-reference-generated/
 
 .cursor/
-.claude/memory/
-.claude/plans/
-.claude/settings.local.json
+.claude/
+!.claude/hooks/
+!.claude/settings.json
