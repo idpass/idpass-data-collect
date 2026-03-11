@@ -18,34 +18,28 @@
  */
 
 import { ref } from 'vue'
+import { createActor, type SnapshotFrom } from 'xstate'
 import { Capacitor } from '@capacitor/core'
-import { BiometricAuth, BiometryErrorType } from '@aparajita/capacitor-biometric-auth'
-import { SecureStorageService } from '@/services/SecureStorageService'
+import { BiometricAuth } from '@aparajita/capacitor-biometric-auth'
+import { lockMachine } from '@/machines/lockMachine'
 
-const LOCK_STATE_KEY = 'app_lock_state'
-const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000
+type LockSnapshot = SnapshotFrom<typeof lockMachine>
 
+function stateIs(snap: LockSnapshot, state: string): boolean {
+  return (snap as { value: string }).value === state
+}
+
+const lockActor = createActor(lockMachine)
+lockActor.start()
+
+// Reactive ref kept in sync with the actor snapshot so that existing
+// consumers that read `AppLockService.locked.value` continue to work.
 const lockedRef = ref(true)
-let inactivityTimer: ReturnType<typeof setTimeout> | null = null
 
-/**
- * Persists the lock state to secure storage so that if the app process is
- * killed while backgrounded (normal Android behaviour under memory pressure),
- * the app restarts in a locked state rather than an unlocked one.
- */
-async function persistLockState(isLocked: boolean): Promise<void> {
-  await SecureStorageService.set(LOCK_STATE_KEY, isLocked ? '1' : '0')
-}
-
-function resetInactivityTimer(): void {
-  if (inactivityTimer !== null) {
-    clearTimeout(inactivityTimer)
-  }
-  inactivityTimer = setTimeout(() => {
-    lockedRef.value = true
-    persistLockState(true)
-  }, INACTIVITY_TIMEOUT_MS)
-}
+// Subscribe to actor transitions to keep the ref updated
+lockActor.subscribe((snap) => {
+  lockedRef.value = !stateIs(snap, 'unlocked')
+})
 
 export const AppLockService = {
   /**
@@ -59,13 +53,9 @@ export const AppLockService = {
    * Defaults to locked if no persisted state is found.
    */
   async init(): Promise<void> {
-    if (!Capacitor.isNativePlatform()) {
-      lockedRef.value = false
-      return
-    }
-    const stored = await SecureStorageService.get(LOCK_STATE_KEY)
-    // Treat missing state as locked (safe default for cold start)
-    lockedRef.value = stored !== '0'
+    lockActor.send({ type: 'INIT' })
+    // Wait for the initializing state to resolve
+    await waitForState((snap) => !stateIs(snap, 'initializing'))
   },
 
   /**
@@ -85,64 +75,53 @@ export const AppLockService = {
   /**
    * Prompt the user to authenticate. Resolves to true on success, false on
    * cancellation or unavailability.
-   *
-   * If the device has no screen lock configured, we warn but allow access so
-   * field workers are not blocked from doing their job.
    */
   async authenticate(): Promise<boolean> {
-    if (!Capacitor.isNativePlatform()) {
-      lockedRef.value = false
-      return true
-    }
+    const snap = lockActor.getSnapshot()
+    if (stateIs(snap, 'unlocked')) return true
 
-    try {
-      const info = await BiometricAuth.checkBiometry()
-      if (!info.isAvailable && !info.deviceIsSecure) {
-        console.warn('AppLockService: device has no screen lock — allowing access without authentication')
-        lockedRef.value = false
-        await persistLockState(false)
-        resetInactivityTimer()
-        return true
-      }
-
-      await BiometricAuth.authenticate({
-        reason: 'Verify your identity to access beneficiary data',
-        allowDeviceCredential: true
-      })
-
-      lockedRef.value = false
-      await persistLockState(false)
-      resetInactivityTimer()
-      return true
-    } catch (err: unknown) {
-      if (
-        err &&
-        typeof err === 'object' &&
-        'code' in err &&
-        (err as { code: BiometryErrorType }).code === BiometryErrorType.userCancel
-      ) {
-        return false
-      }
-      console.error('AppLockService: authentication error', err)
-      return false
-    }
+    lockActor.send({ type: 'AUTHENTICATE' })
+    await waitForState((s) => !stateIs(s, 'authenticating'))
+    return stateIs(lockActor.getSnapshot(), 'unlocked')
   },
 
   /**
    * Lock the app immediately and cancel the inactivity timer.
    */
   async lock(): Promise<void> {
-    lockedRef.value = true
-    await persistLockState(true)
-    if (inactivityTimer !== null) {
-      clearTimeout(inactivityTimer)
-      inactivityTimer = null
-    }
+    lockActor.send({ type: 'LOCK' })
   },
 
   /**
    * Reset the inactivity timer on user interaction. Call from the root
    * component on pointer/touch events.
    */
-  resetInactivityTimer
+  resetInactivityTimer(): void {
+    const snap = lockActor.getSnapshot()
+    if (stateIs(snap, 'unlocked')) {
+      lockActor.send({ type: 'USER_ACTIVITY' })
+    }
+  },
+
+  /** Exposed for testing — the underlying XState actor */
+  _actor: lockActor
+}
+
+/**
+ * Wait until the actor reaches a state matching the predicate.
+ * Resolves immediately if the predicate already holds.
+ */
+function waitForState(predicate: (snap: LockSnapshot) => boolean): Promise<void> {
+  return new Promise((resolve) => {
+    if (predicate(lockActor.getSnapshot())) {
+      resolve()
+      return
+    }
+    const sub = lockActor.subscribe((snap) => {
+      if (predicate(snap)) {
+        sub.unsubscribe()
+        resolve()
+      }
+    })
+  })
 }

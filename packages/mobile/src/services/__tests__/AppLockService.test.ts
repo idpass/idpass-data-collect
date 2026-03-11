@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+// xstate is used internally by AppLockService
 
 vi.mock('@capacitor/core', () => ({
   Capacitor: {
@@ -59,6 +60,7 @@ describe('AppLockService', () => {
       vi.mocked(Capacitor.isNativePlatform).mockReturnValue(false)
       const { AppLockService } = await import('../AppLockService')
 
+      await AppLockService.init()
       const result = await AppLockService.authenticate()
 
       expect(result).toBe(true)
@@ -99,6 +101,7 @@ describe('AppLockService', () => {
     })
 
     it('authenticate unlocks when biometry succeeds', async () => {
+      vi.mocked(SecureStorageService.get).mockResolvedValue('1')
       vi.mocked(BiometricAuth.checkBiometry).mockResolvedValue({
         isAvailable: true,
         deviceIsSecure: true,
@@ -111,6 +114,7 @@ describe('AppLockService', () => {
       vi.mocked(BiometricAuth.authenticate).mockResolvedValue(undefined)
 
       const { AppLockService } = await import('../AppLockService')
+      await AppLockService.init()
       const result = await AppLockService.authenticate()
 
       expect(result).toBe(true)
@@ -119,6 +123,7 @@ describe('AppLockService', () => {
     })
 
     it('authenticate returns false when user cancels', async () => {
+      vi.mocked(SecureStorageService.get).mockResolvedValue('1')
       vi.mocked(BiometricAuth.checkBiometry).mockResolvedValue({
         isAvailable: true,
         deviceIsSecure: true,
@@ -131,12 +136,14 @@ describe('AppLockService', () => {
       vi.mocked(BiometricAuth.authenticate).mockRejectedValue({ code: 'userCancel' })
 
       const { AppLockService } = await import('../AppLockService')
+      await AppLockService.init()
       const result = await AppLockService.authenticate()
 
       expect(result).toBe(false)
     })
 
     it('authenticate allows access when device has no screen lock', async () => {
+      vi.mocked(SecureStorageService.get).mockResolvedValue('1')
       vi.mocked(BiometricAuth.checkBiometry).mockResolvedValue({
         isAvailable: false,
         deviceIsSecure: false,
@@ -148,6 +155,7 @@ describe('AppLockService', () => {
       } as never)
 
       const { AppLockService } = await import('../AppLockService')
+      await AppLockService.init()
       const result = await AppLockService.authenticate()
 
       expect(result).toBe(true)
@@ -155,6 +163,7 @@ describe('AppLockService', () => {
     })
 
     it('lock sets locked to true and persists state', async () => {
+      vi.mocked(SecureStorageService.get).mockResolvedValue('0')
       vi.mocked(BiometricAuth.checkBiometry).mockResolvedValue({
         isAvailable: true,
         deviceIsSecure: true,
@@ -167,7 +176,7 @@ describe('AppLockService', () => {
       vi.mocked(BiometricAuth.authenticate).mockResolvedValue(undefined)
 
       const { AppLockService } = await import('../AppLockService')
-      await AppLockService.authenticate()
+      await AppLockService.init()
       expect(AppLockService.locked.value).toBe(false)
 
       await AppLockService.lock()

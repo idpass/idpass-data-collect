@@ -38,6 +38,7 @@
     "@capacitor/status-bar": "^6.0.3",
     "@formio/vue": "^5.0.0",
     "@idpass/data-collect-core": "workspace:*",
+    "@xstate/vue": "^5.0.0",
     "axios": "^1.13.5",
     "bootstrap": "^5.3.8",
     "claim169": "0.1.0-alpha.3",
@@ -52,7 +53,8 @@
     "uuid": "^10.0.0",
     "vue": "^3.5.28",
     "vue-i18n": "^11.2.8",
-    "vue-router": "^4.6.4"
+    "vue-router": "^4.6.4",
+    "xstate": "^5.28.0"
   },
   "devDependencies": {
     "@eslint/compat": "^1.4.1",

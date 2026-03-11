@@ -353,8 +353,16 @@ describe('AuthManager Store', () => {
     })
 
     it('should not redirect if not authenticated', async () => {
-      authManagerStore.isAuthenticated = false
+      // Initialize with isAuthenticated returning false to land in unauthenticated state
+      vi.mocked(mockStore.isAuthenticated).mockResolvedValue(false)
+      authManagerStore.$reset()
+      const mockTenantForThis = {
+        _data: { authConfigs: [{ type: 'auth0', fields: {} }] },
+      }
+      mockTenantStore.getTenant.mockResolvedValue(mockTenantForThis)
+      await authManagerStore.initialize('test-app-id')
 
+      mockMobileAuthStorage.setLastProvider.mockClear()
       await authManagerStore.handleDefaultLogin()
 
       expect(mockMobileAuthStorage.setLastProvider).not.toHaveBeenCalled()
@@ -395,10 +403,11 @@ describe('AuthManager Store', () => {
     it('should handle errors gracefully', async () => {
       vi.mocked(mockStore.isAuthenticated).mockRejectedValue(new Error('Auth check failed'))
 
+      // Should not throw — XState handles the error via onError transition
       await authManagerStore.refreshAuthenticationState()
 
-      // Should not throw, just log error
-      expect(console.error).toHaveBeenCalledWith('Error refreshing authentication state:', expect.any(Error))
+      // Machine stays in unauthenticated state (graceful error handling)
+      expect(authManagerStore.isAuthenticated).toBe(false)
     })
   })
 
@@ -465,7 +474,8 @@ describe('AuthManager Store', () => {
     })
 
     it('should create temporary storage if none exists', async () => {
-      authManagerStore.mobileAuthStorage = null
+      // Reset to clear mobileAuthStorage from context
+      authManagerStore.$reset()
       const mockData = { appId: 'test-app-id', provider: 'auth0' }
       mockMobileAuthStorage.getTemporaryOAuthData.mockResolvedValue(mockData)
 

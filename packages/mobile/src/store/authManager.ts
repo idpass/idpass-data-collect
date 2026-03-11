@@ -18,67 +18,66 @@
  */
 
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { createActor } from 'xstate'
+import { authMachine } from '@/machines/authMachine'
 import { MobileAuthStorage } from '@/authentication/MobileAuthStorage'
-
 import { detectPlatform } from '@/utils/device'
 import { useTenantStore } from '@/store/tenant'
 import { App } from '@capacitor/app'
-
-import { initStore, store } from '@/store'
-import { getSyncServerUrlByAppId } from '@/utils/getSyncServerByAppId'
-import { EntityDataManager } from '@idpass/data-collect-core'
-// Auth configuration for different providers
-interface AuthConfig {
-  type: 'auth0' | 'keycloak'
-  fields: Record<string, string>
-}
+import { AppLockService } from '@/services/AppLockService'
 
 export const useAuthManagerStore = defineStore('authManager', () => {
-  // State
-  const authManager = ref<EntityDataManager | null>(null)
-  const mobileAuthStorage = ref<MobileAuthStorage | null>(null)
-  const isLoading = ref(false)
-  const error = ref<string | null>(null)
-  const isInitialized = ref(false)
+  const actor = createActor(authMachine)
+  actor.start()
 
-  // Authentication state
-  const isAuthenticated = ref(false)
-  const currentProvider = ref<string | null>(null)
-  const availableProviders = ref<string[]>([])
-  const appId = ref<string | null>(null)
+  // Reactive snapshot kept in sync via subscription
+  const snapshot = ref(actor.getSnapshot())
+  actor.subscribe((snap) => {
+    snapshot.value = snap
+  })
 
-  // Getters
-  // Actions
+  // ── Computed selectors (replace 9 independent refs) ──────────────
+
+  const isLoading = computed(() =>
+    snapshot.value.matches('initializing') ||
+    snapshot.value.matches({ unauthenticated: 'loggingIn' }) ||
+    snapshot.value.matches({ unauthenticated: 'handlingCallback' }) ||
+    snapshot.value.matches({ unauthenticated: 'handlingDefaultLogin' }) ||
+    snapshot.value.matches('loggingOut')
+  )
+
+  const isInitialized = computed(() =>
+    !snapshot.value.matches('idle') && !snapshot.value.matches('error')
+  )
+
+  const isAuthenticated = computed(() =>
+    snapshot.value.matches('authenticated')
+  )
+
+  const error = computed(() => snapshot.value.context.error)
+
+  const currentProvider = computed(() => snapshot.value.context.currentProvider)
+
+  const availableProviders = computed(() => snapshot.value.context.availableProviders)
+
+  const appId = computed(() => snapshot.value.context.appId)
+
+  const authManager = computed(() => snapshot.value.context.authManager)
+
+  const mobileAuthStorage = computed(() => snapshot.value.context.mobileAuthStorage)
+
+  // ── Actions → event dispatchers ──────────────────────────────────
+
   async function initialize(targetAppId: string) {
-    try {
-      isLoading.value = true
-      error.value = null
-      // Initialize storage with app ID
-      mobileAuthStorage.value = new MobileAuthStorage(targetAppId)
-      appId.value = targetAppId || null
-      const tenantStore = useTenantStore()
-      const tenant = await tenantStore.getTenant(targetAppId)
-
-      const authConfigs: AuthConfig[] = tenant._data.authConfigs || []
-      // Get sync server URL and initialize the store properly
-      const syncServerUrl = await getSyncServerUrlByAppId(targetAppId || 'default')
-      await initStore(targetAppId || 'default', syncServerUrl, authConfigs)
-
-      // Now store is properly initialized, assign it to authManager
-      authManager.value = store
-      availableProviders.value = authConfigs.map((config) => config.type)
-      isAuthenticated.value = await store.isAuthenticated()
-      currentProvider.value =
-        (await mobileAuthStorage.value.getLastProvider(targetAppId)) || availableProviders.value[0] || null
-      isInitialized.value = true
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to initialize auth system'
-      console.error('Auth initialization error:', err)
-      isInitialized.value = false
-      throw err
-    } finally {
-      isLoading.value = false
+    actor.send({ type: 'INITIALIZE', appId: targetAppId })
+    await waitForState((s) =>
+      !s.matches('initializing')
+    )
+    // Throw on error to preserve existing API contract
+    const snap = actor.getSnapshot()
+    if (snap.matches('error')) {
+      throw new Error(snap.context.error || 'Failed to initialize auth system')
     }
   }
 
@@ -86,145 +85,75 @@ export const useAuthManagerStore = defineStore('authManager', () => {
     provider: string | null,
     credentials?: { username: string; password: string } | { token: string }
   ) {
-    if (!isInitialized.value || !mobileAuthStorage.value || !authManager.value) {
+    const snap = actor.getSnapshot()
+    if (!snap.matches('unauthenticated') && !snap.matches('authenticated')) {
       throw new Error('Auth system not initialized. Call initialize() first.')
     }
-    try {
-      isLoading.value = true
-      error.value = null
-
-      // Save app ID temporarily for callback processing
-      if (appId.value) {
-        await mobileAuthStorage.value.saveTemporaryOAuthData(appId.value, provider)
-      }
-
-      // Set current provider before login for callback handling
-      currentProvider.value = provider
-
-      // Use the properly initialized authManager (which is the store)
-      await authManager.value.login(credentials || null, provider)
-
-      // Update authentication state
-      isAuthenticated.value = true
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : `Login failed for ${provider}`
-      console.error(`Login error for ${provider}:`, err)
-
-      // Clear temporary app ID on login failure
-      if (mobileAuthStorage.value) {
-        await mobileAuthStorage.value.clearTemporaryOAuthData()
-      }
-      throw err
-    } finally {
-      isLoading.value = false
+    actor.send({ type: 'LOGIN', provider, credentials })
+    await waitForState((s) =>
+      !s.matches({ unauthenticated: 'loggingIn' })
+    )
+    const snap2 = actor.getSnapshot()
+    if (!snap2.matches('authenticated')) {
+      throw new Error(snap2.context.error || `Login failed for ${provider}`)
     }
   }
 
-  async function handleDefaultLogin() {
-    if (isAuthenticated.value && typeof window !== 'undefined') {
-      await mobileAuthStorage.value.setLastProvider('default', appId.value || undefined)
-      // Use window.location for navigation to avoid router issues
-      const redirectUrl = appId.value ? `/app/${appId.value}` : '/'
-      console.log(`Redirecting to: ${redirectUrl}`)
-      window.location.href = redirectUrl
-    }
-  }
   async function logout(targetAppId: string) {
-    if (!authManager.value) return
-
-    try {
-      isLoading.value = true
-      error.value = null
-
-      // Use the properly initialized authManager
-      await authManager.value.logout()
-
-      // Update state
-      isAuthenticated.value = false
-      currentProvider.value = null
-
-      // Clear provider tracking
-      if (mobileAuthStorage.value) {
-        await mobileAuthStorage.value.clearLastProvider(targetAppId || undefined)
-      }
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Logout failed'
-      console.error('Logout error:', err)
-      throw err
-    } finally {
-      isLoading.value = false
+    actor.send({ type: 'LOGOUT', appId: targetAppId })
+    // Cross-machine coordination: lock on logout
+    AppLockService.lock()
+    await waitForState((s) =>
+      !s.matches('loggingOut')
+    )
+    const snap = actor.getSnapshot()
+    if (snap.matches('authenticated') && snap.context.error) {
+      throw new Error(snap.context.error)
     }
   }
 
   async function handleCallback() {
-    if (!mobileAuthStorage.value || !authManager.value) {
+    const currentSnap = actor.getSnapshot()
+    if (!currentSnap.matches('unauthenticated') && !currentSnap.matches('authenticated')) {
       throw new Error('Auth system not initialized. Call initialize() first.')
     }
-
-    try {
-      isLoading.value = true
-      error.value = null
-
-      const { provider } = await mobileAuthStorage.value.getTemporaryOAuthData()
-      if (provider) {
-        await authManager.value.handleCallback(provider)
-        await mobileAuthStorage.value.setLastProvider(provider, appId.value || undefined)
-        currentProvider.value = provider
-      } else {
-        throw new Error('No provider available for callback handling')
-      }
-
-      // Force refresh authentication state after callback
-      await refreshAuthenticationState()
-      await mobileAuthStorage.value.clearTemporaryOAuthData()
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Callback handling failed'
-      console.error('Callback handling error:', err)
-      throw err
-    } finally {
-      isLoading.value = false
+    actor.send({ type: 'HANDLE_CALLBACK' })
+    await waitForState((s) =>
+      !s.matches({ unauthenticated: 'handlingCallback' })
+    )
+    const resultSnap = actor.getSnapshot()
+    if (!resultSnap.matches('authenticated')) {
+      throw new Error(resultSnap.context.error || 'Callback handling failed')
     }
+  }
+
+  async function handleDefaultLogin() {
+    actor.send({ type: 'HANDLE_DEFAULT_LOGIN' })
+    await waitForState((s) =>
+      !s.matches({ unauthenticated: 'handlingDefaultLogin' }) &&
+      !s.matches({ authenticated: 'handlingDefaultLogin' })
+    )
   }
 
   async function refreshAuthenticationState() {
-    if (!authManager.value) return
-
-    try {
-      // Check authentication status from the initialized store
-      const authResult = await authManager.value.isAuthenticated()
-
-      // Set authentication state
-      if (authResult) {
-        isAuthenticated.value = true
-        currentProvider.value =
-          currentProvider.value ||
-          (await mobileAuthStorage.value?.getLastProvider(appId.value || undefined)) ||
-          null
-      } else {
-        isAuthenticated.value = false
-        currentProvider.value = null
-      }
-    } catch (err) {
-      console.error('Error refreshing authentication state:', err)
-    }
+    actor.send({ type: 'REFRESH' })
+    await waitForState((s) =>
+      !s.matches({ authenticated: 'refreshing' }) &&
+      !s.matches({ unauthenticated: 'refreshing' })
+    )
   }
 
   async function getTemporaryOAuthData() {
-    if (!mobileAuthStorage.value) {
+    const storage = mobileAuthStorage.value
+    if (!storage) {
       const tempStorage = new MobileAuthStorage()
       return tempStorage.getTemporaryOAuthData()
     }
-    return mobileAuthStorage.value.getTemporaryOAuthData()
+    return storage.getTemporaryOAuthData()
   }
 
-  /**
-   * Check authentication status for a specific app using AuthManager
-   * @param appId - Application ID to check authentication for
-   * @returns Authentication status and user info
-   */
   async function checkAuthenticationStatus(targetAppId: string) {
     try {
-      // Get tenant configuration to initialize AuthManager
       const tenantStore = useTenantStore()
       const tenant = await tenantStore.getTenant(targetAppId)
 
@@ -235,13 +164,14 @@ export const useAuthManagerStore = defineStore('authManager', () => {
         }
       }
 
-      // Detect platform and transform auth configs accordingly
       const platform = detectPlatform()
 
       await initialize(targetAppId)
-      const isAppAuthenticated = await authManager.value.isAuthenticated()
+      const isAppAuthenticated = authManager.value
+        ? await authManager.value.isAuthenticated()
+        : false
+
       if (isAppAuthenticated) {
-        // Get stored tokens to determine current provider and user info
         return {
           isAuthenticated: isAppAuthenticated,
           currentProvider: currentProvider.value,
@@ -259,38 +189,31 @@ export const useAuthManagerStore = defineStore('authManager', () => {
         tenant,
         platform
       }
-    } catch (error) {
-      console.error('Authentication check failed:', error)
+    } catch (err) {
+      console.error('Authentication check failed:', err)
       return {
         isAuthenticated: false,
-        error: error instanceof Error ? error.message : 'Authentication check failed'
+        error: err instanceof Error ? err.message : 'Authentication check failed'
       }
     }
   }
-  /**
-   * Set up Capacitor deep link listener for OAuth callbacks
-   * This should be called during app initialization to handle incoming URLs
-   */
+
   async function setupCapacitorUrlListener() {
     const platform = detectPlatform()
 
     if (platform !== 'mobile') return
 
     try {
-      // Listen for app URL events (deep links)
       App.addListener('appUrlOpen', async (_event) => {
         try {
           await handleCallback()
 
-          // Navigate to appropriate route after successful callback
           if (isAuthenticated.value && typeof window !== 'undefined') {
-            // Use window.location for navigation to avoid router issues
             const redirectUrl = appId.value ? `/app/${appId.value}` : '/'
             window.location.href = redirectUrl
           }
         } catch (callbackError) {
           console.error('Failed to handle OAuth callback:', callbackError)
-          // Error is already stored in the store
         }
       })
 
@@ -300,21 +223,31 @@ export const useAuthManagerStore = defineStore('authManager', () => {
     }
   }
 
-  // Reset store state
   function $reset() {
-    authManager.value = null
-    mobileAuthStorage.value = null
-    isLoading.value = false
-    error.value = null
-    isInitialized.value = false
-    isAuthenticated.value = false
-    currentProvider.value = null
-    availableProviders.value = []
-    appId.value = null
+    actor.send({ type: 'RESET' })
+  }
+
+  // ── Helper ───────────────────────────────────────────────────────
+
+  function waitForState(
+    predicate: (snap: ReturnType<typeof actor.getSnapshot>) => boolean
+  ): Promise<void> {
+    return new Promise((resolve) => {
+      if (predicate(actor.getSnapshot())) {
+        resolve()
+        return
+      }
+      const sub = actor.subscribe((snap) => {
+        if (predicate(snap)) {
+          sub.unsubscribe()
+          resolve()
+        }
+      })
+    })
   }
 
   return {
-    // State
+    // State (computed — preserves existing API)
     authManager,
     mobileAuthStorage,
     isLoading,

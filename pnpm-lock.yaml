@@ -216,6 +216,9 @@ importers:
       '@mdi/font':
         specifier: ^7.4.47
         version: 7.4.47
+      '@playwright/test':
+        specifier: ^1.58.2
+        version: 1.58.2
       '@types/js-yaml':
         specifier: ^4.0.9
         version: 4.0.9
@@ -478,6 +481,9 @@ importers:
       uuid:
         specifier: ^10.0.0
         version: 10.0.0
+      xstate:
+        specifier: ^5.28.0
+        version: 5.28.0
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -605,6 +611,9 @@ importers:
       '@idpass/data-collect-core':
         specifier: workspace:*
         version: link:../datacollect
+      '@xstate/vue':
+        specifier: ^5.0.0
+        version: 5.0.0(vue@3.5.28(typescript@5.9.3))(xstate@5.28.0)
       axios:
         specifier: ^1.13.5
         version: 1.13.5
@@ -650,6 +659,9 @@ importers:
       vue-router:
         specifier: ^4.6.4
         version: 4.6.4(vue@3.5.28(typescript@5.9.3))
+      xstate:
+        specifier: ^5.28.0
+        version: 5.28.0
     devDependencies:
       '@eslint/compat':
         specifier: ^1.4.1
@@ -4986,6 +4998,15 @@ packages:
   '@xmldom/xmldom@0.8.11':
     resolution: {integrity: sha512-cQzWCtO6C8TQiYl1ruKNn2U6Ao4o4WBBcbL61yJl84x+j5sOWWFU9X7DpND8XZG3daDppSsigMdfAIl2upQBRw==}
     engines: {node: '>=10.0.0'}
+
+  '@xstate/vue@5.0.0':
+    resolution: {integrity: sha512-9TyJV4yz5QLJdEU44Ly9LBooEyZmv0nht3qEvDflxXAJmSn1dzaZeESdHFm+ANHtxoUed5jGqH6NT86BusvXQg==}
+    peerDependencies:
+      vue: ^3.0.0
+      xstate: ^5.20.0
+    peerDependenciesMeta:
+      xstate:
+        optional: true
 
   '@xtuc/ieee754@1.2.0':
     resolution: {integrity: sha512-DX8nKgqcGwsc0eJSqYt5lwP4DH5FlHnmuWWBRy7X0NcaGR0ZtuyeESgMwTYVEtxmsNGY+qit4QYT/MIYTOTPeA==}
@@ -12114,6 +12135,9 @@ packages:
   xmlchars@2.2.0:
     resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
 
+  xstate@5.28.0:
+    resolution: {integrity: sha512-Iaqq6ZrUzqeUtA3hC5LQKZfR8ZLzEFTImMHJM3jWEdVvXWdKvvVLXZEiNQWm3SCA9ZbEou/n5rcsna1wb9t28A==}
+
   xtend@4.0.2:
     resolution: {integrity: sha512-LKYU1iAXJXUgAXn9URjiu+MWhyUXHsvfp7mcuYm9dSUKK0/CjtrUwFAxD82/mCWbtLsGjFIad0wIsod4zrTAEQ==}
     engines: {node: '>=0.4'}
@@ -17590,6 +17614,12 @@ snapshots:
       '@xtuc/long': 4.2.2
 
   '@xmldom/xmldom@0.8.11': {}
+
+  '@xstate/vue@5.0.0(vue@3.5.28(typescript@5.9.3))(xstate@5.28.0)':
+    dependencies:
+      vue: 3.5.28(typescript@5.9.3)
+    optionalDependencies:
+      xstate: 5.28.0
 
   '@xtuc/ieee754@1.2.0': {}
 
@@ -26138,6 +26168,8 @@ snapshots:
   xmlbuilder@15.1.1: {}
 
   xmlchars@2.2.0: {}
+
+  xstate@5.28.0: {}
 
   xtend@4.0.2: {}
 
