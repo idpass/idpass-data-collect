@@ -90,6 +90,7 @@ describeIfPostgres("L15: Per-identifier OTP rate limiting", () => {
   });
 
   afterEach(async () => {
+    if (!otpStore) return;
     await otpStore.clearStore();
     await otpStore.closeConnection();
   });

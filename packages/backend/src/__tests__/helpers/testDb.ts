@@ -62,13 +62,22 @@ export const ensureDatabaseExists = async (connectionString: string): Promise<vo
   adminUrl.pathname = "/postgres";
 
   const client = new Client({ connectionString: adminUrl.toString() });
-  await client.connect();
-  const result = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
-  if (result.rowCount === 0) {
-    const escapedName = dbName.replace(/"/g, '""');
-    await client.query(`CREATE DATABASE "${escapedName}"`);
+  try {
+    await client.connect();
+  } catch (err) {
+    // Connection failed (wrong credentials, server not running, etc.) — treat
+    // the same as POSTGRES_TEST being unset so callers can skip gracefully.
+    throw new Error(`Cannot connect to PostgreSQL for test setup: ${(err as Error).message}`);
   }
-  await client.end();
+  try {
+    const result = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
+    if (result.rowCount === 0) {
+      const escapedName = dbName.replace(/"/g, '""');
+      await client.query(`CREATE DATABASE "${escapedName}"`);
+    }
+  } finally {
+    await client.end().catch(() => {});
+  }
 };
 
 /**

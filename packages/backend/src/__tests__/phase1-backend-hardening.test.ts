@@ -127,6 +127,7 @@ describeIfPostgres("Phase 1b: Uniform error messages for brute-force protection"
   });
 
   afterEach(async () => {
+    if (!otpStore) return;
     await otpStore.clearStore();
     await otpStore.closeConnection();
   });
@@ -390,6 +391,7 @@ describeIfPostgres("Phase 1c: Dynamic availableForms from tenant config", () => 
   });
 
   afterEach(async () => {
+    if (!otpStore) return;
     await otpStore.clearStore();
     await otpStore.closeConnection();
   });

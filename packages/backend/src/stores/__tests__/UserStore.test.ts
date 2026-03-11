@@ -44,10 +44,12 @@ describeIfPostgres("UserStore", () => {
   });
 
   afterEach(async () => {
+    if (!adapter) return;
     await adapter.clearStore();
   });
 
   afterAll(async () => {
+    if (!adapter) return;
     await adapter.clearStore();
     await adapter.closeConnection();
   });

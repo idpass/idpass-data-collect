@@ -100,10 +100,12 @@ describeIfPostgres("AppInstanceStore", () => {
   });
 
   afterEach(async () => {
+    if (!appInstanceStore) return;
     await appInstanceStore.clearStore();
   });
 
   afterAll(async () => {
+    if (!appInstanceStore) return;
     await appInstanceStore.closeConnection();
     await appConfigStore.clearStore();
     await appConfigStore.closeConnection();

@@ -51,11 +51,13 @@ describeIfPostgres("AppConfigStore", () => {
   });
 
   afterEach(async () => {
+    if (!adapter) return;
     await adapter.initialize();
     await adapter.clearStore();
   });
 
   afterAll(async () => {
+    if (!adapter) return;
     await adapter.initialize();
     await adapter.clearStore();
     await adapter.closeConnection();

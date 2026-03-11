@@ -260,6 +260,7 @@ describeIfPostgres("POST /api/auth/oidc/exchange", () => {
   });
 
   afterEach(async () => {
+    if (!otpStore) return;
     await otpStore.clearStore();
     await otpStore.closeConnection();
   });

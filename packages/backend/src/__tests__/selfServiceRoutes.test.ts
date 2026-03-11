@@ -45,6 +45,7 @@ describeIfPostgres("Self-Service Routes", () => {
   });
 
   afterEach(async () => {
+    if (!otpStore) return;
     await otpStore.clearStore();
     await otpStore.closeConnection();
   });
