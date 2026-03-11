@@ -94,3 +94,5 @@ website/docs/packages/datacollect/api/
 website/docs/packages/backend/api-reference-generated/
 
 .cursor/
+.claude/memory/
+.claude/settings.local.json

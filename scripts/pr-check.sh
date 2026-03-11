@@ -35,7 +35,7 @@ cleanup() {
   exit "$EXITCODE"
 }
 
-# If POSTGRES_TEST is already set (e.g. in CI), skip Docker management
+# If POSTGRES_TEST is already set (e.g. in CI), use it as-is
 if [ -z "${POSTGRES_TEST:-}" ]; then
   if ! resolve_compose_cmd; then
     echo "ERROR: neither 'docker compose' nor 'podman compose' is available." >&2
@@ -48,7 +48,6 @@ if [ -z "${POSTGRES_TEST:-}" ]; then
 
   echo "Starting test database on port 5433 (via $COMPOSE_CMD)..."
   $COMPOSE_CMD -f "$COMPOSE_FILE" up -d --wait
-
   export POSTGRES_TEST="postgresql://test:test@localhost:5433/test"
 else
   trap cleanup EXIT INT TERM
@@ -56,6 +55,13 @@ fi
 
 export JWT_SECRET="${JWT_SECRET:-test-secret}"
 
-echo "Running tests with POSTGRES_TEST=$POSTGRES_TEST"
+echo "Running pr-check with POSTGRES_TEST=$POSTGRES_TEST"
 cd "$REPO_ROOT"
-pnpm -r --if-present run test "$@" || EXITCODE=$?
+
+pnpm run build:datacollect || EXITCODE=$?
+[ "$EXITCODE" -eq 0 ] && pnpm run type-check || EXITCODE=$?
+[ "$EXITCODE" -eq 0 ] && pnpm run lint || EXITCODE=$?
+[ "$EXITCODE" -eq 0 ] && pnpm --filter @idpass/data-collect-backend run validate-api || EXITCODE=$?
+[ "$EXITCODE" -eq 0 ] && pnpm run test || EXITCODE=$?
+[ "$EXITCODE" -eq 0 ] && pnpm run build || EXITCODE=$?
+[ "$EXITCODE" -eq 0 ] && pnpm run check-licenses --fix || EXITCODE=$?
