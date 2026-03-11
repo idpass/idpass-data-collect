@@ -36,8 +36,8 @@ test.describe('Config Management', () => {
   })
 
   test('should show config list after login', async ({ page }) => {
-    // Mock login endpoint
-    await page.route('**/api/auth/login', async (route) => {
+    // Mock login endpoint (actual endpoint is /api/users/login)
+    await page.route('**/api/users/login', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -49,7 +49,7 @@ test.describe('Config Management', () => {
     })
 
     // Mock configs endpoint
-    await page.route('**/api/configs', async (route) => {
+    await page.route('**/api/apps', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -59,8 +59,8 @@ test.describe('Config Management', () => {
 
     await page.goto('/login')
     await page.fill('input[name="username"]', 'admin@example.com')
-    await page.fill('input[name="password"]', 'password')
-    await page.locator('button:has-text("Login")').click()
+    await page.fill('input[type="password"]', 'password')
+    await page.locator('.v-btn:has-text("Login")').click()
 
     // After successful login, should navigate to home
     await expect(page).toHaveURL('/')

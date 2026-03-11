@@ -27,15 +27,13 @@ test.describe('Admin Login Flow', () => {
 
   test('should display the login form', async ({ page }) => {
     await page.goto('/login')
-    await expect(page.locator('text=Login')).toBeVisible()
     await expect(page.locator('input[name="username"]')).toBeVisible()
-    await expect(page.locator('input[name="password"]')).toBeVisible()
+    await expect(page.locator('input[type="password"]')).toBeVisible()
   })
 
   test('should show validation errors for empty fields', async ({ page }) => {
     await page.goto('/login')
 
-    // Click the username field and blur to trigger validation
     const usernameField = page.locator('input[name="username"]')
     await usernameField.click()
     await usernameField.blur()
@@ -47,24 +45,17 @@ test.describe('Admin Login Flow', () => {
     await page.goto('/login')
 
     await page.fill('input[name="username"]', 'invalid@example.com')
-    await page.fill('input[name="password"]', 'wrongpassword')
-    await page.locator('button:has-text("Login")').click()
+    await page.fill('input[type="password"]', 'wrongpassword')
+    await page.locator('button[type="submit"], .v-btn:has-text("Login")').first().click()
 
     await expect(
       page.locator('text=Invalid username or password').or(page.locator('text=An error occurred')),
     ).toBeVisible()
   })
 
-  test('should have a login button', async ({ page }) => {
-    await page.goto('/login')
-
-    const loginButton = page.locator('button:has-text("Login")')
-    await expect(loginButton).toBeVisible()
-  })
-
   test('should show loading state when submitting', async ({ page }) => {
-    // Mock the login endpoint to delay the response
-    await page.route('**/api/auth/login', async (route) => {
+    // Mock the login endpoint (actual endpoint is /api/users/login)
+    await page.route('**/api/users/login', async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 2000))
       await route.fulfill({
         status: 401,
@@ -75,11 +66,10 @@ test.describe('Admin Login Flow', () => {
 
     await page.goto('/login')
     await page.fill('input[name="username"]', 'admin@example.com')
-    await page.fill('input[name="password"]', 'password')
-    await page.locator('button:has-text("Login")').click()
+    await page.fill('input[type="password"]', 'password')
+    await page.locator('.v-btn:has-text("Login")').click()
 
-    // The button should show a loading state
-    const loginButton = page.locator('button:has-text("Login")')
-    await expect(loginButton).toBeDisabled()
+    // The button should show a loading state (Vuetify adds v-btn--loading)
+    await expect(page.locator('.v-btn--loading')).toBeVisible()
   })
 })
