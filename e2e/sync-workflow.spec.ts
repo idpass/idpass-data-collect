@@ -102,21 +102,21 @@ test.describe('Sync Workflow', () => {
   test('field worker sees server-seeded data after login', async ({
     page,
   }) => {
-    // --- Step 1: Verify entity exists on the backend ---
+    // Verify entity exists on the backend
     const entities = await getEntities(adminToken, TEST_CONFIG_ID)
     expect(entities.length).toBeGreaterThanOrEqual(1)
 
-    // --- Step 2: Field worker logs in via web UI ---
+    // Field worker logs in via web UI (using proven selectors from web e2e)
     await page.goto(`${WEB_URL}/agent/login`)
-    await page.getByLabel(/email/i).fill(FIELDWORKER_EMAIL)
-    await page.getByLabel(/password/i).fill(FIELDWORKER_PASSWORD)
-    await page.getByRole('button', { name: /login/i }).click()
+    await page.fill('input[type="email"]', FIELDWORKER_EMAIL)
+    await page.fill('input[type="password"]', FIELDWORKER_PASSWORD)
+    await page.click('button[type="submit"]')
 
-    await page.waitForURL(`${WEB_URL}/agent/${TEST_CONFIG_ID}`, {
+    await page.waitForURL(new RegExp(`/agent/${TEST_CONFIG_ID}`), {
       timeout: 15000,
     })
 
-    // --- Step 3: Verify the seeded entity appears in the dashboard ---
+    // Verify the seeded entity appears in the dashboard
     await expect(page.getByText('Synced Household Beta')).toBeVisible({
       timeout: 15000,
     })
@@ -152,11 +152,11 @@ test.describe('Sync Workflow', () => {
 
     // Field worker logs in and sees updated data
     await page.goto(`${WEB_URL}/agent/login`)
-    await page.getByLabel(/email/i).fill(FIELDWORKER_EMAIL)
-    await page.getByLabel(/password/i).fill(FIELDWORKER_PASSWORD)
-    await page.getByRole('button', { name: /login/i }).click()
+    await page.fill('input[type="email"]', FIELDWORKER_EMAIL)
+    await page.fill('input[type="password"]', FIELDWORKER_PASSWORD)
+    await page.click('button[type="submit"]')
 
-    await page.waitForURL(`${WEB_URL}/agent/${TEST_CONFIG_ID}`, {
+    await page.waitForURL(new RegExp(`/agent/${TEST_CONFIG_ID}`), {
       timeout: 15000,
     })
 
