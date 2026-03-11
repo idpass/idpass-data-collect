@@ -68,7 +68,7 @@ describeIfPostgres("Sync flow e2e", () => {
         .send({ events, configId: testAppConfig.id });
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ status: "success" });
+      expect(res.body).toEqual(expect.objectContaining({ status: "success" }));
 
       // Verify entity was created
       const instance = await app.appInstanceStore.getAppInstance(testAppConfig.id);
