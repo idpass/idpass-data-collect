@@ -39,7 +39,8 @@
     "ci:setup": "echo 'enable-pre-post-scripts=true' > .npmrc && echo 'auto-install-peers=true' >> .npmrc && echo 'strict-peer-dependencies=false' >> .npmrc",
     "ci:install": "pnpm run ci:setup && pnpm install",
     "prepare": "[ \"$CI\" != \"true\" ] && husky install || echo 'Skipping husky in CI'",
-    "pr-check": "./scripts/pr-check.sh"
+    "pr-check": "./scripts/pr-check.sh",
+    "test:e2e:integration": "pnpm exec playwright test --config e2e/playwright.config.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
