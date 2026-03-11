@@ -18,7 +18,8 @@ jobs:
       HUSKY: 0
       # Backend configuration
       POSTGRES: postgresql://test:test@localhost:5432/test
-      JWT_SECRET: test_secret
+      POSTGRES_TEST: postgresql://test:test@localhost:5432/test
+      JWT_SECRET: e2e_test_secret_that_is_at_least_32_chars_long!
       ADMIN_EMAIL: admin@datacollect.lan
       ADMIN_PASSWORD: "correct horse battery staple 42!"
       SYNC_SERVER_PORT: 3000
@@ -74,7 +75,7 @@ jobs:
       # --- Backend startup ---
       - name: Start backend in background
         run: |
-          pnpm --filter @idpass/data-collect-backend start &
+          node packages/backend/dist/index.js &
           echo "Backend PID: $!"
         shell: bash
 
@@ -104,7 +105,6 @@ jobs:
       # --- Backend e2e tests ---
       - name: Run backend e2e tests
         run: pnpm run test:e2e:backend
-        continue-on-error: false
 
       # --- Admin e2e tests ---
       - name: Start admin dev server in background
@@ -125,7 +125,6 @@ jobs:
 
       - name: Run admin e2e tests
         run: pnpm run test:e2e:admin
-        continue-on-error: false
 
       # --- Web e2e tests ---
       - name: Start web dev server in background
@@ -145,8 +144,11 @@ jobs:
         shell: bash
 
       - name: Run web e2e tests
-        run: pnpm --filter @idpass/datacollect-web run test:e2e
-        continue-on-error: false
+        run: pnpm --filter @idpass/data-collect-web run test:e2e
+
+      # --- Cross-service integration tests ---
+      - name: Run integration e2e tests
+        run: pnpm run test:e2e:integration
 
       # --- Upload artifacts on failure ---
       - name: Upload Playwright reports
