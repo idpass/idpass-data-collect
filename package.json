@@ -14,6 +14,7 @@
     "test:datacollect": "pnpm --filter @idpass/data-collect-core test",
     "test:backend": "pnpm --filter @idpass/data-collect-backend test",
     "test:admin": "pnpm --filter @idpass/data-collect-admin test:unit",
+    "test:e2e:admin": "pnpm --filter @idpass/data-collect-admin test:e2e",
     "build": "pnpm -r --if-present run build",
     "build:datacollect": "pnpm --filter @idpass/data-collect-core build",
     "build:backend": "pnpm --filter @idpass/data-collect-backend build",
