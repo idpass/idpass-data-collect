@@ -19,10 +19,13 @@
 
 import {
   createTransformer,
+  createLogger,
   type TransformerType,
 } from "@idpass/data-collect-core";
 import { EventApplierService } from "@idpass/data-collect-core";
 import type { OpenSPPCreateIndividualPayload } from "./odoo-types";
+
+const log = createLogger("adapter-openspp:shared");
 
 /**
  * Field mapping configuration from external sync config.
@@ -126,7 +129,7 @@ export async function saveExternalIdToEntity(
   try {
     const entityPair = await eventApplierService.getEntityStore().getEntity(entityGuid);
     if (!entityPair) {
-      console.warn(`Cannot save external ID: entity ${entityGuid} not found`);
+      log.warn({ entityGuid }, "Cannot save external ID: entity not found");
       return;
     }
 
@@ -156,6 +159,6 @@ export async function saveExternalIdToEntity(
 
     await eventApplierService.getEntityStore().saveEntity(entityPair.modified, updatedEntity);
   } catch (error) {
-    console.error(`Error saving external ID ${externalId} to entity ${entityGuid}:`, error);
+    log.error({ entityGuid, externalId, err: error }, "Error saving external ID to entity");
   }
 }

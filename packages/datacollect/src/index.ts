@@ -290,3 +290,6 @@ export type { FaultRule } from "./testing/StorageFaultInjector";
 
 // Utility functions
 export { normalizeLegacyRelationField, normalizeLegacyRelationFields } from "./utils/normalizeLegacyRelationFields";
+
+// Logging
+export { createLogger } from "./utils/logger";
