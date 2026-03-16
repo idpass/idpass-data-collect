@@ -17,6 +17,7 @@ services:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-admin}"]
       interval: 5s
       timeout: 3s
+      start_period: 30s
       retries: 10
 
   sync-server:
