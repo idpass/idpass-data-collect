@@ -9,7 +9,7 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-datacollect}
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./docker/init-reset-dbs.sh:/docker-entrypoint-initdb.d/init-reset-dbs.sh:ro
+      - ./init-reset-dbs.sh:/docker-entrypoint-initdb.d/init-reset-dbs.sh:ro
     networks:
       - internal
     command: ["postgres"]
@@ -21,7 +21,7 @@ services:
 
   sync-server:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile
       target: backend
     restart: unless-stopped
@@ -52,7 +52,7 @@ services:
 
   admin-ui:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile
       target: admin-ui
     restart: unless-stopped
@@ -67,7 +67,7 @@ services:
 
   mobile-app:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile
       target: mobile-app
     restart: unless-stopped
@@ -86,7 +86,7 @@ services:
 
   web-ui:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile
       target: web-ui
     restart: unless-stopped
