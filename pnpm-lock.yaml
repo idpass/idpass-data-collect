@@ -285,6 +285,12 @@ importers:
 
   packages/backend:
     dependencies:
+      '@idpass/adapter-openfn':
+        specifier: workspace:*
+        version: link:../adapter-openfn
+      '@idpass/adapter-openspp':
+        specifier: workspace:*
+        version: link:../adapter-openspp
       '@idpass/data-collect-core':
         specifier: workspace:*
         version: link:../datacollect

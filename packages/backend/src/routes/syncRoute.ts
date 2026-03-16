@@ -66,7 +66,7 @@ const ExternalSyncCredentialsSchema = z.object({
   credentials: z.object({
     username: z.string().min(1, "Username is required"),
     password: z.string().min(1, "Password is required"),
-  }),
+  }).optional(),
 });
 
 export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl?: string): Router {

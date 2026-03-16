@@ -310,7 +310,11 @@ export class ExternalSyncManager {
   async initialize() {
     // Try V2 adapter registry first
     if (adapterRegistry.has(this.config.type)) {
-      const v2 = adapterRegistry.create(this.config.type);
+      const v2 = adapterRegistry.create(this.config.type, {
+        eventStore: this.eventStore,
+        eventApplierService: this.eventApplierService,
+        syncConfig: this.config,
+      });
       const descriptor = v2.descriptor();
 
       // Build config object from ExternalSyncConfig for validation

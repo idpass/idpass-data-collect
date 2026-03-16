@@ -47,8 +47,19 @@ import { Role, SyncServerConfig, SyncServerInstance } from "./types";
 import { generatePublicArtifacts, resolvePublicBaseUrl } from "./utils/publicArtifacts";
 import { logger, createLogger } from "./utils/logger";
 import { initializeDatabase } from "./db/initialize";
+import { adapterRegistry } from "@idpass/data-collect-core";
+import { OpenSppSyncAdapterV2 } from "@idpass/adapter-openspp";
+import { OpenFnSyncAdapterV2 } from "@idpass/adapter-openfn";
 
 const log = createLogger("syncServer");
+
+// Register external sync adapters with the V2 adapter registry
+adapterRegistry.register("openspp-v2-adapter", (deps) =>
+  new OpenSppSyncAdapterV2(deps!.eventStore, deps!.eventApplierService, deps!.syncConfig),
+);
+adapterRegistry.register("openfn-adapter", (deps) =>
+  new OpenFnSyncAdapterV2(deps!.eventStore, deps!.eventApplierService),
+);
 
 export async function run(config: SyncServerConfig): Promise<SyncServerInstance> {
   // Consolidated schema initialization: creates all backend tables and indexes
@@ -72,12 +83,15 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   app.set("trust proxy", 1);
   app.use(helmet());
   const corsOrigins = process.env.CORS_ORIGINS;
-  app.use(cors(corsOrigins ? {
-    origin: corsOrigins.split(",").map(o => o.trim()),
-    credentials: true,
-  } : {
-    origin: false,
-  }));
+  const corsOptions: cors.CorsOptions = { origin: false };
+  if (corsOrigins === "*") {
+    corsOptions.origin = true;
+    corsOptions.credentials = true;
+  } else if (corsOrigins) {
+    corsOptions.origin = corsOrigins.split(",").map(o => o.trim());
+    corsOptions.credentials = true;
+  }
+  app.use(cors(corsOptions));
   app.use(pinoHttp({
     logger,
     genReqId: () => crypto.randomUUID(),
