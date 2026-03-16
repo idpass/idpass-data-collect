@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProgramDraftStore, type EntityForm } from '@/stores/programDraft'
+import { parseOpenSppProgramSpecification } from '@/utils/openSppImport'
+import { useSnackBarStore } from '@/stores/snackBar'
 
 const router = useRouter()
 const draftStore = useProgramDraftStore()
+const snackBarStore = useSnackBarStore()
 
 const entityForms = computed(() => draftStore.draft.entityForms)
 const hasCircularDep = computed(() => draftStore.checkCircularDependencies())
@@ -52,6 +55,50 @@ const getStatusText = (status: string) => {
 const getDependsOnOptions = (form: EntityForm) => {
   return draftStore.getDependsOnOptions(form)
 }
+
+const isOpenSppSync = computed(() => {
+  const type = draftStore.draft.externalSync?.type
+  return (
+    type === 'openspp-adapter' ||
+    type === 'openspp-v1-adapter' ||
+    type === 'openspp-v2-adapter' ||
+    type === 'openspp'
+  )
+})
+
+const specImportFiles = ref<File[] | null>(null)
+const isImportingSpec = ref(false)
+
+const onSpecFileSelection = async (value: File[] | File | null) => {
+  if (!value || isImportingSpec.value) {
+    specImportFiles.value = null
+    return
+  }
+  const file = Array.isArray(value) ? value[0] : value
+  if (!file) {
+    specImportFiles.value = null
+    return
+  }
+
+  try {
+    isImportingSpec.value = true
+    const yamlText = await file.text()
+    const importResult = parseOpenSppProgramSpecification(yamlText)
+    draftStore.importFromOpenSppSpec(importResult)
+    snackBarStore.showSnackbar(
+      `Imported ${importResult.entityForms.length} entity form${
+        importResult.entityForms.length === 1 ? '' : 's'
+      } from OpenSPP spec`,
+      'success',
+    )
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    snackBarStore.showSnackbar(`Failed to import OpenSPP spec: ${message}`, 'red')
+  } finally {
+    specImportFiles.value = null
+    isImportingSpec.value = false
+  }
+}
 </script>
 
 <template>
@@ -60,6 +107,31 @@ const getDependsOnOptions = (form: EntityForm) => {
       Define the entity forms that will be used to collect data. Each form represents a type of
       entity (e.g., Household, Individual) and can depend on other forms.
     </p>
+
+    <!-- OpenSPP YAML Import -->
+    <v-card v-if="isOpenSppSync" variant="tonal" color="secondary" class="mb-4 pa-4">
+      <div class="d-flex align-center gap-3">
+        <v-icon icon="mdi-file-code" />
+        <div class="flex-grow-1">
+          <div class="text-body-2 font-weight-medium">Import from OpenSPP YAML</div>
+          <div class="text-caption text-medium-emphasis">
+            Upload a program specification to auto-generate entity forms.
+          </div>
+        </div>
+        <v-file-input
+          v-model="specImportFiles"
+          accept=".yaml,.yml"
+          label="Choose YAML file"
+          variant="outlined"
+          density="compact"
+          hide-details
+          class="yaml-import-input"
+          :loading="isImportingSpec"
+          :disabled="isImportingSpec"
+          @update:modelValue="onSpecFileSelection"
+        />
+      </div>
+    </v-card>
 
     <!-- Error Alert -->
     <v-alert
@@ -333,5 +405,10 @@ const getDependsOnOptions = (form: EntityForm) => {
 
 .add-form-btn {
   align-self: flex-start;
+}
+
+.yaml-import-input {
+  max-width: 260px;
+  flex-shrink: 0;
 }
 </style>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  createApp as createAppApi,
   getApps as getAppsApi,
   type AppListItem,
   type AppListMeta,
@@ -9,11 +10,13 @@ import AppCard from '@/components/AppCard.vue'
 import OverviewPanel from '@/components/OverviewPanel.vue'
 import RecentActivity, { type ActivityItem } from '@/components/RecentActivity.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useSnackBarStore } from '@/stores/snackBar'
 import { AxiosError } from 'axios'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 const authStore = useAuthStore()
+const snackBarStore = useSnackBarStore()
 const router = useRouter()
 
 const apps = ref<AppListItem[]>([])
@@ -139,6 +142,63 @@ const goToCreate = () => {
   router.push({ name: 'create' })
 }
 
+// JSON Config Import
+const showImportDialog = ref(false)
+const jsonFile = ref<File | null>(null)
+const jsonFileError = ref<string | null>(null)
+const isUploadingJson = ref(false)
+
+const uploadJsonConfig = async () => {
+  if (!jsonFile.value) return
+
+  isUploadingJson.value = true
+  jsonFileError.value = null
+
+  try {
+    const text = await jsonFile.value.text()
+    const json = JSON.parse(text)
+
+    if (!json || typeof json !== 'object') {
+      throw new Error('Invalid configuration format')
+    }
+
+    if (json.id) {
+      const existingApps = await getAppsApi({ search: json.id, pageSize: 1 })
+      if (existingApps.data.some((app) => app.id === json.id)) {
+        jsonFileError.value = `A collection program with ID "${json.id}" already exists.`
+        return
+      }
+    }
+
+    const formData = new FormData()
+    formData.append(
+      'config',
+      new Blob([JSON.stringify(json)], { type: 'application/json' }),
+      'config.json',
+    )
+
+    await createAppApi(formData)
+    showImportDialog.value = false
+    jsonFile.value = null
+    jsonFileError.value = null
+    snackBarStore.showSnackbar('Collection program imported successfully', 'success')
+    fetchApps()
+  } catch (error) {
+    if (error instanceof AxiosError && error.response?.status === 401) {
+      authStore.logout()
+      return
+    }
+    if (error instanceof AxiosError && error.response?.status === 409) {
+      jsonFileError.value = 'A collection program with this ID already exists.'
+    } else {
+      jsonFileError.value =
+        error instanceof Error ? error.message : 'Error uploading configuration'
+    }
+  } finally {
+    isUploadingJson.value = false
+  }
+}
+
 const handleActivityClick = (activity: ActivityItem) => {
   router.push({ name: 'app-details', params: { id: activity.programId } })
 }
@@ -178,6 +238,19 @@ onBeforeUnmount(() => {
                   @click="fetchApps(true)"
                 >
                   <v-icon icon="mdi-refresh" />
+                </v-btn>
+              </template>
+            </v-tooltip>
+            <v-tooltip text="Import JSON Configuration" location="bottom">
+              <template v-slot:activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon
+                  variant="tonal"
+                  color="primary"
+                  @click="showImportDialog = true"
+                >
+                  <v-icon icon="mdi-upload" />
                 </v-btn>
               </template>
             </v-tooltip>
@@ -287,6 +360,48 @@ onBeforeUnmount(() => {
         </div>
       </v-col>
     </v-row>
+
+    <!-- Import JSON Dialog -->
+    <v-dialog v-model="showImportDialog" max-width="500">
+      <v-card>
+        <v-card-title class="d-flex align-center gap-2">
+          <v-icon icon="mdi-upload" color="primary" />
+          Import JSON Configuration
+        </v-card-title>
+        <v-card-text>
+          <p class="text-body-2 text-medium-emphasis mb-4">
+            Upload an exported JSON configuration file to create a new collection program.
+          </p>
+          <v-file-input
+            v-model="jsonFile"
+            accept=".json"
+            label="Choose JSON file"
+            prepend-icon="mdi-file-document"
+            variant="outlined"
+            :error-messages="jsonFileError ?? undefined"
+            :loading="isUploadingJson"
+            :disabled="isUploadingJson"
+          />
+        </v-card-text>
+        <v-card-actions>
+          <v-btn
+            variant="text"
+            @click="showImportDialog = false; jsonFile = null; jsonFileError = null"
+          >
+            Cancel
+          </v-btn>
+          <v-spacer />
+          <v-btn
+            color="primary"
+            :loading="isUploadingJson"
+            :disabled="!jsonFile || isUploadingJson"
+            @click="uploadJsonConfig"
+          >
+            Import
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
