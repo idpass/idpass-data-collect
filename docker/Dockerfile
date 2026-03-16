@@ -6,6 +6,7 @@ WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm run build:datacollect
+RUN pnpm --filter @idpass/adapter-openspp --filter @idpass/adapter-openfn --filter @idpass/adapter-mock build
 RUN pnpm run build:backend
 
 FROM base AS backend

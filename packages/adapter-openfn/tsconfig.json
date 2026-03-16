@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
+    "module": "commonjs",
     "strict": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
@@ -12,11 +13,7 @@
     "types": ["node"],
     "lib": ["ES2022", "DOM"],
     "declaration": true,
-    "resolveJsonModule": true,
-    "baseUrl": ".",
-    "paths": {
-      "@idpass/data-collect-core": ["../datacollect/src/index.ts"]
-    }
+    "resolveJsonModule": true
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "**/*.spec.ts", "**/*.test.ts", "dist"]
