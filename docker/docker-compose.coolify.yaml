@@ -1,71 +1,60 @@
-name: idpass-data-collection-dev
+name: idpass-datacollect-staging
 services:
-  # PostgreSQL database
   postgres:
     image: postgres:15
     restart: always
-    env_file: ./.env
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-admin}
+      - POSTGRES_DB=${POSTGRES_DB:-datacollect}
     volumes:
-      - postgres-data-dev:/var/lib/postgresql/data
-      - ./init-reset-dbs.sh:/docker-entrypoint-initdb.d/init-reset-dbs.sh
-    ports:
-      - "5432:5432"
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-reset-dbs.sh:/docker-entrypoint-initdb.d/init-reset-dbs.sh:ro
     networks:
-      - datacollect-network-dev
+      - internal
     command: ["postgres"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-admin}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
-  # DataCollect Sync Server - Development mode
   sync-server:
     build:
       context: ..
       dockerfile: docker/Dockerfile
       target: backend
-    develop:
-      watch:
-        - action: sync
-          path: ../packages/backend
-          target: /app/packages/backend
-          ignore:
-            - node_modules/
-            - dist/
-        - action: sync
-          path: ../packages/datacollect
-          target: /app/packages/datacollect
-          ignore:
-            - node_modules/
-            - dist/
-        - action: rebuild
-          path: ../package.json
-        - action: rebuild
-          path: ../pnpm-lock.yaml
-    env_file: ./.env
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - POSTGRES=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-datacollect}
+      - POSTGRES_TEST=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-datacollect}_test
+      - JWT_SECRET=${JWT_SECRET:-staging-secret-change-me}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@datacollect.lan}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
+      - EXTERNAL_SYNC_ENABLED=${EXTERNAL_SYNC_ENABLED:-false}
     ports:
       - "${SYNC_SERVER_PORT:-3000}:3000"
-      - "9229:9229" # Node.js debugger port
-    restart: unless-stopped
+      - "9229:9229"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
-      - datacollect-network-dev
+      - internal
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
 
-  # Admin UI - Development mode
   admin-ui:
     build:
       context: ..
       dockerfile: docker/Dockerfile
       target: admin-ui
-    develop:
-      watch:
-        - action: sync
-          path: ../packages/admin
-          target: /app/packages/admin
-          ignore:
-            - node_modules/
-            - dist/
-        - action: rebuild
-          path: ../package.json
-        - action: rebuild
-          path: ../pnpm-lock.yaml
     restart: unless-stopped
     environment:
       - VITE_API_URL=${ADMIN_API_URL:-http://localhost:3000}
@@ -74,11 +63,45 @@ services:
     depends_on:
       - sync-server
     networks:
-      - datacollect-network-dev
+      - internal
+
+  mobile-app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: mobile-app
+    restart: unless-stopped
+    environment:
+      - VITE_BACKEND_API_URL=${MOBILE_API_URL:-http://localhost:3000}
+      - VITE_DB_ENCRYPTION_PASSWORD=${VITE_DB_ENCRYPTION_PASSWORD:-changeme}
+      - VITE_DEVELOP=true
+      - VITE_DEBUG=true
+      - VITE_FEATURE_DYNAMIC=true
+    ports:
+      - "8081:8081"
+    depends_on:
+      - sync-server
+    networks:
+      - internal
+
+  web-ui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: web-ui
+    restart: unless-stopped
+    environment:
+      - VITE_API_URL=${WEB_API_URL:-http://localhost:3000}
+    ports:
+      - "5174:5174"
+    depends_on:
+      - sync-server
+    networks:
+      - internal
 
 volumes:
-  postgres-data-dev:
+  postgres-data:
 
 networks:
-  datacollect-network-dev:
+  internal:
     driver: bridge
