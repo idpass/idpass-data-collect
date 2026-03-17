@@ -1,6 +1,6 @@
 {
   "name": "@idpass/data-collect",
-  "version": "1.1.0",
+  "version": "1.3.0",
   "description": "ID PASS DataCollect - Offline-first data management system",
   "private": true,
   "packageManager": "pnpm@10.14.0+sha256.297534e65d5842450539c1e8022c8831ab5e1fe2eb74664787a815519542d620",
@@ -79,7 +79,9 @@
       "js-yaml@>=4.0.0 <4.1.1": ">=4.1.1",
       "ws@>=8.0.0 <8.17.1": ">=8.17.1",
       "@babel/runtime@<7.26.10": ">=7.26.10",
-      "webpack-dev-server@<=5.2.0": ">=5.2.1"
+      "webpack-dev-server@<=5.2.0": ">=5.2.1",
+      "minimatch@>=10.0.0 <10.2.1": ">=10.2.1",
+      "ajv@>=8.0.0 <8.18.0": ">=8.18.0"
     }
   }
 }

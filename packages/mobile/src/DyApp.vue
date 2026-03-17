@@ -31,7 +31,7 @@ onMounted(async () => {
 
 <style scoped>
 main {
-  padding: var(--spacing-md);
+  /* padding: var(--spacing-md); */
   background: var(--background);
 }
 

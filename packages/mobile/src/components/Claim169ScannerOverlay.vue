@@ -214,7 +214,7 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <div v-else-if="isScanning" class="scanning-overlay">
+        <div v-else-if="isScanning" class="scanning-overlay barcode-scanner-modal">
           <div class="scan-frame">
             <div class="corner top-left"></div>
             <div class="corner top-right"></div>
@@ -395,8 +395,8 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.75rem;
   padding: 0.875rem 1.5rem;
-  background: linear-gradient(135deg, #2563eb 0%, #9333ea 100%);
-  color: white;
+  background: var(--brand, #ff6d37);
+  color: #ffffff;
   border: none;
   border-radius: 14px;
   font-size: 1rem;
@@ -417,7 +417,7 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.9);
+  background: transparent;
   z-index: 100;
 }
 
@@ -471,7 +471,7 @@ onUnmounted(() => {
   left: 10px;
   right: 10px;
   height: 2px;
-  background: linear-gradient(90deg, transparent, #2563eb, transparent);
+  background: linear-gradient(90deg, transparent, var(--brand, #ff6d37), transparent);
   animation: scan 2s ease-in-out infinite;
 }
 
@@ -488,14 +488,15 @@ onUnmounted(() => {
   color: white;
   font-size: 1rem;
   margin-top: 2rem;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 
 .cancel-button {
   margin-top: 2rem;
   padding: 0.75rem 2rem;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.5);
   color: white;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 12px;
   font-size: 1rem;
   cursor: pointer;

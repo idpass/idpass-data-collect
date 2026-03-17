@@ -334,8 +334,8 @@ const getEntityName = () => {
 }
 
 .action-button:first-child {
-  background: linear-gradient(135deg, #2563eb 0%, #9333ea 100%);
-  color: white;
+  background: var(--brand, #ff6d37);
+  color: #ffffff;
 }
 
 .action-button:hover {
@@ -352,18 +352,18 @@ const getEntityName = () => {
 }
 
 .events-section {
-  background: #ffffff;
-  border-radius: 20px;
-  padding: 1.5rem;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  border: none;
 }
 
 .events-section h2 {
   font-size: 1rem;
   font-weight: 700;
   color: #1f2937;
-  margin: 0 0 0.75rem 0;
+  margin: 0 0 0.5rem 0;
 }
 
 .events-list {
@@ -372,15 +372,18 @@ const getEntityName = () => {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0;
+  background: #ffffff;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .event-card {
-  background: #f9fafb;
-  border-radius: 12px;
+  background: #ffffff;
+  border-radius: 0;
   padding: 0;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-left: 3px solid #2563eb;
+  border: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-left: 3px solid var(--brand, #ff6d37);
   overflow: hidden;
 }
 
@@ -516,18 +519,18 @@ const getEntityName = () => {
 }
 
 .dependent-section {
-  background: #ffffff;
-  border-radius: 20px;
-  padding: 1.5rem;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  border: none;
 }
 
 .dependent-section h2 {
   font-size: 1rem;
   font-weight: 700;
   color: #1f2937;
-  margin: 0 0 0.75rem 0;
+  margin: 0 0 0.5rem 0;
 }
 
 .dependent-list {
@@ -536,7 +539,9 @@ const getEntityName = () => {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0;
+  background: #ffffff;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .dependent-card {
@@ -544,16 +549,17 @@ const getEntityName = () => {
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  background: #f9fafb;
-  border-radius: 12px;
-  padding: 0.75rem;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #ffffff;
+  border-radius: 0;
+  padding: 0.875rem 1rem;
+  border: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   cursor: pointer;
-  transition: transform 0.2s ease;
+  transition: background 0.15s ease;
 }
 
 .dependent-card:active {
-  transform: scale(0.99);
+  background: #f9fafb;
 }
 
 .dependent-card h3 {

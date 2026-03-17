@@ -41,12 +41,10 @@ import type {
 } from "../v2/types";
 
 const BASE_URL = process.env.OPENSPP_URL || "http://localhost:8069";
-const CLIENT_ID = process.env.OPENSPP_CLIENT_ID || "client_9wPoIAlhjWDfl4NnkEK5bw";
-const CLIENT_SECRET =
-  process.env.OPENSPP_CLIENT_SECRET ||
-  "tXwWLiS0ycIGcvUIBtw_g_5Kd01j7S3tel_7ln54Tz8";
+const CLIENT_ID = process.env.OPENSPP_CLIENT_ID || "";
+const CLIENT_SECRET = process.env.OPENSPP_CLIENT_SECRET || "";
 const ID_NAMESPACE =
-  process.env.OPENSPP_ID_NAMESPACE || "urn:datacollect:integration-test";
+  process.env.OPENSPP_ID_NAMESPACE || "urn:openspp:vocab:id-type#national_id";
 
 const testRunId = Date.now().toString(36);
 
@@ -61,6 +59,14 @@ function testGroupId(suffix: string): string {
 let serverAvailable = false;
 
 beforeAll(async () => {
+  if (!CLIENT_ID || !CLIENT_SECRET) {
+    console.warn(
+      "Skipping integration tests: OPENSPP_CLIENT_ID and OPENSPP_CLIENT_SECRET are required",
+    );
+    serverAvailable = false;
+    return;
+  }
+
   try {
     await axios.get(`${BASE_URL}/api/v2/spp/metadata`, { timeout: 5000 });
     serverAvailable = true;
@@ -88,7 +94,6 @@ describe("OpenSppV2Client Integration Tests", () => {
       baseUrl: BASE_URL,
       clientId: CLIENT_ID,
       clientSecret: CLIENT_SECRET,
-      identifierNamespace: ID_NAMESPACE,
       includeStudioExtensions: true,
     });
   });
@@ -106,10 +111,13 @@ describe("OpenSppV2Client Integration Tests", () => {
     it("receives token with expected fields via raw request", async () => {
       if (!assumeAvailable()) return;
 
-      const response = await axios.post(`${BASE_URL}/api/v2/spp/oauth/token`, {
+      const body = new URLSearchParams({
         grant_type: "client_credentials",
         client_id: CLIENT_ID,
         client_secret: CLIENT_SECRET,
+      });
+      const response = await axios.post(`${BASE_URL}/api/v2/spp/oauth/token`, body, {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
       });
 
       expect(response.status).toBe(200);

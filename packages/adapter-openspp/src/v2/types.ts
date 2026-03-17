@@ -300,8 +300,6 @@ export interface OpenSppV2Config {
   clientId: string;
   /** OAuth2 client secret */
   clientSecret: string;
-  /** Namespace URI for identifiers */
-  identifierNamespace: string;
   /** Whether to include Studio extensions in requests */
   includeStudioExtensions?: boolean;
 }

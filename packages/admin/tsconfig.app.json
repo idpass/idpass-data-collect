@@ -6,7 +6,7 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "paths": {
       "@/*": ["./src/*"],
-      "@idpass/data-collect-core": ["../datacollect/src/interfaces/types.ts"]
+      "@idpass/data-collect-core": ["../datacollect/dist/types/index.d.ts"]
     }
   }
 }

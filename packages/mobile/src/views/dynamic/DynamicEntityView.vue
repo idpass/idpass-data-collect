@@ -406,8 +406,8 @@ const formatTimestamp = (timestamp: string) => {
   border: none;
   border-radius: 999px;
   padding: 0.55rem 1.25rem;
-  background: linear-gradient(135deg, #2563eb 0%, #9333ea 100%);
-  color: white;
+  background: var(--brand, #ff6d37);
+  color: #ffffff;
   font-weight: 600;
 }
 
@@ -417,11 +417,11 @@ const formatTimestamp = (timestamp: string) => {
 }
 
 .submissions-panel {
-  background: #ffffff;
-  border-radius: 20px;
-  padding: 1.5rem;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
+  border: none;
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -449,8 +449,9 @@ const formatTimestamp = (timestamp: string) => {
   align-items: center;
   gap: 0.75rem;
   background: #f9fafb;
-  border-radius: 14px;
+  border-radius: 8px;
   padding: 0.65rem 1rem;
+  border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .search-bar input {
@@ -472,9 +473,11 @@ const formatTimestamp = (timestamp: string) => {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0;
   padding: 0;
   margin: 0;
+  background: #ffffff;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .submission-card {
@@ -483,15 +486,16 @@ const formatTimestamp = (timestamp: string) => {
   gap: 0.75rem;
   align-items: center;
   padding: 0.875rem 1rem;
-  background: #f9fafb;
-  border-radius: 14px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: #ffffff;
+  border-radius: 0;
+  border: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   cursor: pointer;
-  transition: transform 0.2s ease;
+  transition: background 0.15s ease;
 }
 
 .submission-card:active {
-  transform: scale(0.99);
+  background: #f9fafb;
 }
 
 .submission-header {
@@ -577,9 +581,9 @@ const formatTimestamp = (timestamp: string) => {
 .empty-state {
   text-align: center;
   padding: 2rem 1.5rem;
-  background: #f9fafb;
-  border-radius: 18px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: transparent;
+  border-radius: 0;
+  border: none;
   color: #6b7280;
   font-size: 0.95rem;
 }

@@ -17,7 +17,7 @@
   under the License.
 -->
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useProgramDraftStore } from '@/stores/programDraft'
 import { useSnackBarStore } from '@/stores/snackBar'
 import { fetchOpenSppV2Fields } from '@/api/opensppV2'
@@ -100,23 +100,6 @@ const clearFields = () => {
   fetchError.value = null
 }
 
-// Auto-fetch when configuration changes (debounced)
-const fetchTimeout: ReturnType<typeof setTimeout> | null = null
-
-watch(
-  () => ({
-    url: draftStore.draft.externalSync?.url,
-    clientId: draftStore.draft.externalSync?.adapterConfig?.clientId,
-    clientSecret: draftStore.draft.externalSync?.adapterConfig?.clientSecret,
-  }),
-  () => {
-    // Clear any pending fetch
-    if (fetchTimeout) {
-      clearTimeout(fetchTimeout)
-    }
-  },
-  { deep: true }
-)
 
 // Get field type display name
 const getFieldTypeDisplay = (type: string): string => {

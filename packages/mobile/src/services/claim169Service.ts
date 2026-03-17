@@ -18,6 +18,7 @@
  */
 
 import type { EntityType } from '@idpass/data-collect-core'
+import { v4 as uuidv4 } from 'uuid'
 
 // Lazy-load the claim169 module to avoid WASM initialization issues on mobile
 let claim169Module: typeof import('claim169') | null = null
@@ -406,7 +407,7 @@ export function mapClaim169ToEntityData(
 
   return {
     entityType: 'individual' as EntityType,
-    guid: identity.id || crypto.randomUUID(),
+    guid: identity.id || uuidv4(),
     fullName: identity.fullName,
     firstName: identity.firstName,
     lastName: identity.lastName,

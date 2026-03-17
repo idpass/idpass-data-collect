@@ -97,3 +97,4 @@ website/docs/packages/backend/api-reference-generated/
 .claude/
 !.claude/hooks/
 !.claude/settings.json
+*storybook.log

@@ -189,31 +189,58 @@ const scan = async () => {
   return url
 }
 
+const parseVersion = (version: string | undefined): number[] => {
+  if (!version) return [0]
+  return version.split('.').map((part) => parseInt(part, 10) || 0)
+}
+
+const isNewerVersion = (incoming: string | undefined, existing: string | undefined): boolean => {
+  const incomingParts = parseVersion(incoming)
+  const existingParts = parseVersion(existing)
+  const length = Math.max(incomingParts.length, existingParts.length)
+  for (let i = 0; i < length; i++) {
+    const a = incomingParts[i] ?? 0
+    const b = existingParts[i] ?? 0
+    if (a > b) return true
+    if (a < b) return false
+  }
+  return false
+}
+
 const saveTenantApp = async (config: TenantAppData, sourceUrl = '') => {
   if (!config?.id || !config?.name || !config?.entityForms) {
     throw new Error('Invalid Collection Program configuration: missing required fields')
   }
 
-  // Check if a collection program with the same id or name already exists
-  const existingById = await database.tenantapps
-    .find({
-      selector: {
-        id: config.id
-      }
-    })
-    .exec()
+  const [existingById, existingByName] = await Promise.all([
+    database.tenantapps.find({ selector: { id: config.id } }).exec(),
+    database.tenantapps.find({ selector: { name: config.name } }).exec(),
+  ])
 
-  const existingByName = await database.tenantapps
-    .find({
-      selector: {
-        name: config.name
-      }
-    })
-    .exec()
+  const existing = existingById[0] ?? existingByName[0] ?? null
 
-  if (existingById.length > 0 || existingByName.length > 0) {
-    const existingName = existingById.length > 0 ? existingById[0].name : existingByName[0].name
-    throw new Error(`A Collection Program with the name "${existingName}" already exists. Please use a different program.`)
+  if (existing) {
+    if (!isNewerVersion(config.version, existing.version)) {
+      throw new Error(
+        `"${existing.name}" is already at version ${existing.version ?? '(unknown)'}. ` +
+        `The incoming version ${config.version ?? '(unknown)'} is not newer.`
+      )
+    }
+
+    // Update only config fields — entities are stored separately and are unaffected
+    await existing.patch({
+      id: config.id,
+      name: config.name,
+      description: config.description,
+      version: config.version,
+      url: config.url || sourceUrl || existing.url,
+      entityForms: config.entityForms,
+      entityData: config.entityData,
+      syncServerUrl: config.syncServerUrl,
+      externalSync: config.externalSync,
+      trustedIssuers: config.trustedIssuers,
+    })
+    return
   }
 
   await database.tenantapps.upsert({
@@ -255,10 +282,10 @@ const loadAppFromUrl = async (url: string) => {
 
 const handleLoadAppFromInput = async () => {
   try {
-    await loadAppFromUrl(appUrl.value)
-    // Only close dialog if successful (no error thrown)
+    const savedConfig = await loadAppFromUrl(appUrl.value)
     openInputAppDialog.value = false
-    appUrl.value = '' // Clear the input on success
+    appUrl.value = ''
+    displayError(`Successfully loaded "${savedConfig?.name || 'Collection Program'}"`, 3000, true)
   } catch {
     // Error already handled by loadAppFromUrl via displayError
     // Keep dialog open so user can fix the URL
@@ -279,8 +306,9 @@ const handleFileChange = async (event: Event) => {
 
   try {
     const text = await file.text()
-    const json = JSON.parse(text)
+    const json = JSON.parse(text) as TenantAppData
     await saveTenantApp(json)
+    displayError(`Successfully imported "${json?.name || 'Collection Program'}"`, 3000, true)
   } catch (error) {
     console.error(error)
     const message = error instanceof Error ? error.message : 'Unable to import the selected file. Please verify it is a valid Collection Program JSON.'
@@ -559,6 +587,7 @@ const handleScanIdentity = () => {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
+  padding: var(--spacing-md)
 }
 
 .home-header h1 {
@@ -577,9 +606,9 @@ const handleScanIdentity = () => {
   align-items: center;
   gap: var(--spacing-sm);
   background: var(--surface);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   padding: var(--spacing-sm) var(--spacing-md);
-  box-shadow: var(--shadow-card);
+  box-shadow: none;
   border: 1px solid var(--border-light);
   min-height: var(--touch-target);
 }
@@ -619,6 +648,7 @@ const handleScanIdentity = () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 0 var(--spacing-md);
 }
 
 .section-heading h2 {
@@ -640,28 +670,30 @@ const handleScanIdentity = () => {
 .form-card-list {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: 0;
   padding: 0;
   margin: 0;
   list-style: none;
+  background: var(--surface);
+  border-top: 1px solid var(--border-light);
 }
 
 .form-card {
   background: var(--surface);
-  border-radius: var(--radius-xl);
-  padding: var(--spacing-lg);
-  box-shadow: var(--shadow-card);
-  border: 1px solid var(--border-light);
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  border-radius: 0;
+  padding: var(--spacing-md) var(--spacing-md);
+  border: none;
+  border-bottom: 1px solid var(--border-light);
+  transition: background var(--transition-fast);
   cursor: pointer;
 }
 
 .form-card:active {
-  transform: scale(0.99);
+  background: var(--neutral-50);
 }
 
 .form-card:hover {
-  box-shadow: var(--shadow-floating);
+  background: var(--neutral-50);
 }
 
 .form-card__header {
@@ -723,9 +755,9 @@ const handleScanIdentity = () => {
 }
 
 .stat {
-  background: var(--neutral-50);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-sm);
+  background: transparent;
+  border-radius: 0;
+  padding: var(--spacing-sm) 0;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
@@ -768,8 +800,8 @@ const handleScanIdentity = () => {
   width: 56px;
   height: 56px;
   border-radius: var(--radius-full);
-  background: linear-gradient(135deg, var(--brand) 0%, var(--primary) 100%);
-  color: var(--text-inverted);
+  background: var(--brand);
+  color: #ffffff;
   border: none;
   display: grid;
   place-items: center;
@@ -818,8 +850,9 @@ const handleScanIdentity = () => {
 .overlay__options {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 0;
   margin-top: var(--spacing-lg);
+  border-top: 1px solid var(--border-light);
 }
 
 .option {
@@ -828,16 +861,17 @@ const handleScanIdentity = () => {
   gap: var(--spacing-sm);
   width: 100%;
   padding: var(--spacing-sm) var(--spacing-md);
-  border-radius: var(--radius-xl);
+  border-radius: 0;
   border: none;
-  background: var(--neutral-50);
+  border-bottom: 1px solid var(--border-light);
+  background: var(--surface);
   text-align: left;
-  transition: transform var(--transition-fast), background var(--transition-fast);
+  transition: background var(--transition-fast);
   min-height: var(--touch-target);
 }
 
 .option:active {
-  transform: scale(0.99);
+  background: var(--neutral-50);
 }
 
 .option__icon {
@@ -1002,8 +1036,7 @@ const handleScanIdentity = () => {
 }
 
 .option--identity {
-  border: 1px solid rgba(44, 62, 80, 0.2);
-  background: rgba(44, 62, 80, 0.04);
+  background: rgba(44, 62, 80, 0.03);
 }
 
 .option__icon--identity {
