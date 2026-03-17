@@ -62,6 +62,12 @@ export const authenticateJWT = async (req: Request, res: Response, next: NextFun
     return;
   }
 
+  // Self-service scoped tokens must not be accepted on admin/sync/entity routes
+  if ((result.decoded as DecodedPayload & { scope?: string }).scope === "self-service") {
+    res.status(403).json({ error: "Forbidden: self-service tokens cannot access this endpoint" });
+    return;
+  }
+
   (req as AuthenticatedRequest).user = result.decoded;
   next();
 };
@@ -87,8 +93,13 @@ export function createDynamicAuthMiddleware(appInstanceStore: AppInstanceStore) 
 
       const [authType, token] = authHeader.split(" ");
       if (authType.toLowerCase() === "bearer") {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET!) as DecodedPayload;
-        (req as AuthenticatedRequest).user = decoded;
+        try {
+          const decoded = jwt.verify(token, process.env.JWT_SECRET!) as DecodedPayload;
+          (req as AuthenticatedRequest).user = decoded;
+        } catch {
+          res.status(401).json({ error: "Invalid token" });
+          return;
+        }
       }
 
       // get app instance from request
@@ -197,7 +208,7 @@ export function validateTenantAccess(req: Request, res: Response, next: NextFunc
 
   const tenantIds = user.tenantIds ?? [];
 
-  if (!tenantIds.includes(configId) && configId !== "default") {
+  if (!tenantIds.includes(configId)) {
     res.status(403).json({ error: "Forbidden: No access to this tenant" });
     return;
   }

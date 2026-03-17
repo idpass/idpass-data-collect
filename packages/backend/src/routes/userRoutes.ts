@@ -176,7 +176,7 @@ export function createUserRoutes(userStore: UserStore): Router {
   // Get current user
   router.get(
     "/me",
-    createAuthAdminMiddleware(userStore),
+    authenticateJWT,
     asyncHandler(async (req, res) => {
       const user = await userStore.getUser((req as AuthenticatedRequest).user.email);
       if (!user) {
