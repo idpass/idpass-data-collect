@@ -8,6 +8,8 @@ import { SyncLevel } from "@idpass/data-collect-core";
 import { run } from "../syncServer";
 import { SyncServerInstance, AppConfig } from "../types";
 import { getConnectionString, ensureDatabaseExists, describeIfPostgres } from "./helpers/testDb";
+import { clearReviewState } from "../routes/reviewRoutes";
+import { ReviewStoreImpl } from "../stores/ReviewStore";
 
 const mockConfig: AppConfig = {
   id: "review-test-config",
@@ -324,6 +326,123 @@ describeIfPostgres("Review Routes", () => {
       const appInstance = await currentApp.appInstanceStore.getAppInstance(mockConfig.id);
       const entity = await appInstance?.edm.getEntity(entityGuid);
       expect(entity).not.toBeNull();
+    });
+  });
+
+  describe("Review persistence", () => {
+    it("reviews persist in database after in-memory cache is cleared", async () => {
+      const currentApp = requireApp();
+
+      // Set up review config
+      await request(currentApp.httpServer)
+        .put(`/api/reviews/config/${mockConfig.id}/create-individual`)
+        .send({ policy: "internal-review", requiredRole: "supervisor" })
+        .set("Authorization", `Bearer ${adminToken}`);
+
+      // Submit a review
+      const formGuid = uuidv4();
+      const entityGuid = uuidv4();
+      const submitResponse = await request(currentApp.httpServer)
+        .post("/api/reviews/submit")
+        .send({
+          tenantId: mockConfig.id,
+          formData: {
+            guid: formGuid,
+            entityGuid,
+            type: "create-individual",
+            data: { name: "Persist Person" },
+            timestamp: new Date().toISOString(),
+            userId: "test-user",
+            syncLevel: SyncLevel.LOCAL,
+          },
+        })
+        .set("Authorization", `Bearer ${adminToken}`);
+
+      expect(submitResponse.status).toBe(200);
+      const reviewId = submitResponse.body.review.id;
+
+      // Clear in-memory review state (simulates server restart)
+      clearReviewState();
+
+      // Reviews should still be available from the database via GET
+      const listResponse = await request(currentApp.httpServer)
+        .get(`/api/reviews?tenantId=${mockConfig.id}&status=pending`)
+        .set("Authorization", `Bearer ${adminToken}`);
+
+      expect(listResponse.status).toBe(200);
+      expect(listResponse.body.reviews).toHaveLength(1);
+      expect(listResponse.body.reviews[0].id).toBe(reviewId);
+      expect(listResponse.body.reviews[0].submissionGuid).toBe(formGuid);
+    });
+
+    it("review status updates persist in database", async () => {
+      const currentApp = requireApp();
+
+      // Set up review config
+      await request(currentApp.httpServer)
+        .put(`/api/reviews/config/${mockConfig.id}/create-individual`)
+        .send({ policy: "internal-review", requiredRole: "supervisor" })
+        .set("Authorization", `Bearer ${adminToken}`);
+
+      // Submit a review
+      const submitResponse = await request(currentApp.httpServer)
+        .post("/api/reviews/submit")
+        .send({
+          tenantId: mockConfig.id,
+          formData: {
+            guid: uuidv4(),
+            entityGuid: uuidv4(),
+            type: "create-individual",
+            data: { name: "Status Person" },
+            timestamp: new Date().toISOString(),
+            userId: "test-user",
+            syncLevel: SyncLevel.LOCAL,
+          },
+        })
+        .set("Authorization", `Bearer ${adminToken}`);
+
+      const reviewId = submitResponse.body.review.id;
+
+      // Approve the review
+      await request(currentApp.httpServer)
+        .post(`/api/reviews/${reviewId}/approve`)
+        .set("Authorization", `Bearer ${adminToken}`);
+
+      // Verify status persisted in DB directly via ReviewStore
+      const reviewStore = new ReviewStoreImpl(postgresUrl as string);
+      await reviewStore.initialize();
+      const dbReview = await reviewStore.getReviewById(reviewId);
+      await reviewStore.closeConnection();
+
+      expect(dbReview).not.toBeNull();
+      expect(dbReview!.status).toBe("approved");
+      expect(dbReview!.reviewedBy).toBeTruthy();
+    });
+  });
+
+  describe("Config validation", () => {
+    it("returns 400 when internal-review policy is set without requiredRole", async () => {
+      const currentApp = requireApp();
+
+      const response = await request(currentApp.httpServer)
+        .put(`/api/reviews/config/${mockConfig.id}/create-individual`)
+        .send({ policy: "internal-review" })
+        .set("Authorization", `Bearer ${adminToken}`);
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("internal-review policy requires a requiredRole");
+    });
+
+    it("allows auto-approve policy without requiredRole", async () => {
+      const currentApp = requireApp();
+
+      const response = await request(currentApp.httpServer)
+        .put(`/api/reviews/config/${mockConfig.id}/create-individual`)
+        .send({ policy: "auto-approve" })
+        .set("Authorization", `Bearer ${adminToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe("success");
     });
   });
 });
