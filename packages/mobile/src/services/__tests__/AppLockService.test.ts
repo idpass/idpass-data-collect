@@ -142,7 +142,7 @@ describe('AppLockService', () => {
       expect(result).toBe(false)
     })
 
-    it('authenticate allows access when device has no screen lock', async () => {
+    it('authenticate rejects access when device has no screen lock', async () => {
       vi.mocked(SecureStorageService.get).mockResolvedValue('1')
       vi.mocked(BiometricAuth.checkBiometry).mockResolvedValue({
         isAvailable: false,
@@ -158,8 +158,8 @@ describe('AppLockService', () => {
       await AppLockService.init()
       const result = await AppLockService.authenticate()
 
-      expect(result).toBe(true)
-      expect(AppLockService.locked.value).toBe(false)
+      expect(result).toBe(false)
+      expect(AppLockService.locked.value).toBe(true)
     })
 
     it('lock sets locked to true and persists state', async () => {

@@ -106,12 +106,10 @@ describe('MobileAuthStorage', () => {
       expect(SecureStorageService.set).toHaveBeenCalledWith('temp_oauth_provider', 'oauth-provider')
     })
 
-    it('should handle errors when saving temporary OAuth data', async () => {
+    it('should propagate errors when saving temporary OAuth data', async () => {
       vi.mocked(SecureStorageService.set).mockRejectedValue(new Error('Storage error'))
 
-      await expect(storage.saveTemporaryOAuthData('oauth-app-id', 'oauth-provider')).resolves.toBeUndefined()
-
-      expect(console.warn).toHaveBeenCalledWith('Failed to save temporary OAuth data:', expect.any(Error))
+      await expect(storage.saveTemporaryOAuthData('oauth-app-id', 'oauth-provider')).rejects.toThrow('Storage error')
     })
 
     it('should get temporary OAuth data', async () => {
@@ -138,7 +136,7 @@ describe('MobileAuthStorage', () => {
         appId: null,
         provider: null,
       })
-      expect(console.warn).toHaveBeenCalledWith('Failed to get temporary OAuth data:', expect.any(Error))
+      expect(console.warn).toHaveBeenCalledWith('Failed to get temporary OAuth data')
     })
 
     it('should clear temporary OAuth data', async () => {
@@ -153,7 +151,7 @@ describe('MobileAuthStorage', () => {
 
       await expect(storage.clearTemporaryOAuthData()).resolves.toBeUndefined()
 
-      expect(console.warn).toHaveBeenCalledWith('Failed to clear temporary OAuth data:', expect.any(Error))
+      expect(console.warn).toHaveBeenCalledWith('Failed to clear temporary OAuth data')
     })
   })
 
@@ -199,7 +197,7 @@ describe('MobileAuthStorage', () => {
       const provider = await storage.getLastProvider()
 
       expect(provider).toBeNull()
-      expect(console.warn).toHaveBeenCalledWith('Failed to get last provider:', expect.any(Error))
+      expect(console.warn).toHaveBeenCalledWith('Failed to get last provider')
     })
 
     it('should set last provider with app ID', async () => {
@@ -227,7 +225,7 @@ describe('MobileAuthStorage', () => {
 
       await expect(storage.setLastProvider('new-provider')).resolves.toBeUndefined()
 
-      expect(console.warn).toHaveBeenCalledWith('Failed to set last provider:', expect.any(Error))
+      expect(console.warn).toHaveBeenCalledWith('Failed to set last provider')
     })
 
     it('should clear last provider with app ID', async () => {
@@ -255,7 +253,7 @@ describe('MobileAuthStorage', () => {
 
       await expect(storage.clearLastProvider()).resolves.toBeUndefined()
 
-      expect(console.warn).toHaveBeenCalledWith('Failed to clear last provider:', expect.any(Error))
+      expect(console.warn).toHaveBeenCalledWith('Failed to clear last provider')
     })
   })
 
