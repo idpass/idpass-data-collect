@@ -95,11 +95,15 @@ export class OtpStoreImpl implements OtpStore {
   }
 
   /**
-   * Hash an OTP code using SHA-256 so plaintext codes are not stored in the database.
+   * Hash an OTP code using HMAC-SHA256 so plaintext codes are not stored in the database.
+   * Uses OTP_HASH_SECRET or falls back to JWT_SECRET for the HMAC key.
    */
   private hashCode(code: string): string {
-    const secret = process.env.OTP_HASH_SECRET || process.env.JWT_SECRET || "";
-    return crypto.createHmac("sha256", secret).update(code).digest("hex");
+    const secret = process.env.OTP_HASH_SECRET || process.env.JWT_SECRET;
+    if (!secret) {
+      log.warn("Neither OTP_HASH_SECRET nor JWT_SECRET is set — OTP hashing is degraded");
+    }
+    return crypto.createHmac("sha256", secret || "").update(code).digest("hex");
   }
 
   /**
