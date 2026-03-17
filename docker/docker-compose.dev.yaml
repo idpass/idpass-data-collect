@@ -34,7 +34,7 @@ services:
   sync-server:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/Dockerfile.dev
       target: backend
     develop:
       watch:
@@ -72,7 +72,7 @@ services:
   admin-ui:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/Dockerfile.dev
       target: admin-ui
     develop:
       watch:
@@ -108,7 +108,7 @@ services:
   mobile-app:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/Dockerfile.dev
       target: mobile-app
     develop:
       watch:
@@ -145,7 +145,7 @@ services:
   web-ui:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/Dockerfile.dev
       target: web-ui
     develop:
       watch:
