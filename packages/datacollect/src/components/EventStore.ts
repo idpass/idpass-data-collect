@@ -273,12 +273,14 @@ export class EventStoreImpl implements EventStore {
     const resultPromise = new Promise<string>((resolve, reject) => {
       this.saveQueue = this.saveQueue.then(async () => {
         try {
+          // Clone form to avoid mutating the caller's reference
+          const formToSave = { ...form };
           // Stamp the event with the current schema version when an upcaster service is available
-          if (this.upcasterService && form.schemaVersion === undefined) {
-            form.schemaVersion = this.upcasterService.getCurrentVersion(form.type);
+          if (this.upcasterService && formToSave.schemaVersion === undefined) {
+            formToSave.schemaVersion = this.upcasterService.getCurrentVersion(formToSave.type);
           }
-          const guids = await this.storageAdapter.saveEvents([form]);
-          this.latestHash = this.computeNextHash(form);
+          const guids = await this.storageAdapter.saveEvents([formToSave]);
+          this.latestHash = this.computeNextHash(formToSave);
           await this.storageAdapter.persistHashAnchor(HASH_V2_PREFIX + this.latestHash);
           resolve(guids[0]);
         } catch (error) {

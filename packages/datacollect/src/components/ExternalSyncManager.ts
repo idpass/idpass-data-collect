@@ -69,8 +69,13 @@ function emptySyncResult(duration: number): SyncResult {
 /**
  * Wraps a legacy ExternalSyncAdapter (V1) in the ExternalSyncAdapterV2 interface.
  *
- * This enables the ExternalSyncManager to work uniformly with both old and
+ * This enables the ExternalSyncManager to work uniformly with both old and new
  * adapters while the codebase transitions to the V2 interface.
+ *
+ * **Limitation:** The wrapper always returns `pushed: 0, pulled: 0` in its
+ * SyncResult because the legacy V1 adapter interface (`pushData`/`pullData`)
+ * does not provide entity counts. This means monitoring dashboards and admin
+ * UI will show zero counts for any adapter still using the V1 interface.
  */
 class LegacyAdapterWrapper implements ExternalSyncAdapterV2 {
   constructor(
@@ -96,6 +101,12 @@ class LegacyAdapterWrapper implements ExternalSyncAdapterV2 {
     return { healthy: true, message: "Legacy adapter (health check not supported)" };
   }
 
+  /**
+   * Push entities via the legacy adapter.
+   * Note: pushed/pulled counts are always 0 because the V1 adapter interface
+   * does not provide per-entity counts. Monitoring/admin UI will show zero
+   * counts for V1 adapters — this is a known limitation of the legacy wrapper.
+   */
   async push(_entities: EntityPushPayload[]): Promise<SyncResult> {
     const startTime = Date.now();
     try {

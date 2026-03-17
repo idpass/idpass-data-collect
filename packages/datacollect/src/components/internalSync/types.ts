@@ -34,8 +34,9 @@ export interface SelectiveSyncOptions {
   assignedAreaIds?: string[];
   /** Specific entity GUIDs to sync (overrides area-based filtering) */
   assignedEntityGuids?: string[];
-  /** How to handle data from previously assigned areas during reassignment */
-  reassignmentMode?: "keep" | "purge";
+  /** How to handle data from previously assigned areas during reassignment.
+   *  @todo implement purge mode — currently only "keep" is supported */
+  reassignmentMode?: "keep";
 }
 
 /**

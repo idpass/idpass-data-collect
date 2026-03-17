@@ -103,13 +103,15 @@ export function createSyncMachine(
 
       updateLocalSyncState: fromPromise(
         async ({ input }: { input: { context: SyncContext } }): Promise<void> => {
-          const { eventStore, successfulChunks, allLocalEvents } = input.context;
+          const { eventStore, successfulChunks } = input.context;
           const successfulEvents = successfulChunks.flat();
           await eventStore.updateSyncLevelFromEvents(
             successfulEvents.map((event) => ({ ...event, syncLevel: SyncLevel.REMOTE })),
           );
-          const lastEventTimestamp = allLocalEvents[allLocalEvents.length - 1].timestamp;
-          await eventStore.setLastLocalSyncTimestamp(lastEventTimestamp);
+          if (successfulEvents.length > 0) {
+            const lastEventTimestamp = successfulEvents[successfulEvents.length - 1].timestamp;
+            await eventStore.setLastLocalSyncTimestamp(lastEventTimestamp);
+          }
         },
       ),
 
@@ -148,9 +150,9 @@ export function createSyncMachine(
           input: { context: SyncContext };
         }): Promise<{ events: FormSubmission[]; nextCursor: string | Date | null }> => {
           const { axiosInstance, configId, downloadCursor, selectiveSyncOptions } = input.context;
-          let url = `/api/sync/pull?since=${downloadCursor}&configId=${configId}`;
+          let url = `/api/sync/pull?since=${encodeURIComponent(String(downloadCursor))}&configId=${encodeURIComponent(configId)}`;
           if (selectiveSyncOptions.assignedAreaIds?.length) {
-            url += `&areaIds=${selectiveSyncOptions.assignedAreaIds.join(",")}`;
+            url += `&areaIds=${encodeURIComponent(selectiveSyncOptions.assignedAreaIds.join(","))}`;
           }
           const result = await axiosInstance.get(url);
           return result.data as { events: FormSubmission[]; nextCursor: string | Date | null };
