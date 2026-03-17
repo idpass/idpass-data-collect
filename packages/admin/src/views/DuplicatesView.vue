@@ -12,6 +12,7 @@ const snackBarStore = useSnackBarStore()
 
 const configId = ref(route.params.id as string)
 const showResolveDialog = ref(false)
+const showConfirmDeleteDialog = ref(false)
 const selectedDuplicate = ref<PotentialDuplicate | null>(null)
 
 const headers = [
@@ -130,7 +131,7 @@ onMounted(() => {
           <v-btn
             color="primary"
             variant="tonal"
-            @click="handleResolve(true)"
+            @click="showConfirmDeleteDialog = true"
           >
             Keep Existing
           </v-btn>
@@ -140,6 +141,27 @@ onMounted(() => {
             @click="handleResolve(false)"
           >
             Keep Both
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Confirm deletion dialog -->
+    <v-dialog v-model="showConfirmDeleteDialog" max-width="400">
+      <v-card>
+        <v-card-title class="text-h6">Confirm</v-card-title>
+        <v-card-text>
+          This will permanently remove the duplicate entity. Continue?
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="showConfirmDeleteDialog = false">Cancel</v-btn>
+          <v-btn
+            color="error"
+            variant="tonal"
+            @click="showConfirmDeleteDialog = false; handleResolve(true)"
+          >
+            Confirm
           </v-btn>
         </v-card-actions>
       </v-card>

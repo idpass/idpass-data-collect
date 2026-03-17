@@ -72,8 +72,8 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = newToken
     agentPayload.value = payload
     citizenPayload.value = null
-    localStorage.setItem('web_token', newToken)
-    localStorage.setItem('web_user_type', 'agent')
+    sessionStorage.setItem('web_token', newToken)
+    sessionStorage.setItem('web_user_type', 'agent')
   }
 
   function setCitizenToken(newToken: string) {
@@ -131,16 +131,16 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = null
     agentPayload.value = null
     citizenPayload.value = null
-    localStorage.removeItem('web_token')
-    localStorage.removeItem('web_user_type')
+    sessionStorage.removeItem('web_token')
+    sessionStorage.removeItem('web_user_type')
     sessionStorage.removeItem('web_citizen_token')
     sessionStorage.removeItem('web_user_type')
   }
 
   function initializeAuth() {
-    // Check agent auth (localStorage)
-    const storedAgentToken = localStorage.getItem('web_token')
-    const storedType = localStorage.getItem('web_user_type')
+    // Check agent auth (sessionStorage)
+    const storedAgentToken = sessionStorage.getItem('web_token')
+    const storedType = sessionStorage.getItem('web_user_type')
     if (storedAgentToken && storedType === 'agent') {
       const payload = decodeJwtPayload(storedAgentToken) as AgentPayload | null
       if (payload?.exp) {

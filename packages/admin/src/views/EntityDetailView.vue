@@ -109,6 +109,9 @@ const fetchEntityAndEvents = async () => {
   try {
     // Fetch all entities to find the one we need and to resolve member GUIDs
     const fetchedEntities = await getEntities(routeId.value, 1000)
+    if (fetchedEntities.length >= 1000) {
+      console.warn('Entity list may be truncated — member names may not resolve for large tenants')
+    }
     allEntities.value = fetchedEntities
     const foundEntity = fetchedEntities.find((e) => e.guid === entityGuid.value)
 
