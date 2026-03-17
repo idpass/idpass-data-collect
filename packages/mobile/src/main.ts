@@ -63,6 +63,9 @@ async function initApp() {
       await AppLockService.lock()
     } else {
       document.body.classList.remove('app-backgrounded')
+      if (AppLockService.locked.value) {
+        await AppLockService.authenticate()
+      }
     }
   })
 

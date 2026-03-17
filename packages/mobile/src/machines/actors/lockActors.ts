@@ -42,8 +42,8 @@ export const biometricAuthenticate = fromPromise<BiometricResult>(async () => {
 
   const info = await BiometricAuth.checkBiometry()
   if (!info.isAvailable && !info.deviceIsSecure) {
-    // Device has no screen lock — allow access without authentication
-    return { success: true }
+    // Device has no screen lock or biometrics — reject to protect PII
+    return { success: false, reason: 'device_not_secure' }
   }
 
   try {

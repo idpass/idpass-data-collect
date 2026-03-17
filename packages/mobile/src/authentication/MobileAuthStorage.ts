@@ -71,12 +71,8 @@ export class MobileAuthStorage {
   }
 
   async saveTemporaryOAuthData(appId: string, provider: string): Promise<void> {
-    try {
-      await SecureStorageService.set(this.TEMP_OAUTH_APP_ID_KEY, appId)
-      await SecureStorageService.set(this.TEMP_OAUTH_PROVIDER_KEY, provider)
-    } catch (err) {
-      console.warn('Failed to save temporary OAuth data:', err)
-    }
+    await SecureStorageService.set(this.TEMP_OAUTH_APP_ID_KEY, appId)
+    await SecureStorageService.set(this.TEMP_OAUTH_PROVIDER_KEY, provider)
   }
 
   async getTemporaryOAuthData(): Promise<{ appId: string | null; provider: string | null }> {
@@ -85,8 +81,8 @@ export class MobileAuthStorage {
         appId: await SecureStorageService.get(this.TEMP_OAUTH_APP_ID_KEY),
         provider: await SecureStorageService.get(this.TEMP_OAUTH_PROVIDER_KEY)
       }
-    } catch (err) {
-      console.warn('Failed to get temporary OAuth data:', err)
+    } catch {
+      console.warn('Failed to get temporary OAuth data')
       return { appId: null, provider: null }
     }
   }
@@ -95,8 +91,8 @@ export class MobileAuthStorage {
     try {
       await SecureStorageService.remove(this.TEMP_OAUTH_APP_ID_KEY)
       await SecureStorageService.remove(this.TEMP_OAUTH_PROVIDER_KEY)
-    } catch (err) {
-      console.warn('Failed to clear temporary OAuth data:', err)
+    } catch {
+      console.warn('Failed to clear temporary OAuth data')
     }
   }
 
@@ -106,8 +102,8 @@ export class MobileAuthStorage {
 
     try {
       return await SecureStorageService.get(this.getProviderKey(currentAppId))
-    } catch (err) {
-      console.warn('Failed to get last provider:', err)
+    } catch {
+      console.warn('Failed to get last provider')
       return null
     }
   }
@@ -118,8 +114,8 @@ export class MobileAuthStorage {
 
     try {
       await SecureStorageService.set(this.getProviderKey(currentAppId), provider)
-    } catch (err) {
-      console.warn('Failed to set last provider:', err)
+    } catch {
+      console.warn('Failed to set last provider')
     }
   }
 
@@ -129,8 +125,8 @@ export class MobileAuthStorage {
 
     try {
       await SecureStorageService.remove(this.getProviderKey(currentAppId))
-    } catch (err) {
-      console.warn('Failed to clear last provider:', err)
+    } catch {
+      console.warn('Failed to clear last provider')
     }
   }
 }

@@ -85,4 +85,5 @@ export interface LoadLockStateResult {
 
 export interface BiometricResult {
   success: boolean
+  reason?: string
 }
