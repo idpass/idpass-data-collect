@@ -108,7 +108,7 @@ export function requireSelfServiceScope(req: Request, res: Response, next: NextF
   const requestedEntityGuid =
     req.params.entityGuid || (req.body as Record<string, unknown>)?.entityGuid || req.query.entityGuid;
 
-  if (requestedEntityGuid && decoded.entityGuid && requestedEntityGuid !== decoded.entityGuid) {
+  if (requestedEntityGuid && (!decoded.entityGuid || requestedEntityGuid !== decoded.entityGuid)) {
     res.status(403).json({ error: "Forbidden: cannot access other entities" });
     return;
   }
@@ -417,9 +417,9 @@ export function createSelfServiceRouter(
           audience: expectedAudience,
         });
 
-        // Validate nonce if provided (prevents token replay)
-        if (nonce && verifiedPayload.nonce !== nonce) {
-          return res.status(401).json({ error: "Nonce mismatch" });
+        // Validate nonce if the token carries one (prevents token replay)
+        if (verifiedPayload.nonce && (!nonce || verifiedPayload.nonce !== nonce)) {
+          return res.status(401).json({ error: "Invalid nonce" });
         }
 
         // Extract subject and mapped claims

@@ -98,7 +98,8 @@ export class OtpStoreImpl implements OtpStore {
    * Hash an OTP code using SHA-256 so plaintext codes are not stored in the database.
    */
   private hashCode(code: string): string {
-    return crypto.createHash("sha256").update(code).digest("hex");
+    const secret = process.env.OTP_HASH_SECRET || process.env.JWT_SECRET || "";
+    return crypto.createHmac("sha256", secret).update(code).digest("hex");
   }
 
   /**
