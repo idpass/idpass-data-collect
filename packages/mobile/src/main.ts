@@ -17,6 +17,12 @@
  * under the License.
  */
 
+declare global {
+  interface Window {
+    __showError?: (title: string, msg: string, source?: string) => void
+  }
+}
+
 import 'bootstrap/dist/css/bootstrap.min.css'
 import 'bootstrap/dist/css/bootstrap-grid.min.css'
 import 'font-awesome/css/font-awesome.min.css'
@@ -69,7 +75,15 @@ async function initApp() {
     }
   })
 
+  app.config.errorHandler = (err, _instance, info) => {
+    const msg = err instanceof Error ? err.stack || err.message : String(err)
+    window.__showError?.('Vue Error (' + info + ')', msg)
+  }
+
   app.mount('#app')
 }
 
-initApp()
+initApp().catch((err) => {
+  const msg = err instanceof Error ? err.stack || err.message : String(err)
+  window.__showError?.('App Initialization Failed', msg)
+})
