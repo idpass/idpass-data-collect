@@ -50,21 +50,18 @@ export default defineConfig({
     __GIT_COMMIT_HASH__: JSON.stringify(getGitInfo().commitHash)
   },
 
-  // Optimize for offline usage
+  // Optimize for offline usage — Capacitor loads from local file:// so all
+  // chunks are available offline. We allow minimal code splitting because
+  // inlineDynamicImports: true breaks plugins that use registerPlugin() with
+  // lazy platform loaders (e.g. @aparajita/capacitor-secure-storage).
   build: {
     rollupOptions: {
       output: {
-        manualChunks: undefined,
-        inlineDynamicImports: true,
-        // Ensure a single entry point
         entryFileNames: 'app.js',
-        // Put all assets in the same directory
         assetFileNames: 'assets/[name][extname]',
-        // Disable chunk splitting
         chunkFileNames: '[name].js'
       }
     },
-    assetsInlineLimit: Infinity,
     cssCodeSplit: false,
     sourcemap: 'inline'
   }
