@@ -151,6 +151,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
       const { jsonPath } = await generatePublicArtifacts(baseUrl, appConfig);
       res.setHeader("Content-Type", "application/json");
       res.setHeader("Content-Disposition", "attachment");
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
       return res.sendFile(jsonPath);
     } catch (error) {
       if (error instanceof Error && error.message.includes("artifact id")) {
@@ -178,6 +179,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
       }
       
       res.type("png");
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
       return res.sendFile(qrPath);
     } catch (error) {
       if (error instanceof Error) {
