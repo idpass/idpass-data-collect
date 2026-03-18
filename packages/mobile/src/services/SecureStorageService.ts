@@ -18,7 +18,7 @@
  */
 
 import { Capacitor } from '@capacitor/core'
-import { SecureStorage } from '@aparajita/capacitor-secure-storage'
+import { SecureStorage } from '@/shims/secure-storage'
 
 /**
  * Thin wrapper around native secure storage with a web fallback.
