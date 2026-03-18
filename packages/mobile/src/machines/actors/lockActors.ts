@@ -53,15 +53,14 @@ export const biometricAuthenticate = fromPromise<BiometricResult>(async () => {
     })
     return { success: true }
   } catch (err: unknown) {
-    if (
-      err &&
-      typeof err === 'object' &&
-      'code' in err &&
-      (err as { code: BiometryErrorType }).code === BiometryErrorType.userCancel
-    ) {
-      return { success: false }
+    const code = err && typeof err === 'object' && 'code' in err
+      ? (err as { code: BiometryErrorType }).code
+      : undefined
+    const message = err instanceof Error ? err.message : String(err)
+    if (code === BiometryErrorType.userCancel) {
+      return { success: false, reason: 'cancelled' }
     }
-    throw err
+    return { success: false, reason: `${code ?? 'unknown'}: ${message}` }
   }
 })
 

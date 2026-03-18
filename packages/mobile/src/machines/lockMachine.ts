@@ -102,7 +102,10 @@ export const lockMachine = setup({
           {
             target: 'locked',
             actions: assign({
-              error: 'Authentication failed or cancelled'
+              error: ({ event }) => {
+                const reason = (event.output as BiometricResult).reason
+                return reason || 'Authentication failed or cancelled'
+              }
             })
           }
         ],

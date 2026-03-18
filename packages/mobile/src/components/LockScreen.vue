@@ -17,7 +17,10 @@ async function unlock() {
   try {
     const success = await AppLockService.authenticate()
     if (!success) {
-      authError.value = 'Authentication cancelled. Tap Unlock to try again.'
+      // Read the error from the lock machine's context for detailed diagnostics
+      const snap = AppLockService._actor.getSnapshot()
+      const machineError = (snap.context as { error?: string }).error
+      authError.value = machineError || 'Authentication cancelled. Tap Unlock to try again.'
     }
   } finally {
     isAuthenticating.value = false
