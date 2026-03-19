@@ -54,11 +54,18 @@ onMounted(() => {
 
 <template>
   <v-container>
-    <v-btn class="mb-4" variant="text" prepend-icon="mdi-arrow-left" @click="goBack">
-      Back to Collection Program
-    </v-btn>
+    <div class="subpage-nav">
+      <v-btn variant="text" size="small" prepend-icon="mdi-arrow-left" @click="goBack">
+        Collection Program
+      </v-btn>
+    </div>
 
-    <h1 class="text-h4 mb-4">Potential Duplicates</h1>
+    <div class="page-header">
+      <div class="page-header__text">
+        <h1 class="page-header__title">Potential Duplicates</h1>
+        <p class="page-header__subtitle">Identify and resolve duplicate entity records</p>
+      </div>
+    </div>
 
     <v-alert
       v-if="!duplicatesStore.loading && duplicatesStore.duplicates.length === 0"
@@ -74,7 +81,7 @@ onMounted(() => {
       :headers="headers"
       :items="duplicatesStore.duplicates"
       :loading="duplicatesStore.loading"
-      class="elevation-1"
+      class="duplicates-table"
     >
       <template #[`item.entityGuid`]="{ item }">
         <span class="entity-guid" :title="item.entityGuid">
@@ -102,7 +109,7 @@ onMounted(() => {
     </v-data-table>
 
     <!-- Resolve Dialog -->
-    <v-dialog v-model="showResolveDialog" max-width="600">
+    <v-dialog v-model="showResolveDialog" :max-width="540">
       <v-card v-if="selectedDuplicate">
         <v-card-title class="text-h6">Resolve Duplicate</v-card-title>
         <v-card-text>
@@ -172,6 +179,12 @@ onMounted(() => {
 <style scoped>
 .entity-guid {
   font-family: monospace;
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
+}
+
+.duplicates-table {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-card);
 }
 </style>

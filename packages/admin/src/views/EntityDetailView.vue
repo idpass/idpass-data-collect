@@ -206,9 +206,11 @@ watch(entityGuid, loadEntity)
 
 <template>
   <v-container class="entity-detail" fluid>
-    <v-btn class="detail-back" variant="text" prepend-icon="mdi-arrow-left" @click="goBack">
-      Back to Collection Program
-    </v-btn>
+    <div class="subpage-nav">
+      <v-btn variant="text" size="small" prepend-icon="mdi-arrow-left" @click="goBack">
+        Collection Program
+      </v-btn>
+    </div>
 
     <v-skeleton-loader v-if="isLoading" class="mt-6" type="card" />
 
@@ -493,11 +495,6 @@ watch(entityGuid, loadEntity)
 <style scoped>
 .entity-detail {
   padding-bottom: 64px;
-}
-
-.detail-back {
-  margin-top: 8px;
-  padding-left: 0;
 }
 
 .detail-header {

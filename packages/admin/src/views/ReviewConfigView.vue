@@ -100,11 +100,18 @@ onMounted(async () => {
 
 <template>
   <v-container>
-    <v-btn class="mb-4" variant="text" prepend-icon="mdi-arrow-left" @click="goBack">
-      Back to Collection Program
-    </v-btn>
+    <div class="subpage-nav">
+      <v-btn variant="text" size="small" prepend-icon="mdi-arrow-left" @click="goBack">
+        Collection Program
+      </v-btn>
+    </div>
 
-    <h1 class="text-h4 mb-4">Review Configuration</h1>
+    <div class="page-header">
+      <div class="page-header__text">
+        <h1 class="page-header__title">Review Configuration</h1>
+        <p class="page-header__subtitle">Configure review policies for each event type</p>
+      </div>
+    </div>
 
     <v-alert type="info" variant="tonal" class="mb-4" density="compact">
       Configure how each event type is reviewed.
@@ -117,7 +124,7 @@ onMounted(async () => {
       :headers="headers"
       :items="reviewsStore.reviewConfigs"
       :loading="loading"
-      class="elevation-1"
+      class="review-config-table"
     >
       <template #[`item.policy`]="{ item }">
         <v-chip
@@ -154,7 +161,7 @@ onMounted(async () => {
     </v-alert>
 
     <!-- Edit Config Dialog -->
-    <v-dialog v-model="showEditDialog" max-width="500">
+    <v-dialog v-model="showEditDialog" :max-width="540">
       <v-card v-if="editingConfig">
         <v-card-title class="text-h6">
           Edit: {{ editingConfig.eventType }}
@@ -191,3 +198,11 @@ onMounted(async () => {
     </v-dialog>
   </v-container>
 </template>
+
+<style scoped>
+.review-config-table {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-card);
+}
+</style>
