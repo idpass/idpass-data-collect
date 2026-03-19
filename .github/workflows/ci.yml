@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop, refactorv4]
+    branches: [main, develop]
   pull_request:
-    branches: [main, develop, refactorv4]
+    branches: [main, develop]
 
 jobs:
   license-check:
@@ -95,30 +95,14 @@ jobs:
       - name: Install dependencies
         run: HUSKY=0 pnpm run ci:install
 
-      - name: Build datacollect (required by admin type-check)
-        run: pnpm run build:datacollect
-
-      - name: Run linting
-        run: pnpm run lint
-
-      - name: Run type checking
-        run: pnpm run type-check
-
-      - name: Validate OpenAPI specification
-        working-directory: packages/backend
-        run: pnpm run validate-api
-
-      - name: Run tests
+      - name: Run pr-check
         env:
           POSTGRES: postgresql://test:test@localhost:5432/test
           POSTGRES_TEST: postgresql://test:test@localhost:5432/test
           JWT_SECRET: test_secret
           ADMIN_EMAIL: admin@example.com
           ADMIN_PASSWORD: test_password
-        run: pnpm test
-
-      - name: Build projects
-        run: pnpm run build
+        run: pnpm run pr-check
 
   security:
     runs-on: ubuntu-latest

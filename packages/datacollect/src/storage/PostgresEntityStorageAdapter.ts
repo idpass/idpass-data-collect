@@ -18,7 +18,13 @@
  */
 
 import { Pool } from "pg";
+import { and, eq, gt, or, sql } from "drizzle-orm";
 import { EntityPair, EntityStorageAdapter, SearchCriteria } from "../interfaces/types";
+import { createLogger } from "../utils/logger";
+import { createDrizzleFromPool, DrizzleDatabase, withClient } from "../db/connection";
+import { entities, potentialDuplicates } from "../db/schema";
+
+const log = createLogger("PostgresEntityStorageAdapter");
 
 /**
  * PostgreSQL implementation of the EntityStorageAdapter for server-side entity persistence.
@@ -140,7 +146,9 @@ import { EntityPair, EntityStorageAdapter, SearchCriteria } from "../interfaces/
  */
 export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
   private pool: Pool;
+  private db: DrizzleDatabase;
   private tenantId: string;
+  private ownsPool: boolean;
 
   /**
    * Creates a new PostgresEntityStorageAdapter instance.
@@ -162,32 +170,57 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * );
    * ```
    */
-  constructor(connectionString: string, tenantId?: string) {
-    this.pool = new Pool({
-      connectionString,
-    });
+  constructor(connectionString: string, tenantId?: string);
+  /**
+   * Creates a PostgresEntityStorageAdapter using an existing Pool.
+   * When constructed this way, the adapter does NOT own the pool and will not close it.
+   *
+   * @param pool An existing pg Pool to use for database operations.
+   * @param tenantId Optional tenant identifier for multi-tenant isolation (defaults to "default").
+   */
+  constructor(pool: Pool, tenantId?: string);
+  constructor(connectionStringOrPool: string | Pool, tenantId?: string) {
+    if (typeof connectionStringOrPool === "string") {
+      this.pool = new Pool({ connectionString: connectionStringOrPool });
+      this.ownsPool = true;
+    } else {
+      this.pool = connectionStringOrPool;
+      this.ownsPool = false;
+    }
+    this.db = createDrizzleFromPool(this.pool);
     this.tenantId = tenantId || "default";
   }
 
   /**
-   * Closes all connections in the PostgreSQL connection pool.
+   * Returns the underlying pg Pool used by this adapter.
+   * Useful for creating transactional EDM stacks that share a single connection pool.
+   */
+  getPool(): Pool {
+    return this.pool;
+  }
+
+  /**
+   * Replaces the internal Drizzle database instance.
+   * Used to inject a Drizzle transaction object so that all operations on this
+   * adapter participate in an external transaction.
    *
-   * Should be called during application shutdown to ensure graceful cleanup of database connections.
+   * @param db A Drizzle database or transaction instance.
+   */
+  setDrizzleInstance(db: DrizzleDatabase): void {
+    this.db = db;
+  }
+
+  /**
+   * Closes all connections in the PostgreSQL connection pool.
+   * Only closes the pool if this adapter owns it (created from a connection string).
+   * When constructed with an external Pool, the caller is responsible for pool lifecycle.
    *
    * @returns A Promise that resolves when the connection is closed.
-   *
-   * @example
-   * ```typescript
-   * // Application shutdown handler
-   * process.on('SIGTERM', async () => {
-   *   await adapter.closeConnection();
-   *   console.log('Database connections closed');
-   *   process.exit(0);
-   * });
-   * ```
    */
   async closeConnection(): Promise<void> {
-    await this.pool.end();
+    if (this.ownsPool) {
+      await this.pool.end();
+    }
   }
 
   /**
@@ -215,8 +248,7 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * ```
    */
   async initialize() {
-    const client = await this.pool.connect();
-    try {
+    await withClient(this.pool, async (client) => {
       await client.query(`
         CREATE TABLE IF NOT EXISTS entities (
           id TEXT,
@@ -238,9 +270,7 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
           PRIMARY KEY (entity_guid, duplicate_guid, tenant_id)
         )
       `);
-    } finally {
-      client.release();
-    }
+    });
   }
 
   /**
@@ -250,19 +280,23 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database query fails.
    */
   async getAllEntities(): Promise<EntityPair[]> {
-    const client = await this.pool.connect();
-    try {
-      const result = await client.query("SELECT guid, initial, modified FROM entities WHERE tenant_id = $1", [
-        this.tenantId,
-      ]);
-      return result.rows.map((row) => ({
+    const result = await this.db
+      .select({
+        guid: entities.guid,
+        initial: entities.initial,
+        modified: entities.modified,
+      })
+      .from(entities)
+      .where(eq(entities.tenantId, this.tenantId));
+
+    return result.map((row) => {
+      this.validateEntityRow(row);
+      return {
         guid: row.guid,
-        initial: row.initial,
-        modified: row.modified,
-      }));
-    } finally {
-      client.release();
-    }
+        initial: row.initial as EntityPair["initial"],
+        modified: row.modified as EntityPair["modified"],
+      };
+    });
   }
 
   /**
@@ -302,51 +336,97 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * ```
    */
   async searchEntities(criteria: SearchCriteria): Promise<EntityPair[]> {
-    const client = await this.pool.connect();
-    try {
-      const conditions = criteria.map((criterion) => {
-        const key = Object.keys(criterion)[0];
-        const value = criterion[key];
-        if (typeof value === "object") {
-          const operator = Object.keys(value)[0];
-          const operandValue = value[operator];
+    // Allowlist regex for JSONB field keys to prevent SQL injection via key names.
+    // Keys may only contain alphanumeric characters, underscores, and dots.
+    const SAFE_KEY_PATTERN = /^[a-zA-Z0-9_.]+$/;
+
+    // Maximum allowed length for user-supplied regex patterns to prevent ReDoS
+    const MAX_REGEX_LENGTH = 100;
+
+    // Detects nested quantifiers that can cause catastrophic backtracking (ReDoS).
+    // Matches patterns like (a+)+, (a*)+, (a+)*, (a{2,})+ etc.
+    const NESTED_QUANTIFIER_PATTERN = /[+*}?]\s*\)[\s]*[+*{?]/;
+
+    // Build parameterized SQL conditions for JSONB search.
+    // Field keys are validated against an allowlist and then used with sql.raw()
+    // (PostgreSQL JSONB ->> does not support parameterized key names).
+    // All values are parameterized via Drizzle's sql tagged template.
+    const conditions = criteria.map((criterion) => {
+      const key = Object.keys(criterion)[0];
+      const value = criterion[key];
+
+      if (!SAFE_KEY_PATTERN.test(key)) {
+        throw new Error(`Invalid search field key: ${key}`);
+      }
+
+      // Build safe raw key references for JSONB access
+      const initialPath = sql.raw(`initial->'data'->>'${key}'`);
+      const modifiedPath = sql.raw(`modified->'data'->>'${key}'`);
+
+      if (typeof value === "object") {
+        const operator = Object.keys(value)[0];
+        const operandValue = value[operator];
+
+        // Validate numeric operands for comparison operators
+        if (["$gt", "$lt", "$eq", "$gte", "$lte"].includes(operator)) {
+          const numericValue = Number(operandValue);
+          if (isNaN(numericValue)) {
+            throw new Error(`Non-numeric value for ${operator} operator: ${operandValue}`);
+          }
           switch (operator) {
             case "$gt":
-              return `((initial->'data'->>'${key}')::numeric > ${operandValue} OR (modified->'data'->>'${key}')::numeric > ${operandValue})`;
+              return sql`((${initialPath})::numeric > ${numericValue} OR (${modifiedPath})::numeric > ${numericValue})`;
             case "$lt":
-              return `((initial->'data'->>'${key}')::numeric < ${operandValue} OR (modified->'data'->>'${key}')::numeric < ${operandValue})`;
+              return sql`((${initialPath})::numeric < ${numericValue} OR (${modifiedPath})::numeric < ${numericValue})`;
             case "$eq":
-              return `((initial->'data'->>'${key}')::numeric = ${operandValue} OR (modified->'data'->>'${key}')::numeric = ${operandValue})`;
+              return sql`((${initialPath})::numeric = ${numericValue} OR (${modifiedPath})::numeric = ${numericValue})`;
             case "$gte":
-              return `((initial->'data'->>'${key}')::numeric >= ${operandValue} OR (modified->'data'->>'${key}')::numeric >= ${operandValue})`;
+              return sql`((${initialPath})::numeric >= ${numericValue} OR (${modifiedPath})::numeric >= ${numericValue})`;
             case "$lte":
-              return `((initial->'data'->>'${key}')::numeric <= ${operandValue} OR (modified->'data'->>'${key}')::numeric <= ${operandValue})`;
-            case "$regex":
-              return `((initial->'data'->>'${key}') ~* '${operandValue}' OR (modified->'data'->>'${key}') ~* '${operandValue}')`;
-            default:
-              return "false";
+              return sql`((${initialPath})::numeric <= ${numericValue} OR (${modifiedPath})::numeric <= ${numericValue})`;
           }
-        } else if (typeof value === "boolean") {
-          return `((initial->'data'->>'${key}')::boolean = ${value} OR (modified->'data'->>'${key}')::boolean = ${value})`;
-        } else if (typeof value === "number") {
-          return `((initial->'data'->>'${key}')::numeric = ${value} OR (modified->'data'->>'${key}')::numeric = ${value})`;
-        } else if (typeof value === "string") {
-          return `(LOWER(initial->'data'->>'${key}') = LOWER('${value}') OR LOWER(modified->'data'->>'${key}') = LOWER('${value}'))`;
-        } else {
-          return `(LOWER(initial->'data'->>'${key}') = LOWER('${value}') OR LOWER(modified->'data'->>'${key}') = LOWER('${value}'))`;
         }
-      });
 
-      const query = `SELECT guid, initial, modified FROM entities WHERE tenant_id = $1 AND ${conditions.join(" AND ")}`;
-      const result = await client.query(query, [this.tenantId]);
-      return result.rows.map((row) => ({
+        if (operator === "$regex") {
+          const regexValue = String(operandValue);
+          if (regexValue.length > MAX_REGEX_LENGTH) {
+            throw new Error(`Regex pattern exceeds maximum length of ${MAX_REGEX_LENGTH} characters`);
+          }
+          if (NESTED_QUANTIFIER_PATTERN.test(regexValue)) {
+            throw new Error("Regex pattern contains nested quantifiers which may cause catastrophic backtracking");
+          }
+          return sql`((${initialPath}) ~* ${regexValue} OR (${modifiedPath}) ~* ${regexValue})`;
+        }
+
+        return sql`false`;
+      } else if (typeof value === "boolean") {
+        const boolStr = String(value);
+        return sql`((${initialPath})::boolean = ${sql.raw(boolStr)} OR (${modifiedPath})::boolean = ${sql.raw(boolStr)})`;
+      } else if (typeof value === "number") {
+        return sql`((${initialPath})::numeric = ${value} OR (${modifiedPath})::numeric = ${value})`;
+      } else {
+        const strValue = String(value);
+        return sql`(LOWER(${initialPath}) = LOWER(${strValue}) OR LOWER(${modifiedPath}) = LOWER(${strValue}))`;
+      }
+    });
+
+    const result = await this.db
+      .select({
+        guid: entities.guid,
+        initial: entities.initial,
+        modified: entities.modified,
+      })
+      .from(entities)
+      .where(and(eq(entities.tenantId, this.tenantId), ...conditions));
+
+    return result.map((row) => {
+      this.validateEntityRow(row);
+      return {
         guid: row.guid,
-        initial: row.initial,
-        modified: row.modified,
-      }));
-    } finally {
-      client.release();
-    }
+        initial: row.initial as EntityPair["initial"],
+        modified: row.modified as EntityPair["modified"],
+      };
+    });
   }
 
   /**
@@ -359,17 +439,26 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database operation fails.
    */
   async saveEntity(entity: EntityPair): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      const guid = entity.initial.guid || entity.modified.guid;
-      await client.query(
-        "INSERT INTO entities (id, guid, initial, modified, last_updated, tenant_id) VALUES ($1, $2, $3, $4, $5, $6) " +
-          "ON CONFLICT (guid, tenant_id) DO UPDATE SET initial = $3, modified = $4, last_updated = $5",
-        [guid, guid, entity.initial, entity.modified, entity.modified.lastUpdated, this.tenantId],
-      );
-    } finally {
-      client.release();
-    }
+    const guid = entity.initial?.guid || entity.modified.guid;
+    const newVersion = entity.modified.version;
+    const initialJson = entity.initial ? JSON.stringify(entity.initial) : null;
+    const modifiedJson = JSON.stringify(entity.modified);
+    const lastUpdated = entity.modified.lastUpdated ? new Date(entity.modified.lastUpdated) : null;
+
+    // Use a version check on upsert so stale versions never overwrite newer ones.
+    // The ON CONFLICT UPDATE only applies when the incoming version is greater than
+    // or equal to the existing version stored in the modified JSONB.
+    // Uses this.db.execute() to respect the Drizzle transaction context when
+    // setDrizzleInstance(tx) has been called (e.g., transactional batch processing).
+    await this.db.execute(
+      sql`INSERT INTO entities (id, guid, initial, modified, last_updated, tenant_id)
+         VALUES (${guid}, ${guid}, ${initialJson}::jsonb, ${modifiedJson}::jsonb, ${lastUpdated}, ${this.tenantId})
+         ON CONFLICT (guid, tenant_id) DO UPDATE SET
+           initial = ${initialJson}::jsonb,
+           modified = ${modifiedJson}::jsonb,
+           last_updated = ${lastUpdated}
+         WHERE COALESCE((entities.modified->>'version')::int, 0) <= ${newVersion}`,
+    );
   }
 
   /**
@@ -380,24 +469,25 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database query fails.
    */
   async getEntity(id: string): Promise<EntityPair | null> {
-    const client = await this.pool.connect();
-    try {
-      const result = await client.query(
-        "SELECT guid, initial, modified FROM entities WHERE id = $1 AND tenant_id = $2",
-        [id, this.tenantId],
-      );
-      if (result.rows.length === 0) {
-        return null;
-      }
-      const row = result.rows[0];
-      return {
-        guid: row.guid,
-        initial: row.initial,
-        modified: row.modified,
-      };
-    } finally {
-      client.release();
+    const result = await this.db
+      .select({
+        guid: entities.guid,
+        initial: entities.initial,
+        modified: entities.modified,
+      })
+      .from(entities)
+      .where(and(eq(entities.id, id), eq(entities.tenantId, this.tenantId)));
+
+    if (result.length === 0) {
+      return null;
     }
+    const row = result[0];
+    this.validateEntityRow(row);
+    return {
+      guid: row.guid,
+      initial: row.initial as EntityPair["initial"],
+      modified: row.modified as EntityPair["modified"],
+    };
   }
 
   /**
@@ -418,20 +508,23 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database query fails.
    */
   async getModifiedEntitiesSince(timestamp: string): Promise<EntityPair[]> {
-    const client = await this.pool.connect();
-    try {
-      const result = await client.query(
-        "SELECT guid, initial, modified FROM entities WHERE tenant_id = $1 AND last_updated > $2",
-        [this.tenantId, timestamp],
-      );
-      return result.rows.map((row) => ({
+    const result = await this.db
+      .select({
+        guid: entities.guid,
+        initial: entities.initial,
+        modified: entities.modified,
+      })
+      .from(entities)
+      .where(and(eq(entities.tenantId, this.tenantId), gt(entities.lastUpdated, new Date(timestamp))));
+
+    return result.map((row) => {
+      this.validateEntityRow(row);
+      return {
         guid: row.guid,
-        initial: row.initial,
-        modified: row.modified,
-      }));
-    } finally {
-      client.release();
-    }
+        initial: row.initial as EntityPair["initial"],
+        modified: row.modified as EntityPair["modified"],
+      };
+    });
   }
 
   /**
@@ -442,17 +535,13 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database update fails.
    */
   async markEntityAsSynced(id: string): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query("UPDATE entities SET sync_level = $1, last_updated = $2 WHERE id = $3 AND tenant_id = $4", [
-        "SYNCED",
-        new Date().toISOString(),
-        id,
-        this.tenantId,
-      ]);
-    } finally {
-      client.release();
-    }
+    await this.db
+      .update(entities)
+      .set({
+        syncLevel: "SYNCED",
+        lastUpdated: new Date(),
+      })
+      .where(and(eq(entities.id, id), eq(entities.tenantId, this.tenantId)));
   }
 
   /**
@@ -465,16 +554,17 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database deletion fails.
    */
   async deleteEntity(id: string): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query("DELETE FROM entities WHERE id = $1 AND tenant_id = $2", [id, this.tenantId]);
-      await client.query(
-        "DELETE FROM potential_duplicates WHERE (entity_guid = $1 OR duplicate_guid = $1) AND tenant_id = $2",
-        [id, this.tenantId],
-      );
-    } finally {
-      client.release();
-    }
+    await this.db.transaction(async (tx) => {
+      await tx.delete(entities).where(and(eq(entities.id, id), eq(entities.tenantId, this.tenantId)));
+      await tx
+        .delete(potentialDuplicates)
+        .where(
+          and(
+            or(eq(potentialDuplicates.entityGuid, id), eq(potentialDuplicates.duplicateGuid, id)),
+            eq(potentialDuplicates.tenantId, this.tenantId),
+          ),
+        );
+    });
   }
 
   /**
@@ -487,24 +577,33 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database query fails.
    */
   async getEntityByExternalId(externalId: string): Promise<EntityPair | null> {
-    const client = await this.pool.connect();
-    try {
-      const result = await client.query(
-        "SELECT guid, initial, modified FROM entities WHERE (initial->>'externalId' = $1 OR modified->>'externalId' = $1) AND tenant_id = $2",
-        [externalId, this.tenantId],
+    const result = await this.db
+      .select({
+        guid: entities.guid,
+        initial: entities.initial,
+        modified: entities.modified,
+      })
+      .from(entities)
+      .where(
+        and(
+          eq(entities.tenantId, this.tenantId),
+          or(
+            sql`${entities.initial}->>'externalId' = ${externalId}`,
+            sql`${entities.modified}->>'externalId' = ${externalId}`,
+          ),
+        ),
       );
-      if (result.rows.length === 0) {
-        return null;
-      }
-      const row = result.rows[0];
-      return {
-        guid: row.guid,
-        initial: row.initial,
-        modified: row.modified,
-      };
-    } finally {
-      client.release();
+
+    if (result.length === 0) {
+      return null;
     }
+    const row = result[0];
+    this.validateEntityRow(row);
+    return {
+      guid: row.guid,
+      initial: row.initial as EntityPair["initial"],
+      modified: row.modified as EntityPair["modified"],
+    };
   }
 
   /**
@@ -518,18 +617,15 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database update fails.
    */
   async setExternalId(guid: string, externalId: string): Promise<void> {
-    const client = await this.pool.connect();
     try {
-      await client.query(
-        `UPDATE entities
-         SET modified = jsonb_set(modified, '{data,externalId}', to_jsonb($1), true)
-         WHERE guid = $2`,
-        [externalId, guid],
-      );
+      await this.db
+        .update(entities)
+        .set({
+          modified: sql`jsonb_set(${entities.modified}, '{data,externalId}', to_jsonb(${externalId}::text), true)`,
+        })
+        .where(eq(entities.guid, guid));
     } catch (error) {
-      console.error("Error setting externalId:", error);
-    } finally {
-      client.release();
+      log.error({ err: error }, "Error setting externalId");
     }
   }
 
@@ -540,19 +636,18 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database query fails.
    */
   async getPotentialDuplicates(): Promise<Array<{ entityGuid: string; duplicateGuid: string }>> {
-    const client = await this.pool.connect();
-    try {
-      const result = await client.query(
-        "SELECT entity_guid, duplicate_guid FROM potential_duplicates WHERE tenant_id = $1",
-        [this.tenantId],
-      );
-      return result.rows.map((row) => ({
-        entityGuid: row.entity_guid,
-        duplicateGuid: row.duplicate_guid,
-      }));
-    } finally {
-      client.release();
-    }
+    const result = await this.db
+      .select({
+        entityGuid: potentialDuplicates.entityGuid,
+        duplicateGuid: potentialDuplicates.duplicateGuid,
+      })
+      .from(potentialDuplicates)
+      .where(eq(potentialDuplicates.tenantId, this.tenantId));
+
+    return result.map((row) => ({
+      entityGuid: row.entityGuid,
+      duplicateGuid: row.duplicateGuid,
+    }));
   }
 
   /**
@@ -565,22 +660,18 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database transaction fails.
    */
   async savePotentialDuplicates(duplicates: Array<{ entityGuid: string; duplicateGuid: string }>): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query("BEGIN");
+    await this.db.transaction(async (tx) => {
       for (const duplicate of duplicates) {
-        await client.query(
-          "INSERT INTO potential_duplicates (entity_guid, duplicate_guid, tenant_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
-          [duplicate.entityGuid, duplicate.duplicateGuid, this.tenantId],
-        );
+        await tx
+          .insert(potentialDuplicates)
+          .values({
+            entityGuid: duplicate.entityGuid,
+            duplicateGuid: duplicate.duplicateGuid,
+            tenantId: this.tenantId,
+          })
+          .onConflictDoNothing();
       }
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
   }
 
   /**
@@ -591,14 +682,16 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database deletion fails.
    */
   async resolvePotentialDuplicates(duplicates: Array<{ entityGuid: string; duplicateGuid: string }>): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query(
-        "DELETE FROM potential_duplicates WHERE entity_guid = $1 AND duplicate_guid = $2 AND tenant_id = $3",
-        [duplicates[0].entityGuid, duplicates[0].duplicateGuid, this.tenantId],
-      );
-    } finally {
-      client.release();
+    for (const dup of duplicates) {
+      await this.db
+        .delete(potentialDuplicates)
+        .where(
+          and(
+            eq(potentialDuplicates.entityGuid, dup.entityGuid),
+            eq(potentialDuplicates.duplicateGuid, dup.duplicateGuid),
+            eq(potentialDuplicates.tenantId, this.tenantId),
+          ),
+        );
     }
   }
 
@@ -609,12 +702,25 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
    * @throws {Error} If the database deletion fails.
    */
   async clearStore(): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query("DELETE FROM entities WHERE tenant_id = $1", [this.tenantId]);
-      await client.query("DELETE FROM potential_duplicates WHERE tenant_id = $1", [this.tenantId]);
-    } finally {
-      client.release();
+    await this.db.transaction(async (tx) => {
+      await tx.delete(entities).where(eq(entities.tenantId, this.tenantId));
+      await tx.delete(potentialDuplicates).where(eq(potentialDuplicates.tenantId, this.tenantId));
+    });
+  }
+
+  /**
+   * Validates critical fields on a database row and logs warnings for type mismatches.
+   * Ensures guid is a string and modified is a non-null object.
+   */
+  private validateEntityRow(row: { guid: string; initial: unknown; modified: unknown }): void {
+    if (typeof row.guid !== "string" || row.guid.length === 0) {
+      log.warn({ guid: row.guid }, "Entity row has missing or non-string guid");
+    }
+    if (row.modified === null || typeof row.modified !== "object") {
+      log.warn({ guid: row.guid }, "Entity row has null or non-object modified field");
+    }
+    if (row.initial !== null && typeof row.initial !== "object") {
+      log.warn({ guid: row.guid }, "Entity row has non-object initial field");
     }
   }
 }

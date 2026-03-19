@@ -20,7 +20,7 @@
 import { Router } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { SyncLevel } from "@idpass/data-collect-core";
-import { AuthenticatedRequest, authenticateJWT } from "../middlewares/authentication";
+import { AuthenticatedRequest, authenticateJWT, validateTenantAccess } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { AppInstanceStore } from "../types";
 
@@ -30,6 +30,7 @@ export function createPotentialDuplicatesRoute(appInstanceStore: AppInstanceStor
   router.get(
     "/",
     authenticateJWT,
+    validateTenantAccess,
     asyncHandler(async (req, res) => {
       const { configId } = req.query;
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
@@ -46,6 +47,7 @@ export function createPotentialDuplicatesRoute(appInstanceStore: AppInstanceStor
   router.post(
     "/resolve",
     authenticateJWT,
+    validateTenantAccess,
     asyncHandler(async (req, res) => {
       const { newItem, existingItem, shouldDeleteNewItem, configId } = req.body;
 

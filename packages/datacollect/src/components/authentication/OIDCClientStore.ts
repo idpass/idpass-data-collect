@@ -17,6 +17,10 @@
  * under the License.
  */
 
+import { createLogger } from "../../utils/logger";
+
+const log = createLogger("OIDCClientStore");
+
 export class OIDCCLientStore implements Storage {
   private dbName = 'oidc-client-store'
   private storeName = 'oidc-state'
@@ -25,7 +29,7 @@ export class OIDCCLientStore implements Storage {
 
   constructor() {
     if (typeof window === 'undefined') {
-      console.log('IndexedDB is not available in this environment')
+      log.debug('IndexedDB is not available in this environment')
       return
     }
     this.initDB()

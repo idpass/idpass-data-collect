@@ -30,6 +30,16 @@
   background-color: var(--background);
 }
 
+/* Sub-page Navigation Bar — consistent back button strip for detail/sub-pages */
+.subpage-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) 0;
+  margin-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--border-light);
+}
+
 /* Card Component Base */
 .app-card {
   background-color: var(--surface);
@@ -117,6 +127,41 @@
   border-radius: var(--radius-full);
   font-size: var(--font-size-sm);
   font-weight: 500;
+}
+
+/* Page Header Pattern */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.page-header__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.page-header__title {
+  font-size: clamp(1.5rem, 1.4rem + 0.5vw, 1.875rem);
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-main);
+}
+
+.page-header__subtitle {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
+.page-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
 }
 
 /* Text Utilities */

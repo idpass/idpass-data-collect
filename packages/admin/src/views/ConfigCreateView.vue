@@ -654,9 +654,11 @@ const goBack = () => {
 <template>
   <v-container v-if="isReady" class="config-create" fluid>
     <!-- Header -->
-    <v-btn class="mb-4" variant="text" prepend-icon="mdi-arrow-left" @click="goBack">
-      Back to Collection Programs
-    </v-btn>
+    <div class="subpage-nav">
+      <v-btn variant="text" size="small" prepend-icon="mdi-arrow-left" @click="goBack">
+        Collection Programs
+      </v-btn>
+    </div>
 
     <div class="config-header">
       <h1 class="config-title">{{ pageTitle }}</h1>

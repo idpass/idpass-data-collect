@@ -1,0 +1,178 @@
+{
+  "id": "demo-individual-registry",
+  "name": "Demo Individual Registry",
+  "description": "Demo config for standalone individual registration (no household grouping). Uses entityType override.",
+  "version": "1.0.0",
+  "entityForms": [
+    {
+      "id": "person",
+      "name": "person",
+      "title": "Person",
+      "entityType": "individual",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "name",
+            "type": "textfield",
+            "input": true,
+            "label": "Full Name",
+            "validate": { "required": true }
+          },
+          {
+            "key": "date_of_birth",
+            "type": "datetime",
+            "input": true,
+            "label": "Date of Birth",
+            "format": "yyyy-MM-dd",
+            "enableTime": false
+          },
+          {
+            "key": "gender",
+            "type": "select",
+            "input": true,
+            "label": "Gender",
+            "data": {
+              "values": [
+                { "label": "Male", "value": "male" },
+                { "label": "Female", "value": "female" },
+                { "label": "Other", "value": "other" }
+              ]
+            }
+          },
+          {
+            "key": "national_id",
+            "type": "textfield",
+            "input": true,
+            "label": "National ID"
+          },
+          {
+            "key": "phone",
+            "type": "phoneNumber",
+            "input": true,
+            "label": "Phone Number"
+          },
+          {
+            "key": "address",
+            "type": "textarea",
+            "input": true,
+            "label": "Address",
+            "rows": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "assessment",
+      "name": "assessment",
+      "title": "Assessment",
+      "dependsOn": "person",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "assessment_date",
+            "type": "datetime",
+            "input": true,
+            "label": "Assessment Date",
+            "format": "yyyy-MM-dd",
+            "enableTime": false
+          },
+          {
+            "key": "assessment_type",
+            "type": "select",
+            "input": true,
+            "label": "Assessment Type",
+            "data": {
+              "values": [
+                { "label": "Initial", "value": "initial" },
+                { "label": "Follow-up", "value": "followup" },
+                { "label": "Final", "value": "final" }
+              ]
+            }
+          },
+          {
+            "key": "notes",
+            "type": "textarea",
+            "input": true,
+            "label": "Notes",
+            "rows": 4
+          },
+          {
+            "key": "score",
+            "type": "number",
+            "input": true,
+            "label": "Score",
+            "validate": { "min": 0, "max": 100 }
+          }
+        ]
+      }
+    },
+    {
+      "id": "referral",
+      "name": "referral",
+      "title": "Referral",
+      "dependsOn": "person",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "referral_date",
+            "type": "datetime",
+            "input": true,
+            "label": "Referral Date",
+            "format": "yyyy-MM-dd",
+            "enableTime": false
+          },
+          {
+            "key": "referred_to",
+            "type": "textfield",
+            "input": true,
+            "label": "Referred To"
+          },
+          {
+            "key": "reason",
+            "type": "textarea",
+            "input": true,
+            "label": "Reason",
+            "rows": 3
+          }
+        ]
+      }
+    }
+  ],
+  "entityData": [
+    {
+      "name": "person",
+      "data": [
+        {
+          "id": "p-001",
+          "name": "Somsak Phanthavong",
+          "date_of_birth": "1985-03-15",
+          "gender": "male",
+          "national_id": "LA-1985-03150001",
+          "phone": "+856-20-1234567",
+          "address": "123 Main Street, Chanthabuly, Vientiane"
+        },
+        {
+          "id": "p-002",
+          "name": "Chanthy Vongsa",
+          "date_of_birth": "1990-11-05",
+          "gender": "female",
+          "national_id": "LA-1990-11050002",
+          "phone": "+856-20-9876543",
+          "address": "456 River Road, Xaysetha, Vientiane"
+        },
+        {
+          "id": "p-003",
+          "name": "Kham Sithong",
+          "date_of_birth": "1978-09-30",
+          "gender": "male",
+          "national_id": "LA-1978-09300003",
+          "phone": "+856-20-5555666",
+          "address": "789 Market Lane, Sisattanak, Vientiane"
+        }
+      ]
+    }
+  ]
+}

@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import { useAuthStore } from '@/stores/auth'
 import { useSnackBarStore } from '@/stores/snackBar'
+import { useReviewsStore } from '@/stores/reviews'
 import { RouterView } from 'vue-router'
 
 const authStore = useAuthStore()
 const snackBarStore = useSnackBarStore()
+const reviewsStore = useReviewsStore()
 </script>
 
 <template>
   <v-app>
     <v-app-bar v-if="authStore.isAuthenticated" color="primary">
       <v-container class="d-flex align-center">
-        <v-app-bar-title>ID PASS DataCollect Admin</v-app-bar-title>
+        <v-app-bar-title style="cursor: pointer" @click="$router.push('/')">ID PASS DataCollect Admin</v-app-bar-title>
         <v-spacer></v-spacer>
         <v-btn to="/" variant="text" class="mx-2">
           <v-icon start icon="mdi-home"></v-icon>
@@ -20,6 +22,16 @@ const snackBarStore = useSnackBarStore()
         <v-btn to="/users" variant="text" class="mx-2">
           <v-icon start icon="mdi-account-group"></v-icon>
           Users
+        </v-btn>
+        <v-btn to="/reviews" variant="text" class="mx-2">
+          <v-icon start icon="mdi-clipboard-check-outline"></v-icon>
+          Reviews
+          <v-badge
+            v-if="reviewsStore.pendingCount > 0"
+            :content="reviewsStore.pendingCount"
+            color="warning"
+            floating
+          />
         </v-btn>
         <v-menu>
           <template v-slot:activator="{ props }">
@@ -38,9 +50,7 @@ const snackBarStore = useSnackBarStore()
     </v-app-bar>
 
     <v-main>
-      <v-container>
-        <RouterView />
-      </v-container>
+      <RouterView />
     </v-main>
   </v-app>
 

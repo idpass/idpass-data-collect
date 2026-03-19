@@ -20,6 +20,9 @@
 import { AuthAdapter, AuthConfig, AuthResult, OIDCConfig, SingleAuthStorage } from "../../interfaces/types";
 import OIDCClient from "./OIDCClient";
 import axios from "axios";
+import { createLogger } from "../../utils/logger";
+
+const log = createLogger("KeycloakAuthAdapter");
 
 export class KeycloakAuthAdapter implements AuthAdapter {
   private oidc: OIDCClient;
@@ -79,10 +82,10 @@ export class KeycloakAuthAdapter implements AuthAdapter {
   private async validateTokenServer(token: string): Promise<boolean> {
     try {
       // Use userinfo validation since JWKS requires Node.js crypto
-      console.log("Using userinfo validation for Keycloak token");
+      log.debug("Using userinfo validation for Keycloak token");
       return this.checkTokenActive(token);
     } catch (error) {
-      console.error("Keycloak token validation error:", error);
+      log.error({ err: error }, "Keycloak token validation error");
       return false;
     }
   }
@@ -122,7 +125,7 @@ export class KeycloakAuthAdapter implements AuthAdapter {
       
       return isActive;
     } catch (error) {
-      console.error("Error checking Keycloak token activity:", error);
+      log.error({ err: error }, "Error checking Keycloak token activity");
       // If userinfo call fails, token might be revoked or invalid
       return false;
     }

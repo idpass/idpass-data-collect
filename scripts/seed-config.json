@@ -3,6 +3,13 @@
   "name": "Demo Household Registry",
   "description": "Demo app configuration with households and individuals for development and testing.",
   "version": "1.0.0",
+  "selfService": {
+    "enabled": true,
+    "authMethods": ["otp", "id"],
+    "allowedForms": ["individual", "household", "life_event", "assistance_request", "grievance"],
+    "languages": ["en", "fr"],
+    "requireReview": true
+  },
   "entityForms": [
     {
       "id": "household",
@@ -50,6 +57,66 @@
       }
     },
     {
+      "id": "cooperative",
+      "name": "cooperative",
+      "title": "Cooperative",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "name",
+            "type": "textfield",
+            "input": true,
+            "label": "Cooperative Name",
+            "validate": { "required": true }
+          },
+          {
+            "key": "cooperative_type",
+            "type": "select",
+            "input": true,
+            "label": "Cooperative Type",
+            "data": {
+              "values": [
+                { "label": "Agricultural", "value": "agricultural" },
+                { "label": "Savings", "value": "savings" },
+                { "label": "Marketing", "value": "marketing" }
+              ]
+            }
+          },
+          {
+            "key": "registration_number",
+            "type": "textfield",
+            "input": true,
+            "label": "Registration Number"
+          },
+          {
+            "key": "district",
+            "type": "select",
+            "input": true,
+            "label": "District",
+            "data": {
+              "values": [
+                { "label": "Chanthabuly", "value": "chanthabuly" },
+                { "label": "Sikhottabong", "value": "sikhottabong" },
+                { "label": "Xaysetha", "value": "xaysetha" },
+                { "label": "Sisattanak", "value": "sisattanak" },
+                { "label": "Hadxaifong", "value": "hadxaifong" }
+              ]
+            }
+          },
+          {
+            "key": "established_date",
+            "type": "datetime",
+            "input": true,
+            "label": "Established Date",
+            "format": "yyyy-MM-dd",
+            "enableTime": false,
+            "enableDate": true
+          }
+        ]
+      }
+    },
+    {
       "id": "individual",
       "name": "individual",
       "title": "Individual",
@@ -92,6 +159,493 @@
                 { "label": "Other", "value": "other" }
               ]
             }
+          },
+          {
+            "key": "submit",
+            "type": "button",
+            "input": true,
+            "label": "Submit Change Request",
+            "action": "submit",
+            "theme": "primary"
+          }
+        ]
+      }
+    },
+    {
+      "id": "home_visit",
+      "name": "home_visit",
+      "title": "Home Visit",
+      "dependsOn": "household",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "visit_date",
+            "type": "datetime",
+            "input": true,
+            "label": "Visit Date",
+            "format": "yyyy-MM-dd",
+            "enableTime": false,
+            "enableDate": true
+          },
+          {
+            "key": "purpose",
+            "type": "select",
+            "input": true,
+            "label": "Purpose",
+            "data": {
+              "values": [
+                { "label": "Assessment", "value": "assessment" },
+                { "label": "Follow-up", "value": "follow-up" },
+                { "label": "Verification", "value": "verification" }
+              ]
+            }
+          },
+          {
+            "key": "findings",
+            "type": "textarea",
+            "input": true,
+            "label": "Findings",
+            "rows": 4
+          },
+          {
+            "key": "follow_up_required",
+            "type": "select",
+            "input": true,
+            "label": "Follow-up Required",
+            "data": {
+              "values": [
+                { "label": "Yes", "value": "yes" },
+                { "label": "No", "value": "no" }
+              ]
+            }
+          },
+          {
+            "key": "visited_by",
+            "type": "textfield",
+            "input": true,
+            "label": "Visited By"
+          }
+        ]
+      }
+    },
+    {
+      "id": "training",
+      "name": "training",
+      "title": "Training Participation",
+      "dependsOn": "individual",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "training_name",
+            "type": "textfield",
+            "input": true,
+            "label": "Training Name"
+          },
+          {
+            "key": "training_date",
+            "type": "datetime",
+            "input": true,
+            "label": "Training Date",
+            "format": "yyyy-MM-dd",
+            "enableTime": false,
+            "enableDate": true
+          },
+          {
+            "key": "location",
+            "type": "textfield",
+            "input": true,
+            "label": "Location"
+          },
+          {
+            "key": "status",
+            "type": "select",
+            "input": true,
+            "label": "Status",
+            "data": {
+              "values": [
+                { "label": "Enrolled", "value": "enrolled" },
+                { "label": "Completed", "value": "completed" },
+                { "label": "Dropped", "value": "dropped" }
+              ]
+            }
+          },
+          {
+            "key": "certificate_issued",
+            "type": "select",
+            "input": true,
+            "label": "Certificate Issued",
+            "data": {
+              "values": [
+                { "label": "Yes", "value": "yes" },
+                { "label": "No", "value": "no" }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "assistance",
+      "name": "assistance",
+      "title": "Assistance Distribution",
+      "dependsOn": "household",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "distribution_date",
+            "type": "datetime",
+            "input": true,
+            "label": "Distribution Date",
+            "format": "yyyy-MM-dd",
+            "enableTime": false,
+            "enableDate": true
+          },
+          {
+            "key": "assistance_type",
+            "type": "select",
+            "input": true,
+            "label": "Assistance Type",
+            "data": {
+              "values": [
+                { "label": "Cash", "value": "cash" },
+                { "label": "Food", "value": "food" },
+                { "label": "Non-food", "value": "non-food" }
+              ]
+            }
+          },
+          {
+            "key": "amount",
+            "type": "number",
+            "input": true,
+            "label": "Amount"
+          },
+          {
+            "key": "currency",
+            "type": "select",
+            "input": true,
+            "label": "Currency",
+            "data": {
+              "values": [
+                { "label": "LAK", "value": "LAK" },
+                { "label": "USD", "value": "USD" },
+                { "label": "THB", "value": "THB" }
+              ]
+            }
+          },
+          {
+            "key": "delivery_method",
+            "type": "select",
+            "input": true,
+            "label": "Delivery Method",
+            "data": {
+              "values": [
+                { "label": "Bank Transfer", "value": "bank-transfer" },
+                { "label": "Mobile Money", "value": "mobile-money" },
+                { "label": "In Person", "value": "in-person" }
+              ]
+            }
+          },
+          {
+            "key": "received_by",
+            "type": "textfield",
+            "input": true,
+            "label": "Received By"
+          }
+        ]
+      }
+    },
+    {
+      "id": "referral",
+      "name": "referral",
+      "title": "Referral",
+      "dependsOn": "individual",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "referral_date",
+            "type": "datetime",
+            "input": true,
+            "label": "Referral Date",
+            "format": "yyyy-MM-dd",
+            "enableTime": false,
+            "enableDate": true
+          },
+          {
+            "key": "service_type",
+            "type": "select",
+            "input": true,
+            "label": "Service Type",
+            "data": {
+              "values": [
+                { "label": "Health", "value": "health" },
+                { "label": "Education", "value": "education" },
+                { "label": "Legal", "value": "legal" },
+                { "label": "Livelihood", "value": "livelihood" }
+              ]
+            }
+          },
+          {
+            "key": "facility_name",
+            "type": "textfield",
+            "input": true,
+            "label": "Facility Name"
+          },
+          {
+            "key": "reason",
+            "type": "textarea",
+            "input": true,
+            "label": "Reason",
+            "rows": 3
+          },
+          {
+            "key": "status",
+            "type": "select",
+            "input": true,
+            "label": "Status",
+            "data": {
+              "values": [
+                { "label": "Pending", "value": "pending" },
+                { "label": "Completed", "value": "completed" },
+                { "label": "Cancelled", "value": "cancelled" }
+              ]
+            }
+          },
+          {
+            "key": "notes",
+            "type": "textarea",
+            "input": true,
+            "label": "Notes",
+            "rows": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "life_event",
+      "name": "life_event",
+      "title": "Report Life Event",
+      "dependsOn": "individual",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "event_type",
+            "type": "select",
+            "input": true,
+            "label": "Type of Event",
+            "validate": { "required": true },
+            "data": {
+              "values": [
+                { "label": "Birth of a child", "value": "birth" },
+                { "label": "Death of a family member", "value": "death" },
+                { "label": "Marriage", "value": "marriage" },
+                { "label": "Divorce / Separation", "value": "divorce" },
+                { "label": "Relocation / Change of address", "value": "relocation" },
+                { "label": "Disability status change", "value": "disability" },
+                { "label": "Other", "value": "other" }
+              ]
+            }
+          },
+          {
+            "key": "event_date",
+            "type": "datetime",
+            "input": true,
+            "label": "Date of Event",
+            "format": "yyyy-MM-dd",
+            "enableTime": false,
+            "enableDate": true,
+            "validate": { "required": true }
+          },
+          {
+            "key": "affected_person",
+            "type": "textfield",
+            "input": true,
+            "label": "Name of Person Affected",
+            "validate": { "required": true }
+          },
+          {
+            "key": "description",
+            "type": "textarea",
+            "input": true,
+            "label": "Description",
+            "placeholder": "Please provide details about the event...",
+            "rows": 4,
+            "validate": { "required": true }
+          },
+          {
+            "key": "supporting_documents",
+            "type": "textarea",
+            "input": true,
+            "label": "Supporting Documents (list any documents you can provide)",
+            "placeholder": "e.g., birth certificate, marriage certificate, medical report...",
+            "rows": 2
+          },
+          {
+            "key": "submit",
+            "type": "button",
+            "input": true,
+            "label": "Submit Report",
+            "action": "submit",
+            "theme": "primary"
+          }
+        ]
+      }
+    },
+    {
+      "id": "assistance_request",
+      "name": "assistance_request",
+      "title": "Request Assistance",
+      "dependsOn": "individual",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "assistance_type",
+            "type": "select",
+            "input": true,
+            "label": "Type of Assistance Needed",
+            "validate": { "required": true },
+            "data": {
+              "values": [
+                { "label": "Financial / Cash assistance", "value": "financial" },
+                { "label": "Food / Nutrition support", "value": "food" },
+                { "label": "Medical / Health services", "value": "health" },
+                { "label": "Education / School fees", "value": "education" },
+                { "label": "Housing / Shelter", "value": "housing" },
+                { "label": "Legal aid", "value": "legal" },
+                { "label": "Livelihood / Employment support", "value": "livelihood" },
+                { "label": "Other", "value": "other" }
+              ]
+            }
+          },
+          {
+            "key": "urgency",
+            "type": "select",
+            "input": true,
+            "label": "How urgent is this request?",
+            "validate": { "required": true },
+            "data": {
+              "values": [
+                { "label": "Emergency — need help immediately", "value": "emergency" },
+                { "label": "Urgent — need help within a week", "value": "urgent" },
+                { "label": "Normal — can wait a few weeks", "value": "normal" }
+              ]
+            }
+          },
+          {
+            "key": "number_of_people",
+            "type": "number",
+            "input": true,
+            "label": "Number of People Affected",
+            "validate": { "required": true, "min": 1, "max": 50 }
+          },
+          {
+            "key": "description",
+            "type": "textarea",
+            "input": true,
+            "label": "Describe Your Situation",
+            "placeholder": "Please explain why you need assistance and any relevant details...",
+            "rows": 5,
+            "validate": { "required": true }
+          },
+          {
+            "key": "preferred_contact",
+            "type": "select",
+            "input": true,
+            "label": "Preferred Contact Method",
+            "data": {
+              "values": [
+                { "label": "Phone call", "value": "phone" },
+                { "label": "SMS / Text message", "value": "sms" },
+                { "label": "In-person visit", "value": "in-person" }
+              ]
+            }
+          },
+          {
+            "key": "submit",
+            "type": "button",
+            "input": true,
+            "label": "Submit Request",
+            "action": "submit",
+            "theme": "primary"
+          }
+        ]
+      }
+    },
+    {
+      "id": "grievance",
+      "name": "grievance",
+      "title": "Report a Grievance",
+      "dependsOn": "individual",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "grievance_type",
+            "type": "select",
+            "input": true,
+            "label": "What is this about?",
+            "validate": { "required": true },
+            "data": {
+              "values": [
+                { "label": "Incorrect personal information in the system", "value": "data_error" },
+                { "label": "Missed or delayed assistance payment", "value": "missed_payment" },
+                { "label": "Unfair treatment by staff", "value": "staff_conduct" },
+                { "label": "Exclusion from a program I should qualify for", "value": "exclusion" },
+                { "label": "Service quality issue", "value": "service_quality" },
+                { "label": "Other", "value": "other" }
+              ]
+            }
+          },
+          {
+            "key": "incident_date",
+            "type": "datetime",
+            "input": true,
+            "label": "When did this happen?",
+            "format": "yyyy-MM-dd",
+            "enableTime": false,
+            "enableDate": true
+          },
+          {
+            "key": "description",
+            "type": "textarea",
+            "input": true,
+            "label": "Describe the Issue",
+            "placeholder": "Please provide as much detail as possible so we can help you...",
+            "rows": 5,
+            "validate": { "required": true }
+          },
+          {
+            "key": "desired_resolution",
+            "type": "textarea",
+            "input": true,
+            "label": "What outcome would you like?",
+            "placeholder": "What would resolve this issue for you?",
+            "rows": 3
+          },
+          {
+            "key": "anonymous",
+            "type": "select",
+            "input": true,
+            "label": "Would you like this report to be anonymous?",
+            "data": {
+              "values": [
+                { "label": "No — include my name", "value": "no" },
+                { "label": "Yes — keep my identity confidential", "value": "yes" }
+              ]
+            }
+          },
+          {
+            "key": "submit",
+            "type": "button",
+            "input": true,
+            "label": "Submit Grievance",
+            "action": "submit",
+            "theme": "primary"
           }
         ]
       }
@@ -131,6 +685,27 @@
       ]
     },
     {
+      "name": "cooperative",
+      "data": [
+        {
+          "id": "coop-001",
+          "name": "Chanthabuly Rice Farmers Cooperative",
+          "cooperative_type": "agricultural",
+          "registration_number": "COOP-2020-001",
+          "district": "chanthabuly",
+          "established_date": "2020-06-15"
+        },
+        {
+          "id": "coop-002",
+          "name": "Xaysetha Women's Savings Group",
+          "cooperative_type": "savings",
+          "registration_number": "COOP-2022-015",
+          "district": "xaysetha",
+          "established_date": "2022-01-10"
+        }
+      ]
+    },
+    {
       "name": "individual",
       "data": [
         {
@@ -140,6 +715,8 @@
           "last_name": "Nguyen",
           "date_of_birth": "1985-03-15",
           "gender": "male",
+          "nationalId": "LA-1985-001",
+          "phone": "+856-20-1111111",
           "parentId": "hh-001"
         },
         {
@@ -149,6 +726,8 @@
           "last_name": "Nguyen",
           "date_of_birth": "1988-07-22",
           "gender": "female",
+          "nationalId": "LA-1988-002",
+          "phone": "+856-20-2222222",
           "parentId": "hh-001"
         },
         {
@@ -167,6 +746,8 @@
           "last_name": "Santos",
           "date_of_birth": "1990-11-05",
           "gender": "female",
+          "nationalId": "KH-1990-004",
+          "phone": "+855-12-4444444",
           "parentId": "hh-002"
         },
         {
@@ -176,6 +757,8 @@
           "last_name": "Santos",
           "date_of_birth": "1992-04-18",
           "gender": "male",
+          "nationalId": "KH-1992-005",
+          "phone": "+855-12-5555555",
           "parentId": "hh-002"
         },
         {
@@ -185,6 +768,8 @@
           "last_name": "Sithong",
           "date_of_birth": "1978-09-30",
           "gender": "male",
+          "nationalId": "LA-1978-006",
+          "phone": "+856-20-6666666",
           "parentId": "hh-003"
         },
         {
@@ -213,6 +798,282 @@
           "date_of_birth": "1990-11-05",
           "gender": "female",
           "parentId": "hh-003"
+        },
+        {
+          "id": "ind-010",
+          "name": "Ana Rivera",
+          "first_name": "Ana",
+          "last_name": "Rivera",
+          "date_of_birth": "1994-02-14",
+          "gender": "female",
+          "parentId": "hh-004"
+        },
+        {
+          "id": "ind-011",
+          "name": "Luis Lopez",
+          "first_name": "Luis",
+          "last_name": "Lopez",
+          "date_of_birth": "1991-09-08",
+          "gender": "male",
+          "parentId": "hh-004"
+        },
+        {
+          "id": "ind-012",
+          "name": "Boualoy Thammavong",
+          "first_name": "Boualoy",
+          "last_name": "Thammavong",
+          "date_of_birth": "2000-03-18",
+          "gender": "male"
+        }
+      ]
+    },
+    {
+      "name": "home_visit",
+      "data": [
+        {
+          "id": "hv-001",
+          "name": "Visit 2025-06-10 hh-001",
+          "visit_date": "2025-06-10",
+          "purpose": "assessment",
+          "findings": "Family of 3 living in rented housing. All children enrolled in school. Household head employed as market vendor.",
+          "follow_up_required": "yes",
+          "visited_by": "fieldworker@datacollect.lan",
+          "parentId": "hh-001"
+        },
+        {
+          "id": "hv-002",
+          "name": "Visit 2025-09-15 hh-001",
+          "visit_date": "2025-09-15",
+          "purpose": "follow-up",
+          "findings": "Household situation stable. Cash assistance used for school supplies. No urgent needs identified.",
+          "follow_up_required": "no",
+          "visited_by": "fieldworker@datacollect.lan",
+          "parentId": "hh-001"
+        },
+        {
+          "id": "hv-003",
+          "name": "Visit 2025-07-20 hh-002",
+          "visit_date": "2025-07-20",
+          "purpose": "verification",
+          "findings": "Verified household composition matches records. Address confirmed.",
+          "follow_up_required": "no",
+          "visited_by": "supervisor@datacollect.lan",
+          "parentId": "hh-002"
+        },
+        {
+          "id": "hv-004",
+          "name": "Visit 2025-08-05 hh-003",
+          "visit_date": "2025-08-05",
+          "purpose": "assessment",
+          "findings": "Large household with elderly members. School-age children need enrollment support. Recommend education referral.",
+          "follow_up_required": "yes",
+          "visited_by": "enumerator@datacollect.lan",
+          "parentId": "hh-003"
+        },
+        {
+          "id": "hv-005",
+          "name": "Visit 2025-07-01 hh-004",
+          "visit_date": "2025-07-01",
+          "purpose": "assessment",
+          "findings": "Recently relocated household. Missing documentation for both members. Legal referral recommended.",
+          "follow_up_required": "yes",
+          "visited_by": "fieldworker@datacollect.lan",
+          "parentId": "hh-004"
+        },
+        {
+          "id": "hv-006",
+          "name": "Visit 2025-11-20 hh-004",
+          "visit_date": "2025-11-20",
+          "purpose": "follow-up",
+          "findings": "Documentation issue resolved. Ana Rivera obtained replacement ID. Luis Lopez referral to legal aid in progress.",
+          "follow_up_required": "no",
+          "visited_by": "fieldworker@datacollect.lan",
+          "parentId": "hh-004"
+        }
+      ]
+    },
+    {
+      "name": "training",
+      "data": [
+        {
+          "id": "tr-001",
+          "name": "Agricultural Skills Training - ind-001",
+          "training_name": "Agricultural Skills Training",
+          "training_date": "2025-04-15",
+          "location": "Chanthabuly Community Center",
+          "status": "completed",
+          "certificate_issued": "yes",
+          "parentId": "ind-001"
+        },
+        {
+          "id": "tr-002",
+          "name": "Financial Literacy Workshop - ind-002",
+          "training_name": "Financial Literacy Workshop",
+          "training_date": "2025-05-20",
+          "location": "Xaysetha District Office",
+          "status": "completed",
+          "certificate_issued": "yes",
+          "parentId": "ind-002"
+        },
+        {
+          "id": "tr-003",
+          "name": "Health & Nutrition Program - ind-004",
+          "training_name": "Health & Nutrition Program",
+          "training_date": "2025-10-01",
+          "location": "Sikhottabong Health Center",
+          "status": "enrolled",
+          "certificate_issued": "no",
+          "parentId": "ind-004"
+        },
+        {
+          "id": "tr-004",
+          "name": "Agricultural Skills Training - ind-005",
+          "training_name": "Agricultural Skills Training",
+          "training_date": "2025-04-15",
+          "location": "Chanthabuly Community Center",
+          "status": "dropped",
+          "certificate_issued": "no",
+          "parentId": "ind-005"
+        },
+        {
+          "id": "tr-005",
+          "name": "Financial Literacy Workshop - ind-006",
+          "training_name": "Financial Literacy Workshop",
+          "training_date": "2025-06-10",
+          "location": "Xaysetha District Office",
+          "status": "completed",
+          "certificate_issued": "yes",
+          "parentId": "ind-006"
+        },
+        {
+          "id": "tr-006",
+          "name": "Health & Nutrition Program - ind-010",
+          "training_name": "Health & Nutrition Program",
+          "training_date": "2025-10-01",
+          "location": "Sisattanak Health Center",
+          "status": "enrolled",
+          "certificate_issued": "no",
+          "parentId": "ind-010"
+        }
+      ]
+    },
+    {
+      "name": "assistance",
+      "data": [
+        {
+          "id": "ast-001",
+          "name": "Cash Assistance hh-001 2025-08-15",
+          "distribution_date": "2025-08-15",
+          "assistance_type": "cash",
+          "amount": 500000,
+          "currency": "LAK",
+          "delivery_method": "mobile-money",
+          "received_by": "Nguyen Van Anh",
+          "parentId": "hh-001"
+        },
+        {
+          "id": "ast-002",
+          "name": "Food Package hh-002 2025-09-01",
+          "distribution_date": "2025-09-01",
+          "assistance_type": "food",
+          "amount": 1,
+          "currency": "LAK",
+          "delivery_method": "in-person",
+          "received_by": "Maria Santos",
+          "parentId": "hh-002"
+        },
+        {
+          "id": "ast-003",
+          "name": "Cash Assistance hh-003 2025-08-15",
+          "distribution_date": "2025-08-15",
+          "assistance_type": "cash",
+          "amount": 300000,
+          "currency": "LAK",
+          "delivery_method": "bank-transfer",
+          "received_by": "Kham Sithong",
+          "parentId": "hh-003"
+        },
+        {
+          "id": "ast-004",
+          "name": "School Supplies hh-003 2025-10-01",
+          "distribution_date": "2025-10-01",
+          "assistance_type": "non-food",
+          "amount": 1,
+          "currency": "LAK",
+          "delivery_method": "in-person",
+          "received_by": "Dao Sithong",
+          "parentId": "hh-003"
+        },
+        {
+          "id": "ast-005",
+          "name": "Cash Assistance hh-004 2025-08-15",
+          "distribution_date": "2025-08-15",
+          "assistance_type": "cash",
+          "amount": 500000,
+          "currency": "LAK",
+          "delivery_method": "mobile-money",
+          "received_by": "Ana Rivera",
+          "parentId": "hh-004"
+        }
+      ]
+    },
+    {
+      "name": "referral",
+      "data": [
+        {
+          "id": "ref-001",
+          "name": "Health Referral ind-001",
+          "referral_date": "2025-07-15",
+          "service_type": "health",
+          "facility_name": "Mahosot Hospital",
+          "reason": "Chronic condition follow-up. Patient requires regular monitoring for hypertension.",
+          "status": "completed",
+          "notes": "Appointment confirmed. Patient attended follow-up on 2025-08-01.",
+          "parentId": "ind-001"
+        },
+        {
+          "id": "ref-002",
+          "name": "Education Referral ind-003",
+          "referral_date": "2025-08-20",
+          "service_type": "education",
+          "facility_name": "Chanthabuly Primary School",
+          "reason": "Enrollment assistance for new academic year. Child needs placement in age-appropriate grade.",
+          "status": "completed",
+          "notes": "Enrolled in Grade 3 starting September 2025.",
+          "parentId": "ind-003"
+        },
+        {
+          "id": "ref-003",
+          "name": "Health Referral ind-004",
+          "referral_date": "2025-09-10",
+          "service_type": "health",
+          "facility_name": "Mother and Child Clinic",
+          "reason": "Prenatal care. First pregnancy, requires regular checkups.",
+          "status": "pending",
+          "notes": "Awaiting initial appointment scheduling.",
+          "parentId": "ind-004"
+        },
+        {
+          "id": "ref-004",
+          "name": "Livelihood Referral ind-007",
+          "referral_date": "2025-10-05",
+          "service_type": "livelihood",
+          "facility_name": "TVET Vocational Center",
+          "reason": "Skills training for livelihood improvement. Interest in tailoring program.",
+          "status": "pending",
+          "notes": "Next intake period starts January 2026.",
+          "parentId": "ind-007"
+        },
+        {
+          "id": "ref-005",
+          "name": "Legal Referral ind-010",
+          "referral_date": "2025-11-01",
+          "service_type": "legal",
+          "facility_name": "Vientiane Legal Aid",
+          "reason": "Documentation assistance. Needs replacement national ID and birth certificate.",
+          "status": "pending",
+          "notes": "Initial consultation scheduled for mid-November.",
+          "parentId": "ind-010"
         }
       ]
     }

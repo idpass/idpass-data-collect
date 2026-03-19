@@ -41,10 +41,18 @@ export enum Role {
   USER = "USER",
 }
 
+export interface RoleAssignment {
+  tenantId: string;
+  role: string;
+  areaId?: string;
+}
+
 export interface User {
   id: number;
   email: string;
   role: Role;
+  tenantIds: string[];
+  roleAssignments?: RoleAssignment[];
 }
 
 export interface UserWithPasswordHash extends User {
@@ -69,6 +77,7 @@ export interface EntityForm {
   name: string;
   title: string;
   dependsOn?: string;
+  entityType?: "group" | "individual" | "record";
   formio: object;
 }
 
@@ -89,6 +98,44 @@ export interface AuthConfig {
   fields: Record<string, string>;
 }
 
+/**
+ * Self-service configuration for a tenant. Controls which authentication
+ * methods and forms are available to beneficiaries accessing the system
+ * directly (without a field worker).
+ */
+export interface SelfServiceConfig {
+  /** Whether self-service mode is enabled for this tenant */
+  enabled: boolean;
+  /** Authentication methods available to beneficiaries */
+  authMethods: ("otp" | "id" | "qr" | "oidc")[];
+  /** Form types that beneficiaries can submit through self-service */
+  allowedForms: string[];
+  /** Languages supported for the self-service interface */
+  languages: string[];
+  /** Whether all self-service submissions require review before being applied */
+  requireReview: boolean;
+  /** OIDC configuration for eSignet authentication */
+  oidcConfig?: {
+    /** eSignet issuer URL */
+    authority: string;
+    /** Registered OIDC client ID */
+    clientId: string;
+    /** Web app callback URL */
+    redirectUri: string;
+    /** OIDC scopes to request */
+    scope: string;
+    /** eSignet level of assurance */
+    acrValues?: string;
+    /** How to map OIDC claims to entity fields */
+    entityMapping: {
+      primaryClaim: string;
+      fallbackClaim?: string;
+      entityField: string;
+      fallbackField?: string;
+    };
+  };
+}
+
 export interface AppConfig {
   id: string;
   artifactId?: string;
@@ -100,14 +147,18 @@ export interface AppConfig {
   entityData?: EntityData[];
   externalSync?: ExternalSyncConfig;
   authConfigs?: AuthConfig[];
+  selfService?: SelfServiceConfig;
+  archivedAt?: Date | null;
 }
 
 export interface AppConfigStore {
   initialize(): Promise<void>;
-  getConfigs(): Promise<AppConfig[]>;
+  getConfigs(includeArchived?: boolean): Promise<AppConfig[]>;
   getConfig(id: string): Promise<AppConfig>;
   getConfigByArtifactId(artifactId: string): Promise<AppConfig>;
   saveConfig(config: AppConfig): Promise<void>;
+  archiveConfig(id: string): Promise<void>;
+  restoreConfig(id: string): Promise<void>;
   deleteConfig(id: string): Promise<void>;
   clearStore(): Promise<void>;
   closeConnection(): Promise<void>;
@@ -115,6 +166,7 @@ export interface AppConfigStore {
 
 export interface AppInstance {
   configId: string;
+  config: AppConfig;
   edm: EntityDataManager;
 }
 

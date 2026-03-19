@@ -1,13 +1,23 @@
-# CLAUDE.md
+# DataCollect Development Guidelines
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Offline-first data management system for beneficiary data. TypeScript monorepo (pnpm workspaces) with four packages: `datacollect` (core library), `backend` (Express sync server), `admin` (Vue.js UI), `mobile` (Capacitor app).
+
+## Principles (read before making changes)
+
+All principles are in a `principles/*` directory
+
+## Quick Reference
+
+### Commands
+
+Refer to `package.json` scripts
 
 ## Project Overview
 
 ID PASS DataCollect is a TypeScript-based offline-first data management system for household and individual beneficiary data. The project consists of three main modules:
 
 1. **DataCollect** (`packages/datacollect`) - Main client library for offline data management using IndexedDB
-2. **Backend** (`packages/backend`) - Central sync server using Express.js and PostgreSQL  
+2. **Backend** (`packages/backend`) - Central sync server using Express.js and PostgreSQL
 3. **Admin** (`packages/admin`) - Vue.js admin interface for the sync server
 
 ## Architecture
@@ -19,65 +29,15 @@ The system uses event sourcing and CQRS patterns with the following key concepts
 - **FormSubmissions**: Input data that generates events
 - **Sync**: Two-level sync system (Internal sync between clients/server, External sync with third-party systems)
 
-## Common Development Commands
-
-### DataCollect Module
-```bash
-cd packages/datacollect
-npm install
-npm run build          # Build library (required before using in other modules)
-npm run test          # Run tests
-npm run format        # Format code
-```
-
-### Backend Module
-```bash
-cd packages/backend
-npm install
-npm run dev           # Run development server (port 3000)
-npm run build         # Build for production
-npm run test          # Run tests
-npm run format        # Format code
-```
-
-### Admin Module
-```bash
-cd packages/admin
-npm install
-npm run dev           # Run development server (port 5173)
-npm run build         # Build for production
-npm run test:unit     # Run unit tests
-npm run lint          # Lint code
-npm run type-check    # TypeScript type checking
-npm run format        # Format code
-```
-
-### Root Level
-```bash
-npm test              # Run all tests across modules
-```
-
 ## Testing
 
 ### Running All Tests Locally
 
-```bash
-# One command: starts PostgreSQL via Docker, runs all tests, cleans up
-pnpm run test:all
-
-# If you already have PostgreSQL running:
-export POSTGRES_TEST=postgresql://user:pass@localhost:5432/test
-pnpm test
-```
-
-`pnpm run test:all` requires Docker (Compose v2.1.1+). It spins up an ephemeral PostgreSQL on port 5433, sets `POSTGRES_TEST`, runs the full suite, and tears down the container on exit. Backend tests silently skip when `POSTGRES_TEST` is not set, so `pnpm test` alone only runs datacollect, admin, and mobile tests.
+Refer to test and PR checking scripts.
 
 ### Seed Data
 
-```bash
-# Populate the backend with a demo household registry and sample data
-pnpm run seed
-```
+Refer to the seed command in `package.json`
 
 Requires the backend to be running (default `http://localhost:3000`). Creates a "Demo Household Registry" config with 4 households, 9 individuals, and a field worker user. Safe to run multiple times (deletes and recreates). Override defaults with env vars: `BACKEND_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`.
 
@@ -87,12 +47,6 @@ Each module has its own test suite:
 - DataCollect: Uses Jest with fake-indexeddb for IndexedDB testing
 - Backend: Uses Jest with supertest for API testing (requires PostgreSQL)
 - Admin: Uses Vitest for Vue component testing
-
-To run a single test file:
-```bash
-# In any module directory
-npm test -- path/to/test.spec.ts
-```
 
 ## Key Architectural Patterns
 
@@ -108,27 +62,8 @@ npm test -- path/to/test.spec.ts
 - Adapters available: OpenSPP, OpenFn, MockSyncServer
 
 ### Storage Adapters
-- Client-side: IndexedDbEntityStorageAdapter, IndexedDbEventStorageAdapter
-- Server-side: PostgresEntityStorageAdapter, PostgresEventStorageAdapter
-
-## Environment Configuration
-
-Copy `.env.example` to `.env` and update with your values.
-
-### Backend (.env)
-```env
-POSTGRES=postgresql://admin:admin@localhost:5432/postgres
-POSTGRES_TEST=postgresql://admin:admin@localhost:5432/test
-ADMIN_EMAIL=admin@hdm.example
-ADMIN_PASSWORD=123
-JWT_SECRET=123
-PORT=3000
-```
-
-### Admin (.env)
-```env
-VITE_API_URL=http://localhost:3000
-```
+- Client-side: IndexedDb
+- Server-side: Postgres
 
 ## Multi-Tenant Configuration
 
@@ -162,18 +97,19 @@ Backend supports multiple tenants via app config files. Config structure:
 4. **Pagination**: Internal sync processes 10 records per page by default
 5. **Error Handling**: AppError class for consistent error management
 
-## Docker Deployment
+## Known Pitfalls
 
-Docker Compose setup available for full stack deployment including OpenSPP integration. Before running, copy the example environment files:
+- When producing audit or review reports, never force findings into round numbers. Report the actual count of issues found — artificial caps cause findings to be silently dropped or underclassified.
 
-```bash
-cd docker
-cp .env.example .env
-# For OpenSPP integration (optional):
-cp odoo.env.example odoo.env
-cp odoo_postgresql.env.example odoo_postgresql.env
-# Edit the .env files with your configuration
-docker-compose up
-```
+## Commit Checklist
 
-See `docker/README.md` for detailed configuration options.
+Before committing:
+
+- [ ] `pnpm pr-check` passes
+- [ ] No `console.log` in `datacollect` or `backend` (use `createLogger`)
+- [ ] No Node-only imports in `packages/datacollect/src/`
+- [ ] No PII in log messages
+- [ ] New storage adapters pass conformance tests
+- [ ] New external adapters return `SyncResult` (never throw for per-entity errors)
+- [ ] Conventional commit format: `feat(mobile):`, `fix(backend):`, etc.
+- [ ] Single-line commit messages only — no body, description, or co-author trailers

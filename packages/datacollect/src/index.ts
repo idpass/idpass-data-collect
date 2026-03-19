@@ -214,28 +214,82 @@ export * from "./components/SyncAdapter";
 
 // Core Services
 export * from "./services/EventApplierService";
+export * from "./services/DuplicateDetectionService";
+export { FormClassifier, FormCategory } from "./services/FormClassifier";
+export type { FormDefinition, FormClassification } from "./services/FormClassifier";
+export { EventUpcasterService } from "./services/EventUpcasterService";
+export type { EventUpcaster } from "./services/EventUpcasterService";
+export { ProjectionRebuildService } from "./services/ProjectionRebuildService";
+export type { RebuildResult } from "./services/ProjectionRebuildService";
+export * from "./services/RbacService";
+export * from "./services/ReviewService";
+
+// Phase 3: Area Management, Data Assignment, and Snapshot Services
+export { AreaService } from "./services/AreaService";
+export type { AreaRecord, CreateAreaInput, HdxAreaImportRecord } from "./services/AreaService";
+export { AssignmentService } from "./services/AssignmentService";
+export type { UserAssignmentRecord, EntityOverrideRecord } from "./services/AssignmentService";
+export { SnapshotService } from "./services/SnapshotService";
+export type { SnapshotRecord, BatchSnapshotResult } from "./services/SnapshotService";
+
+// Attachment Services
+export { AttachmentService } from "./services/AttachmentService";
+export type { AttachmentServiceOptions } from "./services/AttachmentService";
 
 // Storage Adapters
 export * from "./storage/IndexedDbEntityStorageAdapter";
 export * from "./storage/IndexedDbEventStorageAdapter";
+export * from "./storage/IndexedDbAttachmentStorageAdapter";
 export * from "./storage/PostgresEntityStorageAdapter";
 export * from "./storage/PostgresEventStorageAdapter";
+export * from "./storage/PostgresAttachmentStorageAdapter";
+
+// Adapter Registry and V2 Adapter Interfaces
+export * from "./interfaces/adapter";
+export * from "./components/AdapterRegistry";
 
 // Type Definitions and Interfaces
 export * from "./interfaces/types";
 export * from "./interfaces/adapter-configs";
 
-// Authentication Components
+// Self-Service Components
+export { SelfServiceManager } from "./services/SelfServiceManager";
+export type { SelfServiceConfig, FormConfig } from "./services/SelfServiceManager";
+export { VerificationService } from "./services/VerificationService";
+export type {
+  VerificationStatus,
+  VerificationResult,
+  DuplicateCheckResult,
+} from "./services/VerificationService";
 
+// Authentication Components
 export * from "./components/AuthManager";
+export * from "./components/authentication/OtpAuthAdapter";
+export * from "./components/authentication/IdAuthAdapter";
 export * from "./storage/IndexedDbAuthStorageAdapter";
 export * from "./services/SingleAuthStorageImpl";
 
-// OpenSPP/Odoo Components (V1)
-export * from "./components/openspp";
-
-// OpenSPP V2 Components
-export * from "./components/openspp-v2";
-
 // Field Transformers
 export * from "./utils/fieldTransformers";
+
+// Database Schema, Connection, and Initialization (Drizzle ORM)
+export * from "./db/schema";
+export * from "./db/connection";
+export { initializeDatacollectDatabase } from "./db/initialize";
+
+// Conflict Detection and Resolution
+export { ConflictService } from "./services/ConflictService";
+export type { ConflictRecord, ConflictStore, RecordConflictParams } from "./services/ConflictService";
+
+// Testing Utilities
+export { InMemoryConflictStore } from "./testing/InMemoryConflictStore";
+export { NetworkSimulator } from "./testing/NetworkSimulator";
+export type { NetworkCondition, NetworkStats } from "./testing/NetworkSimulator";
+export { StorageFaultInjector } from "./testing/StorageFaultInjector";
+export type { FaultRule } from "./testing/StorageFaultInjector";
+
+// Utility functions
+export { normalizeLegacyRelationField, normalizeLegacyRelationFields } from "./utils/normalizeLegacyRelationFields";
+
+// Logging
+export { createLogger } from "./utils/logger";

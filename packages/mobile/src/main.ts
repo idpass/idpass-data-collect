@@ -17,6 +17,12 @@
  * under the License.
  */
 
+declare global {
+  interface Window {
+    __showError?: (title: string, msg: string, source?: string) => void
+  }
+}
+
 import 'bootstrap/dist/css/bootstrap.min.css'
 import 'bootstrap/dist/css/bootstrap-grid.min.css'
 import 'font-awesome/css/font-awesome.min.css'
@@ -37,6 +43,8 @@ import { useAuthManagerStore } from './store/authManager'
 
 import { createPinia } from 'pinia'
 import { registerCustomComponents } from './formio'
+import { App as CapacitorApp } from '@capacitor/app'
+import { AppLockService } from './services/AppLockService'
 
 async function initApp() {
   registerCustomComponents()
@@ -51,7 +59,31 @@ async function initApp() {
   const authManager = useAuthManagerStore()
   await authManager.setupCapacitorUrlListener()
 
+  // Background state listener: blur UI and lock app when backgrounded.
+  // NOTE (iOS): the OS takes the task-switcher screenshot before this JS event
+  // fires (~100-300ms window). The CSS blur is partial protection only on iOS.
+  // Full iOS protection requires a native UIView overlay — tracked as follow-up.
+  CapacitorApp.addListener('appStateChange', async ({ isActive }) => {
+    if (!isActive) {
+      document.body.classList.add('app-backgrounded')
+      await AppLockService.lock()
+    } else {
+      document.body.classList.remove('app-backgrounded')
+      if (AppLockService.locked.value) {
+        await AppLockService.authenticate()
+      }
+    }
+  })
+
+  app.config.errorHandler = (err, _instance, info) => {
+    const msg = err instanceof Error ? err.stack || err.message : String(err)
+    window.__showError?.('Vue Error (' + info + ')', msg)
+  }
+
   app.mount('#app')
 }
 
-initApp()
+initApp().catch((err) => {
+  const msg = err instanceof Error ? err.stack || err.message : String(err)
+  window.__showError?.('App Initialization Failed', msg)
+})

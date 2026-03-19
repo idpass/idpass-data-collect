@@ -30,12 +30,19 @@ import {
   FormSubmission,
   GroupDoc,
   IndividualDoc,
+  RecordDoc,
   SearchCriteria,
   SyncLevel,
 } from "../interfaces/types";
 import { AppError } from "../utils/AppError";
 
 import { validateFormSubmission } from "../utils/formValidation";
+import { ConflictService } from "./ConflictService";
+import { DuplicateDetectionService } from "./DuplicateDetectionService";
+import { EventUpcasterService } from "./EventUpcasterService";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("EventApplierService");
 
 type ConflictResolutionResult =
   | { resolution: "no-conflict"; baseEntity?: EntityDoc }
@@ -144,21 +151,49 @@ type ConflictResolutionResult =
  * ```
  */
 export class EventApplierService {
-  /** Logger instance for debugging and monitoring */
-  private logger = console;
   /** Registry of custom event appliers mapped by event type */
   private eventAppliers: Map<string, EventApplier> = new Map();
+  /** Service that performs duplicate detection asynchronously off the write path */
+  private duplicateDetectionService: DuplicateDetectionService;
+  /** Optional service for upcasting event data from older schema versions */
+  private upcasterService?: EventUpcasterService;
+  /** Optional service for recording detected conflicts */
+  private conflictService?: ConflictService;
+  /** Tenant ID for conflict recording (defaults to "default") */
+  private tenantId: string;
 
   /**
    * Creates a new EventApplierService instance.
    *
    * @param eventStore Store for managing events and audit logs.
    * @param entityStore Store for managing current entity state.
+   * @param duplicateDetectionService Optional service for async duplicate detection. A default instance is created if not provided.
+   * @param upcasterService Optional service for event schema version upcasting. When provided, event data is automatically upcasted before being applied.
+   * @param conflictService Optional service for recording detected conflicts.
+   * @param tenantId Tenant ID for conflict recording (defaults to "default").
    */
   constructor(
     private eventStore: EventStore,
     private entityStore: EntityStore,
-  ) {}
+    duplicateDetectionService?: DuplicateDetectionService,
+    upcasterService?: EventUpcasterService,
+    conflictService?: ConflictService,
+    tenantId?: string,
+  ) {
+    this.duplicateDetectionService =
+      duplicateDetectionService ?? new DuplicateDetectionService(entityStore, eventStore);
+    this.upcasterService = upcasterService;
+    this.conflictService = conflictService;
+    this.tenantId = tenantId ?? "default";
+  }
+
+  /**
+   * Returns the duplicate detection service instance, primarily for testing
+   * purposes (e.g., calling `flush()` to wait for async processing).
+   */
+  getDuplicateDetectionService(): DuplicateDetectionService {
+    return this.duplicateDetectionService;
+  }
 
   /**
    * Registers a custom event applier for a specific event type.
@@ -295,99 +330,167 @@ export class EventApplierService {
       const formData = cloneDeep(formDataParam);
       validateFormSubmission(formData);
 
+      // Upcast event data from older schema versions if an upcaster service is available
+      if (this.upcasterService) {
+        formData.data = this.upcasterService.upcastEvent(
+          formData.type,
+          formData.schemaVersion,
+          formData.data as Record<string, unknown>,
+        ) as Record<string, unknown>;
+      }
+
       // Get existing entity if it exists
       const entityGuid = formData.entityGuid;
       const entityPair = await this.entityStore.getEntity(entityGuid);
 
       const eventGuid = await this.eventStore.saveEvent(formData);
 
-      const conflictResult = await this.handleIncomingConflict(entityPair, formData, eventGuid);
+      const updatedEntity = await this.applyEventToEntity(formData, eventGuid, entityPair);
 
-      if (conflictResult.resolution === "local-wins") {
-        return conflictResult.entity;
-      }
-
-      const baseEntity = conflictResult.baseEntity ?? entityPair?.modified;
-
-      let updatedEntity: EntityDoc | null = null;
-      if (formData.type === "create-group" || formData.type === "update-group") {
-        // this.logger.debug(`Creating or updating group: ${JSON.stringify(formData)}`);
-        updatedEntity = await this.createOrUpdateGroup(
-          eventGuid,
-          baseEntity as GroupDoc | undefined,
-          formData,
-        );
-      } else if (formData.type === "create-individual" || formData.type === "update-individual") {
-        // this.logger.debug(`Creating or updating individual: ${JSON.stringify(formData)}`);
-        updatedEntity = await this.createOrUpdateIndividual(
-          eventGuid,
-          baseEntity as IndividualDoc | undefined,
-          formData,
-        );
-      } else if (formData.type === "add-member") {
-        // this.logger.debug(`Adding member: ${JSON.stringify(formData)}`);
-        updatedEntity = await this.addMemberToGroup(eventGuid, entityGuid, formData);
-      } else if (formData.type === "remove-member") {
-        if (!formData.data.memberId) {
-          throw new AppError("INVALID_MEMBER_DATA", "Member ID is required");
-        }
-        updatedEntity = await this.removeMemberFromGroup(eventGuid, formData);
-      } else if (formData.type === "delete-entity") {
-        // this.logger.debug(`Deleting entity: ${JSON.stringify(formData)}`);
-        await this.deleteEntity(entityPair, eventGuid, formData.userId);
-      } else if (formData.type === "resolve-duplicate") {
-        this.logger.debug(
-          `Resolving duplicate: ${JSON.stringify(formData)} with shouldDelete: ${formData.data.shouldDelete}`,
-        );
-        await this.entityStore.resolvePotentialDuplicates(
-          formData.data.duplicates as Array<{ entityGuid: string; duplicateGuid: string }>,
-        );
-        if (formData.data.shouldDelete) {
-          await this.deleteEntity(entityPair, eventGuid, formData.entityGuid);
-        }
-      } else {
-        const applier = this.getEventApplier(formData.type);
-        if (!applier) {
-          throw new Error(`No event applier found for event type: ${formData.type}`);
-        }
-        // this.logger.debug(`Applying event: ${JSON.stringify(formData)}`);
-        updatedEntity = await applier.apply(
-          baseEntity || this.createNewEntity(entityGuid, formData),
-          formData,
-          async (entityId: string) => {
-            return await this.entityStore.getEntity(entityId);
-          },
-          async (
-            action: string,
-            existingEntity: EntityDoc,
-            modifiedEntity: EntityDoc,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            changes: Record<string, any>,
-          ) => {
-            await this.entityStore.saveEntity(existingEntity, modifiedEntity);
-            await this.logAudit(formData.userId, action, eventGuid, modifiedEntity.guid, changes);
-            return;
-          },
-        );
-      }
-
-      // this.logger.debug(`Updated entity: ${JSON.stringify(updatedEntity)}`);
-
+      // Enqueue the entity for asynchronous duplicate detection so the write
+      // path is never blocked by the O(n) entity scan.
       if (updatedEntity?.guid) {
-        await this.flagPotentialDuplicate(updatedEntity.guid, eventGuid);
+        this.duplicateDetectionService.enqueue(updatedEntity.guid, eventGuid);
       }
 
       return updatedEntity;
     } catch (error) {
       // Log error with full details for debugging
-      console.error("Error in submitForm:", error);
-      if (error instanceof Error) {
-        console.error("Error stack:", error.stack);
-        console.error("Error message:", error.message);
-      }
+      log.error({ err: error }, "Error in submitForm");
       // Re-throw the error - don't suppress it
       throw error;
     }
+  }
+
+  /**
+   * Replays an existing event from the event store against the entity store without
+   * re-persisting the event. Used by ProjectionRebuildService to reconstruct entity
+   * projections from the event log.
+   *
+   * @param formDataParam The event (FormSubmission) to replay.
+   * @returns The resulting entity after applying the event, or null if deletion occurred.
+   * @throws {AppError} When validation fails or required data is missing.
+   */
+  async replayEvent(formDataParam: FormSubmission): Promise<EntityDoc | null> {
+    try {
+      const formData = cloneDeep(formDataParam);
+      validateFormSubmission(formData);
+
+      // Upcast event data from older schema versions if an upcaster service is available
+      if (this.upcasterService) {
+        formData.data = this.upcasterService.upcastEvent(
+          formData.type,
+          formData.schemaVersion,
+          formData.data as Record<string, unknown>,
+        ) as Record<string, unknown>;
+      }
+
+      const entityGuid = formData.entityGuid;
+      const entityPair = await this.entityStore.getEntity(entityGuid);
+      const eventGuid = formData.guid;
+
+      return await this.applyEventToEntity(formData, eventGuid, entityPair);
+    } catch (error) {
+      log.error({ err: error }, "Error in replayEvent");
+      throw error;
+    }
+  }
+
+  /**
+   * Core event application logic shared by submitForm and replayEvent.
+   * Applies the event to entity state without persisting the event itself.
+   */
+  private async applyEventToEntity(
+    formData: FormSubmission,
+    eventGuid: string,
+    entityPair: EntityPair | null,
+  ): Promise<EntityDoc | null> {
+    const conflictResult = await this.handleIncomingConflict(entityPair, formData, eventGuid);
+
+    if (conflictResult.resolution === "local-wins") {
+      return conflictResult.entity;
+    }
+
+    const baseEntity = conflictResult.baseEntity ?? entityPair?.modified;
+    const entityGuid = formData.entityGuid;
+
+    let updatedEntity: EntityDoc | null = null;
+    if (formData.type === "create-group" || formData.type === "update-group") {
+      // log.debug(`Creating or updating group: ${JSON.stringify(formData)}`);
+      updatedEntity = await this.createOrUpdateGroup(
+        eventGuid,
+        baseEntity as GroupDoc | undefined,
+        formData,
+      );
+    } else if (formData.type === "create-individual" || formData.type === "update-individual") {
+      // log.debug(`Creating or updating individual: ${JSON.stringify(formData)}`);
+      updatedEntity = await this.createOrUpdateIndividual(
+        eventGuid,
+        baseEntity as IndividualDoc | undefined,
+        formData,
+      );
+    } else if (formData.type === "create-record" || formData.type === "update-record") {
+      updatedEntity = await this.createOrUpdateRecord(
+        eventGuid,
+        baseEntity as RecordDoc | undefined,
+        formData,
+      );
+    } else if (formData.type === "add-member") {
+      // log.debug(`Adding member: ${JSON.stringify(formData)}`);
+      updatedEntity = await this.addMemberToGroup(eventGuid, entityGuid, formData);
+    } else if (formData.type === "remove-member") {
+      if (!formData.data.memberId) {
+        throw new AppError("INVALID_MEMBER_DATA", "Member ID is required");
+      }
+      updatedEntity = await this.removeMemberFromGroup(eventGuid, formData);
+    } else if (formData.type === "delete-entity") {
+      // log.debug(`Deleting entity: ${JSON.stringify(formData)}`);
+      await this.deleteEntity(entityPair, eventGuid, formData.userId);
+    } else if (formData.type === "resolve-duplicate") {
+      log.debug(
+        `Resolving duplicate: ${JSON.stringify(formData)} with shouldDelete: ${formData.data.shouldDelete}`,
+      );
+      await this.entityStore.resolvePotentialDuplicates(
+        formData.data.duplicates as Array<{ entityGuid: string; duplicateGuid: string }>,
+      );
+      if (formData.data.shouldDelete) {
+        await this.deleteEntity(entityPair, eventGuid, formData.entityGuid);
+      }
+    } else {
+      const applier = this.getEventApplier(formData.type);
+      if (!applier) {
+        throw new Error(`No event applier found for event type: ${formData.type}`);
+      }
+      // log.debug(`Applying event: ${JSON.stringify(formData)}`);
+      updatedEntity = await applier.apply(
+        baseEntity || this.createNewEntity(entityGuid, formData),
+        formData,
+        async (entityId: string) => {
+          return await this.entityStore.getEntity(entityId);
+        },
+        async (
+          action: string,
+          existingEntity: EntityDoc,
+          modifiedEntity: EntityDoc,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          changes: Record<string, any>,
+        ) => {
+          await this.entityStore.saveEntity(existingEntity, modifiedEntity);
+          await this.logAudit(formData.userId, action, eventGuid, modifiedEntity.guid, changes);
+          return;
+        },
+      );
+    }
+
+    // After applying a remote event, reset the baseline so subsequent remote
+    // events don't see stale differences and trigger false conflicts.
+    if (updatedEntity && this.isRemoteEvent(formData)) {
+      await this.entityStore.saveEntity(cloneDeep(updatedEntity), updatedEntity);
+    }
+
+    // log.debug(`Updated entity: ${JSON.stringify(updatedEntity)}`);
+
+    return updatedEntity;
   }
 
   private async handleIncomingConflict(
@@ -416,6 +519,17 @@ export class EventApplierService {
         remoteTimestamp: formData.timestamp,
         localVersion: entityPair.modified.version,
       });
+      // Record the conflict in the ConflictService for tracking and review
+      if (this.conflictService) {
+        await this.conflictService.recordConflict({
+          entityGuid: entityPair.modified.guid,
+          tenantId: this.tenantId,
+          localVersion: entityPair.modified.data as Record<string, unknown>,
+          remoteVersion: formData.data as Record<string, unknown>,
+          localEventGuid: eventGuid,
+          remoteEventGuid: formData.guid,
+        });
+      }
       return { resolution: "local-wins", entity: entityPair.modified };
     }
 
@@ -424,6 +538,17 @@ export class EventApplierService {
       remoteTimestamp: formData.timestamp,
       localVersion: entityPair.modified.version,
     });
+    // Record the conflict in the ConflictService for tracking and review
+    if (this.conflictService) {
+      await this.conflictService.recordConflict({
+        entityGuid: entityPair.modified.guid,
+        tenantId: this.tenantId,
+        localVersion: entityPair.modified.data as Record<string, unknown>,
+        remoteVersion: formData.data as Record<string, unknown>,
+        localEventGuid: eventGuid,
+        remoteEventGuid: formData.guid,
+      });
+    }
 
     const baseline = entityPair.initial ? cloneDeep(entityPair.initial) : cloneDeep(entityPair.modified);
     return { resolution: "remote-wins", baseEntity: baseline };
@@ -434,6 +559,9 @@ export class EventApplierService {
   }
 
   private hasLocalChanges(entityPair: EntityPair): boolean {
+    if (entityPair.initial === null) {
+      return true;
+    }
     return entityPair.initial.version !== entityPair.modified.version;
   }
 
@@ -496,10 +624,56 @@ export class EventApplierService {
     individual.version += 1;
     individual.lastUpdated = new Date().toISOString();
 
-    await this.entityStore.saveEntity(existingIndividual || individual, individual);
+    await this.entityStore.saveEntity(existingIndividual ?? cloneDeep(individual), individual);
     await this.logAudit(formData.userId, formData.type, eventGuid, individual.guid, formData.data);
 
     return individual;
+  }
+
+  /**
+   * Creates a new record or updates an existing one based on form data.
+   *
+   * Records represent activity data (training, referral, home visit, assistance)
+   * that are linked to an entity but are not themselves people or households.
+   *
+   * @param eventGuid GUID of the event triggering this operation.
+   * @param existingRecord Current record entity, if any.
+   * @param formData Form submission containing the changes.
+   * @returns The updated record entity.
+   *
+   * @private
+   */
+  private async createOrUpdateRecord(
+    eventGuid: string,
+    existingRecord: RecordDoc | undefined,
+    formData: FormSubmission,
+  ): Promise<RecordDoc> {
+    validateFormSubmission(formData);
+    const record: RecordDoc = existingRecord
+      ? cloneDeep(existingRecord)
+      : {
+          id: formData.entityGuid,
+          guid: formData.entityGuid,
+          type: EntityType.Record,
+          name: formData.data.name || formData.data.entityName || "Unnamed Record",
+          version: 0,
+          data: { name: "Unnamed Record" },
+          lastUpdated: new Date().toISOString(),
+          parentEntityGuid: formData.data.parentId,
+        };
+    record.data = { ...record.data, ...formData.data };
+    record.name = record.data.name || record.name;
+    if (formData.data.parentId) {
+      record.parentEntityGuid = formData.data.parentId;
+    }
+
+    record.version += 1;
+    record.lastUpdated = new Date().toISOString();
+
+    await this.entityStore.saveEntity(existingRecord ?? cloneDeep(record), record);
+    await this.logAudit(formData.userId, formData.type, eventGuid, record.guid, formData.data);
+
+    return record;
   }
 
   /**
@@ -521,7 +695,7 @@ export class EventApplierService {
     existingGroup: GroupDoc | undefined,
     formData: FormSubmission,
   ): Promise<GroupDoc> {
-    // this.logger.debug(
+    // log.debug(
     //   `Creating or updating group: ${JSON.stringify({
     //     existingGroup,
     //     formData,
@@ -543,7 +717,7 @@ export class EventApplierService {
     group.data.name = group.name || "Unnamed Group";
 
     if (formData.data?.members) {
-      // this.logger.debug(`Processing members: ${JSON.stringify(formData.data.members)}`);
+      // log.debug(`Processing members: ${JSON.stringify(formData.data.members)}`);
       const newMemberIds = await Promise.all(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         formData.data.members.map(async (member: Record<string, any>) => {
@@ -551,25 +725,28 @@ export class EventApplierService {
             throw new Error("Member GUID is required");
           }
 
-          const memberGuid = member.guid;
-          delete member.guid;
+          const { guid: memberGuid, ...memberData } = member;
 
-          if (member && member.type === "group") {
-            const subGroup = await this.createOrUpdateGroup(eventGuid, undefined, {
+          if (memberData && memberData.type === "group") {
+            const existingPair = await this.entityStore.getEntity(memberGuid);
+            const existingGroup = existingPair?.modified as GroupDoc | undefined;
+            const subGroup = await this.createOrUpdateGroup(eventGuid, existingGroup, {
               guid: uuidv4(),
               entityGuid: memberGuid,
-              data: member,
+              data: memberData,
               type: "create-group",
               timestamp: new Date().toISOString(),
               userId: formData.userId,
               syncLevel: SyncLevel.LOCAL,
             });
             return subGroup.guid;
-          } else if (member) {
-            const individualDoc = await this.createOrUpdateIndividual(eventGuid, undefined, {
+          } else if (memberData) {
+            const existingPair = await this.entityStore.getEntity(memberGuid);
+            const existingIndividual = existingPair?.modified as IndividualDoc | undefined;
+            const individualDoc = await this.createOrUpdateIndividual(eventGuid, existingIndividual, {
               guid: uuidv4(),
               entityGuid: memberGuid,
-              data: member,
+              data: memberData,
               type: "create-individual",
               timestamp: new Date().toISOString(),
               userId: formData.userId,
@@ -593,18 +770,24 @@ export class EventApplierService {
     group.lastUpdated = new Date().toISOString();
     delete group.data.members;
 
-    this.logger.debug(`Saving group: ${JSON.stringify(group)}`);
-    await this.entityStore.saveEntity(group, group);
+    log.debug(`Saving group: ${JSON.stringify(group)}`);
+    await this.entityStore.saveEntity(existingGroup ?? cloneDeep(group), group);
     await this.logAudit(formData.userId, formData.type, eventGuid, group.guid, formData.data);
 
     return group;
   }
 
   private createNewEntity(entityGuid: string, formData: FormSubmission): EntityDoc {
+    const type =
+      formData.type === "create-group"
+        ? EntityType.Group
+        : formData.type === "create-record"
+          ? EntityType.Record
+          : EntityType.Individual;
     return {
       id: entityGuid,
       guid: entityGuid,
-      type: formData.type === "create-group" ? EntityType.Group : EntityType.Individual,
+      type,
       version: 1,
       data: { name: "Unnamed Entity" },
       lastUpdated: formData.timestamp,
@@ -642,7 +825,7 @@ export class EventApplierService {
     }
     const updatedGroup = this.removeFromGroupStructure(groupPair.modified as GroupDoc, memberId);
 
-    console.log("updated group", updatedGroup);
+    log.debug({ updatedGroup }, "Updated group");
     await this.entityStore.saveEntity(groupPair.initial, updatedGroup);
     await this.logAudit(formData.userId, formData.type, eventGuid, groupId, formData.data);
 
@@ -667,7 +850,7 @@ export class EventApplierService {
    * @private
    */
   async addMemberToGroup(eventGuid: string, groupId: string, formData: FormSubmission): Promise<GroupDoc> {
-    // this.logger.debug(`Adding member to group: ${JSON.stringify({ groupId, formData })}`);
+    // log.debug(`Adding member to group: ${JSON.stringify({ groupId, formData })}`);
     const groupPair = await this.entityStore.getEntity(groupId);
 
     if (!groupPair || groupPair.modified.type !== "group") {
@@ -676,39 +859,45 @@ export class EventApplierService {
 
     const group = groupPair.modified as GroupDoc;
 
-    let memberData;
+    let rawMemberData;
     if (formData.data.members && Array.isArray(formData.data.members)) {
-      memberData = formData.data.members[0];
+      rawMemberData = formData.data.members[0];
     } else {
       throw new AppError("INVALID_MEMBER_DATA", "Member data is missing or in an invalid format");
     }
 
-    if (!memberData.guid) {
+    if (!rawMemberData.guid) {
       throw new AppError("INVALID_MEMBER_DATA", "Member GUID is missing");
     }
 
-    const guid = memberData.guid;
-    delete memberData.guid;
+    const { guid, ...memberData } = rawMemberData;
 
     if (memberData.type === "group") {
-      // If the new member is a group, create a new group
-      const subGroupForm: FormSubmission = {
-        guid: uuidv4(),
-        type: "create-group",
-        entityGuid: guid,
-        data: memberData,
-        timestamp: new Date().toISOString(),
-        userId: formData.userId,
-        syncLevel: SyncLevel.LOCAL,
-      };
-      await this.createOrUpdateGroup(eventGuid, undefined, subGroupForm);
+      // Only create the sub-group if it doesn't already exist
+      const existingGroupPair = await this.entityStore.getEntity(guid);
+      if (!existingGroupPair) {
+        const subGroupForm: FormSubmission = {
+          guid: uuidv4(),
+          type: "create-group",
+          entityGuid: guid,
+          data: memberData,
+          timestamp: new Date().toISOString(),
+          userId: formData.userId,
+          syncLevel: SyncLevel.LOCAL,
+        };
+        await this.createOrUpdateGroup(eventGuid, undefined, subGroupForm);
+      }
     } else {
-      await this.createOrUpdateIndividual(eventGuid, undefined, {
-        ...formData,
-        entityGuid: guid,
-        type: "create-individual",
-        data: memberData,
-      });
+      // Only create the individual if it doesn't already exist
+      const existingMemberPair = await this.entityStore.getEntity(guid);
+      if (!existingMemberPair) {
+        await this.createOrUpdateIndividual(eventGuid, undefined, {
+          ...formData,
+          entityGuid: guid,
+          type: "create-individual",
+          data: memberData,
+        });
+      }
     }
 
     // Ensure memberIds is always an array
@@ -722,7 +911,7 @@ export class EventApplierService {
       group.lastUpdated = new Date().toISOString();
     }
 
-    // this.logger.debug(`Updated group: ${JSON.stringify(group)}`);
+    // log.debug(`Updated group: ${JSON.stringify(group)}`);
     await this.entityStore.saveEntity(groupPair.initial, group);
     await this.logAudit(formData.userId, formData.type, eventGuid, groupId, formData.data);
 
@@ -818,92 +1007,8 @@ export class EventApplierService {
    * ]);
    * ```
    */
-  async searchEntities(criteria: SearchCriteria): Promise<{ initial: EntityDoc; modified: EntityDoc }[]> {
+  async searchEntities(criteria: SearchCriteria): Promise<EntityPair[]> {
     return await this.entityStore.searchEntities(criteria);
   }
 
-  /**
-   * Automatically flags potential duplicate entities based on data similarity.
-   *
-   * @param entityGuid GUID of the entity to check for duplicates.
-   * @param eventGuid GUID of the event that created/updated the entity.
-   *
-   * @private
-   */
-  private async flagPotentialDuplicate(entityGuid: string, eventGuid: string): Promise<void> {
-    const entity = await this.entityStore.getEntity(entityGuid);
-    if (!entity) {
-      throw new AppError("ENTITY_NOT_FOUND", `Entity with GUID ${entityGuid} not found`);
-    }
-
-    if (!entity.modified.data) {
-      this.logger.warn(`Entity ${entityGuid} has no data property, skipping duplicate check`);
-      return;
-    }
-
-    // Flatten the nested data structure and extract searchable fields
-    const searchableFields = this.extractSearchableFields(entity.modified.data);
-    if (Object.keys(searchableFields).length === 0) {
-      this.logger.warn(`No searchable fields found for entity ${entityGuid}, skipping duplicate check`);
-      return;
-    }
-
-    const searchCriteria = Object.entries(searchableFields)
-       
-      .filter(([_, value]) => value !== null && value !== undefined && value !== "")
-      .map(([key, value]) => ({ [key]: value }));
-
-    const potentialDuplicates = await this.searchEntities(searchCriteria);
-
-    for (const duplicate of potentialDuplicates) {
-      if (duplicate.initial.guid !== entityGuid) {
-        await this.entityStore.savePotentialDuplicates([{ entityGuid, duplicateGuid: duplicate.modified.guid }]);
-        this.logger.info(`Flagging potential duplicate: ${duplicate.modified.guid}`);
-        await this.logAudit("system", "flag-potential-duplicate", eventGuid, entityGuid, {
-          entityId: entityGuid,
-          duplicateId: duplicate.modified.guid,
-        });
-      }
-    }
-  }
-
-  /**
-   * Extracts searchable fields from entity data for duplicate detection.
-   *
-   * @param data The entity data object to process.
-   * @returns Flattened object with searchable field paths and values.
-   *
-   * @private
-   *
-   * @example
-   * Input: { name: "John", address: { street: "123 Main", city: "Boston" } }
-   * Output: { name: "John", "address.street": "123 Main", "address.city": "Boston" }
-   */
-  private extractSearchableFields(data: Record<string, unknown>): Record<string, unknown> {
-    const result: Record<string, unknown> = {};
-
-    // Helper function to recursively extract primitive values
-    const extractFields = (obj: unknown, prefix = ""): void => {
-      if (!obj || typeof obj !== "object") {
-        return;
-      }
-
-      Object.entries(obj as Record<string, unknown>).forEach(([key, value]) => {
-        const fieldPath = prefix ? `${prefix}.${key}` : key;
-
-        if (value !== null && value !== undefined && value !== "") {
-          if (typeof value === "object" && !Array.isArray(value)) {
-            // Recursively process nested objects
-            extractFields(value, fieldPath);
-          } else if (!Array.isArray(value)) {
-            // Only include primitive values (excluding arrays)
-            result[fieldPath] = value;
-          }
-        }
-      });
-    };
-
-    extractFields(data);
-    return result;
-  }
 }

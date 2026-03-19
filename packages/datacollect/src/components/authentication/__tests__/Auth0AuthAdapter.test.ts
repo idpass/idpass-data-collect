@@ -10,6 +10,17 @@ import { AuthConfig, SingleAuthStorage, OIDCConfig } from "../../../interfaces/t
 // Mock dependencies
 jest.mock("../OIDCClient");
 jest.mock("axios");
+jest.mock("../../../utils/logger", () => ({
+  createLogger: () => ({
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    trace: jest.fn(),
+    fatal: jest.fn(),
+    child: jest.fn().mockReturnThis(),
+  }),
+}));
 
 const MockedOIDCClient = OIDCClient as jest.MockedClass<typeof OIDCClient>;
 const mockedAxios = axios as jest.Mocked<typeof axios>;
@@ -590,19 +601,12 @@ describe("Auth0AuthAdapter", () => {
 
       const token = "test-token";
       const timeoutError = new Error("timeout of 5000ms exceeded");
-  
+
       mockedAxios.get.mockRejectedValue(timeoutError);
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
 
       const result = await backendAdapter.validateToken(token);
 
       expect(result).toBe(false);
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "Error checking token activity:",
-        timeoutError
-      );
-
-      consoleSpy.mockRestore();
     });
 
     it("should handle network errors in token validation", async () => {
@@ -610,17 +614,10 @@ describe("Auth0AuthAdapter", () => {
       const networkError = new Error("Network Error");
 
       mockedAxios.get.mockRejectedValue(networkError);
-      const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
 
       const result = await adapter.validateToken(token);
 
       expect(result).toBe(false);
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "Error checking token activity:",
-        networkError
-      );
-
-      consoleSpy.mockRestore();
     });
 
     it("should log token validation success", async () => {

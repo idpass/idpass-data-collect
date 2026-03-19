@@ -24,6 +24,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>The app enables the scanning of various barcodes.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Verify your identity to access beneficiary data</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>The app needs access to your location when in use to provide a location based service.</string>
 	<key>UILaunchStoryboardName</key>

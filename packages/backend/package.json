@@ -1,6 +1,6 @@
 {
   "name": "@idpass/data-collect-backend",
-  "version": "1.3.0",
+  "version": "2.0.0-beta.1",
   "description": "Library to support offline data capture for a beneficiary management system",
   "engines": {
     "node": ">=22.0.0"
@@ -12,6 +12,7 @@
   ],
   "scripts": {
     "test": "jest --silent",
+    "test:e2e": "jest --silent --testPathPattern=e2e",
     "dev": "nodemon",
     "clean": "rimraf dist/",
     "copy-files": "copyfiles -u 1 src/public/**/* dist && copyfiles openapi.yaml dist/",
@@ -20,22 +21,36 @@
     "api-docs": "echo 'OpenAPI spec available at http://localhost:3000/api-docs/openapi.json'",
     "validate-api": "redocly lint openapi.yaml --skip-rule=operation-4xx-response --skip-rule=no-server-example.com --skip-rule=operation-operationId --skip-rule=no-identical-paths --skip-rule=no-ambiguous-paths",
     "lint": "eslint . --config eslint.config.mjs --fix",
-    "type-check": "tsc --noEmit -p tsconfig.type-check.json"
+    "type-check": "tsc --noEmit -p tsconfig.type-check.json",
+    "rebuild-projections": "ts-node src/cli/rebuild-projections.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push"
   },
   "dependencies": {
+    "@idpass/adapter-openspp": "workspace:*",
+    "@idpass/adapter-openfn": "workspace:*",
     "@idpass/data-collect-core": "workspace:*",
     "bcrypt": "^5.1.1",
     "body-parser": "^1.20.4",
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
+    "drizzle-orm": "^0.45.1",
     "express": "^4.22.1",
+    "express-rate-limit": "^8.2.1",
+    "helmet": "^8.1.0",
+    "jose": "^6.1.3",
     "jsonwebtoken": "^9.0.3",
     "lodash": "^4.17.23",
     "multer": "1.4.5-lts.2",
     "pg": "^8.18.0",
+    "pino": "^10.3.1",
+    "pino-http": "^11.0.0",
+    "postgres": "^3.4.8",
     "qrcode": "^1.5.4",
     "uuid": "^10.0.0",
-    "yamljs": "^0.3.0"
+    "yamljs": "^0.3.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
@@ -56,6 +71,7 @@
     "@types/yamljs": "^0.2.34",
     "axios": "^1.13.5",
     "copyfiles": "^2.4.1",
+    "drizzle-kit": "^0.31.9",
     "eslint": "^9.39.2",
     "globals": "^15.15.0",
     "husky": "^9.1.7",

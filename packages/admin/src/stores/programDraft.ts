@@ -28,6 +28,7 @@ export interface EntityForm {
   name: string
   title: string
   dependsOn: string
+  entityType: '' | 'group' | 'individual' | 'record'
   formio: unknown
 }
 
@@ -46,6 +47,14 @@ export interface AuthConfig {
   fields: Record<string, string>
 }
 
+export interface SelfServiceConfig {
+  enabled: boolean
+  authMethods: string[]
+  allowedForms: string[]
+  languages: string[]
+  requireReview: boolean
+}
+
 export interface ProgramDraft {
   artifactId?: string
   name: string
@@ -54,6 +63,7 @@ export interface ProgramDraft {
   entityForms: EntityForm[]
   externalSync: ExternalSync
   authConfigs: AuthConfig[]
+  selfService: SelfServiceConfig
   /** Cached OpenSPP V2 fields for mapping UI */
   opensppV2Fields?: OpenSppV2Field[]
 }
@@ -109,6 +119,13 @@ const getEmptyDraft = (): ProgramDraft => ({
     adapterConfig: {},
   },
   authConfigs: [],
+  selfService: {
+    enabled: false,
+    authMethods: [],
+    allowedForms: [],
+    languages: [],
+    requireReview: false,
+  },
   opensppV2Fields: [],
 })
 
@@ -254,7 +271,11 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
         name: config.name || '',
         description: config.description || '',
         version: config.version || '1',
-        entityForms: config.entityForms || [],
+        entityForms: (config.entityForms || []).map((f: Record<string, unknown>) => ({
+          ...f,
+          dependsOn: f.dependsOn ?? '',
+          entityType: f.entityType ?? '',
+        })),
         externalSync: {
           type: config.externalSync?.type,
           url: config.externalSync?.url || '',
@@ -263,6 +284,15 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
           fieldMappings: config.externalSync?.fieldMappings || [],
         },
         authConfigs: config.authConfigs || [],
+        selfService: config.selfService
+          ? { languages: [], ...config.selfService }
+          : {
+              enabled: false,
+              authMethods: [],
+              allowedForms: [],
+              languages: [],
+              requireReview: false,
+            },
       }
       errors.value = getEmptyErrors()
       mode.value = 'edit'
@@ -283,7 +313,11 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
         name: (config.name || '') + ' Copy',
         description: config.description || '',
         version: config.version || '1',
-        entityForms: config.entityForms || [],
+        entityForms: (config.entityForms || []).map((f: Record<string, unknown>) => ({
+          ...f,
+          dependsOn: f.dependsOn ?? '',
+          entityType: f.entityType ?? '',
+        })),
         externalSync: {
           type: config.externalSync?.type,
           url: config.externalSync?.url || '',
@@ -292,6 +326,15 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
           fieldMappings: config.externalSync?.fieldMappings || [],
         },
         authConfigs: config.authConfigs || [],
+        selfService: config.selfService
+          ? { languages: [], ...config.selfService }
+          : {
+              enabled: false,
+              authMethods: [],
+              allowedForms: [],
+              languages: [],
+              requireReview: false,
+            },
       }
       errors.value = getEmptyErrors()
       mode.value = 'copy'
@@ -304,12 +347,17 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
   }
 
   // Validation
+  const NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 _-]*$/
+
   const validateGeneral = (): boolean => {
     errors.value.general = {}
     let valid = true
 
     if (!draft.value.name.trim()) {
       errors.value.general.name = 'Name is required'
+      valid = false
+    } else if (!NAME_PATTERN.test(draft.value.name.trim())) {
+      errors.value.general.name = 'Name must start with a letter or number and contain only letters, numbers, spaces, hyphens, and underscores'
       valid = false
     }
     if (!draft.value.description.trim()) {
@@ -486,6 +534,7 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
       name: '',
       title: '',
       dependsOn: '',
+      entityType: '',
       formio: null,
     })
   }
@@ -538,9 +587,14 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
         name: draft.value.name,
         description: draft.value.description,
         version: draft.value.version,
-        entityForms: draft.value.entityForms,
+        entityForms: draft.value.entityForms.map((form) => {
+          const { entityType, ...rest } = form
+          const withId = { id: form.name, ...rest }
+          return entityType ? { ...withId, entityType } : withId
+        }),
         externalSync: draft.value.externalSync,
         authConfigs: draft.value.authConfigs,
+        selfService: { ...draft.value.selfService },
       }
 
       const formData = new FormData()
@@ -589,6 +643,7 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
       name: form.name,
       title: form.title,
       dependsOn: form.dependsOn ?? '',
+      entityType: '',
       formio: form.formio,
     }))
     errors.value.forms = { items: {} }

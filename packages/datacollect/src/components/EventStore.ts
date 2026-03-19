@@ -19,58 +19,118 @@
 
 import CryptoJS from "crypto-js";
 import { AuditLogEntry, EventStorageAdapter, EventStore, FormSubmission, SyncLevel } from "../interfaces/types";
+import { EventUpcasterService } from "../services/EventUpcasterService";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("EventStore");
 
 /**
- * Merkle tree node for cryptographic integrity verification.
- *
- * Each node contains a SHA256 hash and references to left/right child nodes.
- * Used to build tamper-evident Merkle trees for event integrity verification.
+ * Version prefix for hash anchors using the deterministic serialization
+ * algorithm. Anchors without this prefix are from the legacy algorithm
+ * and will be migrated on the next initialization.
  *
  * @private
  */
-class MerkleNode {
-  left: MerkleNode | null = null;
-  right: MerkleNode | null = null;
-  hash: string;
+const HASH_V2_PREFIX = "v2:";
 
-  constructor(data: string) {
-    this.hash = this.calculateHash(data);
-  }
-
-  private calculateHash(data: string): string {
-    return CryptoJS.SHA256(data).toString(CryptoJS.enc.Hex);
-  }
+/**
+ * Computes a SHA256 hash of the given data string.
+ *
+ * @private
+ */
+function sha256(data: string): string {
+  return CryptoJS.SHA256(data).toString(CryptoJS.enc.Hex);
 }
 
 /**
- * Event store implementation providing tamper-evident event sourcing with Merkle tree integrity.
+ * Produces deterministic JSON serialization by sorting object keys recursively.
+ *
+ * PostgreSQL JSONB does not preserve object key insertion order. When events
+ * are saved, the `data` field has a specific key order in JavaScript, but
+ * JSONB may reorder keys internally. Since standard JSON.stringify depends
+ * on insertion order, the serialized string differs between save-time and
+ * read-time, breaking the hash chain. This function ensures the same output
+ * regardless of key insertion order.
+ *
+ * @private
+ */
+function deterministicStringify(value: unknown): string {
+  if (value === null || value === undefined) {
+    return JSON.stringify(value);
+  }
+  if (typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return "[" + value.map((item) => deterministicStringify(item)).join(",") + "]";
+  }
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj).sort();
+  const parts = keys.map((key) => JSON.stringify(key) + ":" + deterministicStringify(obj[key]));
+  return "{" + parts.join(",") + "}";
+}
+
+/**
+ * Extracts only the canonical FormSubmission fields from an event for hashing.
+ * Storage adapters may add extra fields (e.g., IndexedDB auto-increment `id`),
+ * which must be excluded to keep the hash chain consistent between save-time
+ * and verification-time.
+ *
+ * Timestamps are normalized to canonical ISO 8601 format to prevent
+ * precision differences across storage backends from breaking the chain.
+ *
+ * @private
+ */
+function normalizeEventForHash(event: FormSubmission): FormSubmission {
+  // Normalize timestamp to canonical ISO 8601 when possible. Fall back to the
+  // original string for non-standard timestamps (e.g. Unix epoch strings used
+  // in tests) to avoid breaking the hash chain.
+  let normalizedTimestamp = event.timestamp;
+  const parsed = new Date(event.timestamp);
+  if (!isNaN(parsed.getTime())) {
+    normalizedTimestamp = parsed.toISOString();
+  }
+
+  const normalized: FormSubmission = {
+    guid: event.guid,
+    entityGuid: event.entityGuid,
+    type: event.type,
+    data: event.data,
+    timestamp: normalizedTimestamp,
+    userId: event.userId,
+    syncLevel: event.syncLevel,
+  };
+  if (event.schemaVersion !== undefined) {
+    normalized.schemaVersion = event.schemaVersion;
+  }
+  return normalized;
+}
+
+/**
+ * Event store implementation providing tamper-evident event sourcing with hash chain integrity.
  *
  * The EventStoreImpl is the core component for managing immutable event storage with cryptographic
- * integrity verification. It implements complete event sourcing capabilities including audit trails,
- * Merkle tree verification, and sync timestamp management.
+ * integrity verification. It uses an incremental hash chain where each event's hash includes the
+ * previous event's hash, providing O(1) append and O(n) full verification.
  *
  * Key features:
  * - **Immutable Event Storage**: All events are stored as immutable records.
- * - **Merkle Tree Integrity**: Cryptographic verification of event integrity using SHA256.
+ * - **Hash Chain Integrity**: Each event hash includes the previous event's hash for tamper detection.
  * - **Audit Trail Management**: Complete audit logging for compliance and debugging.
  * - **Sync Coordination**: Timestamp tracking for multiple sync operations.
- * - **Event Verification**: Merkle proof generation and verification.
  * - **Pagination Support**: Efficient handling of large event datasets.
  * - **Tamper Detection**: Cryptographic detection of unauthorized modifications.
  *
  * Architecture:
  * - Uses pluggable storage adapters for different persistence backends.
- * - Maintains in-memory Merkle tree for fast integrity verification.
+ * - Maintains the latest hash in the chain in memory for O(1) verification.
  * - Implements event sourcing patterns with append-only semantics.
- * - Provides both sync and async operations for different use cases.
  * - Supports multiple sync levels (LOCAL, REMOTE, EXTERNAL).
  *
  * @example
  * Basic usage:
  * ```typescript
- * const eventStore = new EventStoreImpl(
- *   storageAdapter
- * );
+ * const eventStore = new EventStoreImpl(storageAdapter);
  *
  * await eventStore.initialize();
  *
@@ -86,87 +146,38 @@ class MerkleNode {
  * });
  *
  * // Verify integrity
- * const merkleRoot = eventStore.getMerkleRoot();
- * console.log('Current Merkle root:', merkleRoot);
- * ```
- *
- * @example
- * Event verification with Merkle proofs:
- * ```typescript
- * // Get proof for an event
- * const proof = await eventStore.getProof(event);
- *
- * // Verify event integrity
- * const isValid = eventStore.verifyEvent(event, proof);
- * if (isValid) {
- *   console.log('Event integrity verified');
- * } else {
- *   console.error('Event has been tampered with!');
- * }
- * ```
- *
- * @example
- * Audit trail management:
- * ```typescript
- * // Log audit entry
- * await eventStore.logAuditEntry({
- *   guid: 'audit-123',
- *   timestamp: new Date().toISOString(),
- *   userId: 'user-456',
- *   action: 'create-individual',
- *   eventGuid: 'event-789',
- *   entityGuid: 'person-101',
- *   changes: { name: 'John Doe' },
- *   signature: 'sha256:...'
- * });
- *
- * // Get audit trail for entity
- * const auditTrail = await eventStore.getAuditTrailByEntityGuid('person-101');
- * auditTrail.forEach(entry => {
- *   console.log(`${entry.timestamp}: ${entry.action} by ${entry.userId}`);
- * });
+ * const isValid = await eventStore.verifyHashChain();
  * ```
  *
  * @example
  * Sync operations:
  * ```typescript
- * // Check for events since last sync
  * const lastSync = await eventStore.getLastRemoteSyncTimestamp();
  * const newEvents = await eventStore.getEventsSince(lastSync);
  *
  * if (newEvents.length > 0) {
- *   console.log(`${newEvents.length} events to sync`);
- *
- *   // Process sync...
- *
- *   // Update sync timestamp
  *   await eventStore.setLastRemoteSyncTimestamp(new Date().toISOString());
  * }
  * ```
  */
 export class EventStoreImpl implements EventStore {
-  private merkleRoot: MerkleNode | null = null;
+  /** The latest hash in the event hash chain */
+  private latestHash: string = "";
   private storageAdapter: EventStorageAdapter;
-  private logger = console;
+  /** Optional service for stamping events with the current schema version */
+  private upcasterService?: EventUpcasterService;
+  /** Promise queue to serialize saveEvent calls and prevent concurrent hash chain corruption */
+  private saveQueue: Promise<void> = Promise.resolve();
 
   /**
    * Creates a new EventStoreImpl instance.
    *
    * @param storageAdapter Storage adapter for persistence (IndexedDB, PostgreSQL, etc.).
-   *
-   * @example
-   * ```typescript
-   * // With IndexedDB for browser
-   * const indexedDbAdapter = new IndexedDbEventStorageAdapter('tenant-123');
-   * const browserEventStore = new EventStoreImpl(indexedDbAdapter);
-   *
-   * // With PostgreSQL for server
-   * const postgresAdapter = new PostgresEventStorageAdapter(connectionString, 'tenant-123');
-   * const serverEventStore = new EventStoreImpl(postgresAdapter);
-   * ```
+   * @param upcasterService Optional upcaster service. When provided, saved events are stamped with the current schema version for their event type.
    */
-  constructor(storageAdapter: EventStorageAdapter) {
+  constructor(storageAdapter: EventStorageAdapter, upcasterService?: EventUpcasterService) {
     this.storageAdapter = storageAdapter;
+    this.upcasterService = upcasterService;
   }
 
   /**
@@ -189,94 +200,95 @@ export class EventStoreImpl implements EventStore {
   }
 
   /**
-   * Initializes the event store and loads the Merkle tree for integrity verification.
+   * Initializes the event store and computes the hash chain from existing events.
    *
    * @returns A Promise that resolves when the store is initialized.
    * @throws {Error} When storage initialization fails.
-   *
-   * @example
-   * ```typescript
-   * const eventStore = new EventStoreImpl(storageAdapter);
-   *
-   * try {
-   *   await eventStore.initialize();
-   *   console.log('Event store ready');
-   * } catch (error) {
-   *   console.error('Failed to initialize event store:', error);
-   * }
-   * ```
    */
   async initialize(): Promise<void> {
     await this.storageAdapter.initialize();
-    await this.loadMerkleTree();
-  }
 
-  private async loadMerkleTree(): Promise<void> {
-    const events = await this.storageAdapter.getEvents();
-    const persistedRoot = await this.storageAdapter.getMerkleRoot();
-    const recalculatedRoot = this.updateMerkleTree(events);
+    // Compare persisted hash anchor vs recomputed hash to detect tampering.
+    // Only flag tampering when there are actual events and both hashes are
+    // non-empty — an empty store or a first-run store will have no anchor yet.
+    const rawAnchor = await this.storageAdapter.getPersistedHashAnchor();
+    await this.rebuildHashChain();
 
-    if (persistedRoot && persistedRoot !== recalculatedRoot) {
-      this.logger.warn(
-        "Merkle root mismatch detected. Recalculating to preserve integrity.",
-      );
+    if (rawAnchor !== null && rawAnchor !== "" && this.latestHash !== "") {
+      if (rawAnchor.startsWith(HASH_V2_PREFIX)) {
+        // Current algorithm — strict tamper check
+        const persistedHash = rawAnchor.slice(HASH_V2_PREFIX.length);
+        if (persistedHash !== this.latestHash) {
+          log.error(
+            { persistedHash, recomputedHash: this.latestHash },
+            "Hash chain tamper detected: persisted anchor does not match recomputed hash",
+          );
+          throw new Error("Event store integrity check failed: hash chain has been tampered with");
+        }
+      } else {
+        // Legacy anchor (no version prefix) — the old algorithm used non-deterministic
+        // JSON.stringify which breaks on PostgreSQL JSONB key reordering. Migrate
+        // gracefully by re-persisting with the deterministic algorithm.
+        log.info("Migrating hash anchor from legacy format to deterministic v2 algorithm");
+      }
     }
 
-    if (persistedRoot !== recalculatedRoot) {
-      await this.storageAdapter.saveMerkleRoot(recalculatedRoot);
+    // Persist the current hash anchor with version prefix so future restarts
+    // can detect tampering using the deterministic algorithm.
+    if (this.latestHash !== "") {
+      await this.storageAdapter.persistHashAnchor(HASH_V2_PREFIX + this.latestHash);
     }
-  }
-
-  private updateMerkleTree(events: FormSubmission[]): string {
-    const leaves = events.map((event) => new MerkleNode(JSON.stringify(event)));
-    this.merkleRoot = this.buildMerkleTree(leaves);
-    return this.getMerkleRoot();
-  }
-
-  private buildMerkleTree(nodes: MerkleNode[]): MerkleNode | null {
-    if (nodes.length === 0) return null;
-    if (nodes.length === 1) return nodes[0];
-
-    const parents: MerkleNode[] = [];
-    for (let i = 0; i < nodes.length; i += 2) {
-      const left = nodes[i];
-      const right = i + 1 < nodes.length ? nodes[i + 1] : null;
-      const parent = new MerkleNode(left.hash + (right ? right.hash : ""));
-      parent.left = left;
-      parent.right = right;
-      parents.push(parent);
-    }
-
-    return this.buildMerkleTree(parents);
   }
 
   /**
-   * Saves an event and updates the Merkle tree for integrity verification.
+   * Rebuilds the hash chain from all events in storage.
+   * Called on initialization to compute the latest hash.
+   */
+  private async rebuildHashChain(): Promise<void> {
+    const events = await this.storageAdapter.getEvents();
+    let hash = "";
+    for (const event of events) {
+      hash = sha256(hash + deterministicStringify(normalizeEventForHash(event)));
+    }
+    this.latestHash = hash;
+  }
+
+  /**
+   * Computes the next hash in the chain for a given event.
+   */
+  private computeNextHash(event: FormSubmission): string {
+    return sha256(this.latestHash + deterministicStringify(normalizeEventForHash(event)));
+  }
+
+  /**
+   * Saves an event and extends the hash chain.
    *
    * @param form Form submission/event to save.
    * @returns Unique identifier for the saved event.
    * @throws {Error} When event storage fails.
-   *
-   * @example
-   * ```typescript
-   * const eventId = await eventStore.saveEvent({
-   *   guid: 'event-123',
-   *   entityGuid: 'person-456',
-   *   type: 'create-individual',
-   *   data: { name: 'John Doe', age: 30 },
-   *   timestamp: new Date().toISOString(),
-   *   userId: 'user-789',
-   *   syncLevel: SyncLevel.LOCAL
-   * });
-   *
-   * console.log('Event saved with ID:', eventId);
-   * ```
    */
   async saveEvent(form: FormSubmission): Promise<string> {
-    const guids = await this.storageAdapter.saveEvents([form]);
-    await this.loadMerkleTree();
-
-    return guids[0];
+    // Serialize save operations through a promise queue to prevent concurrent
+    // hash chain corruption when multiple saveEvent calls overlap.
+    const resultPromise = new Promise<string>((resolve, reject) => {
+      this.saveQueue = this.saveQueue.then(async () => {
+        try {
+          // Clone form to avoid mutating the caller's reference
+          const formToSave = { ...form };
+          // Stamp the event with the current schema version when an upcaster service is available
+          if (this.upcasterService && formToSave.schemaVersion === undefined) {
+            formToSave.schemaVersion = this.upcasterService.getCurrentVersion(formToSave.type);
+          }
+          const guids = await this.storageAdapter.saveEvents([formToSave]);
+          this.latestHash = this.computeNextHash(formToSave);
+          await this.storageAdapter.persistHashAnchor(HASH_V2_PREFIX + this.latestHash);
+          resolve(guids[0]);
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+    return resultPromise;
   }
 
   /**
@@ -308,103 +320,32 @@ export class EventStoreImpl implements EventStore {
   }
 
   /**
-   * Gets the current Merkle tree root hash for integrity verification.
+   * Gets the latest hash in the hash chain for integrity verification.
    *
-   * The root hash represents the cryptographic fingerprint of all events
-   * in the store. Any modification to any event will change this hash.
+   * The hash represents the cryptographic fingerprint of all events in the store.
+   * Any modification to any event will cause the chain to break.
    *
-   * @returns SHA256 hash of the Merkle tree root, or empty string if no events.
-   *
-   * @example
-   * ```typescript
-   * const rootHash = eventStore.getMerkleRoot();
-   * console.log('Current integrity hash:', rootHash);
-   *
-   * // Store this hash for later verification
-   * const storedHash = rootHash;
-   *
-   * // Later, after potential tampering...
-   * const currentHash = eventStore.getMerkleRoot();
-   * if (currentHash !== storedHash) {
-   *   console.error('Data integrity compromised!');
-   * }
-   * ```
+   * @returns SHA256 hash of the latest chain link, or empty string if no events.
    */
-  getMerkleRoot(): string {
-    return this.merkleRoot ? this.merkleRoot.hash : "";
+  getLatestHash(): string {
+    return this.latestHash;
   }
 
   /**
-   * Verifies an event's integrity using a Merkle proof.
+   * Verifies the integrity of the entire event hash chain.
    *
-   * This method cryptographically verifies that an event has not been tampered
-   * with by checking its Merkle proof against the current root hash.
+   * Walks through all events and recomputes the hash chain from scratch.
+   * If the recomputed hash matches the stored latest hash, the chain is intact.
    *
-   * @param event Event to verify.
-   * @param proof Merkle proof path (array of sibling hashes).
-   * @returns `true` if event is authentic and untampered, `false` otherwise.
-   *
-   * @example
-   * ```typescript
-   * // Get proof for an event
-   * const proof = await eventStore.getProof(suspiciousEvent);
-   *
-   * // Verify the event
-   * const isValid = eventStore.verifyEvent(suspiciousEvent, proof);
-   *
-   * if (isValid) {
-   *   console.log('Event integrity verified - data is authentic');
-   * } else {
-   *   console.error('Event verification failed - possible tampering detected!');
-   *   // Take appropriate security measures
-   * }
-   * ```
+   * @returns `true` if the chain is intact, `false` if tampering is detected.
    */
-  verifyEvent(event: FormSubmission, proof: string[]): boolean {
-    const leaf = this.hashEvent(event);
-    let computedHash = leaf;
-
-    for (const proofElement of proof) {
-      if (computedHash < proofElement) {
-        computedHash = this.hashPair(computedHash, proofElement);
-      } else {
-        computedHash = this.hashPair(proofElement, computedHash);
-      }
-    }
-
-    return computedHash === this.getMerkleRoot();
-  }
-
-  /**
-   * Retrieves the Merkle tree proof for a specific event.
-   *
-   * @param event The event to get the proof for.
-   * @returns An array of sibling hashes forming the Merkle proof.
-   */
-  async getProof(event: FormSubmission): Promise<string[]> {
+  async verifyHashChain(): Promise<boolean> {
     const events = await this.storageAdapter.getEvents();
-    const leaf = this.hashEvent(event);
-    const index = events.findIndex((e) => this.hashEvent(e) === leaf);
-    if (index === -1) return [];
-
-    const proof: string[] = [];
-    let nodeIndex = index;
-    let levelSize = events.length;
-
-    while (levelSize > 1) {
-      const isRightNode = nodeIndex % 2 === 1;
-      const siblingIndex = isRightNode ? nodeIndex - 1 : nodeIndex + 1;
-
-      if (siblingIndex < levelSize) {
-        const siblingHash = this.hashEvent(events[siblingIndex]);
-        proof.push(siblingHash);
-      }
-
-      nodeIndex = Math.floor(nodeIndex / 2);
-      levelSize = Math.ceil(levelSize / 2);
+    let hash = "";
+    for (const event of events) {
+      hash = sha256(hash + deterministicStringify(normalizeEventForHash(event)));
     }
-
-    return proof;
+    return hash === this.latestHash;
   }
 
   /**
@@ -427,14 +368,6 @@ export class EventStoreImpl implements EventStore {
     await this.storageAdapter.saveAuditLog(entries);
   }
 
-  private hashEvent(event: FormSubmission): string {
-    return CryptoJS.SHA256(JSON.stringify(event)).toString(CryptoJS.enc.Hex);
-  }
-
-  private hashPair(left: string, right: string): string {
-    return CryptoJS.SHA256(left + right).toString(CryptoJS.enc.Hex);
-  }
-
   /**
    * Clears all data from the store (for testing).
    *
@@ -442,8 +375,7 @@ export class EventStoreImpl implements EventStore {
    */
   async clearStore(): Promise<void> {
     await this.storageAdapter.clearStore();
-    this.merkleRoot = null;
-    await this.storageAdapter.saveMerkleRoot("");
+    this.latestHash = "";
   }
 
   /**

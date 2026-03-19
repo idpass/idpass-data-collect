@@ -18,11 +18,55 @@
  */
 
 import { Router } from "express";
+import { URL } from "url";
 import { authenticateJWT } from "../middlewares/authentication";
 import { AppError, asyncHandler } from "../middlewares/errorHandlers";
 import multer from "multer";
+import path from "path";
 import fs from "fs/promises";
+// @ts-expect-error OdooClient was moved to @idpass/adapter-openspp; needs dependency wiring
 import { OdooClient } from "@idpass/data-collect-core";
+
+/**
+ * Checks whether a URL targets a private/internal IP range or cloud metadata endpoint.
+ * Used to prevent SSRF attacks via the /fetch endpoint.
+ */
+function isPrivateOrMetadataUrl(urlString: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(urlString);
+  } catch {
+    return true; // Invalid URLs are blocked
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+
+  // Block cloud metadata endpoints
+  if (hostname === "169.254.169.254" || hostname === "metadata.google.internal") {
+    return true;
+  }
+
+  // Block localhost
+  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]") {
+    return true;
+  }
+
+  // Block private IP ranges
+  const ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4Match) {
+    const [, a, b] = ipv4Match.map(Number);
+    // 10.0.0.0/8
+    if (a === 10) return true;
+    // 172.16.0.0/12
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    // 192.168.0.0/16
+    if (a === 192 && b === 168) return true;
+    // 0.0.0.0
+    if (a === 0) return true;
+  }
+
+  return false;
+}
 
 export interface ParsedOpenSppField {
   name: string;
@@ -175,13 +219,16 @@ export function createOpenSppFieldRoutes(): Router {
   const router = Router();
 
   // Configure multer for JSON file uploads
+  const uploadDir = path.resolve(process.cwd(), "uploads");
   const upload = multer({
     storage: multer.diskStorage({
-      destination: "./uploads",
+      destination: uploadDir,
       filename: (req, file, cb) => {
-        cb(null, `openspp-${Date.now()}-${file.originalname}`);
+        const sanitized = path.basename(file.originalname).replace(/[^a-zA-Z0-9._-]/g, "_");
+        cb(null, `openspp-${Date.now()}-${sanitized}`);
       },
     }),
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
     fileFilter: (req, file, cb) => {
       if (file.mimetype === "application/json" || file.originalname.endsWith(".json")) {
         cb(null, true);
@@ -326,6 +373,10 @@ export function createOpenSppFieldRoutes(): Router {
 
       if (!url || !database || !username || !password) {
         throw new AppError("URL, database, username, and password are required", 400);
+      }
+
+      if (isPrivateOrMetadataUrl(url)) {
+        throw new AppError("URLs targeting private or internal networks are not allowed", 400);
       }
 
       try {

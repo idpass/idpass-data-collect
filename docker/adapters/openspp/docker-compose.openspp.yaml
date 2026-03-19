@@ -64,12 +64,11 @@ services:
     networks:
       - datacollect-network-dev
     environment:
-      # Additional environment variables for OpenSPP integration
-      - EXTERNAL_SYNC_ENABLED=true
-      - OPENSPP_URL=http://openspp:8069
-      - OPENSPP_DB=odoo
-      - OPENSPP_USERNAME=admin
-      - OPENSPP_PASSWORD=admin
+      - EXTERNAL_SYNC_ENABLED=${EXTERNAL_SYNC_ENABLED:-true}
+      - OPENSPP_URL=${OPENSPP_URL:-http://openspp:8069}
+      - OPENSPP_DB=${OPENSPP_DB:-odoo}
+      - OPENSPP_USERNAME=${OPENSPP_USERNAME}
+      - OPENSPP_PASSWORD=${OPENSPP_PASSWORD}
 
   # Admin UI - Development mode
   admin-ui:
@@ -124,7 +123,7 @@ services:
         - action: rebuild
           path: ../../../pnpm-lock.yaml
     environment:
-      - VITE_DB_ENCRYPTION_PASSWORD=password
+      - VITE_DB_ENCRYPTION_PASSWORD=${VITE_DB_ENCRYPTION_PASSWORD}
       - VITE_DEVELOP=true
       - VITE_DEBUG=true
       - VITE_FEATURE_DYNAMIC=true

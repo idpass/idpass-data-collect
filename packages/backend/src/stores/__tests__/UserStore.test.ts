@@ -44,10 +44,12 @@ describeIfPostgres("UserStore", () => {
   });
 
   afterEach(async () => {
+    if (!adapter) return;
     await adapter.clearStore();
   });
 
   afterAll(async () => {
+    if (!adapter) return;
     await adapter.clearStore();
     await adapter.closeConnection();
   });
@@ -82,6 +84,8 @@ describeIfPostgres("UserStore", () => {
       email: "test2@example.com",
       passwordHash: "newPassword",
       role: Role.ADMIN,
+      tenantIds: [],
+      roleAssignments: [],
     };
 
     await adapter.updateUser(updatedUser);
@@ -158,11 +162,15 @@ describeIfPostgres("UserStore", () => {
       id: expect.any(Number),
       email: user1.email,
       role: user1.role,
+      tenantIds: [],
+      roleAssignments: [],
     });
     expect(allUsers).toContainEqual({
       id: expect.any(Number),
       email: user2.email,
       role: user2.role,
+      tenantIds: [],
+      roleAssignments: [],
     });
   });
 });

@@ -31,6 +31,8 @@ export enum EntityType {
   Individual = "individual",
   /** Group/household containing multiple individuals */
   Group = "group",
+  /** Activity record (training, referral, home visit, assistance, etc.) */
+  Record = "record",
 }
 
 /**
@@ -69,6 +71,8 @@ export interface EntityDoc {
   data: Record<string, any>;
   /** ISO timestamp of last modification */
   lastUpdated: string;
+  /** Multiple typed identifiers per entity (national ID, UNHCR ID, etc.) */
+  identifiers?: IdentifierRecord[];
 }
 
 /**
@@ -91,8 +95,8 @@ export interface EntityDoc {
 export interface EntityPair {
   /** Global unique identifier for the entity */
   guid: string;
-  /** Entity state when first loaded or last synced */
-  initial: EntityDoc;
+  /** Entity state when first loaded or last synced (null for entities not yet synced) */
+  initial: EntityDoc | null;
   /** Current entity state with any local modifications */
   modified: EntityDoc;
 }
@@ -137,6 +141,8 @@ export interface GroupDoc extends EntityDoc {
   type: EntityType.Group;
   /** Array of entity GUIDs that are members of this group */
   memberIds: string[];
+  /** Typed membership records (replaces flat memberIds for rich membership data) */
+  membershipRecords?: MembershipRecord[];
 }
 
 /**
@@ -156,6 +162,18 @@ export interface GroupDoc extends EntityDoc {
  */
 export interface IndividualDoc extends EntityDoc {
   type: EntityType.Individual;
+}
+
+/**
+ * Activity record entity (training, referral, home visit, assistance, etc.).
+ *
+ * Records are entities that capture activities or services linked to
+ * an individual or group, but are not themselves people or households.
+ */
+export interface RecordDoc extends EntityDoc {
+  type: EntityType.Record;
+  /** GUID of the parent entity this record belongs to (optional) */
+  parentEntityGuid?: string;
 }
 
 /**
@@ -217,6 +235,8 @@ export interface FormSubmission {
   userId: string;
   /** Current synchronization level of this event */
   syncLevel: SyncLevel;
+  /** Schema version of the event data for upcasting support. Undefined treated as version 1. */
+  schemaVersion?: number;
 }
 
 /**
@@ -273,12 +293,10 @@ export interface EventStore {
   getEvents(): Promise<FormSubmission[]>;
   /** Get all events in the store */
   getAllEvents(): Promise<FormSubmission[]>;
-  /** Get the current Merkle tree root hash for integrity verification */
-  getMerkleRoot(): string;
-  /** Verify an event using Merkle tree proof */
-  verifyEvent(event: FormSubmission, proof: string[]): boolean;
-  /** Get Merkle tree proof for an event */
-  getProof(form: FormSubmission): Promise<string[]>;
+  /** Get the latest hash in the hash chain for integrity verification */
+  getLatestHash(): string;
+  /** Verify the integrity of the entire event hash chain */
+  verifyHashChain(): Promise<boolean>;
   /** Log a single audit entry */
   logAuditEntry(entry: AuditLogEntry): Promise<void>;
   /** Save multiple audit log entries */
@@ -344,10 +362,6 @@ export interface EventStorageAdapter {
   saveAuditLog(entries: AuditLogEntry[]): Promise<void>;
   /** Get all audit log entries */
   getAuditLog(): Promise<AuditLogEntry[]>;
-  /** Save Merkle tree root hash */
-  saveMerkleRoot(root: string): Promise<void>;
-  /** Get current Merkle tree root hash */
-  getMerkleRoot(): Promise<string>;
   /** Update the sync level of an event */
   updateEventSyncLevel(id: string, syncLevel: SyncLevel): Promise<void>;
   /** Update the sync level of an audit log entry */
@@ -390,6 +404,10 @@ export interface EventStorageAdapter {
   clearStore(): Promise<void>;
   /** Close database connections and cleanup resources */
   closeConnection(): Promise<void>;
+  /** Persist the latest hash anchor for tamper detection on restart */
+  persistHashAnchor(hash: string): Promise<void>;
+  /** Retrieve the previously persisted hash anchor, or null if none exists */
+  getPersistedHashAnchor(): Promise<string | null>;
 }
 
 /**
@@ -437,19 +455,6 @@ export interface EventApplier {
 }
 
 /**
- * Encryption adapter interface for data protection.
- *
- * Provides encryption capabilities for sensitive data fields.
- * Currently not fully implemented (data parameter is 'never').
- */
-export interface EncryptionAdapter {
-  /** Encrypt data (not implemented) */
-  encrypt(data: never): Promise<string>;
-  /** Decrypt encrypted data */
-  decrypt(data: string): Promise<unknown>;
-}
-
-/**
  * Export/import manager interface for data portability.
  *
  * Enables exporting all entity and event data for backup, migration,
@@ -494,8 +499,8 @@ export type SearchCriteria = Record<string, any>[];
 export interface EntityStore {
   /** Initialize the entity store (create tables, indexes, etc.) */
   initialize(): Promise<void>;
-  /** Save entity with both initial and current state */
-  saveEntity(initial: EntityDoc, modified: EntityDoc): Promise<void>;
+  /** Save entity with both initial and current state (initial is null for entities not yet synced) */
+  saveEntity(initial: EntityDoc | null, modified: EntityDoc): Promise<void>;
   /** Get entity by internal ID */
   getEntity(id: string): Promise<EntityPair | null>;
   /** Get entity by external system ID */
@@ -556,6 +561,21 @@ export interface EntityStorageAdapter {
 }
 
 /**
+ * Shared abstraction over Drizzle's database and transaction objects.
+ *
+ * Both the full database connection and transaction objects expose an
+ * `execute` method for running raw SQL and a `transaction` method for
+ * nesting transactions. Typing adapter methods against this interface
+ * lets them accept either a full DB or a transaction handle, which is
+ * required for callers that need to coordinate writes across multiple
+ * adapters inside a single transaction.
+ */
+export type DrizzleQueryExecutor = {
+  execute: (query: unknown) => Promise<unknown>;
+  transaction: <T>(fn: (tx: DrizzleQueryExecutor) => Promise<T>) => Promise<T>;
+};
+
+/**
  * Sync adapter interface for external system synchronization.
  *
  * Provides integration with external systems for bi-directional data sync.
@@ -600,16 +620,14 @@ export interface SyncStatus {
 }
 
 /**
- * Merkle tree storage interface for data integrity verification.
+ * Hash chain storage interface for data integrity verification.
+ * Replaced the Merkle tree approach with an incremental hash chain
+ * for O(1) append and simpler implementation.
  */
-export interface MerkleTreeStorage {
-  /** Initialize the Merkle tree storage */
+export interface HashChainStorage {
+  /** Initialize the hash chain storage */
   initialize(): Promise<void>;
-  /** Save the root hash of the Merkle tree */
-  saveRootHash(hash: string): Promise<void>;
-  /** Get the current root hash */
-  getRootHash(): Promise<string>;
-  /** Clear the Merkle tree storage */
+  /** Clear the hash chain storage */
   clearStore(): Promise<void>;
   /** Close storage connections */
   closeConnection(): Promise<void>;
@@ -644,6 +662,80 @@ export interface Conflict {
  * };
  * ```
  */
+/**
+ * Represents a membership record linking an individual to a group.
+ * Replaces the flat `memberIds: string[]` array with typed metadata.
+ */
+export interface MembershipRecord {
+  /** GUID of the individual member */
+  individualGuid: string;
+  /** Membership type codes (e.g., "head", "spouse", "child") */
+  membershipTypes: string[];
+  /** ISO date when membership started */
+  startDate: string;
+  /** ISO date when membership ended (null = ongoing) */
+  endDate: string | null;
+}
+
+/**
+ * Represents a typed identifier for an entity.
+ * Supports multiple IDs per entity (national ID, UNHCR ID, etc.).
+ */
+export interface IdentifierRecord {
+  /** Identifier type code (e.g., "national-id", "unhcr-id") */
+  type: string;
+  /** The identifier value */
+  value: string;
+  /** ISO date when the identifier expires (null = no expiry) */
+  expiryDate: string | null;
+}
+
+/**
+ * RBAC role identifiers for the DataCollect system.
+ */
+export enum SystemRole {
+  /** Can create and update entities in assigned areas */
+  ENUMERATOR = "enumerator",
+  /** Can review submissions and see all data in assigned areas */
+  SUPERVISOR = "supervisor",
+  /** Can manage users and configure the program */
+  PROGRAM_ADMIN = "program-admin",
+  /** Can manage programs and tenants (replaces current admin role) */
+  SYSTEM_ADMIN = "system-admin",
+  /** Read-only access to assigned data */
+  VIEWER = "viewer",
+}
+
+/**
+ * Represents a user's role assignment within a program and area scope.
+ */
+export interface UserRoleAssignment {
+  /** User identifier */
+  userId: string;
+  /** Program identifier */
+  programId: string;
+  /** Role assigned to the user */
+  role: SystemRole;
+  /** Area codes the user is assigned to (empty = all areas) */
+  areaCodes: string[];
+  /** Whether this is a local (area-restricted) or global role */
+  isGlobal: boolean;
+}
+
+/**
+ * Represents a hierarchical geographic area (HDX admin boundary aligned).
+ */
+export interface Area {
+  /** Unique area code (HDX p-code, e.g., "KH0101") */
+  code: string;
+  /** Human-readable area name */
+  name: string;
+  /** Area type/admin level (e.g., "admin0", "admin1", "admin2") */
+  type: string;
+  /** Parent area code (null = top-level) */
+  parentCode: string | null;
+}
+
 export type ExternalSyncField = { name: string; value: string };
 
 /**
@@ -880,4 +972,54 @@ export interface SingleAuthStorage {
   getToken(): Promise<string>;
   setToken(token: string): Promise<void>;
   removeToken(): Promise<void>;
+}
+
+/**
+ * Metadata for a file attachment associated with an entity.
+ *
+ * Tracks filename, MIME type, content hash for integrity verification,
+ * and sync status for offline-first upload workflows.
+ */
+export interface AttachmentMetadata {
+  /** Unique identifier for this attachment */
+  guid: string;
+  /** GUID of the entity this attachment belongs to */
+  entityGuid: string;
+  /** Original filename */
+  filename: string;
+  /** MIME type of the file (e.g., "image/jpeg", "application/pdf") */
+  mimeType: string;
+  /** File size in bytes */
+  sizeBytes: number;
+  /** SHA-256 hash of the file content for integrity verification */
+  hash: string;
+  /** ISO timestamp when the attachment was created */
+  createdAt: string;
+  /** Sync status: pending (not uploaded), uploaded (synced), failed (upload error) */
+  syncStatus: "pending" | "uploaded" | "failed";
+  /** Tenant identifier for multi-tenant isolation */
+  tenantId: string;
+}
+
+/**
+ * Storage interface for file attachments.
+ *
+ * Provides CRUD operations for attachment metadata and binary data,
+ * along with sync-related queries for offline-first upload workflows.
+ */
+export interface AttachmentStore {
+  /** Save attachment metadata and binary data */
+  saveAttachment(metadata: AttachmentMetadata, data: ArrayBuffer): Promise<void>;
+  /** Get attachment metadata and binary data by GUID */
+  getAttachment(guid: string): Promise<{ metadata: AttachmentMetadata; data: ArrayBuffer } | null>;
+  /** Get only the metadata for an attachment (without loading binary data) */
+  getAttachmentMetadata(guid: string): Promise<AttachmentMetadata | null>;
+  /** List all attachments for a specific entity */
+  listAttachments(entityGuid: string): Promise<AttachmentMetadata[]>;
+  /** Delete an attachment and its binary data */
+  deleteAttachment(guid: string): Promise<void>;
+  /** Get all attachments with 'pending' sync status for a tenant */
+  getPendingAttachments(tenantId: string): Promise<AttachmentMetadata[]>;
+  /** Update the sync status of an attachment */
+  updateSyncStatus(guid: string, status: AttachmentMetadata["syncStatus"]): Promise<void>;
 }

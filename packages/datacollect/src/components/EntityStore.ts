@@ -228,7 +228,7 @@ export class EntityStoreImpl implements EntityStore {
    * await entityStore.saveEntity(newEntity, modifiedEntity); // Keep original initial state
    * ```
    */
-  async saveEntity(initial: EntityDoc, modified: EntityDoc): Promise<void> {
+  async saveEntity(initial: EntityDoc | null, modified: EntityDoc): Promise<void> {
     await this.entityStorageAdapter.saveEntity({ guid: modified.guid, initial, modified });
   }
 

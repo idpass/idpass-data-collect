@@ -194,6 +194,10 @@ const developerSidebarItems = [
         type: "doc",
         id: "getting-started/tutorials",
       },
+      {
+        type: "doc",
+        id: "getting-started/migration-v2",
+      },
     ],
   },
   {
@@ -412,6 +416,10 @@ const developerSidebarItems = [
         items: [
           {
             type: "doc",
+            id: "adapters/adapter-registry",
+          },
+          {
+            type: "doc",
             id: "adapters/openspp-adapter",
           },
           {
@@ -466,6 +474,26 @@ const userSidebarItems = [
       {
         type: "doc",
         id: "user-guide/mobile-app",
+      },
+    ],
+  },
+  {
+    type: "category",
+    label: "Web App",
+    items: [
+      {
+        type: "doc",
+        id: "user-guide/web-app",
+      },
+    ],
+  },
+  {
+    type: "category",
+    label: "Workflows",
+    items: [
+      {
+        type: "doc",
+        id: "user-guide/review-workflow",
       },
     ],
   },

@@ -21,7 +21,7 @@
  * Normalizes a legacy [id, label] tuple format to just the ID value.
  * This is used when pulling data from OpenSPP to ensure consistent storage format.
  *
- * @param value - The value to normalize (could be [id, label], {"id": 0, "display_name": ""}, or already normalized)
+ * @param value - The value to normalize (could be `[id, label]`, `{"id": 0, "display_name": ""}`, or already normalized)
  * @returns The normalized ID value, or the original value if it's not a legacy format
  */
 export function normalizeLegacyRelationField(value: unknown): unknown {

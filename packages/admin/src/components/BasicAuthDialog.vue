@@ -1,5 +1,5 @@
 <template>
-  <v-dialog v-model="dialog" max-width="500px">
+  <v-dialog v-model="dialog" :max-width="400">
     <v-card>
       <v-card-title class="text-h5"> {{ title }} </v-card-title>
       <v-card-subtitle> {{ description }} </v-card-subtitle>

@@ -614,7 +614,7 @@ const toggleRowExpansion = (index: number) => {
 
 <style scoped>
 .mapping-step {
-  max-width: 1000px;
+  max-width: 900px;
   margin: 0 auto;
 }
 

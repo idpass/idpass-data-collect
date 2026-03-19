@@ -88,7 +88,7 @@ const handleOAuthCallback = async () => {
     authError.value = ''
 
     // Extract app ID from callback URL using the auth manager utility
-    let { appId } = authManager.getTemporaryOAuthData()
+    let { appId } = await authManager.getTemporaryOAuthData()
     // Fallback: try route query parameters
     if (!appId) {
       throw new Error('App ID not found in callback URL. Cannot process authentication.')

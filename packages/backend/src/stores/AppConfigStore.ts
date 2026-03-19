@@ -19,15 +19,46 @@
 
 import { randomBytes } from "crypto";
 import { Pool } from "pg";
+import { eq, isNull, sql } from "drizzle-orm";
+import { drizzle, NodePgDatabase } from "drizzle-orm/node-postgres";
 import { AppConfig, AppConfigStore } from "../types";
+import { appConfigs } from "../db/schema";
+
+type DrizzleDb = NodePgDatabase<Record<string, never>>;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AppConfigRow = Record<string, any>;
+
+/**
+ * Maps a Drizzle row result to an AppConfig object.
+ * Preserves null values from the database for backwards compatibility with existing tests.
+ */
+function mapRowToAppConfig(row: AppConfigRow, artifactId: string): AppConfig {
+  return {
+    id: row.id,
+    artifactId,
+    name: row.name,
+    description: row.description,
+    version: row.version,
+    url: row.url,
+    entityForms: row.entityForms,
+    entityData: row.entityData,
+    externalSync: row.externalSync,
+    authConfigs: row.authConfigs,
+    selfService: row.selfService ?? undefined,
+    archivedAt: row.archivedAt ?? null,
+  } as AppConfig;
+}
 
 export class AppConfigStoreImpl implements AppConfigStore {
   private pool: Pool;
+  private db: DrizzleDb;
 
   constructor(connectionString: string) {
     this.pool = new Pool({
       connectionString,
     });
+    this.db = drizzle(this.pool);
   }
 
   async initialize(): Promise<void> {
@@ -49,29 +80,23 @@ export class AppConfigStoreImpl implements AppConfigStore {
     try {
       await this.pool.query(createTableQuery);
       await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS artifact_id TEXT`);
+      await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS self_service JSONB`);
+      await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP`);
     } catch (error) {
       throw new Error(`Failed to initialize database: ${error}`);
     }
   }
 
-  async getConfigs(): Promise<AppConfig[]> {
-    const query = "SELECT * FROM app_configs";
-
+  async getConfigs(includeArchived = false): Promise<AppConfig[]> {
     try {
-      const result = await this.pool.query(query);
+      const query = includeArchived
+        ? this.db.select().from(appConfigs)
+        : this.db.select().from(appConfigs).where(isNull(appConfigs.archivedAt));
+      const result = await query;
       return Promise.all(
-        result.rows.map(async (row) => ({
-          id: row.id,
-          artifactId: await this.ensureArtifactId(row.id, row.artifact_id),
-          name: row.name,
-          description: row.description,
-          version: row.version,
-          url: row.url,
-          entityForms: row.entity_forms,
-          entityData: row.entity_data,
-          externalSync: row.external_sync,
-          authConfigs: row.auth_configs,
-        })),
+        result.map(async (row) =>
+          mapRowToAppConfig(row, await this.ensureArtifactId(row.id, row.artifactId)),
+        ),
       );
     } catch (error) {
       throw new Error(`Failed to get configs: ${error}`);
@@ -79,28 +104,15 @@ export class AppConfigStoreImpl implements AppConfigStore {
   }
 
   async getConfig(id: string): Promise<AppConfig> {
-    const query = "SELECT * FROM app_configs WHERE id = $1";
-
     try {
-      const result = await this.pool.query(query, [id]);
+      const result = await this.db.select().from(appConfigs).where(eq(appConfigs.id, id));
 
-      if (result.rows.length === 0) {
+      if (result.length === 0) {
         throw new Error(`Config with id ${id} not found`);
       }
 
-      const row = result.rows[0];
-      return {
-        id: row.id,
-        artifactId: await this.ensureArtifactId(row.id, row.artifact_id),
-        name: row.name,
-        description: row.description,
-        version: row.version,
-        url: row.url,
-        entityForms: row.entity_forms,
-        entityData: row.entity_data,
-        externalSync: row.external_sync,
-        authConfigs: row.auth_configs,
-      };
+      const row = result[0];
+      return mapRowToAppConfig(row, await this.ensureArtifactId(row.id, row.artifactId));
     } catch (error) {
       if (error instanceof Error && error.message.includes("not found")) {
         throw error;
@@ -110,28 +122,18 @@ export class AppConfigStoreImpl implements AppConfigStore {
   }
 
   async getConfigByArtifactId(artifactId: string): Promise<AppConfig> {
-    const query = "SELECT * FROM app_configs WHERE artifact_id = $1";
-
     try {
-      const result = await this.pool.query(query, [artifactId]);
+      const result = await this.db
+        .select()
+        .from(appConfigs)
+        .where(eq(appConfigs.artifactId, artifactId));
 
-      if (result.rows.length === 0) {
+      if (result.length === 0) {
         throw new Error(`Config with artifact id ${artifactId} not found`);
       }
 
-      const row = result.rows[0];
-      return {
-        id: row.id,
-        artifactId: await this.ensureArtifactId(row.id, row.artifact_id),
-        name: row.name,
-        description: row.description,
-        version: row.version,
-        url: row.url,
-        entityForms: row.entity_forms,
-        entityData: row.entity_data,
-        externalSync: row.external_sync,
-        authConfigs: row.auth_configs,
-      };
+      const row = result[0];
+      return mapRowToAppConfig(row, await this.ensureArtifactId(row.id, row.artifactId));
     } catch (error) {
       if (error instanceof Error && error.message.includes("not found")) {
         throw error;
@@ -141,56 +143,78 @@ export class AppConfigStoreImpl implements AppConfigStore {
   }
 
   async saveConfig(config: AppConfig): Promise<void> {
-    const query = `
-      INSERT INTO app_configs (
-        id, artifact_id, name, description, version, url, entity_forms, entity_data, external_sync, auth_configs
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      ON CONFLICT (id) DO UPDATE SET
-        artifact_id = EXCLUDED.artifact_id,
-        name = EXCLUDED.name,
-        description = EXCLUDED.description,
-        version = EXCLUDED.version,
-        url = EXCLUDED.url,
-        entity_forms = EXCLUDED.entity_forms,
-        entity_data = EXCLUDED.entity_data,
-        external_sync = EXCLUDED.external_sync,
-        auth_configs = EXCLUDED.auth_configs
-    `;
-
     try {
       const artifactId = await this.ensureArtifactId(config.id, config.artifactId);
-      await this.pool.query(query, [
-        config.id || undefined,
+      const values = {
+        id: config.id,
         artifactId,
-        config.name,
-        config.description,
-        config.version,
-        config.url,
-        JSON.stringify(config.entityForms),
-        JSON.stringify(config.entityData),
-        config.externalSync,
-        JSON.stringify(config.authConfigs),
-      ]);
+        name: config.name,
+        description: config.description ?? null,
+        version: config.version ?? null,
+        url: config.url ?? null,
+        entityForms: JSON.stringify(config.entityForms),
+        entityData: JSON.stringify(config.entityData),
+        externalSync: config.externalSync ?? null,
+        authConfigs: JSON.stringify(config.authConfigs),
+        selfService: config.selfService ? JSON.stringify(config.selfService) : null,
+      };
+      await this.db
+        .insert(appConfigs)
+        .values(values)
+        .onConflictDoUpdate({
+          target: appConfigs.id,
+          set: {
+            artifactId,
+            name: config.name,
+            description: config.description ?? null,
+            version: config.version ?? null,
+            url: config.url ?? null,
+            entityForms: JSON.stringify(config.entityForms),
+            entityData: JSON.stringify(config.entityData),
+            externalSync: config.externalSync ?? null,
+            authConfigs: JSON.stringify(config.authConfigs),
+            selfService: config.selfService ? JSON.stringify(config.selfService) : null,
+            archivedAt: null,
+          },
+        });
     } catch (error) {
       throw new Error(`Failed to save config: ${error}`);
     }
   }
 
-  async deleteConfig(id: string): Promise<void> {
-    const query = "DELETE FROM app_configs WHERE id = $1";
-
+  async archiveConfig(id: string): Promise<void> {
     try {
-      await this.pool.query(query, [id]);
+      await this.db
+        .update(appConfigs)
+        .set({ archivedAt: new Date() })
+        .where(eq(appConfigs.id, id));
+    } catch (error) {
+      throw new Error(`Failed to archive config: ${error}`);
+    }
+  }
+
+  async restoreConfig(id: string): Promise<void> {
+    try {
+      await this.db
+        .update(appConfigs)
+        .set({ archivedAt: null })
+        .where(eq(appConfigs.id, id));
+    } catch (error) {
+      throw new Error(`Failed to restore config: ${error}`);
+    }
+  }
+
+  async deleteConfig(id: string): Promise<void> {
+    try {
+      await this.db.delete(appConfigs).where(eq(appConfigs.id, id));
     } catch (error) {
       throw new Error(`Failed to delete config: ${error}`);
     }
   }
 
   async clearStore(): Promise<void> {
-    const query = "TRUNCATE TABLE app_configs CASCADE";
-
     try {
-      await this.pool.query(query);
+      await this.db.execute(sql`TRUNCATE TABLE app_configs CASCADE`);
     } catch (error) {
       throw new Error(`Failed to clear store: ${error}`);
     }
@@ -210,7 +234,10 @@ export class AppConfigStoreImpl implements AppConfigStore {
     }
 
     const generated = randomBytes(16).toString("hex");
-    await this.pool.query("UPDATE app_configs SET artifact_id = $1 WHERE id = $2", [generated, id]);
+    await this.db
+      .update(appConfigs)
+      .set({ artifactId: generated })
+      .where(eq(appConfigs.id, id));
     return generated;
   }
 }

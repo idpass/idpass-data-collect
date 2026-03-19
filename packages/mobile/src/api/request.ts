@@ -41,7 +41,7 @@ export async function request<TResponse>(params: RequestParams, accessToken?: st
       method,
       headers,
       body: json ? JSON.stringify(json) : formData,
-      credentials: 'include'
+      credentials: 'omit'
     })
   )
 

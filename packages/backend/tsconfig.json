@@ -18,7 +18,9 @@
     "baseUrl": "./",
     "paths": {
       "@idpass/data-collect-core": ["../datacollect/dist/types/index.d.ts"],
-      "@idpass/data-collect-core/*": ["../datacollect/dist/types/*"]
+      "@idpass/data-collect-core/*": ["../datacollect/dist/types/*"],
+      "@idpass/adapter-openspp": ["../adapter-openspp/dist/adapter-openspp/src/index.d.ts"],
+      "@idpass/adapter-openfn": ["../adapter-openfn/dist/adapter-openfn/src/index.d.ts"]
     }
   },
   "include": ["src/**/*.ts"],

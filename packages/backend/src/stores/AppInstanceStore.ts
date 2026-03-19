@@ -27,6 +27,7 @@ import {
   ExternalSyncManager,
   SyncLevel,
   AuthManager,
+  FormClassifier,
 } from "@idpass/data-collect-core";
 import { v4 as uuidv4 } from "uuid";
 import { AppConfigStore, AppInstance, AppInstanceStore } from "../types";
@@ -86,6 +87,7 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
     );
     this.instances[configId] = {
       configId,
+      config,
       edm: manager,
     };
     return this.instances[configId];
@@ -106,22 +108,69 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
     if (!config.entityData) {
       return;
     }
+
+    // Classify all forms using the centralized topology algorithm
+    const formByName = new Map((config.entityForms || []).map((f) => [f.name || f.id, f]));
+    const formDefs = (config.entityForms || []).map((f) => ({
+      name: f.name || f.id,
+      dependsOn: f.dependsOn,
+      entityType: f.entityType,
+    }));
+    const classifications = FormClassifier.classifyAll(formDefs);
+
+    // Pass 1: top-level entities (groups AND standalone individuals without dependsOn)
     for (const entityData of config.entityData) {
+      const classification = classifications.get(entityData.name);
+      const form = formByName.get(entityData.name);
+      if (!classification || form?.dependsOn) continue;
       for (const item of entityData.data) {
         await manager.submitForm({
           guid: uuidv4(),
           entityGuid: item?.id || uuidv4(),
-          type: "create-individual",
-          data: {
-            ...item,
-            entityName: entityData.name,
-            parentGuid: item.parentId || undefined,
-            name: item?.name || item?.id,
-          },
+          type: classification.createEventType,
+          data: { ...item, entityName: entityData.name, name: item?.name || item?.id },
           timestamp: new Date().toISOString(),
           userId: "admin",
           syncLevel: SyncLevel.REMOTE,
         });
+      }
+    }
+
+    // Pass 2: dependent entities (those with dependsOn)
+    for (const entityData of config.entityData) {
+      const classification = classifications.get(entityData.name);
+      const form = formByName.get(entityData.name);
+      if (!classification || !form?.dependsOn) continue;
+
+      const isEntityForm = classification.category === "entity";
+
+      for (const item of entityData.data) {
+        const entityGuid = item?.id || uuidv4();
+        await manager.submitForm({
+          guid: uuidv4(),
+          entityGuid,
+          type: classification.createEventType,
+          data: { ...item, entityName: entityData.name, name: item?.name || item?.id },
+          timestamp: new Date().toISOString(),
+          userId: "admin",
+          syncLevel: SyncLevel.REMOTE,
+        });
+
+        // Link to parent group only if this form is an entity-creating form
+        // and the parent is a group. Record forms are not linked as members.
+        if (item.parentId && classification.parentIsGroup && isEntityForm) {
+          await manager.submitForm({
+            guid: uuidv4(),
+            entityGuid: item.parentId,
+            type: "add-member",
+            data: {
+              members: [{ guid: entityGuid, name: item?.name || item?.id, type: "individual" }],
+            },
+            timestamp: new Date().toISOString(),
+            userId: "admin",
+            syncLevel: SyncLevel.REMOTE,
+          });
+        }
       }
     }
   }

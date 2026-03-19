@@ -51,11 +51,13 @@ describeIfPostgres("AppConfigStore", () => {
   });
 
   afterEach(async () => {
+    if (!adapter) return;
     await adapter.initialize();
     await adapter.clearStore();
   });
 
   afterAll(async () => {
+    if (!adapter) return;
     await adapter.initialize();
     await adapter.clearStore();
     await adapter.closeConnection();
@@ -186,18 +188,30 @@ describeIfPostgres("AppConfigStore", () => {
     });
   });
 
-  describe("deleteConfig", () => {
-    it("should delete an existing config", async () => {
+  describe("archiveConfig", () => {
+    it("should archive an existing config", async () => {
       await adapter.saveConfig(mockConfig);
       const configs = await adapter.getConfigs();
       const savedConfig = configs[0];
 
-      await adapter.deleteConfig(savedConfig.id);
-      await expect(adapter.getConfig(savedConfig.id)).rejects.toThrow(`Config with id ${savedConfig.id} not found`);
+      await adapter.archiveConfig(savedConfig.id);
+
+      // Archived config should be excluded from list
+      const activeConfigs = await adapter.getConfigs();
+      expect(activeConfigs).toHaveLength(0);
+
+      // But still accessible by direct ID lookup
+      const config = await adapter.getConfig(savedConfig.id);
+      expect(config.id).toBe(savedConfig.id);
+      expect(config.archivedAt).toBeTruthy();
+
+      // And included when listing with includeArchived
+      const allConfigs = await adapter.getConfigs(true);
+      expect(allConfigs).toHaveLength(1);
     });
 
-    it("should not throw when deleting non-existent config", async () => {
-      await expect(adapter.deleteConfig("non-existent-id")).resolves.not.toThrow();
+    it("should not throw when archiving non-existent config", async () => {
+      await expect(adapter.archiveConfig("non-existent-id")).resolves.not.toThrow();
     });
   });
 
@@ -225,7 +239,7 @@ describeIfPostgres("AppConfigStore", () => {
       await pool.query("DROP TABLE IF EXISTS app_configs");
 
       // Create a new adapter and initialize
-      const newAdapter = new AppConfigStoreImpl(process.env.POSTGRES_TEST || "");
+      const newAdapter = new AppConfigStoreImpl(getConnectionString());
       await newAdapter.initialize();
 
       // Try to save a config to verify table exists

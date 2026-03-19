@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, computed, inject, onMounted, onBeforeUnmount } from 'vue'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
+import type { RouteLocationNormalized, NavigationGuardNext } from 'vue-router'
 import { useProgramDraftStore } from '@/stores/programDraft'
 import { useSnackBarStore } from '@/stores/snackBar'
 
@@ -16,6 +17,12 @@ const builderIframe = ref<HTMLIFrameElement | null>(null)
 const iframeSrc = '/formio-builder.html'
 const schema = ref<unknown>(null)
 let schemaUpdateResolver: ((value: object) => void) | null = null
+
+// Register actions with the wizard topbar via provide/inject
+const designerActions = inject<{ save: (() => void) | null; cancel: (() => void) | null }>(
+  'designerActions',
+  { save: null, cancel: null }
+)
 
 // Message handler for iframe communication
 const messageHandler = (event: MessageEvent) => {
@@ -60,18 +67,6 @@ const isValidOrigin = (origin: string) => {
   return origin === window.location.origin
 }
 
-onMounted(() => {
-  window.addEventListener('message', messageHandler)
-  // Initialize schema from existing form
-  if (entityForm.value?.formio) {
-    schema.value = entityForm.value.formio
-  }
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('message', messageHandler)
-})
-
 const saveAndGoBack = async () => {
   // Request the latest schema from the iframe before saving
   if (builderIframe.value && builderIframe.value.contentWindow) {
@@ -100,43 +95,99 @@ const saveAndGoBack = async () => {
     snackBarStore.showSnackbar('Form design saved', 'success')
   }
 
+  skipGuard.value = true
   router.push({ name: 'wizard-forms' })
 }
 
+// Unsaved changes guard
+const showLeaveDialog = ref(false)
+let pendingNavigation: (() => void) | null = null
+const skipGuard = ref(false)
+
 const cancel = () => {
-  router.push({ name: 'wizard-forms' })
+  showLeaveDialog.value = true
+  pendingNavigation = () => router.push({ name: 'wizard-forms' })
 }
+
+const confirmLeave = () => {
+  showLeaveDialog.value = false
+  skipGuard.value = true
+  if (pendingNavigation) {
+    pendingNavigation()
+    pendingNavigation = null
+  }
+}
+
+const confirmSaveAndLeave = async () => {
+  showLeaveDialog.value = false
+  skipGuard.value = true
+  await saveAndGoBack()
+}
+
+const cancelLeave = () => {
+  showLeaveDialog.value = false
+  pendingNavigation = null
+}
+
+onBeforeRouteLeave(
+  (_to: RouteLocationNormalized, _from: RouteLocationNormalized, next: NavigationGuardNext) => {
+    if (skipGuard.value) {
+      skipGuard.value = false
+      next()
+      return
+    }
+    // Intercept and show confirmation
+    showLeaveDialog.value = true
+    pendingNavigation = () => {
+      skipGuard.value = true
+      next()
+    }
+    next(false)
+  }
+)
+
+onMounted(() => {
+  window.addEventListener('message', messageHandler)
+  // Initialize schema from existing form
+  if (entityForm.value?.formio) {
+    schema.value = entityForm.value.formio
+  }
+  // Register actions with parent wizard topbar
+  designerActions.save = saveAndGoBack
+  designerActions.cancel = cancel
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('message', messageHandler)
+  // Unregister actions
+  designerActions.save = null
+  designerActions.cancel = null
+})
 </script>
 
 <template>
   <div class="form-designer">
-    <!-- Header -->
-    <div class="designer-header">
-      <div class="designer-header__info">
-        <v-btn icon="mdi-arrow-left" variant="text" size="small" @click="cancel" />
-        <div>
-          <h2>{{ entityForm?.title || entityForm?.name || 'Form Designer' }}</h2>
-          <p>Design the form fields for this entity</p>
-        </div>
-      </div>
-      <div class="designer-header__actions">
-        <v-btn variant="text" @click="cancel">Cancel</v-btn>
-        <v-btn color="primary" @click="saveAndGoBack">
-          <v-icon start icon="mdi-content-save" />
-          Save Form Design
-        </v-btn>
-      </div>
-    </div>
+    <iframe
+      ref="builderIframe"
+      :src="iframeSrc"
+      frameborder="0"
+      class="form-builder-iframe"
+    />
 
-    <!-- Form Builder iframe -->
-    <div class="designer-content">
-      <iframe
-        ref="builderIframe"
-        :src="iframeSrc"
-        frameborder="0"
-        class="form-builder-iframe"
-      />
-    </div>
+    <v-dialog v-model="showLeaveDialog" :max-width="400" persistent>
+      <v-card>
+        <v-card-title class="text-h6">Unsaved Changes</v-card-title>
+        <v-card-text>
+          <p>You have unsaved changes to the form design. What would you like to do?</p>
+        </v-card-text>
+        <v-card-actions>
+          <v-btn variant="text" @click="cancelLeave">Keep Editing</v-btn>
+          <v-spacer />
+          <v-btn variant="text" color="error" @click="confirmLeave">Discard</v-btn>
+          <v-btn color="primary" variant="tonal" @click="confirmSaveAndLeave">Save & Exit</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -144,51 +195,11 @@ const cancel = () => {
 .form-designer {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 180px);
-  min-height: 500px;
-  margin: calc(-1 * var(--spacing-md)) calc(-1 * var(--spacing-lg)) calc(-1 * var(--spacing-lg));
-}
-
-.designer-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--spacing-md) var(--spacing-lg);
-  border-bottom: 1px solid var(--border-light);
-  background: var(--surface);
-}
-
-.designer-header__info {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-}
-
-.designer-header__info h2 {
-  font-size: var(--font-size-base);
-  font-weight: 600;
-  margin: 0;
-  color: var(--text-main);
-}
-
-.designer-header__info p {
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
-  margin: 0;
-}
-
-.designer-header__actions {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-}
-
-.designer-content {
-  flex: 1;
-  overflow: hidden;
+  height: 100%;
 }
 
 .form-builder-iframe {
+  flex: 1;
   width: 100%;
   height: 100%;
   border: none;
