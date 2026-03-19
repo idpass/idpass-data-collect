@@ -31,7 +31,7 @@ const onFieldBlur = (_field: 'name' | 'description' | 'version') => {
           @blur="onFieldBlur('name')"
         />
         <p class="form-hint">
-          This name will be displayed in the program list and used to identify your collection program.
+          Only letters, numbers, spaces, hyphens, and underscores are accepted. Must start with a letter or number.
         </p>
       </div>
 

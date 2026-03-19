@@ -41,6 +41,11 @@ interface StepDef {
   validate: () => boolean
 }
 
+const needsFieldMapping = computed(() => {
+  const type = draftStore.draft.externalSync?.type
+  return type === 'openspp-v1-adapter' || type === 'openspp-v2-adapter'
+})
+
 const steps = computed<StepDef[]>(() => [
   {
     id: 'general',
@@ -63,13 +68,17 @@ const steps = computed<StepDef[]>(() => [
     route: 'wizard-forms',
     validate: () => draftStore.stepValidation.forms,
   },
-  {
-    id: 'mapping',
-    title: 'Field Mapping',
-    icon: 'mdi-link-variant',
-    route: 'wizard-mapping',
-    validate: () => draftStore.stepValidation.mapping,
-  },
+  ...(needsFieldMapping.value
+    ? [
+        {
+          id: 'mapping',
+          title: 'Field Mapping',
+          icon: 'mdi-link-variant',
+          route: 'wizard-mapping',
+          validate: () => draftStore.stepValidation.mapping,
+        },
+      ]
+    : []),
   {
     id: 'auth',
     title: 'Authentication',

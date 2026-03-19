@@ -8,6 +8,8 @@ import {
   getApps,
 } from '@/api'
 import type { AppListItem } from '@/api'
+import { useSnackBarStore } from '@/stores/snackBar'
+import { AxiosError } from 'axios'
 
 interface UserRecord {
   id: string
@@ -16,6 +18,8 @@ interface UserRecord {
   tenantIds?: string[]
   roleAssignments?: Array<{ tenantId: string; role: string; areaId?: string }>
 }
+
+const snackBarStore = useSnackBarStore()
 
 // State
 const loading = ref(false)
@@ -77,7 +81,8 @@ const fetchUsers = async () => {
     const response = await getUsersApi()
     users.value = response as UserRecord[]
   } catch (error) {
-    console.error('Error fetching users:', error)
+    const msg = error instanceof AxiosError ? error.response?.data?.error || error.message : 'Failed to load users'
+    snackBarStore.showSnackbar(msg, 'error')
   } finally {
     loading.value = false
   }
@@ -114,8 +119,10 @@ const deleteUser = async () => {
     await deleteUserApi(editedItem.id)
     users.value.splice(editedIndex.value, 1)
     showDeleteDialog.value = false
+    snackBarStore.showSnackbar('User deleted', 'success')
   } catch (error) {
-    console.error('Error deleting user:', error)
+    const msg = error instanceof AxiosError ? error.response?.data?.error || error.message : 'Failed to delete user'
+    snackBarStore.showSnackbar(msg, 'error')
   }
 }
 
@@ -137,6 +144,7 @@ const removeRoleAssignment = (index: number) => {
 }
 
 const saveUser = async () => {
+  const isEditing = editedIndex.value > -1
   try {
     if (editedIndex.value > -1) {
       // Update existing user
@@ -162,8 +170,10 @@ const saveUser = async () => {
       users.value.push({ ...editedItem })
     }
     closeDialog()
+    snackBarStore.showSnackbar(isEditing ? 'User updated' : 'User created', 'success')
   } catch (error) {
-    console.error('Error saving user:', error)
+    const msg = error instanceof AxiosError ? error.response?.data?.error || error.message : 'Failed to save user'
+    snackBarStore.showSnackbar(msg, 'error')
   }
 }
 

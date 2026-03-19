@@ -128,9 +128,15 @@ watch(sortOrder, () => {
   fetchApps()
 })
 
-watch(searchTerm, () => {
+watch(searchTerm, (newVal) => {
   if (searchDebounce) {
     clearTimeout(searchDebounce)
+  }
+  if (newVal === null) {
+    searchTerm.value = ''
+    page.value = 1
+    fetchApps()
+    return
   }
   searchDebounce = setTimeout(() => {
     page.value = 1
