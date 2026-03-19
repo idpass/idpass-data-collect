@@ -112,6 +112,8 @@ function createMockAppConfigStore(configs: AppConfig[] = [TEST_TENANT_CONFIG]): 
     }),
     getConfigByArtifactId: jest.fn(),
     saveConfig: jest.fn(),
+    archiveConfig: jest.fn(),
+    restoreConfig: jest.fn(),
     deleteConfig: jest.fn(),
     clearStore: jest.fn(),
     closeConnection: jest.fn(),

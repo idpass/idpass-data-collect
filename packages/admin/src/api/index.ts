@@ -75,6 +75,7 @@ export interface AppListParams {
   sortBy?: 'name' | 'id' | 'entitiesCount'
   sortOrder?: 'asc' | 'desc'
   search?: string
+  includeArchived?: boolean
 }
 
 export interface AppListItem {
@@ -85,6 +86,7 @@ export interface AppListItem {
   entitiesCount: number
   externalSync: Record<string, string>
   description: string
+  archivedAt?: string | null
 }
 
 export interface AppListMeta {
@@ -124,8 +126,18 @@ export const updateApp = async (id: string, formData: FormData) => {
   return response.data
 }
 
-export const deleteApp = async (id: string) => {
+export const archiveApp = async (id: string) => {
   const response = await api().delete(`${APPS_URL}/${id}`)
+  return response.data
+}
+
+export const restoreApp = async (id: string) => {
+  const response = await api().post(`${APPS_URL}/${id}/restore`)
+  return response.data
+}
+
+export const purgeApp = async (id: string) => {
+  const response = await api().delete(`${APPS_URL}/${id}/purge`)
   return response.data
 }
 

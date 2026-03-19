@@ -188,18 +188,30 @@ describeIfPostgres("AppConfigStore", () => {
     });
   });
 
-  describe("deleteConfig", () => {
-    it("should delete an existing config", async () => {
+  describe("archiveConfig", () => {
+    it("should archive an existing config", async () => {
       await adapter.saveConfig(mockConfig);
       const configs = await adapter.getConfigs();
       const savedConfig = configs[0];
 
-      await adapter.deleteConfig(savedConfig.id);
-      await expect(adapter.getConfig(savedConfig.id)).rejects.toThrow(`Config with id ${savedConfig.id} not found`);
+      await adapter.archiveConfig(savedConfig.id);
+
+      // Archived config should be excluded from list
+      const activeConfigs = await adapter.getConfigs();
+      expect(activeConfigs).toHaveLength(0);
+
+      // But still accessible by direct ID lookup
+      const config = await adapter.getConfig(savedConfig.id);
+      expect(config.id).toBe(savedConfig.id);
+      expect(config.archivedAt).toBeTruthy();
+
+      // And included when listing with includeArchived
+      const allConfigs = await adapter.getConfigs(true);
+      expect(allConfigs).toHaveLength(1);
     });
 
-    it("should not throw when deleting non-existent config", async () => {
-      await expect(adapter.deleteConfig("non-existent-id")).resolves.not.toThrow();
+    it("should not throw when archiving non-existent config", async () => {
+      await expect(adapter.archiveConfig("non-existent-id")).resolves.not.toThrow();
     });
   });
 

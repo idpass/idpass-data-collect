@@ -129,6 +129,7 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
         sortBy = "name",
         sortOrder = "asc",
         search,
+        includeArchived,
       } = req.query;
 
       const pageNumber = Math.max(parseInt(page as string, 10) || 1, 1);
@@ -137,7 +138,7 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
       const order = typeof sortOrder === "string" && sortOrder.toLowerCase() === "desc" ? "desc" : "asc";
       const searchTerm = typeof search === "string" ? search.trim().toLowerCase() : "";
 
-      const appConfigs = await appConfigStore.getConfigs();
+      const appConfigs = await appConfigStore.getConfigs(includeArchived === "true");
 
       const appsWithCounts = await Promise.all(
         appConfigs.map(async (config) => {
@@ -152,6 +153,7 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
             externalSync: config.externalSync || {},
             entitiesCount: entities?.length || 0,
             description: config.description || "",
+            archivedAt: config.archivedAt || null,
           };
         }),
       );
@@ -372,25 +374,44 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
     "/:id",
     adminAuth,
     asyncHandler(async (req, res) => {
-      // get body
       const { id } = req.params;
-      let artifactId: string | undefined;
-      try {
-        const config = await appConfigStore.getConfig(id);
-        artifactId = config.artifactId;
-      } catch (error) {
-        if (!(error instanceof Error) || !error.message.includes("not found")) {
-          throw error;
-        }
-      }
-
-      await appConfigStore.deleteConfig(id);
-      await appInstanceStore.clearAppInstance(id);
-      await deletePublicArtifacts(artifactId);
-
+      await appConfigStore.archiveConfig(id);
       res.json({ status: "success" });
     }),
   );
+
+  // Restore an archived config
+  router.post(
+    "/:id/restore",
+    adminAuth,
+    asyncHandler(async (req, res) => {
+      const { id } = req.params;
+      await appConfigStore.restoreConfig(id);
+      res.json({ status: "success" });
+    }),
+  );
+
+  // Hard delete — development only, for cleaning up test programs
+  if (process.env.NODE_ENV !== "production") {
+    router.delete(
+      "/:id/purge",
+      adminAuth,
+      asyncHandler(async (req, res) => {
+        const { id } = req.params;
+        let artifactId: string | undefined;
+        try {
+          const config = await appConfigStore.getConfig(id);
+          artifactId = config.artifactId;
+        } catch {
+          // Config may already be archived; try to delete by id directly
+        }
+        await appConfigStore.deleteConfig(id);
+        await appInstanceStore.clearAppInstance(id);
+        await deletePublicArtifacts(artifactId);
+        res.json({ status: "success", warning: "Program permanently deleted. This endpoint is for development only." });
+      }),
+    );
+  }
 
   async function deletePublicArtifacts(artifactId?: string) {
     if (!artifactId) {
