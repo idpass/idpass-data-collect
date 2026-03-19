@@ -84,13 +84,10 @@ const removeAuthConfig = (index: number) => {
 
         <div class="auth-config-body">
           <div class="form-section">
-            <label class="form-label">
-              Authentication Type
-              <span class="required">*</span>
-            </label>
             <v-select
               v-model="draftStore.draft.authConfigs[index].type"
               :items="authTypeOptions"
+              label="Authentication Type *"
               placeholder="Select authentication type"
               :error-messages="draftStore.errors.auth[index]?.type"
               variant="outlined"
@@ -100,8 +97,7 @@ const removeAuthConfig = (index: number) => {
 
           <div class="form-section">
             <label class="form-label">
-              Configuration Fields
-              <span class="required">*</span>
+              Configuration Fields *
             </label>
             <p class="form-hint mb-3">
               Add the required configuration fields for your authentication provider (e.g., domain,
@@ -263,18 +259,13 @@ const removeAuthConfig = (index: number) => {
 .form-section {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
 }
 
 .form-label {
   font-weight: 500;
   font-size: var(--font-size-sm);
   color: var(--text-main);
-}
-
-.form-label .required {
-  color: var(--status-danger);
-  margin-left: 2px;
+  margin-bottom: var(--spacing-xs);
 }
 
 .form-hint {

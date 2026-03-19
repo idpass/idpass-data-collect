@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, reactive, provide, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useProgramDraftStore } from '@/stores/programDraft'
 import { useSnackBarStore } from '@/stores/snackBar'
@@ -114,14 +114,19 @@ const pageTitle = computed(() => {
 
 const getStepStatus = (step: StepDef, index: number): 'complete' | 'current' | 'error' | 'pending' => {
   if (index === currentStepIndex.value) return 'current'
-  // Check if step has been visited and has errors
   if (index < currentStepIndex.value) {
     return step.validate() ? 'complete' : 'error'
   }
   return 'pending'
 }
 
-const navigateToStep = (step: StepDef) => {
+const canNavigateToStep = (_step: StepDef, index: number): boolean => {
+  // Can always go back to completed/errored steps, but never skip forward
+  return index <= currentStepIndex.value
+}
+
+const navigateToStep = (step: StepDef, index: number) => {
+  if (!canNavigateToStep(step, index)) return
   router.push({ name: step.route })
 }
 
@@ -132,12 +137,11 @@ const goBack = () => {
 
 const goToPreviousStep = () => {
   if (currentStepIndex.value > 0) {
-    navigateToStep(steps.value[currentStepIndex.value - 1])
+    navigateToStep(steps.value[currentStepIndex.value - 1], currentStepIndex.value - 1)
   }
 }
 
 const goToNextStep = () => {
-  // Validate current step before proceeding
   const step = currentStep.value
   let isValid = true
 
@@ -159,13 +163,30 @@ const goToNextStep = () => {
   }
 
   if (currentStepIndex.value < steps.value.length - 1) {
-    navigateToStep(steps.value[currentStepIndex.value + 1])
+    // Bypass canNavigateToStep — Continue is the legitimate way to advance
+    router.push({ name: steps.value[currentStepIndex.value + 1].route })
   }
 }
 
 const canGoBack = computed(() => currentStepIndex.value > 0)
 const canGoNext = computed(() => currentStepIndex.value < steps.value.length - 1)
 const isReviewStep = computed(() => currentStep.value?.id === 'review')
+const isFormDesignerOpen = computed(() => route.name === 'wizard-form-design')
+
+// Form designer integration — child component registers its actions here
+const designerActions = reactive<{
+  save: (() => void) | null
+  cancel: (() => void) | null
+}>({ save: null, cancel: null })
+
+provide('designerActions', designerActions)
+
+const designerFormName = computed(() => {
+  if (!isFormDesignerOpen.value) return ''
+  const idx = parseInt(route.params.formIndex as string, 10)
+  const form = draftStore.draft.entityForms[idx]
+  return form?.title || form?.name || 'Form Designer'
+})
 
 // Auto-save indicator
 const lastSavedText = computed(() => {
@@ -175,86 +196,135 @@ const lastSavedText = computed(() => {
   if (diff < 60000) return 'Saved a moment ago'
   return `Saved at ${draftStore.lastSavedAt.toLocaleTimeString()}`
 })
+
+// Small screen advisory
+const dismissedSmallScreenNotice = ref(false)
 </script>
 
 <template>
   <div class="wizard-layout">
-    <!-- Compact Header Bar -->
-    <div class="wizard-topbar">
-      <v-btn variant="text" size="small" prepend-icon="mdi-arrow-left" @click="goBack">
-        Programs
-      </v-btn>
-      <div class="wizard-topbar__center">
-        <span class="wizard-topbar__title">{{ pageTitle }}</span>
-        <!-- Horizontal Step Indicator -->
-        <div class="wizard-steps-inline">
-          <template v-for="(step, index) in steps" :key="step.id">
-            <div
-              :class="['step-dot', `step-dot--${getStepStatus(step, index)}`]"
-              @click="navigateToStep(step)"
-              :title="step.title"
-            >
-              <v-icon
-                v-if="getStepStatus(step, index) === 'complete'"
-                icon="mdi-check"
-                size="12"
-              />
-              <v-icon
-                v-else-if="getStepStatus(step, index) === 'error'"
-                icon="mdi-alert"
-                size="12"
-              />
-              <span v-else class="step-dot__number">{{ index + 1 }}</span>
-            </div>
-            <div v-if="index < steps.length - 1" class="step-connector" />
-          </template>
-        </div>
-      </div>
-      <div class="wizard-topbar__right">
-        <span v-if="lastSavedText" class="wizard-topbar__saved">
-          <v-icon size="14" icon="mdi-cloud-check" />
-          {{ lastSavedText }}
-        </span>
-      </div>
+    <!-- Small screen advisory -->
+    <div v-if="!dismissedSmallScreenNotice" class="small-screen-notice">
+      <v-icon icon="mdi-monitor" size="20" />
+      <p>
+        The program wizard is designed for desktop use.
+        For the best experience, please use a computer. If on a tablet, try landscape orientation.
+      </p>
+      <v-btn
+        icon="mdi-close"
+        variant="text"
+        size="x-small"
+        @click="dismissedSmallScreenNotice = true"
+      />
     </div>
 
-    <!-- Main Content Area -->
-    <div class="wizard-body">
-      <!-- Step Title -->
-      <div class="wizard-step-title">
-        <v-icon :icon="currentStep?.icon" size="20" color="primary" />
-        <h2>{{ currentStep?.title }}</h2>
-      </div>
-
-      <!-- Router View for Step Content -->
-      <div class="wizard-step-content">
-        <router-view />
-      </div>
-
-      <!-- Navigation Footer -->
-      <div class="wizard-footer">
+    <!-- Top Bar -->
+    <div class="wizard-topbar">
+      <template v-if="isFormDesignerOpen">
         <v-btn
-          v-if="canGoBack"
           variant="text"
-          prepend-icon="mdi-chevron-left"
-          @click="goToPreviousStep"
+          size="small"
+          prepend-icon="mdi-arrow-left"
+          @click="designerActions.cancel?.()"
         >
-          Previous
+          Entity Forms
         </v-btn>
-        <v-spacer />
-        <v-btn
-          v-if="canGoNext && !isReviewStep"
-          color="primary"
-          append-icon="mdi-chevron-right"
-          @click="goToNextStep"
+        <div class="wizard-topbar__center">
+          <span class="wizard-topbar__title">{{ designerFormName }}</span>
+          <span class="wizard-topbar__subtitle">Form Designer</span>
+        </div>
+        <div class="wizard-topbar__actions">
+          <v-btn variant="text" size="small" @click="designerActions.cancel?.()">
+            Cancel
+          </v-btn>
+          <v-btn
+            color="primary"
+            size="small"
+            prepend-icon="mdi-content-save"
+            @click="designerActions.save?.()"
+          >
+            Save Form Design
+          </v-btn>
+        </div>
+      </template>
+      <template v-else>
+        <v-btn variant="text" size="small" prepend-icon="mdi-arrow-left" @click="goBack">
+          Programs
+        </v-btn>
+        <div class="wizard-topbar__center">
+          <span class="wizard-topbar__title">{{ pageTitle }}</span>
+        </div>
+        <div class="wizard-topbar__actions">
+          <span v-if="lastSavedText" class="wizard-topbar__saved">
+            <v-icon size="14" icon="mdi-cloud-check" />
+            {{ lastSavedText }}
+          </span>
+        </div>
+      </template>
+    </div>
+
+    <!-- Main area: sidebar + content -->
+    <div class="wizard-main">
+      <!-- Vertical Step Sidebar -->
+      <nav class="wizard-sidebar">
+        <div
+          v-for="(step, index) in steps"
+          :key="step.id"
+          :class="[
+            'sidebar-step',
+            `sidebar-step--${getStepStatus(step, index)}`,
+            { 'sidebar-step--disabled': !canNavigateToStep(step, index) }
+          ]"
+          @click="navigateToStep(step, index)"
         >
-          Continue
-        </v-btn>
+          <div class="sidebar-step__indicator">
+            <v-icon
+              v-if="getStepStatus(step, index) === 'complete'"
+              icon="mdi-check"
+              size="14"
+            />
+            <v-icon
+              v-else-if="getStepStatus(step, index) === 'error'"
+              icon="mdi-alert"
+              size="14"
+            />
+            <span v-else class="sidebar-step__number">{{ index + 1 }}</span>
+          </div>
+          <span class="sidebar-step__label">{{ step.title }}</span>
+        </div>
+      </nav>
+
+      <!-- Content area -->
+      <div :class="['wizard-content', { 'wizard-content--designer': isFormDesignerOpen }]">
+        <div class="wizard-step-content">
+          <router-view />
+        </div>
+
+        <!-- Navigation Footer (hidden when form designer is open) -->
+        <div v-if="!isFormDesignerOpen" class="wizard-footer">
+          <v-btn
+            v-if="canGoBack"
+            variant="text"
+            prepend-icon="mdi-chevron-left"
+            @click="goToPreviousStep"
+          >
+            Previous
+          </v-btn>
+          <v-spacer />
+          <v-btn
+            v-if="canGoNext && !isReviewStep"
+            color="primary"
+            append-icon="mdi-chevron-right"
+            @click="goToNextStep"
+          >
+            Continue
+          </v-btn>
+        </div>
       </div>
     </div>
 
     <!-- Recovery Dialog -->
-    <v-dialog v-model="showRecoveryDialog" max-width="450" persistent>
+    <v-dialog v-model="showRecoveryDialog" :max-width="400" persistent>
       <v-card>
         <v-card-title class="d-flex align-center gap-2">
           <v-icon icon="mdi-file-restore" color="primary" />
@@ -287,13 +357,36 @@ const lastSavedText = computed(() => {
   background: var(--background);
 }
 
+/* Small screen advisory — only visible below 960px */
+.small-screen-notice {
+  display: none;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  background: var(--status-warning-light);
+  color: var(--status-warning-dark);
+  font-size: var(--font-size-sm);
+  border-bottom: 1px solid var(--status-warning);
+}
+
+.small-screen-notice p {
+  flex: 1;
+  margin: 0;
+}
+
+@media (max-width: 960px) {
+  .small-screen-notice {
+    display: flex;
+  }
+}
+
 /* Top Bar */
 .wizard-topbar {
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
   padding: var(--spacing-sm) var(--spacing-lg);
-  background: var(--neutral-50);
+  background: var(--surface);
   border-bottom: 1px solid var(--border-light);
   flex-shrink: 0;
 }
@@ -303,7 +396,7 @@ const lastSavedText = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-lg);
+  gap: var(--spacing-sm);
 }
 
 .wizard-topbar__title {
@@ -313,9 +406,15 @@ const lastSavedText = computed(() => {
   color: var(--text-main);
 }
 
-.wizard-topbar__right {
-  min-width: 120px;
-  text-align: right;
+.wizard-topbar__subtitle {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.wizard-topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
 }
 
 .wizard-topbar__saved {
@@ -326,85 +425,135 @@ const lastSavedText = computed(() => {
   color: var(--text-muted);
 }
 
-/* Inline Steps */
-.wizard-steps-inline {
+/* Main layout: sidebar + content */
+.wizard-main {
+  flex: 1;
   display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
+  min-height: 0;
 }
 
-.step-dot {
+/* Vertical Sidebar */
+.wizard-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border-light);
+  padding: var(--spacing-md) 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-step {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+  position: relative;
+}
+
+.sidebar-step:hover {
+  background: var(--neutral-50);
+}
+
+.sidebar-step--current {
+  background: var(--brand-100);
+}
+
+.sidebar-step--current:hover {
+  background: var(--brand-100);
+}
+
+/* Left accent bar for current step */
+.sidebar-step--current::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: var(--spacing-xs);
+  bottom: var(--spacing-xs);
+  width: 3px;
+  background: var(--brand);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.sidebar-step__indicator {
   width: 24px;
   height: 24px;
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: pointer;
-  transition: all var(--transition-fast);
+  flex-shrink: 0;
   font-size: var(--font-size-xs);
   font-weight: 600;
+  transition: all var(--transition-fast);
 }
 
-.step-dot--pending {
+.sidebar-step--pending .sidebar-step__indicator {
   background: var(--neutral-100);
   color: var(--neutral-400);
 }
 
-.step-dot--current {
+.sidebar-step--current .sidebar-step__indicator {
   background: var(--primary);
   color: var(--primary-foreground);
-  box-shadow: 0 0 0 3px rgba(44, 62, 80, 0.2);
 }
 
-.step-dot--complete {
+.sidebar-step--complete .sidebar-step__indicator {
   background: var(--status-success);
   color: var(--text-inverted);
 }
 
-.step-dot--error {
+.sidebar-step--error .sidebar-step__indicator {
   background: var(--status-danger);
   color: var(--text-inverted);
 }
 
-.step-dot:hover {
-  transform: scale(1.1);
-}
-
-.step-dot__number {
+.sidebar-step__number {
   line-height: 1;
 }
 
-.step-connector {
-  width: 20px;
-  height: 2px;
-  background: var(--border-light);
+.sidebar-step__label {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
-/* Main Body */
-.wizard-body {
+.sidebar-step--current .sidebar-step__label {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.sidebar-step--complete .sidebar-step__label,
+.sidebar-step--error .sidebar-step__label {
+  color: var(--text-main);
+}
+
+.sidebar-step--disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.sidebar-step--disabled:hover {
+  background: transparent;
+}
+
+/* Content area */
+.wizard-content {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 0 var(--spacing-lg) var(--spacing-lg);
-  max-width: 100%;
-  overflow-x: hidden;
+  padding: var(--spacing-lg) var(--spacing-xl);
+  min-width: 0;
+  overflow-y: auto;
 }
 
-.wizard-step-title {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md) 0 var(--spacing-sm);
-  border-bottom: 1px solid var(--border-light);
-  margin-bottom: var(--spacing-md);
-}
-
-.wizard-step-title h2 {
-  font-size: var(--font-size-base);
-  font-weight: 600;
-  margin: 0;
-  color: var(--text-main);
+.wizard-content--designer {
+  padding: 0;
+  overflow: hidden;
 }
 
 .wizard-step-content {
@@ -418,32 +567,5 @@ const lastSavedText = computed(() => {
   padding: var(--spacing-md) 0;
   margin-top: auto;
   border-top: 1px solid var(--border-light);
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .wizard-topbar {
-    flex-wrap: wrap;
-    padding: var(--spacing-sm) var(--spacing-md);
-  }
-
-  .wizard-topbar__center {
-    order: 3;
-    width: 100%;
-    justify-content: center;
-    padding-top: var(--spacing-sm);
-  }
-
-  .wizard-topbar__title {
-    display: none;
-  }
-
-  .wizard-body {
-    padding: 0 var(--spacing-md) var(--spacing-md);
-  }
-
-  .step-connector {
-    width: 12px;
-  }
 }
 </style>

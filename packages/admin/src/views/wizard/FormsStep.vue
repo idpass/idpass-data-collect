@@ -201,9 +201,9 @@ const onSpecFileSelection = async (value: File[] | File | null) => {
         <div class="form-card__body">
           <v-row dense>
             <v-col cols="12" sm="6">
-              <label class="field-label">Entity Name (ID)</label>
               <v-text-field
                 v-model="form.name"
+                label="Entity Name (ID)"
                 placeholder="e.g., household"
                 variant="outlined"
                 density="compact"
@@ -211,9 +211,9 @@ const onSpecFileSelection = async (value: File[] | File | null) => {
               />
             </v-col>
             <v-col cols="12" sm="6">
-              <label class="field-label">Display Title</label>
               <v-text-field
                 v-model="form.title"
+                label="Display Title"
                 placeholder="e.g., Household Registration"
                 variant="outlined"
                 density="compact"
@@ -221,24 +221,21 @@ const onSpecFileSelection = async (value: File[] | File | null) => {
               />
             </v-col>
             <v-col v-if="getDependsOnOptions(form).length > 0" cols="12" sm="6">
-              <label class="field-label">Depends On (Optional)</label>
               <v-select
                 v-model="form.dependsOn"
                 :items="getDependsOnOptions(form)"
                 item-title="title"
                 item-value="name"
+                label="Depends On (Optional)"
                 placeholder="Select parent entity"
+                hint="If this entity belongs to another (e.g., Individual → Household), select the parent."
+                persistent-hint
                 variant="outlined"
                 density="compact"
                 clearable
               />
-              <p class="field-hint">
-                If this entity belongs to another entity (e.g., Individual belongs to Household),
-                select the parent here.
-              </p>
             </v-col>
             <v-col cols="12" sm="6">
-              <label class="field-label">Entity Type (Optional)</label>
               <v-select
                 v-model="form.entityType"
                 :items="[
@@ -249,14 +246,13 @@ const onSpecFileSelection = async (value: File[] | File | null) => {
                 ]"
                 item-title="title"
                 item-value="value"
+                label="Entity Type (Optional)"
                 placeholder="Auto"
+                hint="Override the entity type. Use 'Individual' for standalone individuals without a parent group."
+                persistent-hint
                 variant="outlined"
                 density="compact"
               />
-              <p class="field-hint">
-                Override the entity type. Use "Individual" to create standalone individuals
-                without requiring a parent group.
-              </p>
               <v-alert
                 v-if="form.entityType === 'group' && form.dependsOn"
                 type="warning"
@@ -373,20 +369,6 @@ const onSpecFileSelection = async (value: File[] | File | null) => {
 
 .form-card__body {
   padding: var(--spacing-md);
-}
-
-.field-label {
-  display: block;
-  font-size: var(--font-size-xs);
-  font-weight: 500;
-  color: var(--text-muted);
-  margin-bottom: var(--spacing-xs);
-}
-
-.field-hint {
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
-  margin: calc(-1 * var(--spacing-sm)) 0 0;
 }
 
 .form-card__actions {
