@@ -19,9 +19,11 @@
 
 import pino from "pino";
 
-const isTest = process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID !== undefined;
+const env = typeof process !== "undefined" && process.env ? process.env : {} as NodeJS.ProcessEnv;
 
-const level = isTest ? "silent" : (process.env.LOG_LEVEL || "info");
+const isTest = env.NODE_ENV === "test" || env.JEST_WORKER_ID !== undefined;
+
+const level = isTest ? "silent" : (env.LOG_LEVEL || "info");
 
 export const logger = pino({ name: "datacollect", level });
 
