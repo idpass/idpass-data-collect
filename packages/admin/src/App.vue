@@ -13,7 +13,7 @@ const reviewsStore = useReviewsStore()
   <v-app>
     <v-app-bar v-if="authStore.isAuthenticated" color="primary">
       <v-container class="d-flex align-center">
-        <v-app-bar-title>ID PASS DataCollect Admin</v-app-bar-title>
+        <v-app-bar-title style="cursor: pointer" @click="$router.push('/')">ID PASS DataCollect Admin</v-app-bar-title>
         <v-spacer></v-spacer>
         <v-btn to="/" variant="text" class="mx-2">
           <v-icon start icon="mdi-home"></v-icon>
@@ -50,9 +50,7 @@ const reviewsStore = useReviewsStore()
     </v-app-bar>
 
     <v-main>
-      <v-container>
-        <RouterView />
-      </v-container>
+      <RouterView />
     </v-main>
   </v-app>
 
