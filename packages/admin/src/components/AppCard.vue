@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { getAppConfigJsonUrl, getAppQrCodeUrl, deleteApp as deleteAppApi } from '@/api'
+import { getAppConfigJsonUrl, getAppQrCodeUrl, archiveApp as archiveAppApi, restoreApp as restoreAppApi, purgeApp as purgeAppApi } from '@/api'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -14,6 +14,7 @@ interface Props {
     entitiesCount: number
     externalSync: Record<string, string>
     description: string
+    archivedAt?: string | null
   }
 }
 
@@ -36,7 +37,7 @@ const handleArchive = () => {
 
 const confirmArchive = async () => {
   try {
-    await deleteAppApi(app.id)
+    await archiveAppApi(app.id)
     emit('appDeleted')
     showArchiveDialog.value = false
   } catch (error) {
@@ -58,6 +59,31 @@ const editApp = async (id: string) => {
 const copyApp = async (id: string) => {
   menu.value = false
   router.push(`/copy/${id}`)
+}
+
+const isDev = import.meta.env.DEV
+const isArchived = computed(() => !!app.archivedAt)
+const showPurgeDialog = ref(false)
+
+const confirmPurge = async () => {
+  try {
+    await purgeAppApi(app.id)
+    emit('appDeleted')
+    showPurgeDialog.value = false
+  } catch (error) {
+    console.error('Error:', error)
+    alert('Error permanently deleting program')
+  }
+}
+
+const confirmRestore = async () => {
+  try {
+    await restoreAppApi(app.id)
+    emit('appDeleted')
+  } catch (error) {
+    console.error('Error:', error)
+    alert('Error restoring program')
+  }
 }
 
 const avatarLabel = computed(() => (app.name ? app.name.charAt(0).toUpperCase() : 'A'))
@@ -112,6 +138,7 @@ watch(showQrDialog, (isOpen) => {
         <v-list density="compact">
           <v-list-item @click="editApp(app.id)" prepend-icon="mdi-pencil" title="Edit" />
           <v-list-item @click="copyApp(app.id)" prepend-icon="mdi-content-copy" title="Duplicate" />
+          <v-list-item prepend-icon="mdi-qrcode" title="Deploy to Device" @click.stop="showQrDialog = true" />
           <v-list-item
             :href="downloadUrl"
             download
@@ -121,16 +148,33 @@ watch(showQrDialog, (isOpen) => {
           />
           <v-divider class="my-1" />
           <v-list-item
+            v-if="isArchived"
+            @click="confirmRestore()"
+            prepend-icon="mdi-archive-arrow-up"
+            title="Restore"
+            class="text-success"
+          />
+          <v-list-item
+            v-else
             @click="handleArchive()"
             prepend-icon="mdi-archive"
             title="Archive"
             class="text-warning"
           />
+          <template v-if="isDev">
+            <v-divider class="my-1" />
+            <v-list-item
+              @click="showPurgeDialog = true"
+              prepend-icon="mdi-delete-forever"
+              title="Delete (Dev Only)"
+              class="text-error"
+            />
+          </template>
         </v-list>
       </v-menu>
     </v-card-text>
 
-    <!-- Inline metrics and status -->
+    <!-- Metrics and description -->
     <v-card-text class="app-card__body">
       <div class="app-card__metrics">
         <v-chip :color="syncDetails.color" variant="tonal" size="small" density="comfortable">
@@ -138,8 +182,8 @@ watch(showQrDialog, (isOpen) => {
           {{ syncDetails.label }}
         </v-chip>
         <v-chip variant="tonal" color="primary" size="small">
-          <v-icon icon="mdi-database" size="14" start />
-          {{ app.entitiesCount || 0 }}
+          <v-icon icon="mdi-account-multiple" size="14" start />
+          {{ app.entitiesCount || 0 }} {{ app.entitiesCount === 1 ? 'entity' : 'entities' }}
         </v-chip>
         <v-chip variant="outlined" size="small"> v{{ app.version || 'N/A' }} </v-chip>
       </div>
@@ -147,39 +191,16 @@ watch(showQrDialog, (isOpen) => {
         {{ app.description }}
       </p>
     </v-card-text>
-
-    <!-- Actions -->
-    <v-card-actions class="app-card__actions">
-      <v-btn
-        size="small"
-        variant="tonal"
-        color="primary"
-        prepend-icon="mdi-qrcode"
-        @click.stop="showQrDialog = true"
-      >
-        QR Code
-      </v-btn>
-      <v-spacer />
-      <v-btn
-        size="small"
-        variant="text"
-        color="primary"
-        append-icon="mdi-chevron-right"
-        @click.stop="openDetails(app.id)"
-      >
-        Details
-      </v-btn>
-    </v-card-actions>
   </v-card>
 
   <!-- QR Dialog -->
-  <v-dialog v-model="showQrDialog" max-width="360">
+  <v-dialog v-model="showQrDialog" :max-width="400">
     <v-card>
-      <v-card-title class="text-h6">Scan to deploy</v-card-title>
+      <v-card-title class="text-h6">Deploy to Device</v-card-title>
       <v-card-text class="text-center">
         <v-img
           :src="qrUrl"
-          alt="QR Code"
+          alt="Deployment QR code"
           max-width="200"
           class="mx-auto my-4"
           @error="handleQrError"
@@ -187,7 +208,7 @@ watch(showQrDialog, (isOpen) => {
           <template v-if="qrError" #placeholder>
             <div class="text-center pa-4">
               <v-icon icon="mdi-alert-circle" size="48" color="error" class="mb-2" />
-              <p class="text-body-2 text-error">Failed to load QR code</p>
+              <p class="text-body-2 text-error">Could not load deployment code</p>
               <p class="text-caption text-medium-emphasis mt-2">
                 Please ensure the backend is accessible.
               </p>
@@ -195,7 +216,7 @@ watch(showQrDialog, (isOpen) => {
           </template>
         </v-img>
         <p v-if="!qrError" class="text-body-2 text-medium-emphasis">
-          Share this code with field teams to load the configuration.
+          Scan from the mobile app to load this program configuration onto a device.
         </p>
       </v-card-text>
       <v-card-actions class="justify-end">
@@ -207,14 +228,14 @@ watch(showQrDialog, (isOpen) => {
           target="_blank"
           prepend-icon="mdi-download"
         >
-          Download
+          Download Config
         </v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
 
   <!-- Archive Dialog -->
-  <v-dialog v-model="showArchiveDialog" max-width="420">
+  <v-dialog v-model="showArchiveDialog" :max-width="400">
     <v-card>
       <v-card-title class="text-h6">
         <v-icon icon="mdi-archive" start />
@@ -222,17 +243,39 @@ watch(showQrDialog, (isOpen) => {
       </v-card-title>
       <v-card-text>
         <p>
-          Are you sure you want to archive <strong>{{ app.name }}</strong
-          >?
+          Are you sure you want to archive <strong>{{ app.name }}</strong>?
         </p>
         <p class="mt-2 text-medium-emphasis text-body-2">
-          The program will be hidden from the main list but data will remain accessible.
+          The program configuration will be removed. Collected entity data will not be affected.
         </p>
       </v-card-text>
       <v-card-actions>
         <v-spacer />
         <v-btn variant="text" @click="showArchiveDialog = false">Cancel</v-btn>
         <v-btn color="warning" variant="tonal" @click="confirmArchive">Archive</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
+  <!-- Purge Dialog (dev only) -->
+  <v-dialog v-if="isDev" v-model="showPurgeDialog" :max-width="400">
+    <v-card>
+      <v-card-title class="text-h6">
+        <v-icon icon="mdi-delete-forever" start color="error" />
+        Permanently Delete
+      </v-card-title>
+      <v-card-text>
+        <v-alert type="warning" variant="tonal" density="compact" class="mb-3">
+          Development only — this action cannot be undone.
+        </v-alert>
+        <p>
+          Permanently delete <strong>{{ app.name }}</strong> and all associated data?
+        </p>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer />
+        <v-btn variant="text" @click="showPurgeDialog = false">Cancel</v-btn>
+        <v-btn color="error" variant="tonal" @click="confirmPurge">Delete Forever</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -259,7 +302,7 @@ watch(showQrDialog, (isOpen) => {
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--spacing-sm);
-  padding-bottom: var(--spacing-sm);
+  padding-bottom: var(--spacing-md);
 }
 
 .app-card__header-main {
@@ -310,7 +353,7 @@ watch(showQrDialog, (isOpen) => {
 
 .app-card__body {
   padding-top: 0;
-  padding-bottom: var(--spacing-sm);
+  padding-bottom: var(--spacing-md);
 }
 
 .app-card__metrics {
@@ -329,10 +372,5 @@ watch(showQrDialog, (isOpen) => {
   -webkit-box-orient: vertical;
   overflow: hidden;
   line-height: var(--line-height-normal);
-}
-
-.app-card__actions {
-  padding-top: 0;
-  border-top: 1px solid var(--border-light);
 }
 </style>

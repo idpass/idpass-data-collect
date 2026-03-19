@@ -188,7 +188,7 @@ const handleActivityClick = (activity: ActivityItem) => {
 .recent-activity__list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-xs);
 }
 
 .activity-item {

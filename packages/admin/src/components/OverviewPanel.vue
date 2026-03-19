@@ -93,16 +93,6 @@ const stats = computed(() => [
         </div>
       </div>
 
-      <v-divider class="my-4" />
-
-      <div class="overview-panel__info">
-        <div class="overview-panel__info-row">
-          <span class="overview-panel__info-label">Server Status</span>
-          <v-chip :color="serverStatus.color" size="x-small" variant="flat">
-            {{ serverStatus.label }}
-          </v-chip>
-        </div>
-      </div>
     </v-card-text>
   </v-card>
 </template>
@@ -192,24 +182,6 @@ const stats = computed(() => [
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.overview-panel__info {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-}
-
-.overview-panel__info-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-sm);
-}
-
-.overview-panel__info-label {
-  font-size: var(--font-size-sm);
-  color: var(--text-muted);
 }
 
 @media (max-width: 1280px) {
