@@ -5,21 +5,120 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] - 2025-01-XX
+## [2.0.0-beta.1] - 2026-03-18
+
+### Breaking Changes
+- `EntityPair.initial` is now nullable (entities not yet synced have `null`)
+- Adapter imports moved: `@idpass/data-collect-core` → `@idpass/adapter-openspp`, `@idpass/adapter-openfn`
+- Adapters must register via `AdapterRegistry` at startup
+- `EntityDataManager.getEntity()` returns `EntityPair` (adds `guid`, nullable `initial`)
+- JWT tokens expire after 1 hour (previously no expiry)
+- `JWT_SECRET` must be ≥32 characters (server refuses to start otherwise)
+- `CORS_ORIGINS` defaults to deny-all (must be set explicitly)
 
 ### Added
+- **Web App** (`packages/web`): Vue 3 app for agent data collection and citizen self-service (OTP, National ID, OIDC authentication)
+- **Hash Chain Integrity**: Incremental hash chain replaces Merkle tree for event store tamper detection
+- **XState v5 Sync**: InternalSyncManager replaced with XState v5 statechart for reliable sync orchestration
+- **XState v5 Mobile Auth/Lock**: Authentication and app lock flows managed by XState statecharts
+- **Selective Sync**: Filter sync by area IDs and entity GUIDs
+- **Biometric App Lock**: Fingerprint/PIN lock on mobile with auto-lock on background
+- **Secure Storage**: Mobile secrets migrated to iOS Keychain / Android Keystore
+- **Review Workflow**: Submission review pipeline (pending/approved/rejected) with DB persistence
+- **Duplicate Detection**: Async duplicate detection and resolution UI in admin
+- **Attachments**: File upload/download with MIME type detection from magic bytes
+- **Record Entity Type**: New entity type for activities, services, home visits
+- **Adapter Registry**: V2 adapter interface with Zod validation and dynamic registration
+- **Adapter Packages**: OpenSPP, OpenFn, and Mock adapters extracted to standalone packages
+- **FormClassifier**: Centralized form-to-event-type classification
+- **13 New Services**: EventUpcaster, RBAC, Area, Assignment, Attachment, Conflict, Snapshot, Verification, ProjectionRebuild, SelfService, DuplicateDetection, Review, FormClassifier
+- **E2E Tests**: Playwright setup with 41+ tests across admin, backend, and cross-service
+- **Error Overlay**: Production-visible error overlay on mobile for QA crash reporting
+- **Drizzle ORM**: Schema definitions for new tables alongside raw SQL
 
-- OpenSPP adapter enhancements with field mapping, batch processing, and retry logic
-- OpenSPP field metadata API endpoints for admin UI integration
-- Enhanced duplicate detection and resolution capabilities
-- Comprehensive Auth0 and Keycloak authentication documentation
+### Security
+- JWT 1-hour expiry with token refresh endpoint
+- OIDC: JWKS URI origin validation, issuer pre-validation (prevents SSRF), audience + nonce checks
+- Tenant isolation: `validateTenantAccess()` middleware on all tenant-scoped routes
+- Self-service token scope enforcement (cannot access admin/sync routes)
+- Entity isolation for self-service tokens (prevents cross-entity enumeration)
+- OTP codes hashed with HMAC-SHA256 and verified with constant-time comparison
+- Rate limiting on OTP, verification, and public endpoints
+- Zod input validation on all self-service endpoints
+- Filename sanitization on ingestion (null bytes, path traversal, header injection)
+- HTTPS-only in production mobile builds
+- Non-root Docker containers
 
 ### Improved
+- Pino-based structured logging replaces console.log throughout backend and core
+- Composite cursor (`timestamp|eventGuid`) for pagination prevents event skipping
+- Transactional sync push (all events in a batch commit or rollback atomically)
+- Docker: multi-stage Dockerfile, nginx for frontend SPAs, Coolify-compatible compose configs
+- PR check script with Podman/Docker auto-detection
+- License header enforcement across all source files
 
-- OpenSPP sync adapter now supports configurable batch sizes and delays
-- Retry logic with exponential backoff for failed sync operations
-- Field mapping UI with transformer support (text, date, ID, multi-select, boolean)
-- Better error handling and logging for external sync operations
+### Fixed
+- Sync cursor derived from successful chunks only (prevents advancing past failed uploads)
+- FormSubmission cloned before mutation in EventStore.saveEvent
+- URL-encoded composite cursor in sync pull URL
+- Cross-origin QR code and config artifact loading (CORP header fix)
+- SecureStorage initialization on Android (eager import shim for inlineDynamicImports compatibility)
+- Storage permissions for QR code scanning from gallery
+- Biometric auth error details surfaced on lock screen
+
+### Deployment Notes
+1. Set `JWT_SECRET` to ≥32 characters (server won't start otherwise)
+2. Set `CORS_ORIGINS` explicitly (defaults to deny-all)
+3. Run DB migrations — new tables: `users`, `areas`, `userAssignments`, `entityOverrides`, `entitySnapshots`, `attachments`, `attachmentData`, `otp_codes`, `submission_reviews`, `review_configs`, `verifications`
+4. Update adapter imports from `@idpass/data-collect-core` to `@idpass/adapter-openspp` / `@idpass/adapter-openfn`
+5. Audit all `entityPair.initial` access for null checks
+
+## [1.3.0-beta.1] - 2026-02-24
+
+### Added
+- **OpenSPP V2 Adapter**: New adapter with updated API integration and wizard flow
+- Seed data script for demo environment (`pnpm seed`)
+- One-command local test setup
+- Claim-169 scanner integration in mobile UI
+
+### Fixed
+- Sync-server startup race condition in dev compose
+- Hard-coded invalid identifier namespace
+- Scanner viewport missing on mobile
+- CI error on docs build
+- Missing step for type-check in CI
+
+### Improved
+- OpenSPP V1 field fetching updated
+- Mobile list item spacing
+
+## [1.2.0-beta.1] - 2026-01-16
+
+### Added
+- **OpenSPP Field Mapping**: Configurable field mapping with transformer support (text, date, ID, multi-select, boolean)
+- **Biometric Capture**: BCA (Biometric Capture Application) integration with skip option
+- Admin entities list view
+- Mobile event list in entity details
+- Mobile QR scanner improvements
+- OpenSPP adapter documentation
+
+### Fixed
+- Sync issue with timestamps causing duplicates during sync
+- OpenSPP push sync failures
+- Generated QR code not using Railway public URL
+- Text transformer saving "false" instead of empty string
+- Update event not using field mapper
+- Admin form input trimming
+- Mobile APK build output
+- Display missing entities on mobile
+- Duplicate program error message on mobile
+
+### Improved
+- Admin layout updated
+- Admin search filter section cleaned up
+- Request batching for OpenSPP sync
+- Docker Compose configs for OpenSPP and Portainer
+- Live reload with watchers for development
 
 ## [1.0.0] - 2025-09-24
 

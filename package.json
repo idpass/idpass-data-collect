@@ -1,6 +1,6 @@
 {
   "name": "@idpass/data-collect",
-  "version": "1.3.0",
+  "version": "2.0.0-beta.1",
   "description": "ID PASS DataCollect - Offline-first data management system",
   "private": true,
   "packageManager": "pnpm@10.14.0+sha256.297534e65d5842450539c1e8022c8831ab5e1fe2eb74664787a815519542d620",

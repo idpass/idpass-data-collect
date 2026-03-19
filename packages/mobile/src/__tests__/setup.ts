@@ -111,11 +111,16 @@ vi.mock('@capacitor/app', () => ({
 }))
 
 // Mock @capacitor/core so Capacitor.isNativePlatform() returns false in tests
-vi.mock('@capacitor/core', () => ({
-  Capacitor: {
-    isNativePlatform: vi.fn().mockReturnValue(false),
-  },
-}))
+vi.mock('@capacitor/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@capacitor/core')>()
+  return {
+    ...actual,
+    Capacitor: {
+      ...actual.Capacitor,
+      isNativePlatform: vi.fn().mockReturnValue(false),
+    },
+  }
+})
 
 // Mock @aparajita/capacitor-secure-storage (native plugin — not available in jsdom)
 vi.mock('@aparajita/capacitor-secure-storage', () => ({

@@ -3,13 +3,18 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('@capacitor/core', () => ({
-  Capacitor: {
-    isNativePlatform: vi.fn().mockReturnValue(false),
-  },
-}))
+vi.mock('@capacitor/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@capacitor/core')>()
+  return {
+    ...actual,
+    Capacitor: {
+      ...actual.Capacitor,
+      isNativePlatform: vi.fn().mockReturnValue(false),
+    },
+  }
+})
 
-vi.mock('@aparajita/capacitor-secure-storage', () => ({
+vi.mock('@/shims/secure-storage', () => ({
   SecureStorage: {
     getItem: vi.fn(),
     setItem: vi.fn(),
@@ -19,7 +24,7 @@ vi.mock('@aparajita/capacitor-secure-storage', () => ({
 }))
 
 import { Capacitor } from '@capacitor/core'
-import { SecureStorage } from '@aparajita/capacitor-secure-storage'
+import { SecureStorage } from '@/shims/secure-storage'
 import { SecureStorageService } from '../SecureStorageService'
 
 describe('SecureStorageService', () => {

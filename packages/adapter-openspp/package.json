@@ -1,6 +1,6 @@
 {
   "name": "@idpass/adapter-openspp",
-  "version": "1.0.0",
+  "version": "2.0.0-beta.1",
   "description": "OpenSPP sync adapters (V1 and V2) for ID PASS DataCollect",
   "engines": {
     "node": ">=22.0.0"
