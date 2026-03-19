@@ -35,6 +35,7 @@ const pageSize = ref(12)
 const sortBy = ref<AppListParams['sortBy']>('name')
 const sortOrder = ref<AppListParams['sortOrder']>('asc')
 const searchTerm = ref('')
+const showArchived = ref(false)
 const isLoading = ref(false)
 const isRefreshing = ref(false)
 
@@ -88,6 +89,7 @@ const fetchApps = async (isRefresh = false) => {
       sortBy: sortBy.value,
       sortOrder: sortOrder.value,
       search: searchTerm.value.trim() || undefined,
+      includeArchived: showArchived.value || undefined,
     })
     apps.value = response.data
     meta.value = response.meta
@@ -124,6 +126,11 @@ watch(sortBy, () => {
 })
 
 watch(sortOrder, () => {
+  page.value = 1
+  fetchApps()
+})
+
+watch(showArchived, () => {
   page.value = 1
   fetchApps()
 })
@@ -222,16 +229,16 @@ onBeforeUnmount(() => {
 
 <template>
   <v-container class="app-dashboard" fluid>
-    <v-row dense>
-      <!-- Main Content (left ~70%) -->
-      <v-col cols="12" lg="8">
+    <div class="dashboard-grid">
+      <!-- Main Content -->
+      <div class="dashboard-main">
         <!-- Header with title and icon buttons -->
-        <div class="dashboard-header">
-          <div class="dashboard-header__text">
-            <h1 class="dashboard-title">Collection Programs</h1>
-            <p class="dashboard-subtitle">Manage and monitor your form applications</p>
+        <div class="page-header">
+          <div class="page-header__text">
+            <h1 class="page-header__title">Collection Programs</h1>
+            <p class="page-header__subtitle">Manage and monitor your form applications</p>
           </div>
-          <div class="dashboard-header__actions">
+          <div class="page-header__actions">
             <v-tooltip text="Refresh" location="bottom">
               <template v-slot:activator="{ props }">
                 <v-btn
@@ -310,9 +317,19 @@ onBeforeUnmount(() => {
                 />
               </v-col>
             </v-row>
-            <p class="filters-card__meta mt-3">
-              Showing {{ apps.length }} of {{ totalApps }} programs
-            </p>
+            <div class="filters-card__footer mt-3">
+              <p class="filters-card__meta">
+                Showing {{ apps.length }} of {{ totalApps }} programs
+              </p>
+              <v-btn
+                variant="text"
+                size="small"
+                :prepend-icon="showArchived ? 'mdi-archive-off' : 'mdi-archive'"
+                @click="showArchived = !showArchived"
+              >
+                {{ showArchived ? 'Hide archived' : 'Show archived' }}
+              </v-btn>
+            </div>
           </v-card-text>
         </v-card>
 
@@ -320,19 +337,38 @@ onBeforeUnmount(() => {
         <v-progress-linear v-if="isLoading" class="mt-6" color="primary" indeterminate />
 
         <!-- Empty state -->
-        <v-alert v-else-if="hasNoResults" class="mt-6" border="start" variant="tonal" type="info">
-          No collection programs match your filters. Try adjusting your search or
-          <a class="text-primary" style="cursor: pointer" @click="goToCreate"
-            >create a new program</a
-          >.
-        </v-alert>
+        <div v-else-if="hasNoResults" class="empty-state">
+          <div class="empty-state__icon">
+            <v-icon icon="mdi-clipboard-text-outline" size="48" color="primary" />
+          </div>
+          <template v-if="searchTerm">
+            <h3 class="empty-state__title">No programs found</h3>
+            <p class="empty-state__description">
+              No collection programs match "<strong>{{ searchTerm }}</strong>".
+              Try a different search term.
+            </p>
+          </template>
+          <template v-else>
+            <h3 class="empty-state__title">Create your first collection program</h3>
+            <p class="empty-state__description">
+              Collection programs define how field data is captured — the forms, entity types,
+              and sync configuration. Create one to start collecting data.
+            </p>
+            <div class="empty-state__actions">
+              <v-btn color="primary" size="large" prepend-icon="mdi-plus" @click="goToCreate">
+                New Program
+              </v-btn>
+              <v-btn variant="tonal" size="large" prepend-icon="mdi-upload" @click="showImportDialog = true">
+                Import JSON
+              </v-btn>
+            </div>
+          </template>
+        </div>
 
         <!-- Programs Grid -->
-        <v-row v-else class="apps-grid" dense>
-          <v-col v-for="app in apps" :key="app.id" cols="12" md="6">
-            <AppCard :app="app" @app-deleted="fetchApps" />
-          </v-col>
-        </v-row>
+        <div v-else class="apps-grid">
+          <AppCard v-for="app in apps" :key="app.id" :app="app" @app-deleted="fetchApps" />
+        </div>
 
         <!-- Pagination -->
         <div v-if="meta.totalPages > 1" class="pagination">
@@ -344,31 +380,28 @@ onBeforeUnmount(() => {
             density="comfortable"
           />
         </div>
-      </v-col>
+      </div>
 
-      <!-- Sidebar (right ~30%) -->
-      <v-col cols="12" lg="4">
-        <div class="sidebar">
-          <OverviewPanel
-            :total-programs="totalApps"
-            :total-entities="totalEntities"
-            :sync-enabled-count="syncEnabledCount"
-            :local-only-count="localOnlyCount"
-            :is-loading="isLoading"
-          />
+      <!-- Sidebar -->
+      <aside class="dashboard-sidebar">
+        <OverviewPanel
+          :total-programs="totalApps"
+          :total-entities="totalEntities"
+          :sync-enabled-count="syncEnabledCount"
+          :local-only-count="localOnlyCount"
+          :is-loading="isLoading"
+        />
 
-          <RecentActivity
-            class="mt-4"
-            :activities="recentActivities"
-            :is-loading="isLoading"
-            @activity-click="handleActivityClick"
-          />
-        </div>
-      </v-col>
-    </v-row>
+        <RecentActivity
+          :activities="recentActivities"
+          :is-loading="isLoading"
+          @activity-click="handleActivityClick"
+        />
+      </aside>
+    </div>
 
     <!-- Import JSON Dialog -->
-    <v-dialog v-model="showImportDialog" max-width="500">
+    <v-dialog v-model="showImportDialog" :max-width="540">
       <v-card>
         <v-card-title class="d-flex align-center gap-2">
           <v-icon icon="mdi-upload" color="primary" />
@@ -416,43 +449,30 @@ onBeforeUnmount(() => {
   padding-bottom: var(--spacing-2xl);
 }
 
-.dashboard-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-md);
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: var(--spacing-xl);
+  align-items: start;
 }
 
-.dashboard-header__text {
+.dashboard-sidebar {
+  position: sticky;
+  top: 80px;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
-}
-
-.dashboard-title {
-  font-size: clamp(1.5rem, 1.4rem + 0.5vw, 1.875rem);
-  font-weight: 600;
-  margin: 0;
-  color: var(--text-main);
-}
-
-.dashboard-subtitle {
-  margin: 0;
-  font-size: var(--font-size-sm);
-  color: var(--text-muted);
-}
-
-.dashboard-header__actions {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-md);
 }
 
 .filters-card {
   border-radius: var(--radius-xl);
   background: var(--surface);
+}
+
+.filters-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .filters-card__meta {
@@ -461,7 +481,50 @@ onBeforeUnmount(() => {
   margin: 0;
 }
 
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--spacing-2xl) var(--spacing-lg);
+  margin-top: var(--spacing-xl);
+}
+
+.empty-state__icon {
+  width: 80px;
+  height: 80px;
+  border-radius: var(--radius-full);
+  background: var(--brand-100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.empty-state__title {
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  margin: 0 0 var(--spacing-sm);
+  color: var(--text-main);
+}
+
+.empty-state__description {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  max-width: 420px;
+  line-height: var(--line-height-relaxed);
+  margin: 0 0 var(--spacing-lg);
+}
+
+.empty-state__actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
 .apps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--spacing-md);
   margin-top: var(--spacing-md);
 }
 
@@ -471,25 +534,12 @@ onBeforeUnmount(() => {
   margin-top: var(--spacing-lg);
 }
 
-.sidebar {
-  position: sticky;
-  top: 80px;
-}
-
 @media (max-width: 1280px) {
-  .sidebar {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-sidebar {
     position: static;
-    margin-top: var(--spacing-lg);
-  }
-}
-
-@media (max-width: 960px) {
-  .dashboard-header {
-    align-items: flex-start;
-  }
-  .dashboard-header__actions {
-    width: 100%;
-    justify-content: flex-end;
   }
 }
 </style>
