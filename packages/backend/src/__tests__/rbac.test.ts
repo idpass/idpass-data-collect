@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
 import { SystemRole } from "@idpass/data-collect-core";
 import { requireRole, requireAction } from "../middlewares/rbac";
 import { AuthenticatedRequest } from "../middlewares/authentication";

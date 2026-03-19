@@ -1,74 +1,90 @@
-version: "3.8"
-
+name: idpass-datacollect
 services:
-  # Nginx reverse proxy
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - sync-server
-      - admin-ui
-      - web-ui
-    networks:
-      - hdm-network
-
-  # HDM Sync Server - Main application
-  sync-server:
-    image: "hdm-sync-server:latest"
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-      target: backend
-    working_dir: /app
-    env_file: ./.env
-    restart: always
-    depends_on:
-      - postgres
-    networks:
-      - hdm-network
-
-  # PostgreSQL database for HDM Sync Server
   postgres:
     image: postgres:15
     restart: always
     env_file: ./.env
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-admin}
+      - POSTGRES_DB=${POSTGRES_DB:-datacollect}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./init-reset-dbs.sh:/docker-entrypoint-initdb.d/init-reset-dbs.sh:ro
     networks:
-      - hdm-network
+      - internal
+    command: ["postgres"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-admin}"]
+      interval: 5s
+      timeout: 3s
+      start_period: 30s
+      retries: 10
 
-  # Admin UI (Vue.js application)
+  sync-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: backend
+    restart: unless-stopped
+    env_file: ./.env
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - POSTGRES=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-datacollect}
+      - POSTGRES_TEST=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-datacollect}_test
+      - JWT_SECRET=${JWT_SECRET:-staging-secret-change-me}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@datacollect.lan}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
+      - EXTERNAL_SYNC_ENABLED=${EXTERNAL_SYNC_ENABLED:-false}
+    ports:
+      - "${SYNC_SERVER_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
   admin-ui:
-    image: "hdm-admin-ui:latest"
     build:
       context: ..
-      dockerfile: docker/Dockerfile.admin-ui
+      dockerfile: docker/Dockerfile
+      target: admin-ui
       args:
-        - VITE_API_URL=/sync
+        - VITE_API_URL=${ADMIN_API_URL:-http://localhost:3000}
+    restart: unless-stopped
+    ports:
+      - "4173:80"
     depends_on:
       - sync-server
     networks:
-      - hdm-network
+      - internal
 
-  # Web UI (Vue.js citizen/agent portal)
   web-ui:
-    image: "hdm-web-ui:latest"
     build:
       context: ..
-      dockerfile: docker/Dockerfile.web-ui
+      dockerfile: docker/Dockerfile
+      target: web-ui
       args:
-        - VITE_API_URL=/sync
+        - VITE_API_URL=${WEB_API_URL:-http://localhost:3000}
+    restart: unless-stopped
+    ports:
+      - "5174:80"
     depends_on:
       - sync-server
     networks:
-      - hdm-network
+      - internal
 
 volumes:
   postgres-data:
 
 networks:
-  hdm-network:
+  internal:
     driver: bridge

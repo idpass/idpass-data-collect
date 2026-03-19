@@ -6,6 +6,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   createApp as createAppApi,
+  fetchOpenSppFieldsFromAPI,
   getApp,
   getApps as getAppsApi,
   updateApp as updateAppApi,
@@ -15,7 +16,6 @@ import {
 import FormBuilderDialog from '@/components/FormBuilderDialog.vue'
 import FieldsInput from '@/components/FieldsInput.vue'
 import AdapterConfigFields from '@/components/AdapterConfigFields.vue'
-import OpenSppFieldInputDialog from '@/components/OpenSppFieldInputDialog.vue'
 import FieldMappingDialog from '@/components/FieldMappingDialog.vue'
 import { parseOpenSppProgramSpecification } from '@/utils/openSppImport'
 import { useSnackBarStore } from '@/stores/snackBar'
@@ -102,8 +102,8 @@ const jsonFileError = ref<string | null>(null)
 const isUploadingJson = ref(false)
 
 // OpenSPP Field Mapping
-const showOpenSppFieldInput = ref(false)
 const showFieldMapping = ref(false)
+const isFetchingOpenSppFields = ref(false)
 const opensppFields = ref<ParsedOpenSppField[]>([])
 const selectedFormForMapping = ref<EntityForm | null>(null)
 
@@ -514,9 +514,45 @@ const uploadJsonConfig = async () => {
 }
 
 // OpenSPP Field Mapping handlers
-const onOpenSppFieldsParsed = (fields: ParsedOpenSppField[]) => {
-  opensppFields.value = fields
-  snackBarStore.showSnackbar(`Loaded ${fields.length} OpenSPP fields`, 'success')
+const v1SyncConfig = computed(() => {
+  const sync = form.value.externalSync
+  const config = (sync?.adapterConfig as Record<string, string | number | boolean> | undefined) || {}
+  return {
+    url: sync?.url || '',
+    database: (config.database as string) || '',
+    username: (config.username as string) || '',
+    password: (config.password as string) || '',
+  }
+})
+
+const isV1SyncConfigComplete = computed(() => {
+  const { url, database, username, password } = v1SyncConfig.value
+  return !!(url && database && username && password)
+})
+
+const fetchOpenSppFields = async () => {
+  if (!isV1SyncConfigComplete.value) {
+    snackBarStore.showSnackbar('Complete the OpenSPP connection settings first', 'warning')
+    return
+  }
+  try {
+    isFetchingOpenSppFields.value = true
+    const result = await fetchOpenSppFieldsFromAPI({
+      url: v1SyncConfig.value.url,
+      database: v1SyncConfig.value.database,
+      username: v1SyncConfig.value.username,
+      password: v1SyncConfig.value.password,
+    })
+    opensppFields.value = result.fields
+    snackBarStore.showSnackbar(`Fetched ${result.fields.length} OpenSPP fields`, 'success')
+  } catch (error) {
+    snackBarStore.showSnackbar(
+      error instanceof Error ? error.message : 'Failed to fetch OpenSPP fields',
+      'error',
+    )
+  } finally {
+    isFetchingOpenSppFields.value = false
+  }
 }
 
 const openFieldMappingForForm = (entityForm: EntityForm) => {
@@ -618,9 +654,11 @@ const goBack = () => {
 <template>
   <v-container v-if="isReady" class="config-create" fluid>
     <!-- Header -->
-    <v-btn class="mb-4" variant="text" prepend-icon="mdi-arrow-left" @click="goBack">
-      Back to Collection Programs
-    </v-btn>
+    <div class="subpage-nav">
+      <v-btn variant="text" size="small" prepend-icon="mdi-arrow-left" @click="goBack">
+        Collection Programs
+      </v-btn>
+    </div>
 
     <div class="config-header">
       <h1 class="config-title">{{ pageTitle }}</h1>
@@ -948,22 +986,55 @@ const goBack = () => {
                   color="primary"
                   variant="outlined"
                   size="small"
-                  @click="showOpenSppFieldInput = true"
+                  :loading="isFetchingOpenSppFields"
+                  :disabled="!isV1SyncConfigComplete"
+                  @click="fetchOpenSppFields"
                 >
-                  <v-icon start icon="mdi-upload" />
-                  Import Fields
+                  <v-icon start icon="mdi-refresh" />
+                  Fetch Fields
                 </v-btn>
               </div>
 
+              <v-card variant="outlined" density="compact" class="mb-4" color="grey-lighten-4">
+                <v-card-text class="pa-3">
+                  <p class="text-caption text-medium-emphasis font-weight-bold text-uppercase mb-2">
+                    Fetching from:
+                  </p>
+                  <div class="d-flex flex-column ga-1">
+                    <div class="d-flex align-center ga-2 text-body-2">
+                      <span class="text-medium-emphasis" style="min-width: 80px">URL</span>
+                      <code class="text-caption">{{ v1SyncConfig.url || '—' }}</code>
+                    </div>
+                    <div class="d-flex align-center ga-2 text-body-2">
+                      <span class="text-medium-emphasis" style="min-width: 80px">Database</span>
+                      <code class="text-caption">{{ v1SyncConfig.database || '—' }}</code>
+                    </div>
+                    <div class="d-flex align-center ga-2 text-body-2">
+                      <span class="text-medium-emphasis" style="min-width: 80px">Username</span>
+                      <code class="text-caption">{{ v1SyncConfig.username || '—' }}</code>
+                    </div>
+                  </div>
+                  <v-alert
+                    v-if="!isV1SyncConfigComplete"
+                    type="warning"
+                    variant="tonal"
+                    density="compact"
+                    class="mt-2"
+                  >
+                    Complete the URL, database, username and password fields above to enable field fetching.
+                  </v-alert>
+                </v-card-text>
+              </v-card>
+
               <v-alert
-                v-if="opensppFields.length === 0"
+                v-if="isV1SyncConfigComplete && opensppFields.length === 0"
                 type="info"
                 variant="tonal"
                 density="compact"
               >
-                Import OpenSPP fields from a sample payload to enable field mapping.
+                Click "Fetch Fields" to load available OpenSPP fields for mapping.
               </v-alert>
-              <v-alert v-else type="success" variant="tonal" density="compact">
+              <v-alert v-else-if="opensppFields.length > 0" type="success" variant="tonal" density="compact">
                 {{ opensppFields.length }} OpenSPP field{{ opensppFields.length === 1 ? '' : 's' }}
                 loaded.
               </v-alert>
@@ -1084,11 +1155,6 @@ const goBack = () => {
       :title="selectedForFormBuilder?.title"
       :formio="selectedForFormBuilder?.formio"
       @submit="saveFormio"
-    />
-
-    <OpenSppFieldInputDialog
-      v-model="showOpenSppFieldInput"
-      @fields-parsed="onOpenSppFieldsParsed"
     />
 
     <FieldMappingDialog

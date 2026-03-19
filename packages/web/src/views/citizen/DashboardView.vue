@@ -1,12 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
 import { getSelfServiceEntity, type SelfServiceEntity } from '@/api/selfService'
 import LoadingState from '@/components/LoadingState.vue'
 
 const route = useRoute()
-const authStore = useAuthStore()
 const entityData = ref<SelfServiceEntity | null>(null)
 const loading = ref(true)
 const error = ref<string | null>(null)

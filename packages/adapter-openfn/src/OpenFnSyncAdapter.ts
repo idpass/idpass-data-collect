@@ -18,7 +18,6 @@
  */
 
 import axios from "axios";
-import { v4 as uuidv4 } from "uuid";
 
 import {
   EventStore,
@@ -30,6 +29,7 @@ import {
   getExternalField,
 } from "@idpass/data-collect-core";
 import { EventApplierService } from "@idpass/data-collect-core";
+import { convertPulledDataToEvents } from "./shared";
 
 class OpenFnSyncAdapter implements ExternalSyncAdapter {
   private readonly url: string = "";
@@ -102,7 +102,7 @@ class OpenFnSyncAdapter implements ExternalSyncAdapter {
 
     const lastPullExternalSyncTimestamp = await this.eventStore.getLastPullExternalSyncTimestamp();
     const payload = await this._apiPullData(lastPullExternalSyncTimestamp);
-    const events = this.convertPulledDataToEvents(payload);
+    const events = convertPulledDataToEvents(payload);
 
     if (!events.length) {
       return;
@@ -156,35 +156,6 @@ class OpenFnSyncAdapter implements ExternalSyncAdapter {
     return response.data;
   }
 
-  private convertPulledDataToEvents(payload: unknown): FormSubmission[] {
-    if (!payload) {
-      return [];
-    }
-
-    const events = Array.isArray(payload)
-      ? payload
-      : Array.isArray((payload as { events?: unknown[] }).events)
-      ? (payload as { events: unknown[] }).events
-      : [];
-
-    return events.map((event) => this.toFormSubmission(event));
-  }
-
-  private toFormSubmission(event: unknown): FormSubmission {
-    const record = (event as Record<string, unknown>) || {};
-    const timestamp = typeof record.timestamp === "string" ? record.timestamp : new Date().toISOString();
-    const entityGuid = typeof record.entityGuid === "string" ? record.entityGuid : undefined;
-
-    return {
-      type: (record.type as string) || "external-pull",
-      guid: (record.guid as string) || uuidv4(),
-      entityGuid: entityGuid || ((record.id as string) ?? uuidv4()),
-      data: record,
-      timestamp,
-      userId: (record.userId as string) || "external-system",
-      syncLevel: SyncLevel.REMOTE,
-    };
-  }
 }
 
 export default OpenFnSyncAdapter;

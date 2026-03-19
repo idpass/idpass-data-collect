@@ -17,21 +17,24 @@
  * under the License.
  */
 
+import { SecureStorageService } from '@/services/SecureStorageService'
+
 /**
- * Mobile storage adapter for AuthManager that uses localStorage
- * Implements the AuthStorageAdapter interface from idpass-data-collect
- * Supports app-specific and provider-specific token storage with OAuth flow management
+ * Mobile storage adapter for AuthManager that uses native secure storage.
+ * Implements the AuthStorageAdapter interface from idpass-data-collect.
+ * Supports app-specific and provider-specific token storage with OAuth flow management.
+ *
+ * On native platforms, all values are stored in iOS Keychain / Android Keystore
+ * via SecureStorageService. On web/dev, falls back to localStorage.
  */
 export class MobileAuthStorage {
   private readonly TOKEN_KEY_PREFIX = 'auth_token'
   private readonly PROVIDER_KEY_PREFIX = 'last_provider'
-  //use for temporary oauth data between login and callback
   private readonly TEMP_OAUTH_APP_ID_KEY = 'temp_oauth_app_id'
   private readonly TEMP_OAUTH_PROVIDER_KEY = 'temp_oauth_provider'
 
   constructor(private appId?: string) {}
 
-  // Generate token key with app ID and provider
   private getTokenKey(provider?: string, appId?: string): string {
     const currentAppId = appId || this.appId
     let key = this.TOKEN_KEY_PREFIX
@@ -47,7 +50,6 @@ export class MobileAuthStorage {
     return key
   }
 
-  // Generate provider key with app ID
   private getProviderKey(appId?: string): string {
     const currentAppId = appId || this.appId
     return currentAppId ? `${currentAppId}_${this.PROVIDER_KEY_PREFIX}` : this.PROVIDER_KEY_PREFIX
@@ -55,100 +57,76 @@ export class MobileAuthStorage {
 
   async getToken(provider?: string, appId?: string): Promise<string> {
     const key = this.getTokenKey(provider, appId)
-    return localStorage.getItem(key) || ''
+    return (await SecureStorageService.get(key)) || ''
   }
 
   async setToken(token: string, provider?: string, appId?: string): Promise<void> {
     const key = this.getTokenKey(provider, appId)
-    localStorage.setItem(key, token)
+    await SecureStorageService.set(key, token)
   }
 
   async removeToken(provider?: string, appId?: string): Promise<void> {
     const key = this.getTokenKey(provider, appId)
-    localStorage.removeItem(key)
+    await SecureStorageService.remove(key)
   }
 
-  // OAuth flow management methods
-  /**
-   * Save app ID and provider temporarily for OAuth flow
-   */
-  saveTemporaryOAuthData(appId: string, provider: string): void {
-    try {
-      localStorage.setItem(this.TEMP_OAUTH_APP_ID_KEY, appId)
-      localStorage.setItem(this.TEMP_OAUTH_PROVIDER_KEY, provider)
-    } catch (err) {
-      console.warn('Failed to save temporary OAuth data:', err)
-    }
+  async saveTemporaryOAuthData(appId: string, provider: string): Promise<void> {
+    await SecureStorageService.set(this.TEMP_OAUTH_APP_ID_KEY, appId)
+    await SecureStorageService.set(this.TEMP_OAUTH_PROVIDER_KEY, provider)
   }
 
-  /**
-   * Retrieve temporary OAuth data from localStorage
-   */
-  getTemporaryOAuthData(): { appId: string | null; provider: string | null } {
+  async getTemporaryOAuthData(): Promise<{ appId: string | null; provider: string | null }> {
     try {
       return {
-        appId: localStorage.getItem(this.TEMP_OAUTH_APP_ID_KEY),
-        provider: localStorage.getItem(this.TEMP_OAUTH_PROVIDER_KEY)
+        appId: await SecureStorageService.get(this.TEMP_OAUTH_APP_ID_KEY),
+        provider: await SecureStorageService.get(this.TEMP_OAUTH_PROVIDER_KEY)
       }
-    } catch (err) {
-      console.warn('Failed to get temporary OAuth data:', err)
+    } catch {
+      console.warn('Failed to get temporary OAuth data')
       return { appId: null, provider: null }
     }
   }
 
-  /**
-   * Clear temporary OAuth data from localStorage
-   */
-  clearTemporaryOAuthData(): void {
+  async clearTemporaryOAuthData(): Promise<void> {
     try {
-      localStorage.removeItem(this.TEMP_OAUTH_APP_ID_KEY)
-      localStorage.removeItem(this.TEMP_OAUTH_PROVIDER_KEY)
-    } catch (err) {
-      console.warn('Failed to clear temporary OAuth data:', err)
+      await SecureStorageService.remove(this.TEMP_OAUTH_APP_ID_KEY)
+      await SecureStorageService.remove(this.TEMP_OAUTH_PROVIDER_KEY)
+    } catch {
+      console.warn('Failed to clear temporary OAuth data')
     }
   }
 
-  // Provider tracking methods
-  /**
-   * Get the last used provider for an app
-   */
-  getLastProvider(appId?: string): string | null {
+  async getLastProvider(appId?: string): Promise<string | null> {
     const currentAppId = appId || this.appId
     if (!currentAppId) return null
 
     try {
-      return localStorage.getItem(this.getProviderKey(currentAppId))
-    } catch (err) {
-      console.warn('Failed to get last provider:', err)
+      return await SecureStorageService.get(this.getProviderKey(currentAppId))
+    } catch {
+      console.warn('Failed to get last provider')
       return null
     }
   }
 
-  /**
-   * Set the last used provider for an app
-   */
-  setLastProvider(provider: string, appId?: string): void {
+  async setLastProvider(provider: string, appId?: string): Promise<void> {
     const currentAppId = appId || this.appId
     if (!currentAppId) return
 
     try {
-      localStorage.setItem(this.getProviderKey(currentAppId), provider)
-    } catch (err) {
-      console.warn('Failed to set last provider:', err)
+      await SecureStorageService.set(this.getProviderKey(currentAppId), provider)
+    } catch {
+      console.warn('Failed to set last provider')
     }
   }
 
-  /**
-   * Clear the last used provider for an app
-   */
-  clearLastProvider(appId?: string): void {
+  async clearLastProvider(appId?: string): Promise<void> {
     const currentAppId = appId || this.appId
     if (!currentAppId) return
 
     try {
-      localStorage.removeItem(this.getProviderKey(currentAppId))
-    } catch (err) {
-      console.warn('Failed to clear last provider:', err)
+      await SecureStorageService.remove(this.getProviderKey(currentAppId))
+    } catch {
+      console.warn('Failed to clear last provider')
     }
   }
 }

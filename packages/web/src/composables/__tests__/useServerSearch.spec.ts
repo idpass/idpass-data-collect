@@ -169,8 +169,7 @@ describe("useServerSearch", () => {
     vi.advanceTimersByTime(100);
     await vi.runAllTimersAsync();
 
-    expect(mockSearchEntities).toHaveBeenCalledOnce();
-    expect(mockSearchEntities).toHaveBeenCalledWith("tenant-1", [{ name: { $regex: "Sm" } }]);
+    expect(mockSearchEntities).toHaveBeenCalledExactlyOnceWith("tenant-1", [{ name: { $regex: "Sm" } }]);
   });
 
   it("discards stale responses when a newer query has been issued", async () => {

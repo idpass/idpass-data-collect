@@ -74,10 +74,10 @@ export class StorageFaultInjector<T extends object> {
    * and applies fault rules.
    */
   getProxy(): T {
-    const self = this;
+    const { callCounts, rules } = this;
 
     return new Proxy(this.target, {
-      get(target: T, property: string | symbol, receiver: unknown): unknown {
+      get: (target: T, property: string | symbol, receiver: unknown): unknown => {
         const originalValue = Reflect.get(target, property, receiver);
 
         // Only intercept function calls
@@ -89,11 +89,11 @@ export class StorageFaultInjector<T extends object> {
 
         return function (this: unknown, ...args: unknown[]): unknown {
           // Increment call count
-          const currentCount = (self.callCounts.get(operationName) ?? 0) + 1;
-          self.callCounts.set(operationName, currentCount);
+          const currentCount = (callCounts.get(operationName) ?? 0) + 1;
+          callCounts.set(operationName, currentCount);
 
           // Find matching fault rules for this operation
-          const matchingRules = self.rules.filter(
+          const matchingRules = rules.filter(
             (rule) => rule.operation === operationName,
           );
 

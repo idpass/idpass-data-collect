@@ -1,3 +1,22 @@
+<!--
+ * Licensed to the Association pour la cooperation numerique (ACN) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ACN licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+-->
+
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -81,11 +100,18 @@ onMounted(async () => {
 
 <template>
   <v-container>
-    <v-btn class="mb-4" variant="text" prepend-icon="mdi-arrow-left" @click="goBack">
-      Back to Collection Program
-    </v-btn>
+    <div class="subpage-nav">
+      <v-btn variant="text" size="small" prepend-icon="mdi-arrow-left" @click="goBack">
+        Collection Program
+      </v-btn>
+    </div>
 
-    <h1 class="text-h4 mb-4">Review Configuration</h1>
+    <div class="page-header">
+      <div class="page-header__text">
+        <h1 class="page-header__title">Review Configuration</h1>
+        <p class="page-header__subtitle">Configure review policies for each event type</p>
+      </div>
+    </div>
 
     <v-alert type="info" variant="tonal" class="mb-4" density="compact">
       Configure how each event type is reviewed.
@@ -98,9 +124,9 @@ onMounted(async () => {
       :headers="headers"
       :items="reviewsStore.reviewConfigs"
       :loading="loading"
-      class="elevation-1"
+      class="review-config-table"
     >
-      <template #item.policy="{ item }">
+      <template #[`item.policy`]="{ item }">
         <v-chip
           :color="item.policy === 'auto-approve' ? 'success' : item.policy === 'internal-review' ? 'warning' : 'info'"
           size="small"
@@ -110,12 +136,12 @@ onMounted(async () => {
         </v-chip>
       </template>
 
-      <template #item.requiredRole="{ item }">
+      <template #[`item.requiredRole`]="{ item }">
         <span v-if="item.requiredRole">{{ item.requiredRole }}</span>
         <span v-else class="text-medium-emphasis">--</span>
       </template>
 
-      <template #item.actions="{ item }">
+      <template #[`item.actions`]="{ item }">
         <v-btn
           variant="text"
           icon="mdi-pencil"
@@ -135,7 +161,7 @@ onMounted(async () => {
     </v-alert>
 
     <!-- Edit Config Dialog -->
-    <v-dialog v-model="showEditDialog" max-width="500">
+    <v-dialog v-model="showEditDialog" :max-width="540">
       <v-card v-if="editingConfig">
         <v-card-title class="text-h6">
           Edit: {{ editingConfig.eventType }}
@@ -164,7 +190,7 @@ onMounted(async () => {
         <v-card-actions>
           <v-spacer />
           <v-btn variant="text" @click="showEditDialog = false">Cancel</v-btn>
-          <v-btn color="primary" variant="tonal" :loading="loading" @click="saveConfig">
+          <v-btn color="primary" variant="tonal" :loading="loading" :disabled="editPolicy === 'internal-review' && !editRequiredRole" @click="saveConfig">
             Save
           </v-btn>
         </v-card-actions>
@@ -172,3 +198,11 @@ onMounted(async () => {
     </v-dialog>
   </v-container>
 </template>
+
+<style scoped>
+.review-config-table {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-card);
+}
+</style>

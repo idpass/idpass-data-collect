@@ -21,6 +21,7 @@ import { Pool } from "pg";
 import { v4 as uuidv4 } from "uuid";
 import crypto from "crypto";
 import { createLogger } from "../utils/logger";
+import { withClient } from "../utils/db";
 
 const log = createLogger("OtpStore");
 
@@ -62,8 +63,7 @@ export class OtpStoreImpl implements OtpStore {
   }
 
   async initialize(): Promise<void> {
-    const client = await this.pool.connect();
-    try {
+    await withClient(this.pool, async (client) => {
       await client.query(`
         CREATE TABLE IF NOT EXISTS otp_codes (
           id TEXT PRIMARY KEY,
@@ -81,9 +81,7 @@ export class OtpStoreImpl implements OtpStore {
         CREATE INDEX IF NOT EXISTS idx_otp_codes_identifier_tenant
         ON otp_codes (identifier, tenant_id)
       `);
-    } finally {
-      client.release();
-    }
+    });
     log.info("OTP store initialized");
   }
 
@@ -97,10 +95,15 @@ export class OtpStoreImpl implements OtpStore {
   }
 
   /**
-   * Hash an OTP code using SHA-256 so plaintext codes are not stored in the database.
+   * Hash an OTP code using HMAC-SHA256 so plaintext codes are not stored in the database.
+   * Uses OTP_HASH_SECRET or falls back to JWT_SECRET for the HMAC key.
    */
   private hashCode(code: string): string {
-    return crypto.createHash("sha256").update(code).digest("hex");
+    const secret = process.env.OTP_HASH_SECRET || process.env.JWT_SECRET;
+    if (!secret) {
+      log.warn("Neither OTP_HASH_SECRET nor JWT_SECRET is set — OTP hashing is degraded");
+    }
+    return crypto.createHmac("sha256", secret || "").update(code).digest("hex");
   }
 
   /**
@@ -126,33 +129,32 @@ export class OtpStoreImpl implements OtpStore {
 
     const hashedCode = this.hashCode(code);
 
-    const client = await this.pool.connect();
-    try {
+    await withClient(this.pool, async (client) => {
       // Wrap invalidation + insert in a transaction so both succeed or fail
       // together. Without this, a crash between the UPDATE and INSERT would
       // leave the user with no valid code (denial of service).
       await client.query("BEGIN");
-      // Invalidate all existing active codes for this identifier/tenant
-      // before creating a new one. This prevents code accumulation and
-      // ensures only the most recent code is valid.
-      await client.query(
-        `UPDATE otp_codes SET verified = true
-         WHERE identifier = $1 AND tenant_id = $2 AND verified = false AND expires_at > NOW()`,
-        [identifier, tenantId],
-      );
+      try {
+        // Invalidate all existing active codes for this identifier/tenant
+        // before creating a new one. This prevents code accumulation and
+        // ensures only the most recent code is valid.
+        await client.query(
+          `UPDATE otp_codes SET verified = true
+           WHERE identifier = $1 AND tenant_id = $2 AND verified = false AND expires_at > NOW()`,
+          [identifier, tenantId],
+        );
 
-      await client.query(
-        `INSERT INTO otp_codes (id, identifier, code, tenant_id, entity_guid, expires_at, attempts, verified)
-         VALUES ($1, $2, $3, $4, $5, $6, 0, false)`,
-        [id, identifier, hashedCode, tenantId, entityGuid || null, expiresAt],
-      );
-      await client.query("COMMIT");
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+        await client.query(
+          `INSERT INTO otp_codes (id, identifier, code, tenant_id, entity_guid, expires_at, attempts, verified)
+           VALUES ($1, $2, $3, $4, $5, $6, 0, false)`,
+          [id, identifier, hashedCode, tenantId, entityGuid || null, expiresAt],
+        );
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      }
+    });
 
     log.info({ tenantId }, "OTP code created");
 
@@ -176,76 +178,73 @@ export class OtpStoreImpl implements OtpStore {
     code: string,
     tenantId: string,
   ): Promise<OtpCode | null> {
-    const client = await this.pool.connect();
-    try {
+    return withClient(this.pool, async (client) => {
       await client.query("BEGIN");
+      try {
+        // Lock the most recent active code with FOR UPDATE SKIP LOCKED
+        // to prevent concurrent verification of the same code.
+        const result = await client.query(
+          `SELECT id, identifier, code, tenant_id, entity_guid, expires_at, attempts, verified, created_at
+           FROM otp_codes
+           WHERE identifier = $1
+             AND tenant_id = $2
+             AND verified = false
+             AND attempts < $3
+             AND expires_at > NOW()
+           ORDER BY created_at DESC
+           LIMIT 1
+           FOR UPDATE SKIP LOCKED`,
+          [identifier, tenantId, MAX_ATTEMPTS],
+        );
 
-      // Lock the most recent active code with FOR UPDATE SKIP LOCKED
-      // to prevent concurrent verification of the same code.
-      const result = await client.query(
-        `SELECT id, identifier, code, tenant_id, entity_guid, expires_at, attempts, verified, created_at
-         FROM otp_codes
-         WHERE identifier = $1
-           AND tenant_id = $2
-           AND verified = false
-           AND attempts < $3
-           AND expires_at > NOW()
-         ORDER BY created_at DESC
-         LIMIT 1
-         FOR UPDATE SKIP LOCKED`,
-        [identifier, tenantId, MAX_ATTEMPTS],
-      );
+        if (result.rows.length === 0) {
+          await client.query("ROLLBACK");
+          return null;
+        }
 
-      if (result.rows.length === 0) {
-        await client.query("ROLLBACK");
-        return null;
-      }
+        const row = result.rows[0];
 
-      const row = result.rows[0];
+        // Constant-time comparison of the input code against the stored hash
+        if (!this.verifyCodeHash(code, row.code)) {
+          // Increment attempts atomically within the same transaction
+          await client.query(
+            `UPDATE otp_codes SET attempts = attempts + 1 WHERE id = $1`,
+            [row.id],
+          );
+          await client.query("COMMIT");
+          return null;
+        }
 
-      // Constant-time comparison of the input code against the stored hash
-      if (!this.verifyCodeHash(code, row.code)) {
-        // Increment attempts atomically within the same transaction
+        // Mark as verified atomically within the same transaction
         await client.query(
-          `UPDATE otp_codes SET attempts = attempts + 1 WHERE id = $1`,
+          `UPDATE otp_codes SET verified = true WHERE id = $1`,
           [row.id],
         );
         await client.query("COMMIT");
-        return null;
+
+        return {
+          id: row.id,
+          identifier: row.identifier,
+          code: row.code,
+          tenantId: row.tenant_id,
+          entityGuid: row.entity_guid,
+          expiresAt: row.expires_at,
+          attempts: row.attempts,
+          verified: true,
+          createdAt: row.created_at,
+        };
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
       }
-
-      // Mark as verified atomically within the same transaction
-      await client.query(
-        `UPDATE otp_codes SET verified = true WHERE id = $1`,
-        [row.id],
-      );
-      await client.query("COMMIT");
-
-      return {
-        id: row.id,
-        identifier: row.identifier,
-        code: row.code,
-        tenantId: row.tenant_id,
-        entityGuid: row.entity_guid,
-        expiresAt: row.expires_at,
-        attempts: row.attempts,
-        verified: true,
-        createdAt: row.created_at,
-      };
-    } catch (error) {
-      await client.query("ROLLBACK");
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
   }
 
   async getActiveCodesByIdentifier(
     identifier: string,
     tenantId: string,
   ): Promise<OtpCode[]> {
-    const client = await this.pool.connect();
-    try {
+    return withClient(this.pool, async (client) => {
       const result = await client.query(
         `SELECT id, identifier, code, tenant_id, entity_guid, expires_at, attempts, verified, created_at
          FROM otp_codes
@@ -269,42 +268,23 @@ export class OtpStoreImpl implements OtpStore {
         verified: row.verified,
         createdAt: row.created_at,
       }));
-    } finally {
-      client.release();
-    }
+    });
   }
 
   async incrementAttempts(id: string): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query(
-        `UPDATE otp_codes SET attempts = attempts + 1 WHERE id = $1`,
-        [id],
-      );
-    } finally {
-      client.release();
-    }
+    await withClient(this.pool, (client) =>
+      client.query(`UPDATE otp_codes SET attempts = attempts + 1 WHERE id = $1`, [id]),
+    );
   }
 
   async markVerified(id: string): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query(
-        `UPDATE otp_codes SET verified = true WHERE id = $1`,
-        [id],
-      );
-    } finally {
-      client.release();
-    }
+    await withClient(this.pool, (client) =>
+      client.query(`UPDATE otp_codes SET verified = true WHERE id = $1`, [id]),
+    );
   }
 
   async clearStore(): Promise<void> {
-    const client = await this.pool.connect();
-    try {
-      await client.query(`DELETE FROM otp_codes`);
-    } finally {
-      client.release();
-    }
+    await withClient(this.pool, (client) => client.query(`DELETE FROM otp_codes`));
   }
 
   async closeConnection(): Promise<void> {

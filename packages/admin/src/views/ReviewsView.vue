@@ -1,3 +1,22 @@
+<!--
+ * Licensed to the Association pour la cooperation numerique (ACN) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ACN licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+-->
+
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { getApps } from '@/api'
@@ -177,10 +196,26 @@ onMounted(() => {
 
 <template>
   <v-container>
-    <h1 class="text-h4 mb-4">Reviews</h1>
+    <div class="page-header">
+      <div class="page-header__text">
+        <h1 class="page-header__title">Reviews</h1>
+        <p class="page-header__subtitle">Review and approve submitted data changes</p>
+      </div>
+      <div class="page-header__actions">
+        <v-btn
+          v-if="hasSelectedReviews"
+          color="success"
+          variant="tonal"
+          prepend-icon="mdi-check-all"
+          @click="handleBulkApprove"
+        >
+          Approve Selected ({{ selectedReviewIds.length }})
+        </v-btn>
+      </div>
+    </div>
 
     <v-row class="mb-4" align="center">
-      <v-col cols="12" md="4">
+      <v-col cols="12" md="5">
         <v-select
           v-model="selectedTenantId"
           :items="tenants"
@@ -192,7 +227,7 @@ onMounted(() => {
           hide-details
         />
       </v-col>
-      <v-col cols="12" md="4">
+      <v-col cols="12" md="7">
         <v-chip-group v-model="selectedStatus" column>
           <v-chip
             v-for="option in statusOptions"
@@ -204,17 +239,6 @@ onMounted(() => {
             {{ option.title }}
           </v-chip>
         </v-chip-group>
-      </v-col>
-      <v-col cols="12" md="4" class="text-right">
-        <v-btn
-          v-if="hasSelectedReviews"
-          color="success"
-          variant="tonal"
-          prepend-icon="mdi-check-all"
-          @click="handleBulkApprove"
-        >
-          Approve Selected ({{ selectedReviewIds.length }})
-        </v-btn>
       </v-col>
     </v-row>
 
@@ -230,26 +254,26 @@ onMounted(() => {
       :loading="reviewsStore.loading"
       item-value="id"
       show-select
-      class="elevation-1 reviews-table"
+      class="reviews-table"
       @click:row="handleRowClick"
     >
-      <template #item.entityGuid="{ item }">
+      <template #[`item.entityGuid`]="{ item }">
         <span class="entity-guid" :title="item.entityGuid">
           {{ item.entityGuid.substring(0, 8) }}...
         </span>
       </template>
 
-      <template #item.createdAt="{ item }">
+      <template #[`item.createdAt`]="{ item }">
         {{ formatDate(item.createdAt) }}
       </template>
 
-      <template #item.status="{ item }">
+      <template #[`item.status`]="{ item }">
         <v-chip :color="statusColor(item.status)" size="small" variant="tonal">
           {{ item.status }}
         </v-chip>
       </template>
 
-      <template #item.actions="{ item }">
+      <template #[`item.actions`]="{ item }">
         <template v-if="item.status === 'pending'">
           <v-btn
             variant="text"
@@ -274,7 +298,7 @@ onMounted(() => {
     </v-data-table>
 
     <!-- Reject Dialog -->
-    <v-dialog v-model="showRejectDialog" max-width="500">
+    <v-dialog v-model="showRejectDialog" :max-width="540">
       <v-card>
         <v-card-title class="text-h6">Reject Review</v-card-title>
         <v-card-text>
@@ -303,7 +327,7 @@ onMounted(() => {
     </v-dialog>
 
     <!-- Review Detail Dialog -->
-    <v-dialog v-model="showDetailDialog" max-width="700">
+    <v-dialog v-model="showDetailDialog" :max-width="700">
       <v-card v-if="selectedReview">
         <v-card-title class="d-flex align-center justify-space-between">
           <span class="text-h6">Review Detail</span>
@@ -394,7 +418,13 @@ onMounted(() => {
 <style scoped>
 .entity-guid {
   font-family: monospace;
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
+}
+
+.reviews-table {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-card);
 }
 
 .reviews-table :deep(tbody tr) {
@@ -404,42 +434,42 @@ onMounted(() => {
 .detail-meta {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .detail-meta-row {
   display: flex;
-  gap: 12px;
-  font-size: 0.9rem;
+  gap: var(--spacing-md);
+  font-size: var(--font-size-sm);
 }
 
 .detail-meta-label {
   font-weight: 600;
-  color: rgba(0, 0, 0, 0.6);
+  color: var(--text-muted);
   min-width: 120px;
   flex-shrink: 0;
 }
 
 .detail-meta-value {
-  color: rgba(0, 0, 0, 0.87);
+  color: var(--text-main);
   word-break: break-word;
 }
 
 .mono-text {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
 }
 
 .data-sheet {
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.02);
+  border-radius: var(--radius-lg);
+  background: var(--neutral-50);
 }
 
 .data-display {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  line-height: 1.5;
+  line-height: var(--line-height-normal);
   overflow-x: auto;
 }
 </style>

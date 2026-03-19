@@ -9,15 +9,17 @@
  * These tests MUST FAIL against the current codebase.
  */
 import "dotenv/config";
-import jwt from "jsonwebtoken";
+import fs from "fs";
+import path from "path";
 import request from "supertest";
-import { Client } from "pg";
 import { v4 as uuidv4 } from "uuid";
 import { FormSubmission, SyncLevel } from "@idpass/data-collect-core";
 import { run } from "../syncServer";
-import { SyncServerInstance, AppConfig, Role } from "../types";
+import { SyncServerInstance, AppConfig } from "../types";
+import { getConnectionString, ensureDatabaseExists, describeIfPostgres } from "./helpers/testDb";
 
 jest.mock("../utils/logger", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const pino = require("pino");
   const silentLogger = pino({ level: "silent" });
   return {
@@ -62,37 +64,7 @@ const tenantBConfig: AppConfig = {
   ],
 };
 
-const getConnectionString = () => {
-  const url = process.env.POSTGRES_TEST;
-  if (!url) return "";
-  const parsed = new URL(url.replace(/ /g, "%20"));
-  const baseName = parsed.pathname.replace(/^\//, "");
-  const dbName = baseName ? `${baseName}_sec_tenant` : "datacollect_sec_tenant";
-  parsed.pathname = `/${dbName}`;
-  return parsed.toString();
-};
-
-const postgresUrl = getConnectionString();
-const describeIfPostgres = process.env.POSTGRES_TEST ? describe : describe.skip;
-
-const ensureDatabaseExists = async (connectionString: string) => {
-  if (!connectionString) return;
-  const parsed = new URL(connectionString);
-  const dbName = parsed.pathname.replace(/^\//, "");
-  if (!dbName) return;
-
-  const adminUrl = new URL(connectionString);
-  adminUrl.pathname = "/postgres";
-
-  const client = new Client({ connectionString: adminUrl.toString() });
-  await client.connect();
-  const result = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
-  if (result.rowCount === 0) {
-    const escapedName = dbName.replace(/"/g, '""');
-    await client.query(`CREATE DATABASE "${escapedName}"`);
-  }
-  await client.end();
-};
+const postgresUrl = getConnectionString("sec_tenant");
 
 describeIfPostgres("SECURITY: Tenant isolation vulnerabilities", () => {
   let app: SyncServerInstance | null = null;
@@ -284,13 +256,11 @@ describeIfPostgres("SECURITY: Tenant isolation vulnerabilities", () => {
       // The dynamic import of ReviewService fails in test (needs --experimental-vm-modules),
       // so we verify the vulnerability by inspecting the route handler source.
 
-      const reviewRoutesSource = require("fs").readFileSync(
-        require("path").join(__dirname, "..", "routes", "reviewRoutes.ts"),
+      const reviewRoutesSource = fs.readFileSync(
+        path.join(__dirname, "..", "routes", "reviewRoutes.ts"),
         "utf8",
       );
 
-      // Find the approve handler -- it should check the user's tenantIds
-      // before iterating reviewServiceCache
       const approveSection = reviewRoutesSource.substring(
         reviewRoutesSource.indexOf("/:id/approve"),
         reviewRoutesSource.indexOf("/:id/reject"),
@@ -304,12 +274,11 @@ describeIfPostgres("SECURITY: Tenant isolation vulnerabilities", () => {
     });
 
     test("review reject endpoint iterates ALL tenants without filtering by user access", () => {
-      const reviewRoutesSource = require("fs").readFileSync(
-        require("path").join(__dirname, "..", "routes", "reviewRoutes.ts"),
+      const reviewRoutesSource = fs.readFileSync(
+        path.join(__dirname, "..", "routes", "reviewRoutes.ts"),
         "utf8",
       );
 
-      // Find the reject handler
       const rejectSection = reviewRoutesSource.substring(
         reviewRoutesSource.indexOf("/:id/reject"),
         reviewRoutesSource.indexOf("// List all reviews") ||

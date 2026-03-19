@@ -1,13 +1,21 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
+import { onMounted } from 'vue'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import Claim169ScannerOverlay from '@/components/Claim169ScannerOverlay.vue'
+import LockScreen from '@/components/LockScreen.vue'
+import { AppLockService } from '@/services/AppLockService'
 
 const { isOffline } = useNetworkStatus()
+
+onMounted(async () => {
+  await AppLockService.init()
+})
 </script>
 
 <template>
-  <div id="app" class="app-shell safe-top safe-bottom">
+  <div id="app" class="app-shell safe-top safe-bottom" @touchstart="AppLockService.resetInactivityTimer" @click="AppLockService.resetInactivityTimer">
+    <LockScreen v-if="AppLockService.locked.value" />
     <div v-if="isOffline" class="offline-banner" role="alert">
       <svg class="offline-banner__icon" viewBox="0 0 24 24" focusable="false">
         <path
@@ -27,7 +35,7 @@ const { isOffline } = useNetworkStatus()
 <style scoped>
 .app-shell {
   min-height: 100vh;
-  background: linear-gradient(180deg, var(--surface) 0%, var(--background) 100%);
+  background: var(--background);
   color: var(--text-main);
 }
 
@@ -51,7 +59,7 @@ const { isOffline } = useNetworkStatus()
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
-  background: linear-gradient(135deg, var(--status-warning-light) 0%, #fde68a 100%);
+  background: var(--status-warning-light);
   border-bottom: 1px solid var(--status-warning);
   color: var(--status-warning);
   font-size: var(--font-size-sm);

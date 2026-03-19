@@ -6,7 +6,7 @@ import request from "supertest";
 import { v4 as uuidv4 } from "uuid";
 import { run } from "../syncServer";
 import { SyncServerInstance, AppConfig } from "../types";
-import { Client } from "pg";
+import { getConnectionString, ensureDatabaseExists, describeIfPostgres } from "./helpers/testDb";
 
 const mockConfig: AppConfig = {
   id: "health-test-config",
@@ -26,38 +26,7 @@ const mockConfig: AppConfig = {
   ],
 };
 
-const getConnectionString = () => {
-  const url = process.env.POSTGRES_TEST;
-  if (!url) return "";
-  const parsed = new URL(url.replace(/ /g, "%20"));
-  const baseName = parsed.pathname.replace(/^\//, "");
-  const dbName = baseName ? `${baseName}_health_security` : "datacollect_health_security";
-  parsed.pathname = `/${dbName}`;
-  return parsed.toString();
-};
-
-const postgresUrl = getConnectionString();
-const describeIfPostgres = process.env.POSTGRES_TEST ? describe : describe.skip;
-
-const ensureDatabaseExists = async (connectionString: string) => {
-  if (!connectionString) return;
-
-  const parsed = new URL(connectionString);
-  const dbName = parsed.pathname.replace(/^\//, "");
-  if (!dbName) return;
-
-  const adminUrl = new URL(connectionString);
-  adminUrl.pathname = "/postgres";
-
-  const client = new Client({ connectionString: adminUrl.toString() });
-  await client.connect();
-  const result = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
-  if (result.rowCount === 0) {
-    const escapedName = dbName.replace(/"/g, '""');
-    await client.query(`CREATE DATABASE "${escapedName}"`);
-  }
-  await client.end();
-};
+const postgresUrl = getConnectionString("health_security");
 
 describeIfPostgres("Health and Security endpoints", () => {
   let app: SyncServerInstance | null = null;
@@ -157,7 +126,7 @@ describeIfPostgres("Health and Security endpoints", () => {
       const response = await request(currentApp.httpServer).get("/api/users/check-token");
 
       expect(response.status).toBe(401);
-      expect(response.body.error).toBe("Authorization header missing");
+      expect(response.body.error).toBe("Invalid token");
     });
 
     it("returns 401 when an invalid token is provided", async () => {
@@ -192,7 +161,7 @@ describeIfPostgres("Health and Security endpoints", () => {
         .set("Authorization", "Basic dXNlcjpwYXNz");
 
       expect(response.status).toBe(401);
-      expect(response.body.error).toBe("Invalid authentication type");
+      expect(response.body.error).toBe("Invalid token");
     });
   });
 

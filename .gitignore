@@ -94,3 +94,7 @@ website/docs/packages/datacollect/api/
 website/docs/packages/backend/api-reference-generated/
 
 .cursor/
+.claude/
+!.claude/hooks/
+!.claude/settings.json
+*storybook.log

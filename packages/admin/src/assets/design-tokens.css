@@ -87,6 +87,11 @@
   --spacing-2xl: 3rem;
   --spacing-section: 4.5rem;
 
+  /* Dialog width tiers */
+  --dialog-sm: 400px;
+  --dialog-md: 540px;
+  --dialog-lg: 700px;
+
   /* Border Radius - Professional, not playful */
   --radius-sm: 0.125rem;
   --radius-default: 0.25rem;

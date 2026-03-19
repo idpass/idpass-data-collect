@@ -99,13 +99,29 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
         return res.status(400).json({ error: "Missing tenantId query parameter" });
       }
 
-      const reviewService = await getReviewService(appInstanceStore, reviewStore, tenantId as string);
-      if (!reviewService) {
+      const appInstance = await appInstanceStore.getAppInstance(tenantId as string);
+      if (!appInstance) {
         return res.status(404).json({ error: "Tenant not found" });
       }
 
-      const filters = status ? { status: status as "pending" | "approved" | "rejected" } : undefined;
-      const reviews = reviewService.getReviewQueue(tenantId as string, filters);
+      const filters = status ? { status: status as string } : undefined;
+      const dbReviews = await reviewStore.getReviewsByTenant(tenantId as string, filters);
+
+      // Map DB records to the API shape expected by clients
+      const reviews = dbReviews.map((r) => ({
+        id: r.id,
+        submissionGuid: r.submissionGuid,
+        tenantId: r.tenantId,
+        status: r.status,
+        submittedBy: r.submittedBy || "",
+        reviewedBy: r.reviewedBy || null,
+        reviewedAt: r.reviewedAt ? r.reviewedAt.toISOString() : null,
+        rejectionReason: r.rejectionReason || null,
+        eventType: r.eventType,
+        entityGuid: r.entityGuid || "",
+        formData: r.data || {},
+        createdAt: r.createdAt ? r.createdAt.toISOString() : new Date().toISOString(),
+      }));
 
       res.json({ reviews });
     }),
@@ -130,6 +146,22 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
       }
 
       const review = await reviewService.submitForReview(tenantId, formData as FormSubmission);
+
+      // Persist review to database
+      await reviewStore.saveReview({
+        id: review.id,
+        submissionGuid: review.submissionGuid,
+        tenantId: review.tenantId,
+        status: review.status,
+        submittedBy: review.submittedBy,
+        reviewedBy: review.reviewedBy || undefined,
+        reviewedAt: review.reviewedAt ? new Date(review.reviewedAt) : undefined,
+        rejectionReason: review.rejectionReason || undefined,
+        eventType: review.eventType,
+        entityGuid: review.entityGuid,
+        data: formData,
+        createdAt: new Date(review.createdAt),
+      });
 
       res.json({ review });
     }),
@@ -161,6 +193,13 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
       if (!review) {
         return res.status(404).json({ error: "Review not found" });
       }
+
+      // Persist approval to database
+      await reviewStore.updateReviewStatus(id, {
+        status: review.status,
+        reviewedBy: review.reviewedBy || user.email,
+        reviewedAt: review.reviewedAt ? new Date(review.reviewedAt) : new Date(),
+      });
 
       res.json({ review });
     }),
@@ -196,6 +235,14 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
       if (!review) {
         return res.status(404).json({ error: "Review not found" });
       }
+
+      // Persist rejection to database
+      await reviewStore.updateReviewStatus(id, {
+        status: review.status,
+        reviewedBy: review.reviewedBy || user.email,
+        reviewedAt: review.reviewedAt ? new Date(review.reviewedAt) : new Date(),
+        rejectionReason: reason,
+      });
 
       res.json({ review });
     }),
@@ -275,6 +322,10 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
 
       if (!policy) {
         return res.status(400).json({ error: "Missing policy" });
+      }
+
+      if (policy === "internal-review" && !requiredRole) {
+        return res.status(400).json({ error: "internal-review policy requires a requiredRole" });
       }
 
       const configRecord = await reviewStore.setConfig(tenantId, eventType, {

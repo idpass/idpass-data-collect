@@ -18,14 +18,26 @@
  */
 
 import type { ExternalSyncAdapterV2, AdapterDescriptor } from "../interfaces/adapter";
+import type { EventStore, ExternalSyncConfig } from "../interfaces/types";
+import type { EventApplierService } from "../services/EventApplierService";
 import { createLogger } from "../utils/logger";
 
 const log = createLogger("AdapterRegistry");
 
 /**
- * Factory function type for creating adapter instances.
+ * Dependencies provided to adapter factories by ExternalSyncManager.
  */
-export type AdapterFactory = () => ExternalSyncAdapterV2;
+export interface AdapterDeps {
+  eventStore: EventStore;
+  eventApplierService: EventApplierService;
+  syncConfig: ExternalSyncConfig;
+}
+
+/**
+ * Factory function type for creating adapter instances.
+ * Receives optional dependencies for adapters that need access to stores.
+ */
+export type AdapterFactory = (deps?: AdapterDeps) => ExternalSyncAdapterV2;
 
 /**
  * Registry for external sync adapters.
@@ -78,7 +90,7 @@ export class AdapterRegistry {
    * @returns A new ExternalSyncAdapterV2 instance
    * @throws {Error} If no factory is registered for the given type
    */
-  create(type: string): ExternalSyncAdapterV2 {
+  create(type: string, deps?: AdapterDeps): ExternalSyncAdapterV2 {
     const factory = this.factories.get(type);
     if (!factory) {
       throw new Error(
@@ -86,7 +98,7 @@ export class AdapterRegistry {
         `Available types: ${this.types().join(", ") || "(none)"}`,
       );
     }
-    return factory();
+    return factory(deps);
   }
 
   /**

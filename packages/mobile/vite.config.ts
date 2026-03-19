@@ -50,17 +50,19 @@ export default defineConfig({
     __GIT_COMMIT_HASH__: JSON.stringify(getGitInfo().commitHash)
   },
 
-  // Optimize for offline usage
+  // Optimize for offline usage — single bundle for Capacitor file:// loading.
+  // inlineDynamicImports is required because RxJS/RxDB use CJS-style IIFEs
+  // that break when Rollup reorders modules across chunks.
+  // The @aparajita/capacitor-secure-storage plugin uses registerPlugin() with
+  // lazy dynamic imports that break when inlined. We pre-resolve the native
+  // module reference via a manual chunk to avoid the circular init issue.
   build: {
     rollupOptions: {
       output: {
         manualChunks: undefined,
         inlineDynamicImports: true,
-        // Ensure a single entry point
         entryFileNames: 'app.js',
-        // Put all assets in the same directory
         assetFileNames: 'assets/[name][extname]',
-        // Disable chunk splitting
         chunkFileNames: '[name].js'
       }
     },

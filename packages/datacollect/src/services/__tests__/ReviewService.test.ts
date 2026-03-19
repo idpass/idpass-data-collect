@@ -14,10 +14,6 @@ import { IndexedDbEntityStorageAdapter } from "../../storage/IndexedDbEntityStor
 import { IndexedDbEventStorageAdapter } from "../../storage/IndexedDbEventStorageAdapter";
 import {
   ReviewService,
-  ReviewPolicy,
-  ReviewConfig,
-  SubmissionReview,
-  ReviewStatus,
 } from "../ReviewService";
 
 function makeForm(overrides: Partial<FormSubmission> = {}): FormSubmission {

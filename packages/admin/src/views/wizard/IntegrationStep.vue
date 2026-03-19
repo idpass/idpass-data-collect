@@ -131,24 +131,18 @@ const getAdapterDescription = computed(() => {
 
     <v-form class="integration-form">
       <!-- Sync Type -->
-      <div class="form-section">
-        <label class="form-label">
-          Integration Type
-          <span class="required">*</span>
-        </label>
-        <v-select
-          v-model="draftStore.draft.externalSync.type"
-          :items="syncTypeOptions"
-          placeholder="Select an integration adapter"
-          :error-messages="draftStore.errors.integration?.type"
-          variant="outlined"
-          density="comfortable"
-          clearable
-        />
-        <p class="form-hint">
-          Choose the external system you want to integrate with.
-        </p>
-      </div>
+      <v-select
+        v-model="draftStore.draft.externalSync.type"
+        :items="syncTypeOptions"
+        label="Integration Type *"
+        placeholder="Select an integration adapter"
+        hint="Choose the external system you want to integrate with."
+        persistent-hint
+        :error-messages="draftStore.errors.integration?.type"
+        variant="outlined"
+        density="comfortable"
+        clearable
+      />
 
       <!-- Adapter Description -->
       <v-alert
@@ -156,28 +150,21 @@ const getAdapterDescription = computed(() => {
         type="info"
         variant="tonal"
         density="compact"
-        class="mb-4"
       >
         {{ getAdapterDescription }}
       </v-alert>
 
       <!-- Sync URL -->
-      <div class="form-section">
-        <label class="form-label">
-          API URL
-          <span class="required">*</span>
-        </label>
-        <v-text-field
-          v-model="draftStore.draft.externalSync.url"
-          placeholder="https://openspp.example.com"
-          :error-messages="draftStore.errors.integration?.url"
-          variant="outlined"
-          density="comfortable"
-        />
-        <p class="form-hint">
-          The base URL of the external system's API endpoint.
-        </p>
-      </div>
+      <v-text-field
+        v-model="draftStore.draft.externalSync.url"
+        label="API URL *"
+        placeholder="https://openspp.example.com"
+        hint="The base URL of the external system's API endpoint."
+        persistent-hint
+        :error-messages="draftStore.errors.integration?.url"
+        variant="outlined"
+        density="comfortable"
+      />
 
       <!-- Development-only proxy configuration -->
       <v-expand-transition>
@@ -307,31 +294,14 @@ const getAdapterDescription = computed(() => {
 .integration-form {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-lg);
-}
-
-.form-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-md);
 }
 
 .form-label {
   font-weight: 500;
   font-size: var(--font-size-sm);
   color: var(--text-main);
-}
-
-.form-label .required {
-  color: var(--status-danger);
-  margin-left: 2px;
-}
-
-.form-hint {
-  font-size: var(--font-size-xs);
-  color: var(--text-muted);
-  margin: 0;
-  margin-top: calc(-1 * var(--spacing-xs));
+  margin-bottom: var(--spacing-xs);
 }
 
 .connection-test {

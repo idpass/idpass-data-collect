@@ -101,7 +101,7 @@ export class UserStoreImpl implements UserStore {
   }
 
   async updateUser(user: UserWithPasswordHash): Promise<void> {
-    const { id, email, passwordHash, role, tenantIds = [], roleAssignments = [] } = user;
+    const { id, passwordHash, role, tenantIds = [], roleAssignments = [] } = user;
     await this.db
       .update(users)
       .set({

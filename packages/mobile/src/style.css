@@ -48,7 +48,11 @@ body {
 
 body.barcode-scanner-active {
   visibility: hidden;
-  opacity: 0;
+  background-color: transparent !important;
+}
+
+body.barcode-scanner-active #app {
+  background-color: transparent !important;
 }
 
 .barcode-scanner-modal {
@@ -353,4 +357,14 @@ h1, h2, h3, h4, h5, h6 {
   background-color: var(--status-info-light);
   color: var(--status-info);
   border: 1px solid var(--status-info);
+}
+
+/* Applied when the app is backgrounded to prevent the OS task switcher from
+   capturing sensitive screen content. Note: on iOS, the OS takes the snapshot
+   before this class is applied (~100-300ms window), so this is partial
+   protection only. Android is fully covered by FLAG_SECURE (see MainActivity). */
+body.app-backgrounded #app,
+body.app-backgrounded #dy-app {
+  filter: blur(20px);
+  pointer-events: none;
 }

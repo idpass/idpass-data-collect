@@ -8,11 +8,12 @@
  */
 import "dotenv/config";
 import request from "supertest";
-import { Client } from "pg";
 import { run } from "../syncServer";
 import { SyncServerInstance } from "../types";
+import { getConnectionString, ensureDatabaseExists, describeIfPostgres } from "./helpers/testDb";
 
 jest.mock("../utils/logger", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const pino = require("pino");
   const silentLogger = pino({ level: "silent" });
   return {
@@ -21,37 +22,7 @@ jest.mock("../utils/logger", () => {
   };
 });
 
-const getConnectionString = () => {
-  const url = process.env.POSTGRES_TEST;
-  if (!url) return "";
-  const parsed = new URL(url.replace(/ /g, "%20"));
-  const baseName = parsed.pathname.replace(/^\//, "");
-  const dbName = baseName ? `${baseName}_sec_input` : "datacollect_sec_input";
-  parsed.pathname = `/${dbName}`;
-  return parsed.toString();
-};
-
-const postgresUrl = getConnectionString();
-const describeIfPostgres = process.env.POSTGRES_TEST ? describe : describe.skip;
-
-const ensureDatabaseExists = async (connectionString: string) => {
-  if (!connectionString) return;
-  const parsed = new URL(connectionString);
-  const dbName = parsed.pathname.replace(/^\//, "");
-  if (!dbName) return;
-
-  const adminUrl = new URL(connectionString);
-  adminUrl.pathname = "/postgres";
-
-  const client = new Client({ connectionString: adminUrl.toString() });
-  await client.connect();
-  const result = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
-  if (result.rowCount === 0) {
-    const escapedName = dbName.replace(/"/g, '""');
-    await client.query(`CREATE DATABASE "${escapedName}"`);
-  }
-  await client.end();
-};
+const postgresUrl = getConnectionString("sec_input");
 
 describeIfPostgres("SECURITY: CORS configuration", () => {
   let app: SyncServerInstance | null = null;

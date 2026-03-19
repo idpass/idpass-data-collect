@@ -25,35 +25,21 @@ import {
   FormSubmission,
   SyncLevel,
   getExternalField,
+  getAdapterConfigValue,
   EntityType,
-  createTransformer,
-  type TransformerType,
 } from "@idpass/data-collect-core";
 import { EventApplierService } from "@idpass/data-collect-core";
 import OdooClient from "./OdooClient";
 import { IndividualTransformer } from "./pullTransformers/IndividualTransformer";
-import type { OdooConfig, OpenSPPCreateIndividualPayload } from "./odoo-types";
+import type { OdooConfig } from "./odoo-types";
 import type { OpenSppAdapterOptions } from "./OpenSppAdapterOptions";
 import { parseOpenSppAdapterOptions } from "./OpenSppAdapterOptions";
-
-/**
- * Field mapping configuration from external sync config.
- * Matches the structure used in the admin UI.
- */
-interface FieldMapping {
-  formField: string;
-  opensppField: string;
-  transformer: {
-    type: TransformerType;
-    options?: {
-      inputFormat?: "YYYY-MM-DD" | "MM/DD/YYYY" | "DD/MM/YYYY" | "auto";
-      outputFormat?: "YYYY-MM-DD" | "MM/DD/YYYY" | "DD/MM/YYYY";
-      delimiter?: string; // Multi-select transformer option
-      truthyValue?: string; // Boolean transformer option
-      falsyValue?: string; // Boolean transformer option
-    };
-  };
-}
+import {
+  type FieldMapping,
+  buildOpenSppPayload,
+  resolveExternalIdFromEntity,
+  saveExternalIdToEntity,
+} from "./shared";
 
 class OpenSppSyncAdapter implements ExternalSyncAdapter {
   private url: string;
@@ -135,7 +121,7 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
       // Process batch with retry logic
       for (const entityPair of batch) {
         const entity = entityPair.modified;
-        const externalId = await this.resolveExternalIdFromEntity(entity.guid);
+        const externalId = await resolveExternalIdFromEntity(this.eventApplierService, entity.guid);
 
         let attempt = 0;
         let lastError: Error | null = null;
@@ -287,7 +273,7 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     }
 
     // Build OpenSPP payload from form submission using field mappings
-    const payload = this.buildOpenSppPayload(member.data);
+    const payload = buildOpenSppPayload(this.getFieldMappings(), member.data);
 
     console.log("CREATING_INDIVIDUAL", payload);
 
@@ -298,27 +284,10 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
 
     // Save the external ID back to the entity
     if (externalId) {
-      await this.saveExternalIdToEntity(member.entityGuid, externalId);
+      await saveExternalIdToEntity(this.eventApplierService, member.entityGuid, externalId);
     }
 
     return externalId;
-  }
-
-  private async resolveExternalIdFromEntity(entityGuid: string): Promise<number | undefined> {
-    const entityPair = await this.eventApplierService.getEntityStore().getEntity(entityGuid);
-    if (!entityPair) {
-      return undefined;
-    }
-
-    // Check top-level externalId first (used by IndexedDB index), then fallback to data.externalId
-    const externalId = entityPair.modified.externalId ?? entityPair.modified.data.externalId;
-    if (!externalId) {
-      return undefined;
-    }
-
-    // External ID can be stored as number or string
-    const id = typeof externalId === "number" ? externalId : parseInt(String(externalId), 10);
-    return isNaN(id) ? undefined : id;
   }
 
   async updateIndividualData(
@@ -331,79 +300,18 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
     }
 
     // Get the external ID from the entity
-    const externalId = await this.resolveExternalIdFromEntity(member.entityGuid);
+    const externalId = await resolveExternalIdFromEntity(this.eventApplierService, member.entityGuid);
     if (!externalId) {
       throw new Error(`Cannot update individual: entity ${member.entityGuid} does not have an externalId`);
     }
 
     // Build OpenSPP payload from form submission using field mappings
-    const payload = this.buildOpenSppPayload(member.data);
+    const payload = buildOpenSppPayload(this.getFieldMappings(), member.data);
 
     // Update the individual in OpenSPP
     await this.odooClient.write("res.partner", [externalId], payload as unknown as Record<string, unknown>);
 
     return externalId;
-  }
-
-  /**
-   * Builds an OpenSPP payload from form submission data using configured field mappings.
-   * Uses field transformers to convert values to the appropriate OpenSPP format.
-   */
-  private buildOpenSppPayload(formData: Record<string, unknown>): OpenSPPCreateIndividualPayload {
-    const fieldMappings = this.getFieldMappings();
-    const payload: Record<string, unknown> = {
-      is_registrant: true,
-      is_group: false,
-    };
-
-    // Apply field mappings with transformers
-    for (const mapping of fieldMappings) {
-      const formValue = formData[mapping.formField];
-
-      // Skip if form field value is missing
-      if (formValue === null || formValue === undefined || formValue === "") {
-        continue;
-      }
-
-      // Create transformer for this field
-      const transformer = createTransformer(
-        mapping.transformer.type,
-        mapping.transformer.options,
-      );
-
-      // For text transformers, normalize "false" strings to empty string before transformation
-      // This handles cases where boolean false values are stored as strings for text fields
-      let valueToTransform = formValue;
-      if (mapping.transformer.type === "text" && (formValue === "false" || formValue === false)) {
-        valueToTransform = "";
-      }
-
-      // Skip if normalized value is empty (for text fields)
-      if (mapping.transformer.type === "text" && valueToTransform === "") {
-        continue;
-      }
-
-      // Transform the value from form format to OpenSPP format
-      const transformedValue = transformer.transform(valueToTransform);
-
-      // Skip if transformed value is empty, null, or undefined
-      // OpenSPP doesn't accept empty strings for text fields
-      if (transformedValue === null || transformedValue === undefined || transformedValue === "") {
-        continue;
-      }
-
-      // Map to OpenSPP field name
-      payload[mapping.opensppField] = transformedValue;
-    }
-
-    // Ensure required fields are present
-    const finalPayload: OpenSPPCreateIndividualPayload = {
-      is_registrant: true,
-      is_group: false,
-      ...payload,
-    };
-
-    return finalPayload;
   }
 
   /**
@@ -437,9 +345,10 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
 
   /**
    * Gets a required field from the external sync config.
+   * Checks adapterConfig first, then falls back to legacy extraFields.
    */
   private getRequiredField(name: string): string {
-    const value = getExternalField(this.config, name);
+    const value = getAdapterConfigValue<string>(this.config, name);
     if (!value) {
       throw new Error(`Required field '${name}' is missing from external sync config`);
     }
@@ -448,71 +357,12 @@ class OpenSppSyncAdapter implements ExternalSyncAdapter {
 
   /**
    * Gets an optional field from the external sync config.
+   * Checks adapterConfig first, then falls back to legacy extraFields.
    */
   private getOptionalField(name: string): string | undefined {
-    return getExternalField(this.config, name);
+    return getAdapterConfigValue<string>(this.config, name);
   }
 
-  /**
-   * Saves the external ID back to the entity after successful creation in OpenSPP.
-   * This prevents duplicates by ensuring the entity knows its external ID for future updates.
-   *
-   * IMPORTANT: This method directly updates the entity data without creating a new event
-   * to avoid the event being picked up in the next sync cycle and causing duplicate processing.
-   *
-   * Sets the externalId at both the top-level (for IndexedDB index) and in data.externalId
-   * (for consistency with form data structure).
-   */
-  private async saveExternalIdToEntity(entityGuid: string, externalId: number): Promise<void> {
-    try {
-      const entityPair = await this.eventApplierService.getEntityStore().getEntity(entityGuid);
-      if (!entityPair) {
-        console.warn(`Cannot save external ID: entity ${entityGuid} not found`);
-        return;
-      }
-
-      // Check if external ID is already set to avoid unnecessary updates
-      // Check both top-level and nested locations
-      const currentTopLevel = entityPair.modified.externalId;
-      const currentNested = entityPair.modified.data.externalId;
-      const externalIdStr = String(externalId);
-
-      // Compare top-level (stored as string) with string version
-      const topLevelMatches = currentTopLevel === externalIdStr;
-
-      // Compare nested (could be number or string) with both number and string versions
-      const nestedMatches =
-        currentNested === externalId ||
-        currentNested === externalIdStr ||
-        String(currentNested) === externalIdStr;
-
-      if (topLevelMatches && nestedMatches) {
-        return;
-      }
-
-      // Directly update the entity with external ID at both locations:
-      // 1. Top-level externalId (used by IndexedDB index for getEntityByExternalId)
-      // 2. data.externalId (for consistency with form data structure)
-      // This prevents the update from being picked up in the next sync cycle
-      const updatedEntity = {
-        ...entityPair.modified,
-        externalId: String(externalId), // Top-level for index lookup
-        data: {
-          ...entityPair.modified.data,
-          externalId: externalId, // Nested for form data consistency
-        },
-        lastUpdated: new Date().toISOString(),
-      };
-
-      // Save directly to entity store without going through EventApplierService
-      // to avoid creating a new event that would be processed in next sync
-      await this.eventApplierService.getEntityStore().saveEntity(entityPair.modified, updatedEntity);
-    } catch (error) {
-      console.error(`Error saving external ID ${externalId} to entity ${entityGuid}:`, error);
-      // Don't throw - we don't want to fail the entire sync if saving external ID fails
-      // The next sync will try again
-    }
-  }
 }
 
 export default OpenSppSyncAdapter;

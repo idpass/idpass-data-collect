@@ -119,13 +119,11 @@ describe("adapter-configs", () => {
       expect(fieldNames).toContain("clientSecret");
     });
 
-    it("has identifierNamespace field", () => {
+    it("does not expose identifierNamespace in adapter config", () => {
       const namespaceField = OpenSppV2AdapterConfig.fields.find(
         (f) => f.name === "identifierNamespace",
       );
-      expect(namespaceField).toBeDefined();
-      expect(namespaceField?.required).toBe(true);
-      expect(namespaceField?.placeholder).toBe("urn:datacollect:entity");
+      expect(namespaceField).toBeUndefined();
     });
 
     it("has includeStudioExtensions select field", () => {

@@ -145,14 +145,6 @@ export const OpenSppV2AdapterConfig: AdapterConfigSchema = {
       helpText: "OAuth2 client secret from OpenSPP API Client configuration",
     },
     {
-      name: "identifierNamespace",
-      label: "Identifier Namespace",
-      type: "text",
-      required: true,
-      placeholder: "urn:datacollect:entity",
-      helpText: "URI namespace for external identifiers (e.g., urn:datacollect:entity)",
-    },
-    {
       name: "batchSize",
       label: "Batch Size",
       type: "number",

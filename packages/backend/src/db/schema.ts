@@ -96,6 +96,7 @@ export const appConfigs = pgTable("app_configs", {
   externalSync: jsonb("external_sync"),
   authConfigs: jsonb("auth_configs"),
   selfService: jsonb("self_service"),
+  archivedAt: timestamp("archived_at"),
 });
 
 /**

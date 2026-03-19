@@ -32,8 +32,7 @@ jest.mock("../../../datacollect/src/utils/logger", () => ({
   }),
 }));
 
-import type { EventStore, ExternalSyncConfig, EntityPair } from "@idpass/data-collect-core";
-import { EntityType } from "@idpass/data-collect-core";
+import type { EventStore, ExternalSyncConfig } from "@idpass/data-collect-core";
 import { EventApplierService } from "@idpass/data-collect-core";
 import { OpenSppSyncAdapterV2 } from "../OpenSppSyncAdapterV2";
 import { runAdapterConformanceTests } from "../../../datacollect/src/interfaces/__tests__/adapterConformance";

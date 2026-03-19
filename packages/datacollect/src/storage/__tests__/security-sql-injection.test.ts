@@ -97,14 +97,14 @@ describeWithPostgres("SECURITY: SQL injection in searchEntities", () => {
     // single quotes modify the SQL structure:
     // LOWER('anything' OR '1'='1') -- PostgreSQL can't evaluate this
     let threwError = false;
-    let errorMessage = "";
+    let _errorMessage = "";
     try {
       const results = await adapter.searchEntities([{ name: maliciousValue }]);
       // If we get here without error, check that injection didn't return extra rows
       expect(results).toHaveLength(0);
     } catch (error) {
       threwError = true;
-      errorMessage = (error as Error).message || "";
+      _errorMessage = (error as Error).message || "";
     }
 
     // A secure parameterized query would never throw a syntax error for user input.
@@ -123,7 +123,7 @@ describeWithPostgres("SECURITY: SQL injection in searchEntities", () => {
     try {
       const results = await adapter.searchEntities([{ name: maliciousValue }]);
       expect(results).toHaveLength(0);
-    } catch (error) {
+    } catch {
       threwError = true;
     }
 
@@ -143,7 +143,7 @@ describeWithPostgres("SECURITY: SQL injection in searchEntities", () => {
     let results: unknown[] = [];
     try {
       results = await adapter.searchEntities([{ [maliciousKey]: "anything" }]);
-    } catch (error) {
+    } catch {
       threwError = true;
     }
 
@@ -176,8 +176,7 @@ describeWithPostgres("SECURITY: SQL injection in searchEntities", () => {
     let results: unknown[] = [];
     try {
       results = await adapter.searchEntities([{ age: { $gt: maliciousValue } }]);
-    } catch (error) {
-      // It's acceptable to throw an error for non-numeric input
+    } catch {
       threwError = true;
     }
 

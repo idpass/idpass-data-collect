@@ -12,6 +12,7 @@ const snackBarStore = useSnackBarStore()
 
 const configId = ref(route.params.id as string)
 const showResolveDialog = ref(false)
+const showConfirmDeleteDialog = ref(false)
 const selectedDuplicate = ref<PotentialDuplicate | null>(null)
 
 const headers = [
@@ -53,11 +54,18 @@ onMounted(() => {
 
 <template>
   <v-container>
-    <v-btn class="mb-4" variant="text" prepend-icon="mdi-arrow-left" @click="goBack">
-      Back to Collection Program
-    </v-btn>
+    <div class="subpage-nav">
+      <v-btn variant="text" size="small" prepend-icon="mdi-arrow-left" @click="goBack">
+        Collection Program
+      </v-btn>
+    </div>
 
-    <h1 class="text-h4 mb-4">Potential Duplicates</h1>
+    <div class="page-header">
+      <div class="page-header__text">
+        <h1 class="page-header__title">Potential Duplicates</h1>
+        <p class="page-header__subtitle">Identify and resolve duplicate entity records</p>
+      </div>
+    </div>
 
     <v-alert
       v-if="!duplicatesStore.loading && duplicatesStore.duplicates.length === 0"
@@ -73,21 +81,21 @@ onMounted(() => {
       :headers="headers"
       :items="duplicatesStore.duplicates"
       :loading="duplicatesStore.loading"
-      class="elevation-1"
+      class="duplicates-table"
     >
-      <template #item.entityGuid="{ item }">
+      <template #[`item.entityGuid`]="{ item }">
         <span class="entity-guid" :title="item.entityGuid">
           {{ item.entityGuid.substring(0, 12) }}...
         </span>
       </template>
 
-      <template #item.duplicateGuid="{ item }">
+      <template #[`item.duplicateGuid`]="{ item }">
         <span class="entity-guid" :title="item.duplicateGuid">
           {{ item.duplicateGuid.substring(0, 12) }}...
         </span>
       </template>
 
-      <template #item.actions="{ item }">
+      <template #[`item.actions`]="{ item }">
         <v-btn
           variant="tonal"
           color="primary"
@@ -101,7 +109,7 @@ onMounted(() => {
     </v-data-table>
 
     <!-- Resolve Dialog -->
-    <v-dialog v-model="showResolveDialog" max-width="600">
+    <v-dialog v-model="showResolveDialog" :max-width="540">
       <v-card v-if="selectedDuplicate">
         <v-card-title class="text-h6">Resolve Duplicate</v-card-title>
         <v-card-text>
@@ -130,7 +138,7 @@ onMounted(() => {
           <v-btn
             color="primary"
             variant="tonal"
-            @click="handleResolve(true)"
+            @click="showConfirmDeleteDialog = true"
           >
             Keep Existing
           </v-btn>
@@ -144,12 +152,39 @@ onMounted(() => {
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- Confirm deletion dialog -->
+    <v-dialog v-model="showConfirmDeleteDialog" max-width="400">
+      <v-card>
+        <v-card-title class="text-h6">Confirm</v-card-title>
+        <v-card-text>
+          This will permanently remove the duplicate entity. Continue?
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="showConfirmDeleteDialog = false">Cancel</v-btn>
+          <v-btn
+            color="error"
+            variant="tonal"
+            @click="showConfirmDeleteDialog = false; handleResolve(true)"
+          >
+            Confirm
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
 <style scoped>
 .entity-guid {
   font-family: monospace;
-  font-size: 0.85rem;
+  font-size: var(--font-size-sm);
+}
+
+.duplicates-table {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-card);
 }
 </style>

@@ -38,6 +38,32 @@ import type {
   CodeableConcept,
   Extension,
 } from "./types";
+import { v4 as uuidv4 } from "uuid";
+
+/** User ID for sync-originated events */
+const SYNC_USER_ID = "openspp-v2-sync";
+
+/** Extension key for Studio individual custom fields (OpenSPP V2 API) */
+const STUDIO_INDIVIDUAL_EXTENSION_KEY = "urn:openspp:extension:studio-individual";
+
+/**
+ * Gender codes per ISO/IEC 5218 (representation of human sexes).
+ * Push: text -> code; Pull: code -> text.
+ */
+const GENDER_TO_CODE: Record<string, { code: string; display: string }> = {
+  male: { code: "1", display: "Male" },
+  m: { code: "1", display: "Male" },
+  female: { code: "2", display: "Female" },
+  f: { code: "2", display: "Female" },
+  other: { code: "9", display: "Not applicable" },
+};
+
+const GENDER_FROM_CODE: Record<string, string> = {
+  "1": "male",
+  "2": "female",
+  "9": "other",
+  "0": "unknown",
+};
 
 /**
  * OpenSPP V2 Sync Adapter
@@ -72,7 +98,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     this.clientId = getAdapterConfigValue<string>(config, "clientId") ?? "";
     this.clientSecret = getAdapterConfigValue<string>(config, "clientSecret") ?? "";
     this.identifierNamespace =
-      getAdapterConfigValue<string>(config, "identifierNamespace") ?? "urn:datacollect:entity";
+      getAdapterConfigValue<string>(config, "identifierNamespace") ?? "urn:openspp:vocab:id-type#";
     this.includeStudioExtensions =
       getAdapterConfigValue<string>(config, "includeStudioExtensions") !== "false";
     this.batchSize = getAdapterConfigValue<number>(config, "batchSize", 50) ?? 50;
@@ -88,13 +114,18 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       await this.ensureClient();
       return true;
     } catch (error) {
-      console.error("OpenSPP V2 authentication error:", error);
+      console.error(
+        "[OpenSppV2SyncAdapter] Authentication failed:",
+        error instanceof Error ? error.message : error,
+      );
       return false;
     }
   }
 
   /**
    * Push local entities (Individuals and Groups) to OpenSPP.
+   * Syncs all entities each invocation (matching V1 adapter behavior).
+   * Incremental sync via getModifiedEntitiesSince() is a planned optimization.
    */
   async pushData(_credentials?: ExternalSyncCredentials): Promise<void> {
     await this.ensureClient();
@@ -119,18 +150,17 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       await this.pushEntities(groupsToSync, "group");
     }
 
-    if (individualsToSync.length === 0 && groupsToSync.length === 0) {
-      console.log("No entities to sync");
-    }
   }
 
   /**
    * Pull entities (Individuals and Groups) from OpenSPP.
+   * Supports optional _lastUpdated filter when config.lastSyncTimestamp is set.
    */
   async pullData(_credentials?: ExternalSyncCredentials): Promise<void> {
     await this.ensureClient();
-    await this.pullIndividuals();
-    await this.pullGroups();
+    const since = (this.config as { lastSyncTimestamp?: string }).lastSyncTimestamp;
+    await this.pullIndividuals(since);
+    await this.pullGroups(since);
   }
 
   /**
@@ -148,19 +178,11 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     entityType: "individual" | "group",
   ): Promise<void> {
     const label = entityType === "individual" ? "individuals" : "groups";
-    console.log(`Syncing ${entities.length} ${label} in batches of ${this.batchSize}`);
 
-    let successCount = 0;
-    let failureCount = 0;
     const failedEntities: Array<{ guid: string; error: string }> = [];
 
     for (let i = 0; i < entities.length; i += this.batchSize) {
       const batch = entities.slice(i, i + this.batchSize);
-      const batchNumber = Math.floor(i / this.batchSize) + 1;
-      const totalBatches = Math.ceil(entities.length / this.batchSize);
-
-      console.log(`Processing ${label} batch ${batchNumber}/${totalBatches} (${batch.length} entities)`);
-
       for (const entityPair of batch) {
         const entity = entityPair.modified;
         const externalId = this.resolveExternalId(entity);
@@ -177,7 +199,6 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
               await this.pushGroup(entity.guid, entity.data, externalId);
             }
             success = true;
-            successCount++;
           } catch (error) {
             attempt++;
             lastError = error instanceof Error ? error : new Error(String(error));
@@ -189,7 +210,6 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
               );
               await this.delay(delayMs);
             } else {
-              failureCount++;
               failedEntities.push({ guid: entity.guid, error: lastError.message });
               console.error(
                 `Failed to sync ${entityType} ${entity.guid} after ${this.maxRetries} retries:`,
@@ -205,14 +225,13 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       }
     }
 
-    console.log(`${label} sync complete: ${successCount} succeeded, ${failureCount} failed`);
     if (failedEntities.length > 0) {
       console.error(
         `Failed ${label} (${failedEntities.length}):`,
         failedEntities.map((e) => e.guid).join(", "),
       );
       throw new Error(
-        `Sync completed with ${failureCount} failures out of ${entities.length} ${label}. ` +
+        `Sync completed with ${failedEntities.length} failures out of ${entities.length} ${label}. ` +
           `First failure: ${failedEntities[0]?.error || "Unknown error"}`,
       );
     }
@@ -224,10 +243,11 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     externalId?: string,
   ): Promise<void> {
     const resource = this.buildIndividualResource(guid, data);
+    const system = this.resolveIdentifierSystem(data);
 
     if (externalId) {
-      const identifier = this.client!.formatIdentifier(guid);
-      await this.client!.patchIndividual(identifier, {
+      const identifier = this.getClient().formatIdentifier(system, guid);
+      await this.getClient().patchIndividual(identifier, {
         name: resource.name,
         birthDate: resource.birthDate,
         gender: resource.gender,
@@ -235,7 +255,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
         extension: resource.extension,
       });
     } else {
-      const created = await this.client!.createIndividual(resource);
+      const created = await this.getClient().createIndividual(resource);
       await this.saveExternalIdToEntity(guid, created);
     }
   }
@@ -246,33 +266,38 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     externalId?: string,
   ): Promise<void> {
     const resource = this.buildGroupResource(guid, data);
+    const system = this.resolveIdentifierSystem(data);
 
     if (externalId) {
-      const identifier = this.client!.formatIdentifier(guid);
-      await this.client!.patchGroup(identifier, {
+      const identifier = this.getClient().formatIdentifier(system, guid);
+      await this.getClient().patchGroup(identifier, {
         name: resource.name,
         groupType: resource.groupType,
         extension: resource.extension,
       });
     } else {
-      const created = await this.client!.createGroup(resource);
+      const created = await this.getClient().createGroup(resource);
       await this.saveExternalIdToEntity(guid, created);
     }
   }
 
   // ==================== Pull Logic ====================
 
-  private async pullIndividuals(): Promise<void> {
+  private async pullIndividuals(since?: string): Promise<void> {
     const entityStore = this.eventApplierService.getEntityStore();
     let offset = 0;
     const pageSize = 100;
     let hasMore = true;
 
     while (hasMore) {
-      const searchResult = await this.client!.searchIndividuals({
+      const params: Record<string, string> = {
         _count: String(pageSize),
         _offset: String(offset),
-      });
+      };
+      if (since) {
+        params._lastUpdated = since;
+      }
+      const searchResult = await this.getClient().searchIndividuals(params);
 
       const individuals = searchResult.data || [];
       if (individuals.length === 0) {
@@ -304,17 +329,21 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     }
   }
 
-  private async pullGroups(): Promise<void> {
+  private async pullGroups(since?: string): Promise<void> {
     const entityStore = this.eventApplierService.getEntityStore();
     let offset = 0;
     const pageSize = 100;
     let hasMore = true;
 
     while (hasMore) {
-      const searchResult = await this.client!.searchGroups({
+      const params: Record<string, string> = {
         _count: String(pageSize),
         _offset: String(offset),
-      });
+      };
+      if (since) {
+        params._lastUpdated = since;
+      }
+      const searchResult = await this.getClient().searchGroups(params);
 
       const groups = searchResult.data || [];
       if (groups.length === 0) {
@@ -361,15 +390,40 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       baseUrl: this.url,
       clientId: this.clientId,
       clientSecret: this.clientSecret,
-      identifierNamespace: this.identifierNamespace,
       includeStudioExtensions: this.includeStudioExtensions,
     });
 
     await this.client.authenticate();
   }
 
+  private getClient(): OpenSppV2Client {
+    if (!this.client) {
+      throw new Error("Client not initialized. Call ensureClient() first.");
+    }
+    return this.client;
+  }
+
   private resolveExternalId(entity: { externalId?: string; data: Record<string, unknown> }): string | undefined {
     return entity.externalId ?? (entity.data.externalId as string | undefined);
+  }
+
+  /**
+   * Resolve the OpenSPP identifier system URI from entity data.
+   * Checks for an `identifierType` field in the form data, falling back to `national_id`.
+   */
+  private resolveIdentifierSystem(data: Record<string, unknown>): string {
+    const code = (data.identifierType as string) || "national_id";
+    if (code.startsWith(this.identifierNamespace)) {
+      return code;
+    }
+    return `${this.identifierNamespace}${code}`;
+  }
+
+  /**
+   * Check if an identifier system matches the configured namespace.
+   */
+  private isOpenSppIdentifier(system: string): boolean {
+    return system.startsWith(this.identifierNamespace);
   }
 
   /**
@@ -381,9 +435,10 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     data: Record<string, unknown>,
   ): IndividualResource {
     const fieldMappings = this.getFieldMappings();
+    const system = this.resolveIdentifierSystem(data);
     const resource: IndividualResource = {
       type: "Individual",
-      identifier: [this.client!.createIdentifier(guid)],
+      identifier: [this.getClient().createIdentifier(system, guid)],
       active: true,
     };
 
@@ -425,7 +480,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       const studioExtension = this.buildStudioExtension(data, fieldMappings);
       if (Object.keys(studioExtension).length > 1) {
         resource.extension = {
-          "studio-individual": studioExtension,
+          [STUDIO_INDIVIDUAL_EXTENSION_KEY]: studioExtension,
         };
       }
     }
@@ -441,9 +496,10 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     guid: string,
     data: Record<string, unknown>,
   ): GroupResource {
+    const system = this.resolveIdentifierSystem(data);
     const resource: GroupResource = {
       type: "Group",
-      identifier: [this.client!.createIdentifier(guid)],
+      identifier: [this.getClient().createIdentifier(system, guid)],
       active: true,
       groupType: "household",
     };
@@ -463,16 +519,8 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   }
 
   private buildGenderCoding(gender: string): CodeableConcept {
-    const genderMap: Record<string, { code: string; display: string }> = {
-      male: { code: "1", display: "Male" },
-      m: { code: "1", display: "Male" },
-      female: { code: "2", display: "Female" },
-      f: { code: "2", display: "Female" },
-      other: { code: "9", display: "Not applicable" },
-    };
-
     const normalized = gender.toLowerCase();
-    const mapping = genderMap[normalized] || { code: "0", display: "Unknown" };
+    const mapping = GENDER_TO_CODE[normalized] || { code: "0", display: "Unknown" };
 
     return {
       coding: [
@@ -490,7 +538,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     fieldMappings: FieldMapping[],
   ): Extension {
     const extension: Extension = {
-      url: "urn:openspp:extension:studio-individual",
+      url: STUDIO_INDIVIDUAL_EXTENSION_KEY,
     };
 
     for (const mapping of fieldMappings) {
@@ -525,14 +573,14 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
   private extractIdentifier(individual: IndividualResource): string | undefined {
     const matchingId = individual.identifier.find(
-      (id) => id.system === this.identifierNamespace,
+      (id) => this.isOpenSppIdentifier(id.system),
     );
     return matchingId?.value;
   }
 
   private extractGroupIdentifier(group: GroupResource): string | undefined {
     const matchingId = group.identifier.find(
-      (id) => id.system === this.identifierNamespace,
+      (id) => this.isOpenSppIdentifier(id.system),
     );
     return matchingId?.value;
   }
@@ -552,7 +600,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     syncLevel: SyncLevel;
   } {
     const identifier = this.extractIdentifier(individual);
-    const guid = existingGuid || identifier || crypto.randomUUID();
+    const guid = existingGuid || identifier || uuidv4();
 
     const data: Record<string, unknown> = {
       entityName: "individual",
@@ -570,13 +618,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
     if (individual.gender?.coding?.[0]) {
       const genderCode = individual.gender.coding[0].code;
-      const genderMap: Record<string, string> = {
-        "1": "male",
-        "2": "female",
-        "9": "other",
-        "0": "unknown",
-      };
-      data.gender = genderMap[genderCode] || "unknown";
+      data.gender = GENDER_FROM_CODE[genderCode] || "unknown";
     }
 
     if (individual.telecom) {
@@ -587,7 +629,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     }
 
     if (individual.extension) {
-      const studioExt = individual.extension["urn:openspp:extension:studio-individual"];
+      const studioExt = individual.extension[STUDIO_INDIVIDUAL_EXTENSION_KEY];
       if (studioExt) {
         for (const [key, value] of Object.entries(studioExt)) {
           if (key !== "url") {
@@ -601,12 +643,12 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     data.externalId = identifier;
 
     return {
-      guid: crypto.randomUUID(),
+      guid: uuidv4(),
       entityGuid: guid,
       type: existingGuid ? "update-individual" : "create-individual",
       data,
       timestamp: new Date().toISOString(),
-      userId: "openspp-v2-sync",
+      userId: SYNC_USER_ID,
       syncLevel: SyncLevel.EXTERNAL,
     };
   }
@@ -624,7 +666,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     syncLevel: SyncLevel;
   } {
     const identifier = this.extractGroupIdentifier(group);
-    const guid = existingGuid || identifier || crypto.randomUUID();
+    const guid = existingGuid || identifier || uuidv4();
 
     const data: Record<string, unknown> = {
       entityName: "group",
@@ -642,12 +684,12 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     data.externalId = identifier;
 
     return {
-      guid: crypto.randomUUID(),
+      guid: uuidv4(),
       entityGuid: guid,
       type: existingGuid ? "update-group" : "create-group",
       data,
       timestamp: new Date().toISOString(),
-      userId: "openspp-v2-sync",
+      userId: SYNC_USER_ID,
       syncLevel: SyncLevel.EXTERNAL,
     };
   }

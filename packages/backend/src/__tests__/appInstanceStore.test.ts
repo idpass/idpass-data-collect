@@ -41,6 +41,8 @@ function buildConfigStore(config: AppConfig): AppConfigStore {
     getConfig: jest.fn().mockResolvedValue(config),
     getConfigByArtifactId: jest.fn(),
     saveConfig: jest.fn(),
+    archiveConfig: jest.fn(),
+    restoreConfig: jest.fn(),
     deleteConfig: jest.fn(),
     clearStore: jest.fn(),
     closeConnection: jest.fn(),

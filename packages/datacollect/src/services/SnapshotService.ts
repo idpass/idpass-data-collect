@@ -18,11 +18,11 @@
  */
 
 import { v4 as uuidv4 } from "uuid";
-import { and, eq, desc, asc, gt, sql, count } from "drizzle-orm";
+import { and, eq, desc, asc, sql, count } from "drizzle-orm";
 import { Pool } from "pg";
-import { createDrizzleFromPool, DrizzleDatabase } from "../db/connection";
+import { createDrizzleFromPool, DrizzleDatabase, withClient } from "../db/connection";
 import { entitySnapshots, events, entities } from "../db/schema";
-import { EntityDoc, EntityPair, FormSubmission, SyncLevel } from "../interfaces/types";
+import { EntityDoc, FormSubmission, SyncLevel } from "../interfaces/types";
 import { EventApplierService } from "./EventApplierService";
 import { createLogger } from "../utils/logger";
 
@@ -92,8 +92,7 @@ export class SnapshotService {
    * Initializes the entity_snapshots table in the database.
    */
   async initialize(): Promise<void> {
-    const client = await this.pool.connect();
-    try {
+    await withClient(this.pool, async (client) => {
       await client.query(`
         CREATE TABLE IF NOT EXISTS entity_snapshots (
           id TEXT PRIMARY KEY,
@@ -113,9 +112,7 @@ export class SnapshotService {
       await client.query(
         "CREATE INDEX IF NOT EXISTS idx_entity_snapshots_entity_tenant ON entity_snapshots(entity_guid, tenant_id)",
       );
-    } finally {
-      client.release();
-    }
+    });
   }
 
   /**
@@ -257,36 +254,33 @@ export class SnapshotService {
     const result: BatchSnapshotResult = { created: 0, checked: 0, skipped: 0, errors: [] };
 
     // Get all unique entity GUIDs that have events in this tenant
-    const client = await this.pool.connect();
-    try {
-      const entityGuidsResult = await client.query(
+    const entityGuidsResult = await withClient(this.pool, (client) =>
+      client.query(
         `SELECT DISTINCT entity_guid FROM events WHERE tenant_id = $1 AND entity_guid IS NOT NULL`,
         [effectiveTenantId],
-      );
+      ),
+    );
 
-      for (const row of entityGuidsResult.rows) {
-        result.checked++;
-        const entityGuid = row.entity_guid;
+    for (const row of entityGuidsResult.rows) {
+      result.checked++;
+      const entityGuid = row.entity_guid;
 
-        try {
-          const needs = await this.shouldSnapshot(entityGuid, threshold);
-          if (needs) {
-            const snapshot = await this.createSnapshot(entityGuid);
-            if (snapshot) {
-              result.created++;
-            } else {
-              result.skipped++;
-            }
+      try {
+        const needs = await this.shouldSnapshot(entityGuid, threshold);
+        if (needs) {
+          const snapshot = await this.createSnapshot(entityGuid);
+          if (snapshot) {
+            result.created++;
           } else {
             result.skipped++;
           }
-        } catch (err) {
-          const errorMessage = err instanceof Error ? err.message : String(err);
-          result.errors.push({ entityGuid, error: errorMessage });
+        } else {
+          result.skipped++;
         }
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        result.errors.push({ entityGuid, error: errorMessage });
       }
-    } finally {
-      client.release();
     }
 
     return result;
@@ -300,8 +294,7 @@ export class SnapshotService {
    * @returns Number of snapshots deleted.
    */
   async pruneSnapshots(entityGuid: string, keepCount: number = 3): Promise<number> {
-    const client = await this.pool.connect();
-    try {
+    return withClient(this.pool, async (client) => {
       // Get IDs of snapshots to keep
       const keepResult = await client.query(
         `SELECT id FROM entity_snapshots
@@ -325,9 +318,7 @@ export class SnapshotService {
       );
 
       return deleteResult.rowCount ?? 0;
-    } finally {
-      client.release();
-    }
+    });
   }
 
   /**

@@ -69,53 +69,6 @@ export interface ConflictStore {
 }
 
 /**
- * In-memory implementation of ConflictStore for testing and lightweight use.
- */
-export class InMemoryConflictStore implements ConflictStore {
-  private conflicts: Map<string, ConflictRecord> = new Map();
-
-  async saveConflict(conflict: ConflictRecord): Promise<void> {
-    this.conflicts.set(conflict.guid, { ...conflict });
-  }
-
-  async getConflict(guid: string): Promise<ConflictRecord | null> {
-    const conflict = this.conflicts.get(guid);
-    return conflict ? { ...conflict } : null;
-  }
-
-  async getUnresolvedConflicts(tenantId: string): Promise<ConflictRecord[]> {
-    const unresolved: ConflictRecord[] = [];
-    for (const conflict of this.conflicts.values()) {
-      if (conflict.tenantId === tenantId && conflict.resolution === null) {
-        unresolved.push({ ...conflict });
-      }
-    }
-    return unresolved;
-  }
-
-  async updateConflict(
-    guid: string,
-    updates: Partial<ConflictRecord>,
-  ): Promise<void> {
-    const existing = this.conflicts.get(guid);
-    if (!existing) {
-      throw new Error(`Conflict not found: ${guid}`);
-    }
-    this.conflicts.set(guid, { ...existing, ...updates });
-  }
-
-  async getConflictCount(tenantId: string): Promise<number> {
-    let count = 0;
-    for (const conflict of this.conflicts.values()) {
-      if (conflict.tenantId === tenantId && conflict.resolution === null) {
-        count++;
-      }
-    }
-    return count;
-  }
-}
-
-/**
  * Parameters for recording a conflict.
  */
 export interface RecordConflictParams {
@@ -235,63 +188,6 @@ export class ConflictService {
     localData: Record<string, unknown>,
     remoteData: Record<string, unknown>,
   ): boolean {
-    return !this.deepEqual(localData, remoteData);
-  }
-
-  /**
-   * Deep equality comparison for two values.
-   */
-  private deepEqual(a: unknown, b: unknown): boolean {
-    if (a === b) {
-      return true;
-    }
-
-    if (a === null || b === null || a === undefined || b === undefined) {
-      return false;
-    }
-
-    if (typeof a !== typeof b) {
-      return false;
-    }
-
-    if (typeof a !== "object") {
-      return false;
-    }
-
-    if (Array.isArray(a) !== Array.isArray(b)) {
-      return false;
-    }
-
-    if (Array.isArray(a) && Array.isArray(b)) {
-      if (a.length !== b.length) {
-        return false;
-      }
-      for (let i = 0; i < a.length; i++) {
-        if (!this.deepEqual(a[i], b[i])) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    const aObj = a as Record<string, unknown>;
-    const bObj = b as Record<string, unknown>;
-    const aKeys = Object.keys(aObj);
-    const bKeys = Object.keys(bObj);
-
-    if (aKeys.length !== bKeys.length) {
-      return false;
-    }
-
-    for (const key of aKeys) {
-      if (!Object.prototype.hasOwnProperty.call(bObj, key)) {
-        return false;
-      }
-      if (!this.deepEqual(aObj[key], bObj[key])) {
-        return false;
-      }
-    }
-
-    return true;
+    return JSON.stringify(localData) !== JSON.stringify(remoteData);
   }
 }

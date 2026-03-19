@@ -42,14 +42,24 @@ import { AppConfigStoreImpl } from "./stores/AppConfigStore";
 import { AppInstanceStoreImpl } from "./stores/AppInstanceStore";
 import { UserStoreImpl } from "./stores/UserStore";
 import { OtpStoreImpl } from "./stores/OtpStore";
-import { VerificationStoreImpl } from "./stores/VerificationStore";
 import { ReviewStoreImpl } from "./stores/ReviewStore";
 import { Role, SyncServerConfig, SyncServerInstance } from "./types";
 import { generatePublicArtifacts, resolvePublicBaseUrl } from "./utils/publicArtifacts";
 import { logger, createLogger } from "./utils/logger";
 import { initializeDatabase } from "./db/initialize";
+import { adapterRegistry } from "@idpass/data-collect-core";
+import { OpenSppSyncAdapterV2 } from "@idpass/adapter-openspp";
+import { OpenFnSyncAdapterV2 } from "@idpass/adapter-openfn";
 
 const log = createLogger("syncServer");
+
+// Register external sync adapters with the V2 adapter registry
+adapterRegistry.register("openspp-v2-adapter", (deps) =>
+  new OpenSppSyncAdapterV2(deps!.eventStore, deps!.eventApplierService, deps!.syncConfig),
+);
+adapterRegistry.register("openfn-adapter", (deps) =>
+  new OpenFnSyncAdapterV2(deps!.eventStore, deps!.eventApplierService),
+);
 
 export async function run(config: SyncServerConfig): Promise<SyncServerInstance> {
   // Consolidated schema initialization: creates all backend tables and indexes
@@ -64,8 +74,6 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   await appInstanceStore.initialize();
   const otpStore = new OtpStoreImpl(config.postgresUrl);
   await otpStore.initialize();
-  const verificationStore = new VerificationStoreImpl(config.postgresUrl);
-  await verificationStore.initialize();
   const reviewStore = new ReviewStoreImpl(config.postgresUrl);
   await reviewStore.initialize();
 
@@ -75,12 +83,15 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   app.set("trust proxy", 1);
   app.use(helmet());
   const corsOrigins = process.env.CORS_ORIGINS;
-  app.use(cors(corsOrigins ? {
-    origin: corsOrigins.split(",").map(o => o.trim()),
-    credentials: true,
-  } : {
-    origin: false,
-  }));
+  const corsOptions: cors.CorsOptions = { origin: false };
+  if (corsOrigins === "*") {
+    corsOptions.origin = true;
+    corsOptions.credentials = true;
+  } else if (corsOrigins) {
+    corsOptions.origin = corsOrigins.split(",").map(o => o.trim());
+    corsOptions.credentials = true;
+  }
+  app.use(cors(corsOptions));
   app.use(pinoHttp({
     logger,
     genReqId: () => crypto.randomUUID(),
@@ -140,6 +151,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
       const { jsonPath } = await generatePublicArtifacts(baseUrl, appConfig);
       res.setHeader("Content-Type", "application/json");
       res.setHeader("Content-Disposition", "attachment");
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
       return res.sendFile(jsonPath);
     } catch (error) {
       if (error instanceof Error && error.message.includes("artifact id")) {
@@ -167,6 +179,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
       }
       
       res.type("png");
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
       return res.sendFile(qrPath);
     } catch (error) {
       if (error instanceof Error) {
@@ -235,7 +248,6 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
     await appConfigStore.clearStore();
     await appInstanceStore.clearStore();
     await otpStore.clearStore();
-    await verificationStore.clearStore();
     clearReviewState();
     await reviewStore.clearStore();
 
@@ -261,7 +273,6 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
     await appConfigStore.closeConnection();
     await appInstanceStore.closeConnection();
     await otpStore.closeConnection();
-    await verificationStore.closeConnection();
     await reviewStore.closeConnection();
     await healthCheckPool.end();
     await new Promise<void>((resolve) => {

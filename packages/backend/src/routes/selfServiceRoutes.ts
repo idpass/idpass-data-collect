@@ -24,6 +24,7 @@ import rateLimit from "express-rate-limit";
 import { v4 as uuidv4 } from "uuid";
 import { FormClassifier, FormCategory } from "@idpass/data-collect-core";
 import { asyncHandler } from "../middlewares/errorHandlers";
+import { extractBearerToken } from "../middlewares/authentication";
 import { OtpStore } from "../stores/OtpStore";
 import { ReviewStore } from "../stores/ReviewStore";
 import { AppInstanceStore } from "../types";
@@ -90,44 +91,30 @@ export interface SelfServiceAuthenticatedRequest extends Request {
  * request only accesses the entity associated with the token.
  */
 export function requireSelfServiceScope(req: Request, res: Response, next: NextFunction): void {
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      res.status(401).json({ error: "Authorization header missing" });
-      return;
-    }
-
-    const [authType, token] = authHeader.split(" ");
-    if (authType.toLowerCase() !== "bearer" || !token) {
-      res.status(401).json({ error: "Invalid authentication type" });
-      return;
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as SelfServiceDecodedPayload;
-
-    if (decoded.scope !== "self-service") {
-      res.status(403).json({ error: "Forbidden: self-service scope required" });
-      return;
-    }
-
-    // entityGuid is enforced at the handler level, not here, because OTP
-    // verification issues tokens before an entity is associated.
-
-    // Verify entityGuid in JWT matches the requested entity (if present in request)
-    const requestedEntityGuid =
-      req.params.entityGuid || (req.body as Record<string, unknown>)?.entityGuid || req.query.entityGuid;
-
-    if (requestedEntityGuid && decoded.entityGuid && requestedEntityGuid !== decoded.entityGuid) {
-      res.status(403).json({ error: "Forbidden: cannot access other entities" });
-      return;
-    }
-
-    (req as SelfServiceAuthenticatedRequest).selfServiceUser = decoded;
-    next();
-  } catch (error) {
-    log.error({ err: error }, "Self-service authentication failed");
+  const result = extractBearerToken(req);
+  if (!result) {
     res.status(401).json({ error: "Invalid token" });
+    return;
   }
+
+  const decoded = result.decoded as unknown as SelfServiceDecodedPayload;
+
+  if (decoded.scope !== "self-service") {
+    res.status(403).json({ error: "Forbidden: self-service scope required" });
+    return;
+  }
+
+  // Verify entityGuid in JWT matches the requested entity (if present in request)
+  const requestedEntityGuid =
+    req.params.entityGuid || (req.body as Record<string, unknown>)?.entityGuid || req.query.entityGuid;
+
+  if (requestedEntityGuid && (!decoded.entityGuid || requestedEntityGuid !== decoded.entityGuid)) {
+    res.status(403).json({ error: "Forbidden: cannot access other entities" });
+    return;
+  }
+
+  (req as SelfServiceAuthenticatedRequest).selfServiceUser = decoded;
+  next();
 }
 
 /**
@@ -430,9 +417,9 @@ export function createSelfServiceRouter(
           audience: expectedAudience,
         });
 
-        // Validate nonce if provided (prevents token replay)
-        if (nonce && verifiedPayload.nonce !== nonce) {
-          return res.status(401).json({ error: "Nonce mismatch" });
+        // Validate nonce if the token carries one (prevents token replay)
+        if (verifiedPayload.nonce && (!nonce || verifiedPayload.nonce !== nonce)) {
+          return res.status(401).json({ error: "Invalid nonce" });
         }
 
         // Extract subject and mapped claims
@@ -574,9 +561,7 @@ export function createSelfServiceRouter(
       const classification = FormClassifier.classifyForm(formType, entityForms);
       const isEntityUpdate = classification.category === FormCategory.Entity;
 
-      const eventType = isEntityUpdate
-        ? classification.updateEventType
-        : classification.updateEventType;
+      const eventType = classification.updateEventType;
 
       const submission = {
         guid: uuidv4(),

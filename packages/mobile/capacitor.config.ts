@@ -24,11 +24,7 @@ const config: CapacitorConfig = {
   appName: "ID PASS DataCollect",
   webDir: "dist",
   server: {
-    // androidScheme: "https",
-    cleartext: true,
-  },
-  android: {
-    allowMixedContent: true,
+    androidScheme: "https",
   },
   plugins: {
     CapacitorHttp: {

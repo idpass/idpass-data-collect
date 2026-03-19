@@ -41,23 +41,15 @@ type AdapterConstructor = new (
 ) => ExternalSyncAdapter;
 
 /**
- * Built-in adapter registry. Contains only adapters that are bundled with the core package.
+ * Legacy (V1) adapter registry. Maps adapter type strings to constructor classes.
  *
- * External adapters (OpenSPP, OpenFn) are registered at application startup using
- * ExternalSyncManager.registerAdapter() to avoid circular dependencies between packages.
- *
- * Adapter types:
- * - mock-sync-server: Mock adapter for testing
+ * Built-in adapters (mock-sync-server) are pre-registered here. External adapters
+ * (OpenSPP, OpenFn) can be added at application startup via
+ * ExternalSyncManager.registerAdapter().
  */
-const builtInAdaptersMapping: Record<string, AdapterConstructor> = {
+const legacyAdapterRegistry: Record<string, AdapterConstructor> = {
   "mock-sync-server": MockSyncServerAdapter as unknown as AdapterConstructor,
 };
-
-/**
- * Runtime adapter registry. External adapters are registered here at application startup.
- * Keys are adapter type strings (e.g., "openspp-v2-adapter", "openfn-adapter").
- */
-const runtimeAdapterRegistry: Record<string, AdapterConstructor> = {};
 
 /**
  * Creates an empty SyncResult with the given duration.
@@ -77,8 +69,13 @@ function emptySyncResult(duration: number): SyncResult {
 /**
  * Wraps a legacy ExternalSyncAdapter (V1) in the ExternalSyncAdapterV2 interface.
  *
- * This enables the ExternalSyncManager to work uniformly with both old and
+ * This enables the ExternalSyncManager to work uniformly with both old and new
  * adapters while the codebase transitions to the V2 interface.
+ *
+ * **Limitation:** The wrapper always returns `pushed: 0, pulled: 0` in its
+ * SyncResult because the legacy V1 adapter interface (`pushData`/`pullData`)
+ * does not provide entity counts. This means monitoring dashboards and admin
+ * UI will show zero counts for any adapter still using the V1 interface.
  */
 class LegacyAdapterWrapper implements ExternalSyncAdapterV2 {
   constructor(
@@ -104,6 +101,12 @@ class LegacyAdapterWrapper implements ExternalSyncAdapterV2 {
     return { healthy: true, message: "Legacy adapter (health check not supported)" };
   }
 
+  /**
+   * Push entities via the legacy adapter.
+   * Note: pushed/pulled counts are always 0 because the V1 adapter interface
+   * does not provide per-entity counts. Monitoring/admin UI will show zero
+   * counts for V1 adapters — this is a known limitation of the legacy wrapper.
+   */
   async push(_entities: EntityPushPayload[]): Promise<SyncResult> {
     const startTime = Date.now();
     try {
@@ -282,7 +285,7 @@ export class ExternalSyncManager {
    * ```
    */
   static registerAdapter(type: string, adapterClass: AdapterConstructor): void {
-    runtimeAdapterRegistry[type] = adapterClass;
+    legacyAdapterRegistry[type] = adapterClass;
   }
 
   /**
@@ -318,7 +321,11 @@ export class ExternalSyncManager {
   async initialize() {
     // Try V2 adapter registry first
     if (adapterRegistry.has(this.config.type)) {
-      const v2 = adapterRegistry.create(this.config.type);
+      const v2 = adapterRegistry.create(this.config.type, {
+        eventStore: this.eventStore,
+        eventApplierService: this.eventApplierService,
+        syncConfig: this.config,
+      });
       const descriptor = v2.descriptor();
 
       // Build config object from ExternalSyncConfig for validation
@@ -353,13 +360,11 @@ export class ExternalSyncManager {
     }
 
     // Fall back to legacy adapter registries
-    const adapterModule =
-      builtInAdaptersMapping[this.config.type] ??
-      runtimeAdapterRegistry[this.config.type];
+    const adapterModule = legacyAdapterRegistry[this.config.type];
 
     if (!adapterModule) {
       log.warn(
-        { type: this.config.type, builtIn: Object.keys(builtInAdaptersMapping), runtime: Object.keys(runtimeAdapterRegistry) },
+        { type: this.config.type, registered: Object.keys(legacyAdapterRegistry) },
         "No adapter registered for type; external sync disabled",
       );
       return;
@@ -454,7 +459,7 @@ export class ExternalSyncManager {
           combinedResult.success = true;
           combinedResult.errors = [];
           combinedResult.failed = 0;
-        } catch (error) {
+        } catch {
           // Keep the original errors
         }
       }

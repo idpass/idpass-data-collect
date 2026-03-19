@@ -1,6 +1,6 @@
 {
   "name": "@idpass/data-collect",
-  "version": "1.1.0",
+  "version": "2.0.0-beta.1",
   "description": "ID PASS DataCollect - Offline-first data management system",
   "private": true,
   "packageManager": "pnpm@10.14.0+sha256.297534e65d5842450539c1e8022c8831ab5e1fe2eb74664787a815519542d620",
@@ -14,7 +14,9 @@
     "test:all": "./scripts/test.sh",
     "test:datacollect": "pnpm --filter @idpass/data-collect-core test",
     "test:backend": "pnpm --filter @idpass/data-collect-backend test",
+    "test:e2e:backend": "pnpm --filter @idpass/data-collect-backend test:e2e",
     "test:admin": "pnpm --filter @idpass/data-collect-admin test:unit",
+    "test:e2e:admin": "pnpm --filter @idpass/data-collect-admin test:e2e",
     "test:adapter-openspp": "pnpm --filter @idpass/adapter-openspp test",
     "test:adapter-openfn": "pnpm --filter @idpass/adapter-openfn test",
     "build": "pnpm -r --if-present run build",
@@ -37,12 +39,16 @@
     "ci:setup": "echo 'enable-pre-post-scripts=true' > .npmrc && echo 'auto-install-peers=true' >> .npmrc && echo 'strict-peer-dependencies=false' >> .npmrc",
     "ci:install": "pnpm run ci:setup && pnpm install",
     "prepare": "[ \"$CI\" != \"true\" ] && husky install || echo 'Skipping husky in CI'",
-    "pr-check": "pnpm run type-check && pnpm run lint && pnpm run test && pnpm run check-licenses --fix"
+    "pr-check": "./scripts/pr-check.sh",
+    "test:e2e:integration": "pnpm exec playwright test --config e2e/playwright.config.ts"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "glob": "^10.5.0",
+    "globals": "^15.15.0",
     "husky": "^8.0.3",
-    "lint-staged": "^15.5.2"
+    "lint-staged": "^15.5.2",
+    "typescript-eslint": "^8.55.0"
   },
   "lint-staged": {
     "packages/**/*.{ts,tsx,js,jsx}": [
@@ -67,13 +73,15 @@
   "homepage": "https://github.com/idpass/idpass-data-collect#readme",
   "pnpm": {
     "overrides": {
-      "tar@<=7.5.6": ">=7.5.7",
+      "tar@>=7.0.0 <7.5.8": ">=7.5.8",
       "lodash-es@<=4.17.22": ">=4.17.23",
       "lodash@<=4.17.22": ">=4.17.23",
       "js-yaml@>=4.0.0 <4.1.1": ">=4.1.1",
       "ws@>=8.0.0 <8.17.1": ">=8.17.1",
       "@babel/runtime@<7.26.10": ">=7.26.10",
-      "webpack-dev-server@<=5.2.0": ">=5.2.1"
+      "webpack-dev-server@<=5.2.0": ">=5.2.1",
+      "minimatch@>=10.0.0 <10.2.1": ">=10.2.1",
+      "ajv@>=8.0.0 <8.18.0": ">=8.18.0"
     }
   }
 }

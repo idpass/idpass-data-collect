@@ -152,7 +152,6 @@ describe("EntityDataManager", () => {
   let externalSyncManager: ExternalSyncManager;
   let authManager: AuthManager;
 
-  // let encryptionAdapter: EncryptionAdapter;
   // let exportImportManager: ExportImportManager;
   // let groupService: GroupService;
   const internalUrl = "http://localhost:3000";

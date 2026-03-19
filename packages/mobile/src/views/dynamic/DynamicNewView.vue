@@ -174,8 +174,8 @@ const onBack = () => {
   border: none;
   border-radius: 999px;
   padding: 0.55rem 1.25rem;
-  background: linear-gradient(135deg, #2563eb 0%, #9333ea 100%);
-  color: white;
+  background: var(--brand, #ff6d37);
+  color: #ffffff;
   font-weight: 600;
 }
 

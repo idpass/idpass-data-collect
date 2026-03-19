@@ -19,7 +19,7 @@
 
 import { randomBytes } from "crypto";
 import { Pool } from "pg";
-import { eq, sql } from "drizzle-orm";
+import { eq, isNull, sql } from "drizzle-orm";
 import { drizzle, NodePgDatabase } from "drizzle-orm/node-postgres";
 import { AppConfig, AppConfigStore } from "../types";
 import { appConfigs } from "../db/schema";
@@ -46,6 +46,7 @@ function mapRowToAppConfig(row: AppConfigRow, artifactId: string): AppConfig {
     externalSync: row.externalSync,
     authConfigs: row.authConfigs,
     selfService: row.selfService ?? undefined,
+    archivedAt: row.archivedAt ?? null,
   } as AppConfig;
 }
 
@@ -80,14 +81,18 @@ export class AppConfigStoreImpl implements AppConfigStore {
       await this.pool.query(createTableQuery);
       await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS artifact_id TEXT`);
       await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS self_service JSONB`);
+      await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP`);
     } catch (error) {
       throw new Error(`Failed to initialize database: ${error}`);
     }
   }
 
-  async getConfigs(): Promise<AppConfig[]> {
+  async getConfigs(includeArchived = false): Promise<AppConfig[]> {
     try {
-      const result = await this.db.select().from(appConfigs);
+      const query = includeArchived
+        ? this.db.select().from(appConfigs)
+        : this.db.select().from(appConfigs).where(isNull(appConfigs.archivedAt));
+      const result = await query;
       return Promise.all(
         result.map(async (row) =>
           mapRowToAppConfig(row, await this.ensureArtifactId(row.id, row.artifactId)),
@@ -169,10 +174,33 @@ export class AppConfigStoreImpl implements AppConfigStore {
             externalSync: config.externalSync ?? null,
             authConfigs: JSON.stringify(config.authConfigs),
             selfService: config.selfService ? JSON.stringify(config.selfService) : null,
+            archivedAt: null,
           },
         });
     } catch (error) {
       throw new Error(`Failed to save config: ${error}`);
+    }
+  }
+
+  async archiveConfig(id: string): Promise<void> {
+    try {
+      await this.db
+        .update(appConfigs)
+        .set({ archivedAt: new Date() })
+        .where(eq(appConfigs.id, id));
+    } catch (error) {
+      throw new Error(`Failed to archive config: ${error}`);
+    }
+  }
+
+  async restoreConfig(id: string): Promise<void> {
+    try {
+      await this.db
+        .update(appConfigs)
+        .set({ archivedAt: null })
+        .where(eq(appConfigs.id, id));
+    } catch (error) {
+      throw new Error(`Failed to restore config: ${error}`);
     }
   }
 

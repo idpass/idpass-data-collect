@@ -148,14 +148,17 @@ export interface AppConfig {
   externalSync?: ExternalSyncConfig;
   authConfigs?: AuthConfig[];
   selfService?: SelfServiceConfig;
+  archivedAt?: Date | null;
 }
 
 export interface AppConfigStore {
   initialize(): Promise<void>;
-  getConfigs(): Promise<AppConfig[]>;
+  getConfigs(includeArchived?: boolean): Promise<AppConfig[]>;
   getConfig(id: string): Promise<AppConfig>;
   getConfigByArtifactId(artifactId: string): Promise<AppConfig>;
   saveConfig(config: AppConfig): Promise<void>;
+  archiveConfig(id: string): Promise<void>;
+  restoreConfig(id: string): Promise<void>;
   deleteConfig(id: string): Promise<void>;
   clearStore(): Promise<void>;
   closeConnection(): Promise<void>;

@@ -13,10 +13,11 @@
  *
  * This test MUST FAIL against the current codebase.
  */
-import express, { Request, Response, NextFunction } from "express";
+import express, { Request, Response } from "express";
 import request from "supertest";
 
 jest.mock("../utils/logger", () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const pino = require("pino");
   const silentLogger = pino({ level: "silent" });
   return {
@@ -47,7 +48,8 @@ describe("SECURITY: Express error handler arity", () => {
     // A route that throws an error via asyncHandler
     app.get(
       "/test-error",
-      asyncHandler(async (req: Request, res: Response) => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      asyncHandler(async (_req: Request, _res: Response) => {
         throw new AppError("Something went wrong", 422);
       }),
     );

@@ -31,36 +31,20 @@ import type {
   ExternalSyncConfig,
 } from "@idpass/data-collect-core";
 import {
-  EntityType,
-  SyncLevel,
   getExternalField,
-  createTransformer,
-  type TransformerType,
 } from "@idpass/data-collect-core";
 import { EventApplierService } from "@idpass/data-collect-core";
 import OdooClient from "./OdooClient";
 import { IndividualTransformer } from "./pullTransformers/IndividualTransformer";
-import type { OdooConfig, OpenSPPCreateIndividualPayload } from "./odoo-types";
+import type { OdooConfig } from "./odoo-types";
 import { parseOpenSppAdapterOptions } from "./OpenSppAdapterOptions";
 import type { OpenSppAdapterOptions } from "./OpenSppAdapterOptions";
-
-/**
- * Field mapping configuration from external sync config.
- */
-interface FieldMapping {
-  formField: string;
-  opensppField: string;
-  transformer: {
-    type: TransformerType;
-    options?: {
-      inputFormat?: "YYYY-MM-DD" | "MM/DD/YYYY" | "DD/MM/YYYY" | "auto";
-      outputFormat?: "YYYY-MM-DD" | "MM/DD/YYYY" | "DD/MM/YYYY";
-      delimiter?: string;
-      truthyValue?: string;
-      falsyValue?: string;
-    };
-  };
-}
+import {
+  type FieldMapping,
+  buildOpenSppPayload,
+  resolveExternalIdFromEntity,
+  saveExternalIdToEntity,
+} from "./shared";
 
 /**
  * Zod config schema for the OpenSPP adapter.
@@ -198,8 +182,6 @@ export class OpenSppSyncAdapterV2 implements ExternalSyncAdapterV2 {
     let skippedCount = 0;
     const errors: SyncError[] = [];
 
-    const entityStore = this.eventApplierService.getEntityStore();
-
     for (let i = 0; i < entities.length; i += batchSize) {
       const batch = entities.slice(i, i + batchSize);
 
@@ -209,21 +191,21 @@ export class OpenSppSyncAdapterV2 implements ExternalSyncAdapterV2 {
           continue;
         }
 
-        const externalId = await this.resolveExternalIdFromEntity(entityPayload.guid);
+        const externalId = await resolveExternalIdFromEntity(this.eventApplierService, entityPayload.guid);
 
         let attempt = 0;
         let success = false;
 
         while (attempt <= maxRetries && !success) {
           try {
-            const payload = this.buildOpenSppPayload(entityPayload.data);
+            const payload = buildOpenSppPayload(this.fieldMappings, entityPayload.data);
 
             if (externalId) {
               await this.odooClient!.write("res.partner", [externalId], payload as unknown as Record<string, unknown>);
             } else {
               const createdId = await this.odooClient!.createIndividual(payload);
               if (createdId) {
-                await this.saveExternalIdToEntity(entityPayload.guid, createdId);
+                await saveExternalIdToEntity(this.eventApplierService, entityPayload.guid, createdId);
               }
             }
 
@@ -345,100 +327,4 @@ export class OpenSppSyncAdapterV2 implements ExternalSyncAdapterV2 {
     this.config = null;
   }
 
-  private async resolveExternalIdFromEntity(entityGuid: string): Promise<number | undefined> {
-    const entityPair = await this.eventApplierService.getEntityStore().getEntity(entityGuid);
-    if (!entityPair) {
-      return undefined;
-    }
-
-    const externalId = entityPair.modified.externalId ?? entityPair.modified.data.externalId;
-    if (!externalId) {
-      return undefined;
-    }
-
-    const id = typeof externalId === "number" ? externalId : parseInt(String(externalId), 10);
-    return isNaN(id) ? undefined : id;
-  }
-
-  private buildOpenSppPayload(formData: Record<string, unknown>): OpenSPPCreateIndividualPayload {
-    const payload: Record<string, unknown> = {
-      is_registrant: true,
-      is_group: false,
-    };
-
-    for (const mapping of this.fieldMappings) {
-      const formValue = formData[mapping.formField];
-
-      if (formValue === null || formValue === undefined || formValue === "") {
-        continue;
-      }
-
-      const transformer = createTransformer(
-        mapping.transformer.type,
-        mapping.transformer.options,
-      );
-
-      let valueToTransform = formValue;
-      if (mapping.transformer.type === "text" && (formValue === "false" || formValue === false)) {
-        valueToTransform = "";
-      }
-
-      if (mapping.transformer.type === "text" && valueToTransform === "") {
-        continue;
-      }
-
-      const transformedValue = transformer.transform(valueToTransform);
-
-      if (transformedValue === null || transformedValue === undefined || transformedValue === "") {
-        continue;
-      }
-
-      payload[mapping.opensppField] = transformedValue;
-    }
-
-    const finalPayload: OpenSPPCreateIndividualPayload = {
-      is_registrant: true,
-      is_group: false,
-      ...payload,
-    };
-
-    return finalPayload;
-  }
-
-  private async saveExternalIdToEntity(entityGuid: string, externalId: number): Promise<void> {
-    try {
-      const entityPair = await this.eventApplierService.getEntityStore().getEntity(entityGuid);
-      if (!entityPair) {
-        return;
-      }
-
-      const currentTopLevel = entityPair.modified.externalId;
-      const currentNested = entityPair.modified.data.externalId;
-      const externalIdStr = String(externalId);
-
-      const topLevelMatches = currentTopLevel === externalIdStr;
-      const nestedMatches =
-        currentNested === externalId ||
-        currentNested === externalIdStr ||
-        String(currentNested) === externalIdStr;
-
-      if (topLevelMatches && nestedMatches) {
-        return;
-      }
-
-      const updatedEntity = {
-        ...entityPair.modified,
-        externalId: String(externalId),
-        data: {
-          ...entityPair.modified.data,
-          externalId: externalId,
-        },
-        lastUpdated: new Date().toISOString(),
-      };
-
-      await this.eventApplierService.getEntityStore().saveEntity(entityPair.modified, updatedEntity);
-    } catch (error) {
-      // Do not throw - external ID save failure should not block sync
-    }
-  }
 }

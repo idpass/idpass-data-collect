@@ -9,7 +9,7 @@ import { v4 as uuidv4 } from "uuid";
 import { FormSubmission, SyncLevel } from "@idpass/data-collect-core";
 import { run } from "../syncServer";
 import { SyncServerInstance, AppConfig } from "../types";
-import { Client } from "pg";
+import { getConnectionString, ensureDatabaseExists, describeIfPostgres } from "./helpers/testDb";
 
 const mockConfig: AppConfig = {
   id: "mock-config",
@@ -29,38 +29,7 @@ const mockConfig: AppConfig = {
   ],
 };
 
-const getConnectionString = () => {
-  const url = process.env.POSTGRES_TEST;
-  if (!url) return "";
-  const parsed = new URL(url.replace(/ /g, "%20"));
-  const baseName = parsed.pathname.replace(/^\//, "");
-  const dbName = baseName ? `${baseName}_sync_server` : "datacollect_sync_server";
-  parsed.pathname = `/${dbName}`;
-  return parsed.toString();
-};
-
-const postgresUrl = getConnectionString();
-const describeIfPostgres = process.env.POSTGRES_TEST ? describe : describe.skip;
-
-const ensureDatabaseExists = async (connectionString: string) => {
-  if (!connectionString) return;
-
-  const parsed = new URL(connectionString);
-  const dbName = parsed.pathname.replace(/^\//, "");
-  if (!dbName) return;
-
-  const adminUrl = new URL(connectionString);
-  adminUrl.pathname = "/postgres";
-
-  const client = new Client({ connectionString: adminUrl.toString() });
-  await client.connect();
-  const result = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
-  if (result.rowCount === 0) {
-    const escapedName = dbName.replace(/"/g, '""');
-    await client.query(`CREATE DATABASE "${escapedName}"`);
-  }
-  await client.end();
-};
+const postgresUrl = getConnectionString("sync_server");
 
 describeIfPostgres("Sync Server", () => {
   let app: SyncServerInstance | null = null;
@@ -283,7 +252,11 @@ describeIfPostgres("Sync Server", () => {
       expect(pushedEntities).toEqual(expect.arrayContaining([
         expect.objectContaining({
           guid: expect.any(String),
-          initial: null,
+          initial: expect.objectContaining({
+            name: "John Doe",
+            type: "individual",
+            data: { name: "John Doe", age: 30, email: "john.doe@example.com" },
+          }),
           modified: expect.objectContaining({
             name: "John Doe",
             type: "individual",
@@ -292,7 +265,11 @@ describeIfPostgres("Sync Server", () => {
         }),
         expect.objectContaining({
           guid: expect.any(String),
-          initial: null,
+          initial: expect.objectContaining({
+            name: "Jane Smith",
+            type: "individual",
+            data: { name: "Jane Smith", age: 40, email: "jane.smith@test.com" },
+          }),
           modified: expect.objectContaining({
             name: "Jane Smith",
             type: "individual",
@@ -423,7 +400,11 @@ describeIfPostgres("Sync Server", () => {
       expect(entitiesAfter).toEqual([
         {
           guid: entityGuid1,
-          initial: null,
+          initial: expect.objectContaining({
+            type: "individual",
+            name: "John Doe",
+            data: { name: "John Doe", age: 30, email: "john.doe@example.com" },
+          }),
           modified: {
             id: expect.any(String),
             guid: expect.any(String),

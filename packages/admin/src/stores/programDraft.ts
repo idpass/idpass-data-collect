@@ -51,6 +51,7 @@ export interface SelfServiceConfig {
   enabled: boolean
   authMethods: string[]
   allowedForms: string[]
+  languages: string[]
   requireReview: boolean
 }
 
@@ -122,6 +123,7 @@ const getEmptyDraft = (): ProgramDraft => ({
     enabled: false,
     authMethods: [],
     allowedForms: [],
+    languages: [],
     requireReview: false,
   },
   opensppV2Fields: [],
@@ -282,12 +284,15 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
           fieldMappings: config.externalSync?.fieldMappings || [],
         },
         authConfigs: config.authConfigs || [],
-        selfService: config.selfService || {
-          enabled: false,
-          authMethods: [],
-          allowedForms: [],
-          requireReview: false,
-        },
+        selfService: config.selfService
+          ? { languages: [], ...config.selfService }
+          : {
+              enabled: false,
+              authMethods: [],
+              allowedForms: [],
+              languages: [],
+              requireReview: false,
+            },
       }
       errors.value = getEmptyErrors()
       mode.value = 'edit'
@@ -321,12 +326,15 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
           fieldMappings: config.externalSync?.fieldMappings || [],
         },
         authConfigs: config.authConfigs || [],
-        selfService: config.selfService || {
-          enabled: false,
-          authMethods: [],
-          allowedForms: [],
-          requireReview: false,
-        },
+        selfService: config.selfService
+          ? { languages: [], ...config.selfService }
+          : {
+              enabled: false,
+              authMethods: [],
+              allowedForms: [],
+              languages: [],
+              requireReview: false,
+            },
       }
       errors.value = getEmptyErrors()
       mode.value = 'copy'
@@ -339,12 +347,17 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
   }
 
   // Validation
+  const NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 _-]*$/
+
   const validateGeneral = (): boolean => {
     errors.value.general = {}
     let valid = true
 
     if (!draft.value.name.trim()) {
       errors.value.general.name = 'Name is required'
+      valid = false
+    } else if (!NAME_PATTERN.test(draft.value.name.trim())) {
+      errors.value.general.name = 'Name must start with a letter or number and contain only letters, numbers, spaces, hyphens, and underscores'
       valid = false
     }
     if (!draft.value.description.trim()) {
@@ -576,11 +589,12 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
         version: draft.value.version,
         entityForms: draft.value.entityForms.map((form) => {
           const { entityType, ...rest } = form
-          return entityType ? { ...rest, entityType } : rest
+          const withId = { id: form.name, ...rest }
+          return entityType ? { ...withId, entityType } : withId
         }),
         externalSync: draft.value.externalSync,
         authConfigs: draft.value.authConfigs,
-        selfService: draft.value.selfService,
+        selfService: { ...draft.value.selfService },
       }
 
       const formData = new FormData()

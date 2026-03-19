@@ -7,7 +7,6 @@ import { requestOtp, verifyOtp, verifyNationalId } from '@/api/auth'
 import { startOidcLogin, type OidcTenantConfig } from '@/auth/oidcManager'
 import { useAuthStore } from '@/stores/auth'
 import { setLocaleFromTenant } from '@/i18n'
-import LoadingState from '@/components/LoadingState.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -113,7 +112,7 @@ async function handleOtpRequest() {
       tenantId: tenantId.value,
     })
     otpRequested.value = true
-    if (result.devCode) {
+    if (result.devCode && import.meta.env.DEV) {
       devCode.value = result.devCode
     }
   } catch {

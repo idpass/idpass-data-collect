@@ -41,11 +41,12 @@ import type {
  *   baseUrl: "http://openspp.example.com",
  *   clientId: "my-client-id",
  *   clientSecret: "my-secret",
- *   identifierNamespace: "urn:datacollect:entity"
  * });
  *
  * await client.authenticate();
- * const individual = await client.getIndividual("urn:datacollect:entity|abc-123");
+ * const individual = await client.getIndividual(
+ *   "urn:openspp:vocab:id-type#national_id|abc-123"
+ * );
  * ```
  */
 export class OpenSppV2Client {
@@ -67,14 +68,14 @@ export class OpenSppV2Client {
 
   /**
    * Format an identifier for use in API URLs.
-   * Uses the format: {namespace}|{value}
+   * Uses the format: `system|value`
    */
-  formatIdentifier(value: string): string {
-    return `${this.config.identifierNamespace}|${value}`;
+  formatIdentifier(system: string, value: string): string {
+    return `${system}|${value}`;
   }
 
   /**
-   * Parse an identifier string into namespace and value.
+   * Parse an identifier string into system and value.
    */
   parseIdentifier(identifier: string): { system: string; value: string } | null {
     const parts = identifier.split("|");
@@ -87,16 +88,16 @@ export class OpenSppV2Client {
   /**
    * Create an Identifier object for API requests.
    */
-  createIdentifier(value: string): Identifier {
-    return {
-      system: this.config.identifierNamespace,
-      value,
-    };
+  createIdentifier(system: string, value: string): Identifier {
+    return { system, value };
   }
 
   /**
    * Authenticate with the OpenSPP server using OAuth2 client credentials flow.
    * Tokens are cached and automatically refreshed when expired.
+   *
+   * The OpenSPP V2 token endpoint expects a JSON body (Pydantic model),
+   * not the application/x-www-form-urlencoded format from RFC 6749 §4.4.
    */
   async authenticate(): Promise<void> {
     // Check if we have a valid token
@@ -104,14 +105,16 @@ export class OpenSppV2Client {
       return;
     }
 
+    const body = {
+      grant_type: "client_credentials",
+      client_id: this.config.clientId,
+      client_secret: this.config.clientSecret,
+    };
+
     try {
       const response = await this.httpClient.post<OAuth2TokenResponse>(
         "/api/v2/spp/oauth/token",
-        {
-          grant_type: "client_credentials",
-          client_id: this.config.clientId,
-          client_secret: this.config.clientSecret,
-        },
+        body,
       );
 
       this.accessToken = response.data.access_token;
@@ -119,9 +122,33 @@ export class OpenSppV2Client {
       this.tokenExpiresAt = Date.now() + response.data.expires_in * 1000;
     } catch (error) {
       if (axios.isAxiosError(error)) {
-        const axiosError = error as AxiosError<{ detail?: string }>;
+        const axiosError = error as AxiosError<{
+          detail?: string | unknown[];
+          error?: string;
+          error_description?: string;
+          message?: string;
+        }>;
+
+        const data = axiosError.response?.data;
+        const rawDetail =
+          data?.detail ||
+          data?.error_description ||
+          data?.error ||
+          data?.message ||
+          axiosError.message ||
+          `HTTP ${axiosError.response?.status ?? "network error"}`;
+        const detail =
+          typeof rawDetail === "string" ? rawDetail : JSON.stringify(rawDetail);
+        const status = axiosError.response?.status;
+        const code = axiosError.code;
+        const suffix = [
+          status ? `status=${status}` : null,
+          code ? `code=${code}` : null,
+        ]
+          .filter(Boolean)
+          .join(", ");
         throw new Error(
-          `OAuth2 authentication failed: ${axiosError.response?.data?.detail || axiosError.message}`,
+          `OAuth2 authentication failed: ${detail}${suffix ? ` (${suffix})` : ""}`,
         );
       }
       throw error;
@@ -162,7 +189,7 @@ export class OpenSppV2Client {
   /**
    * Get an individual by their external identifier.
    *
-   * @param identifier Full identifier in format {namespace}|{value}
+   * @param identifier Full identifier in format `namespace|value`
    * @returns The individual resource or null if not found
    */
   async getIndividual(identifier: string): Promise<IndividualResource | null> {
@@ -240,7 +267,7 @@ export class OpenSppV2Client {
   /**
    * Update an existing individual.
    *
-   * @param identifier Full identifier in format {namespace}|{value}
+   * @param identifier Full identifier in format `namespace|value`
    * @param individual The updated individual resource
    * @returns The updated individual
    */
@@ -268,7 +295,7 @@ export class OpenSppV2Client {
    * Partially update an individual using JSON Merge Patch (RFC 7396).
    * Only specified fields are updated; omitted fields remain unchanged.
    *
-   * @param identifier Full identifier in format {namespace}|{value}
+   * @param identifier Full identifier in format `namespace|value`
    * @param patch Partial individual fields to update
    * @param versionId Optional versionId for optimistic locking (If-Match header)
    * @returns The updated individual
@@ -302,7 +329,7 @@ export class OpenSppV2Client {
   /**
    * Get a group by its external identifier.
    *
-   * @param identifier Full identifier in format {namespace}|{value}
+   * @param identifier Full identifier in format `namespace|value`
    * @returns The group resource or null if not found
    */
   async getGroup(identifier: string): Promise<GroupResource | null> {
@@ -374,7 +401,7 @@ export class OpenSppV2Client {
   /**
    * Update an existing group.
    *
-   * @param identifier Full identifier in format {namespace}|{value}
+   * @param identifier Full identifier in format `namespace|value`
    * @param group The updated group resource
    * @returns The updated group
    */
@@ -398,7 +425,7 @@ export class OpenSppV2Client {
   /**
    * Partially update a group using JSON Merge Patch (RFC 7396).
    *
-   * @param identifier Full identifier in format {namespace}|{value}
+   * @param identifier Full identifier in format `namespace|value`
    * @param patch Partial group fields to update
    * @param versionId Optional versionId for optimistic locking (If-Match header)
    * @returns The updated group
@@ -596,6 +623,7 @@ export class OpenSppV2Client {
   private handleApiError(error: unknown, context: string): Error {
     if (axios.isAxiosError(error)) {
       const axiosError = error as AxiosError<{ detail?: string; message?: string }>;
+
       const status = axiosError.response?.status;
       const rawDetail =
         axiosError.response?.data?.detail || axiosError.response?.data?.message || axiosError.message;

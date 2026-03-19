@@ -30,6 +30,40 @@ graph TB
     F[Third-party APIs] --> C
 ```
 
+## XState v5 Sync Orchestration
+
+As of v2.0, the `InternalSyncManager` class has been replaced with an **XState v5 statechart** that orchestrates the sync lifecycle. This provides:
+
+- **Deterministic state transitions** — sync states (idle, pushing, pulling, error) are explicit and observable
+- **Automatic retry** with configurable backoff
+- **Cancellation** — sync can be cleanly cancelled mid-operation
+- **Observable** — UI components subscribe to state changes for real-time sync status
+
+### Composite Cursor
+
+Pagination now uses a **composite cursor** (`timestamp|eventGuid`) instead of a plain timestamp. This prevents event skipping when multiple events share the same timestamp.
+
+```typescript
+// Cursor format: "2026-03-18T12:00:00.000Z|evt-abc123"
+const cursor = `${event.timestamp}|${event.guid}`;
+```
+
+### Selective Sync
+
+Clients can filter sync by area IDs and entity GUIDs:
+
+```typescript
+// Only sync entities in specific areas
+syncMachine.send({ type: 'SYNC', areaIds: ['area-1', 'area-2'] });
+
+// Only sync specific entities
+syncMachine.send({ type: 'SYNC', entityGuids: ['entity-1'] });
+```
+
+### Transactional Push
+
+All events in a push batch now commit or rollback atomically. The sync cursor only advances on successful chunks — failed uploads do not advance the cursor.
+
 ## Sync Levels
 
 ### 1. Local Level (Offline)

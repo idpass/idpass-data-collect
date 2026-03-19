@@ -110,6 +110,36 @@ vi.mock('@capacitor/app', () => ({
   },
 }))
 
+// Mock @capacitor/core so Capacitor.isNativePlatform() returns false in tests
+vi.mock('@capacitor/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@capacitor/core')>()
+  return {
+    ...actual,
+    Capacitor: {
+      ...actual.Capacitor,
+      isNativePlatform: vi.fn().mockReturnValue(false),
+    },
+  }
+})
+
+// Mock @aparajita/capacitor-secure-storage (native plugin — not available in jsdom)
+vi.mock('@aparajita/capacitor-secure-storage', () => ({
+  SecureStorage: {
+    getItem: vi.fn().mockResolvedValue(null),
+    setItem: vi.fn().mockResolvedValue(undefined),
+    remove: vi.fn().mockResolvedValue(true),
+    clear: vi.fn().mockResolvedValue(undefined),
+  },
+}))
+
+// Mock @aparajita/capacitor-biometric-auth (native plugin — not available in jsdom)
+vi.mock('@aparajita/capacitor-biometric-auth', () => ({
+  BiometricAuth: {
+    checkBiometry: vi.fn().mockResolvedValue({ isAvailable: false }),
+    authenticate: vi.fn().mockResolvedValue(undefined),
+  },
+}))
+
 // Mock idpass-data-collect with comprehensive implementations
 vi.mock('@idpass/data-collect-core', () => ({
   EntityDataManager: vi.fn().mockImplementation(() => ({

@@ -18,7 +18,7 @@
  */
 
 import { drizzle, NodePgDatabase } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
+import { Pool, PoolClient } from "pg";
 import * as schema from "./schema";
 
 export type DrizzleDatabase = NodePgDatabase<typeof schema>;
@@ -43,4 +43,16 @@ export function createDrizzle(connectionString: string): { db: DrizzleDatabase; 
   const pool = new Pool({ connectionString });
   const db = drizzle(pool, { schema });
   return { db, pool };
+}
+
+/**
+ * Acquires a client from the pool, executes the callback, and releases the client.
+ */
+export async function withClient<T>(pool: Pool, fn: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+  try {
+    return await fn(client);
+  } finally {
+    client.release();
+  }
 }

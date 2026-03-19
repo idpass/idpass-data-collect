@@ -13,7 +13,6 @@ import { ExternalSyncManager } from "../ExternalSyncManager";
 import { adapterRegistry } from "../AdapterRegistry";
 import type {
   ExternalSyncAdapterV2,
-  SyncResult,
   EntityPushPayload,
 } from "../../interfaces/adapter";
 import type { EventStore, EntityStore, ExternalSyncConfig, EntityPair, EntityType } from "../../interfaces/types";

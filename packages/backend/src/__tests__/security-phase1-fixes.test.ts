@@ -14,42 +14,13 @@ import bodyParser from "body-parser";
 import { createSelfServiceRouter } from "../routes/selfServiceRoutes";
 import { OtpStoreImpl } from "../stores/OtpStore";
 import { AppInstanceStore } from "../types";
-import { Client } from "pg";
+import { verifyRoleFromDatabase } from "../middlewares/rbac";
+import { createReviewRoutes } from "../routes/reviewRoutes";
+import { getConnectionString, ensureDatabaseExists, describeIfPostgres } from "./helpers/testDb";
 
 const JWT_SECRET = "test-secret-phase1-security-fixes-32chars!";
 
-const getConnectionString = () => {
-  const url = process.env.POSTGRES_TEST;
-  if (!url) return "";
-  const parsed = new URL(url.replace(/ /g, "%20"));
-  const baseName = parsed.pathname.replace(/^\//, "");
-  const dbName = baseName ? `${baseName}_phase1_security` : "datacollect_phase1_security";
-  parsed.pathname = `/${dbName}`;
-  return parsed.toString();
-};
-
-const postgresUrl = getConnectionString();
-const describeIfPostgres = process.env.POSTGRES_TEST ? describe : describe.skip;
-
-const ensureDatabaseExists = async (connectionString: string) => {
-  if (!connectionString) return;
-
-  const parsed = new URL(connectionString);
-  const dbName = parsed.pathname.replace(/^\//, "");
-  if (!dbName) return;
-
-  const adminUrl = new URL(connectionString);
-  adminUrl.pathname = "/postgres";
-
-  const client = new Client({ connectionString: adminUrl.toString() });
-  await client.connect();
-  const result = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [dbName]);
-  if (result.rowCount === 0) {
-    const escapedName = dbName.replace(/"/g, '""');
-    await client.query(`CREATE DATABASE "${escapedName}"`);
-  }
-  await client.end();
-};
+const postgresUrl = getConnectionString("phase1_security");
 
 describe("G2: JWT token lifetime", () => {
   beforeAll(() => {
@@ -119,6 +90,7 @@ describeIfPostgres("L15: Per-identifier OTP rate limiting", () => {
   });
 
   afterEach(async () => {
+    if (!otpStore) return;
     await otpStore.clearStore();
     await otpStore.closeConnection();
   });
@@ -150,15 +122,11 @@ describeIfPostgres("L15: Per-identifier OTP rate limiting", () => {
 
 describe("G21: verifyRoleFromDatabase middleware exists and is exported", () => {
   it("should be importable from rbac module", () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const rbac = require("../middlewares/rbac");
-    expect(rbac.verifyRoleFromDatabase).toBeDefined();
-    expect(typeof rbac.verifyRoleFromDatabase).toBe("function");
+    expect(verifyRoleFromDatabase).toBeDefined();
+    expect(typeof verifyRoleFromDatabase).toBe("function");
   });
 
   it("should return a middleware function when called with a store", () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { verifyRoleFromDatabase } = require("../middlewares/rbac");
     const mockStore = { getUser: jest.fn() };
     const middleware = verifyRoleFromDatabase(mockStore);
     expect(typeof middleware).toBe("function");
@@ -167,10 +135,7 @@ describe("G21: verifyRoleFromDatabase middleware exists and is exported", () => 
 
 describe("C1: validateTenantAccess is imported in reviewRoutes", () => {
   it("reviewRoutes module should export createReviewRoutes that accepts userStore", () => {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { createReviewRoutes } = require("../routes/reviewRoutes");
     expect(createReviewRoutes).toBeDefined();
-    // createReviewRoutes now takes 3 params: appInstanceStore, reviewStore, userStore
     expect(createReviewRoutes.length).toBe(3);
   });
 });

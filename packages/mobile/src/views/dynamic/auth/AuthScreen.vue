@@ -88,7 +88,7 @@ const handleOAuthCallback = async () => {
     authError.value = ''
 
     // Extract app ID from callback URL using the auth manager utility
-    let { appId } = authManager.getTemporaryOAuthData()
+    let { appId } = await authManager.getTemporaryOAuthData()
     // Fallback: try route query parameters
     if (!appId) {
       throw new Error('App ID not found in callback URL. Cannot process authentication.')
@@ -175,7 +175,7 @@ const onLogin = async () => {
 </script>
 
 <template>
-  <div class="d-flex justify-content-between">
+  <div class="d-flex justify-content-between px-3">
     <a class="primary mb-2" @click="onBack" v-if="!isCallback">Back</a>
   </div>
   <AuthContainer>

@@ -29,7 +29,6 @@ import {
   FormSubmission,
   GroupDoc,
   SearchCriteria,
-  SyncLevel,
   ExternalSyncCredentials,
   PasswordCredentials,
   TokenCredentials,

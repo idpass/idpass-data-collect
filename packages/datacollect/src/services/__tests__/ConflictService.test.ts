@@ -17,10 +17,8 @@
  * under the License.
  */
 
-import {
-  ConflictService,
-  InMemoryConflictStore,
-} from "../ConflictService";
+import { ConflictService } from "../ConflictService";
+import { InMemoryConflictStore } from "../../testing/InMemoryConflictStore";
 
 describe("ConflictService", () => {
   let store: InMemoryConflictStore;

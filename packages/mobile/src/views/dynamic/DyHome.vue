@@ -7,10 +7,12 @@ import { initStore, closeStore, store } from '@/store'
 import { Barcode, BarcodeScanner } from '@capacitor-mlkit/barcode-scanning'
 import { Camera } from '@capacitor/camera'
 import { Capacitor } from '@capacitor/core'
+import { App as CapApp } from '@capacitor/app'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { registerIssuerKey } from '@/services/claim169Service'
+import { SecureStorageService } from '@/services/SecureStorageService'
 
 interface AppStats {
   totalRecords: number
@@ -22,6 +24,8 @@ const router = useRouter()
 
 const isMobile = ref(['android', 'ios'].includes(Capacitor.getPlatform()))
 const isGrantedPermissions = ref(false)
+const isScanning = ref(false)
+let cancelScan: (() => void) | null = null
 const isDevelop = import.meta.env.VITE_DEVELOP === 'true'
 
 const database = useDatabase()
@@ -121,6 +125,10 @@ const devHandleClickClearData = async () => {
   await database.tenantapps.remove()
   localStorage.clear()
   sessionStorage.clear()
+  // Also clear native secure storage so the DB encryption key is reset alongside
+  // the data. Without this, a stale key in secure storage would cause a DB1
+  // password mismatch on the next launch.
+  await SecureStorageService.clear()
   window.location.reload()
 }
 
@@ -132,16 +140,37 @@ const requestPermissions = async (): Promise<boolean> => {
 const scanSingleBarcode = (): Promise<Barcode> => {
   return new Promise((resolve, reject) => {
     document.querySelector('body')?.classList.add('barcode-scanner-active')
+    isScanning.value = true
     let activeListener: { remove: () => Promise<void> } | null = null
+    let backButtonListener: { remove: () => Promise<void> } | null = null
 
     const cleanup = async () => {
+      isScanning.value = false
+      cancelScan = null
       document.querySelector('body')?.classList.remove('barcode-scanner-active')
       await BarcodeScanner.stopScan().catch(() => {})
       if (activeListener) {
         await activeListener.remove().catch(() => {})
         activeListener = null
       }
+      if (backButtonListener) {
+        await backButtonListener.remove().catch(() => {})
+        backButtonListener = null
+      }
     }
+
+    cancelScan = async () => {
+      await cleanup()
+      reject(new Error('Scan cancelled'))
+    }
+
+    // Listen for hardware back button
+    CapApp.addListener('backButton', async () => {
+      await cleanup()
+      reject(new Error('Scan cancelled'))
+    }).then((listener) => {
+      backButtonListener = listener
+    })
 
     BarcodeScanner.addListener('barcodeScanned', async (result) => {
       try {
@@ -184,31 +213,58 @@ const scan = async () => {
   return url
 }
 
+const parseVersion = (version: string | undefined): number[] => {
+  if (!version) return [0]
+  return version.split('.').map((part) => parseInt(part, 10) || 0)
+}
+
+const isNewerVersion = (incoming: string | undefined, existing: string | undefined): boolean => {
+  const incomingParts = parseVersion(incoming)
+  const existingParts = parseVersion(existing)
+  const length = Math.max(incomingParts.length, existingParts.length)
+  for (let i = 0; i < length; i++) {
+    const a = incomingParts[i] ?? 0
+    const b = existingParts[i] ?? 0
+    if (a > b) return true
+    if (a < b) return false
+  }
+  return false
+}
+
 const saveTenantApp = async (config: TenantAppData, sourceUrl = '') => {
   if (!config?.id || !config?.name || !config?.entityForms) {
     throw new Error('Invalid Collection Program configuration: missing required fields')
   }
 
-  // Check if a collection program with the same id or name already exists
-  const existingById = await database.tenantapps
-    .find({
-      selector: {
-        id: config.id
-      }
-    })
-    .exec()
+  const [existingById, existingByName] = await Promise.all([
+    database.tenantapps.find({ selector: { id: config.id } }).exec(),
+    database.tenantapps.find({ selector: { name: config.name } }).exec(),
+  ])
 
-  const existingByName = await database.tenantapps
-    .find({
-      selector: {
-        name: config.name
-      }
-    })
-    .exec()
+  const existing = existingById[0] ?? existingByName[0] ?? null
 
-  if (existingById.length > 0 || existingByName.length > 0) {
-    const existingName = existingById.length > 0 ? existingById[0].name : existingByName[0].name
-    throw new Error(`A Collection Program with the name "${existingName}" already exists. Please use a different program.`)
+  if (existing) {
+    if (!isNewerVersion(config.version, existing.version)) {
+      throw new Error(
+        `"${existing.name}" is already at version ${existing.version ?? '(unknown)'}. ` +
+        `The incoming version ${config.version ?? '(unknown)'} is not newer.`
+      )
+    }
+
+    // Update only config fields — entities are stored separately and are unaffected
+    await existing.patch({
+      id: config.id,
+      name: config.name,
+      description: config.description,
+      version: config.version,
+      url: config.url || sourceUrl || existing.url,
+      entityForms: config.entityForms,
+      entityData: config.entityData,
+      syncServerUrl: config.syncServerUrl,
+      externalSync: config.externalSync,
+      trustedIssuers: config.trustedIssuers,
+    })
+    return
   }
 
   await database.tenantapps.upsert({
@@ -250,10 +306,10 @@ const loadAppFromUrl = async (url: string) => {
 
 const handleLoadAppFromInput = async () => {
   try {
-    await loadAppFromUrl(appUrl.value)
-    // Only close dialog if successful (no error thrown)
+    const savedConfig = await loadAppFromUrl(appUrl.value)
     openInputAppDialog.value = false
-    appUrl.value = '' // Clear the input on success
+    appUrl.value = ''
+    displayError(`Successfully loaded "${savedConfig?.name || 'Collection Program'}"`, 3000, true)
   } catch {
     // Error already handled by loadAppFromUrl via displayError
     // Keep dialog open so user can fix the URL
@@ -274,8 +330,9 @@ const handleFileChange = async (event: Event) => {
 
   try {
     const text = await file.text()
-    const json = JSON.parse(text)
+    const json = JSON.parse(text) as TenantAppData
     await saveTenantApp(json)
+    displayError(`Successfully imported "${json?.name || 'Collection Program'}"`, 3000, true)
   } catch (error) {
     console.error(error)
     const message = error instanceof Error ? error.message : 'Unable to import the selected file. Please verify it is a valid Collection Program JSON.'
@@ -308,6 +365,7 @@ const handleScanApp = async () => {
     displayError(`Successfully added "${savedConfig?.name || 'Collection Program'}"`, 3000, true)
     
   } catch (error) {
+    if (error instanceof Error && error.message === 'Scan cancelled') return
     console.error('Error scanning QR code:', error)
     const message = error instanceof Error ? error.message : 'Unable to scan QR code. Please try again.'
     displayError(message)
@@ -532,6 +590,21 @@ const handleScanIdentity = () => {
       @change="handleFileChange"
     />
 
+    <!-- Scanner overlay with cancel button (visible while camera is active) -->
+    <div v-if="isScanning" class="scanner-overlay barcode-scanner-modal">
+      <div class="scan-frame">
+        <div class="corner top-left"></div>
+        <div class="corner top-right"></div>
+        <div class="corner bottom-left"></div>
+        <div class="corner bottom-right"></div>
+        <div class="scan-line"></div>
+      </div>
+      <p class="scan-hint">Align QR code within frame</p>
+      <button class="cancel-scan-button" type="button" @click="cancelScan?.()">
+        Cancel
+      </button>
+    </div>
+
     <button
       v-if="isDevelop"
       class="dev-reset"
@@ -554,6 +627,7 @@ const handleScanIdentity = () => {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
+  padding: var(--spacing-md)
 }
 
 .home-header h1 {
@@ -572,9 +646,9 @@ const handleScanIdentity = () => {
   align-items: center;
   gap: var(--spacing-sm);
   background: var(--surface);
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-lg);
   padding: var(--spacing-sm) var(--spacing-md);
-  box-shadow: var(--shadow-card);
+  box-shadow: none;
   border: 1px solid var(--border-light);
   min-height: var(--touch-target);
 }
@@ -614,6 +688,7 @@ const handleScanIdentity = () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 0 var(--spacing-md);
 }
 
 .section-heading h2 {
@@ -635,28 +710,30 @@ const handleScanIdentity = () => {
 .form-card-list {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: 0;
   padding: 0;
   margin: 0;
   list-style: none;
+  background: var(--surface);
+  border-top: 1px solid var(--border-light);
 }
 
 .form-card {
   background: var(--surface);
-  border-radius: var(--radius-xl);
-  padding: var(--spacing-lg);
-  box-shadow: var(--shadow-card);
-  border: 1px solid var(--border-light);
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  border-radius: 0;
+  padding: var(--spacing-md) var(--spacing-md);
+  border: none;
+  border-bottom: 1px solid var(--border-light);
+  transition: background var(--transition-fast);
   cursor: pointer;
 }
 
 .form-card:active {
-  transform: scale(0.99);
+  background: var(--neutral-50);
 }
 
 .form-card:hover {
-  box-shadow: var(--shadow-floating);
+  background: var(--neutral-50);
 }
 
 .form-card__header {
@@ -718,9 +795,9 @@ const handleScanIdentity = () => {
 }
 
 .stat {
-  background: var(--neutral-50);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-sm);
+  background: transparent;
+  border-radius: 0;
+  padding: var(--spacing-sm) 0;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
@@ -763,8 +840,8 @@ const handleScanIdentity = () => {
   width: 56px;
   height: 56px;
   border-radius: var(--radius-full);
-  background: linear-gradient(135deg, var(--brand) 0%, var(--primary) 100%);
-  color: var(--text-inverted);
+  background: var(--brand);
+  color: #ffffff;
   border: none;
   display: grid;
   place-items: center;
@@ -813,8 +890,9 @@ const handleScanIdentity = () => {
 .overlay__options {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: 0;
   margin-top: var(--spacing-lg);
+  border-top: 1px solid var(--border-light);
 }
 
 .option {
@@ -823,16 +901,17 @@ const handleScanIdentity = () => {
   gap: var(--spacing-sm);
   width: 100%;
   padding: var(--spacing-sm) var(--spacing-md);
-  border-radius: var(--radius-xl);
+  border-radius: 0;
   border: none;
-  background: var(--neutral-50);
+  border-bottom: 1px solid var(--border-light);
+  background: var(--surface);
   text-align: left;
-  transition: transform var(--transition-fast), background var(--transition-fast);
+  transition: background var(--transition-fast);
   min-height: var(--touch-target);
 }
 
 .option:active {
-  transform: scale(0.99);
+  background: var(--neutral-50);
 }
 
 .option__icon {
@@ -974,6 +1053,68 @@ const handleScanIdentity = () => {
   height: 18px;
 }
 
+.scanner-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  z-index: 100;
+}
+
+.scan-frame {
+  position: relative;
+  width: 280px;
+  height: 280px;
+}
+
+.corner {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--brand, #ff6d37);
+}
+
+.corner.top-left { top: 0; left: 0; border-right: none; border-bottom: none; border-radius: 8px 0 0 0; }
+.corner.top-right { top: 0; right: 0; border-left: none; border-bottom: none; border-radius: 0 8px 0 0; }
+.corner.bottom-left { bottom: 0; left: 0; border-right: none; border-top: none; border-radius: 0 0 0 8px; }
+.corner.bottom-right { bottom: 0; right: 0; border-left: none; border-top: none; border-radius: 0 0 8px 0; }
+
+.scan-line {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--brand, #ff6d37), transparent);
+  animation: scan 2s ease-in-out infinite;
+}
+
+@keyframes scan {
+  0%, 100% { top: 10px; }
+  50% { top: calc(100% - 10px); }
+}
+
+.scan-hint {
+  color: white;
+  font-size: var(--font-size-base);
+  margin-top: var(--spacing-lg);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.cancel-scan-button {
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-sm) var(--spacing-xl);
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  min-height: var(--touch-target);
+}
+
 .options-divider {
   display: flex;
   align-items: center;
@@ -997,8 +1138,7 @@ const handleScanIdentity = () => {
 }
 
 .option--identity {
-  border: 1px solid rgba(44, 62, 80, 0.2);
-  background: rgba(44, 62, 80, 0.04);
+  background: rgba(44, 62, 80, 0.03);
 }
 
 .option__icon--identity {

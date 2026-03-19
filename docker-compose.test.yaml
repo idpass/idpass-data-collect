@@ -10,7 +10,7 @@ services:
     ports:
       - "5433:5432"
     tmpfs:
-      - /var/lib/postgresql/data:mode=0700,uid=999
+      - /var/lib/postgresql/data:mode=0700
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U test -d test"]
       interval: 2s

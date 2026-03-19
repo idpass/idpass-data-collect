@@ -6,8 +6,8 @@ import "core-js/stable/structured-clone";
 import "fake-indexeddb/auto";
 
 import { v4 as uuidv4 } from "uuid";
-import { SelfServiceManager, FormConfig, SelfServiceConfig } from "../SelfServiceManager";
-import { EntityStore, EntityType, EventStore, FormSubmission, SyncLevel } from "../../interfaces/types";
+import { SelfServiceManager, SelfServiceConfig } from "../SelfServiceManager";
+import { EntityStore, EntityType, EventStore, SyncLevel } from "../../interfaces/types";
 import { EntityStoreImpl } from "../../components/EntityStore";
 import { EventStoreImpl } from "../../components/EventStore";
 import { EventApplierService } from "../EventApplierService";

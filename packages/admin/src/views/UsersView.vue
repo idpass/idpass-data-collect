@@ -8,6 +8,8 @@ import {
   getApps,
 } from '@/api'
 import type { AppListItem } from '@/api'
+import { useSnackBarStore } from '@/stores/snackBar'
+import { AxiosError } from 'axios'
 
 interface UserRecord {
   id: string
@@ -16,6 +18,8 @@ interface UserRecord {
   tenantIds?: string[]
   roleAssignments?: Array<{ tenantId: string; role: string; areaId?: string }>
 }
+
+const snackBarStore = useSnackBarStore()
 
 // State
 const loading = ref(false)
@@ -62,7 +66,7 @@ const formTitle = computed(() => {
   return editedIndex.value === -1 ? 'Create User' : 'Edit User'
 })
 
-const tenantNames = computed(() => {
+const _tenantNames = computed(() => {
   const map: Record<string, string> = {}
   for (const t of tenants.value) {
     map[t.id] = t.name
@@ -77,7 +81,8 @@ const fetchUsers = async () => {
     const response = await getUsersApi()
     users.value = response as UserRecord[]
   } catch (error) {
-    console.error('Error fetching users:', error)
+    const msg = error instanceof AxiosError ? error.response?.data?.error || error.message : 'Failed to load users'
+    snackBarStore.showSnackbar(msg, 'error')
   } finally {
     loading.value = false
   }
@@ -114,8 +119,10 @@ const deleteUser = async () => {
     await deleteUserApi(editedItem.id)
     users.value.splice(editedIndex.value, 1)
     showDeleteDialog.value = false
+    snackBarStore.showSnackbar('User deleted', 'success')
   } catch (error) {
-    console.error('Error deleting user:', error)
+    const msg = error instanceof AxiosError ? error.response?.data?.error || error.message : 'Failed to delete user'
+    snackBarStore.showSnackbar(msg, 'error')
   }
 }
 
@@ -137,6 +144,7 @@ const removeRoleAssignment = (index: number) => {
 }
 
 const saveUser = async () => {
+  const isEditing = editedIndex.value > -1
   try {
     if (editedIndex.value > -1) {
       // Update existing user
@@ -162,8 +170,10 @@ const saveUser = async () => {
       users.value.push({ ...editedItem })
     }
     closeDialog()
+    snackBarStore.showSnackbar(isEditing ? 'User updated' : 'User created', 'success')
   } catch (error) {
-    console.error('Error saving user:', error)
+    const msg = error instanceof AxiosError ? error.response?.data?.error || error.message : 'Failed to save user'
+    snackBarStore.showSnackbar(msg, 'error')
   }
 }
 
@@ -180,16 +190,26 @@ onMounted(() => {
 
 <template>
   <v-container>
-    <v-row>
-      <v-col cols="12">
-        <h1 class="text-h4 mb-4">User Management</h1>
-
-        <!-- Create User Button -->
-        <v-btn color="primary" class="mb-4" @click="showCreateDialog = true"> Create User </v-btn>
+    <div class="page-header">
+      <div class="page-header__text">
+        <h1 class="page-header__title">User Management</h1>
+        <p class="page-header__subtitle">Create and manage user accounts and role assignments</p>
+      </div>
+      <div class="page-header__actions">
+        <v-btn
+          variant="flat"
+          color="primary"
+          prepend-icon="mdi-account-plus"
+          @click="showCreateDialog = true"
+        >
+          Create User
+        </v-btn>
+      </div>
+    </div>
 
         <!-- Users Table -->
-        <v-data-table :headers="headers" :items="users" :loading="loading" class="elevation-1">
-          <template #item.tenantCount="{ item }">
+        <v-data-table :headers="headers" :items="users" :loading="loading" class="users-table">
+          <template #[`item.tenantCount`]="{ item }">
             <v-chip size="small" variant="tonal">
               {{ getTenantCount(item) }} tenant(s)
             </v-chip>
@@ -215,147 +235,148 @@ onMounted(() => {
         </v-data-table>
 
         <!-- Create/Edit User Dialog -->
-        <v-dialog v-model="showCreateDialog" max-width="600px">
+        <v-dialog v-model="showCreateDialog" :max-width="540">
           <v-card>
-            <v-card-title>
-              <span class="text-h5">{{ formTitle }}</span>
-            </v-card-title>
+            <v-card-title class="text-h6">{{ formTitle }}</v-card-title>
 
             <v-card-text>
-              <v-container>
-                <v-row>
-                  <v-col cols="12">
-                    <v-text-field
-                      v-model="editedItem.email"
-                      label="Email"
-                      type="email"
-                      required
-                    ></v-text-field>
-                  </v-col>
-                  <v-col cols="12">
-                    <v-text-field
-                      v-model="editedItem.password"
-                      label="Password"
-                      type="password"
-                      :required="editedIndex === -1"
-                      :hint="editedIndex > -1 ? 'Leave blank to keep current password' : ''"
-                      persistent-hint
-                    ></v-text-field>
-                  </v-col>
-                  <v-col cols="12">
-                    <v-select
-                      v-model="editedItem.role"
-                      :items="roles"
-                      label="Role"
-                      required
-                    ></v-select>
-                  </v-col>
-                  <v-col cols="12">
-                    <v-autocomplete
-                      v-model="editedItem.tenantIds"
-                      :items="tenants"
-                      item-title="name"
-                      item-value="id"
-                      label="Assigned Tenants"
-                      multiple
-                      chips
-                      closable-chips
-                      variant="outlined"
-                      density="comfortable"
-                    />
-                  </v-col>
+              <div class="user-form">
+                <v-text-field
+                  v-model="editedItem.email"
+                  label="Email"
+                  type="email"
+                  variant="outlined"
+                  density="comfortable"
+                  required
+                />
+                <v-text-field
+                  v-model="editedItem.password"
+                  label="Password"
+                  type="password"
+                  variant="outlined"
+                  density="comfortable"
+                  :required="editedIndex === -1"
+                  :hint="editedIndex > -1 ? 'Leave blank to keep current password' : ''"
+                  persistent-hint
+                />
+                <v-select
+                  v-model="editedItem.role"
+                  :items="roles"
+                  label="Role"
+                  variant="outlined"
+                  density="comfortable"
+                  required
+                />
+                <v-autocomplete
+                  v-model="editedItem.tenantIds"
+                  :items="tenants"
+                  item-title="name"
+                  item-value="id"
+                  label="Assigned Tenants"
+                  multiple
+                  chips
+                  closable-chips
+                  variant="outlined"
+                  density="comfortable"
+                />
 
-                  <!-- Per-tenant role assignments -->
-                  <v-col cols="12">
-                    <div class="d-flex align-center justify-space-between mb-2">
-                      <span class="text-subtitle-2">Role Assignments</span>
-                      <v-btn
-                        size="small"
-                        variant="tonal"
-                        prepend-icon="mdi-plus"
-                        @click="addRoleAssignment"
-                      >
-                        Add
-                      </v-btn>
-                    </div>
-                    <v-card
-                      v-for="(assignment, index) in editedItem.roleAssignments"
-                      :key="index"
-                      variant="outlined"
-                      class="mb-2 pa-3"
+                <!-- Per-tenant role assignments -->
+                <div>
+                  <div class="d-flex align-center justify-space-between mb-2">
+                    <span class="text-subtitle-2">Role Assignments</span>
+                    <v-btn
+                      size="small"
+                      variant="tonal"
+                      prepend-icon="mdi-plus"
+                      @click="addRoleAssignment"
                     >
-                      <v-row dense align="center">
-                        <v-col cols="5">
-                          <v-select
-                            v-model="assignment.tenantId"
-                            :items="tenants"
-                            item-title="name"
-                            item-value="id"
-                            label="Tenant"
-                            density="compact"
-                            variant="outlined"
-                            hide-details
-                          />
-                        </v-col>
-                        <v-col cols="5">
-                          <v-select
-                            v-model="assignment.role"
-                            :items="granularRoles"
-                            item-title="title"
-                            item-value="value"
-                            label="Role"
-                            density="compact"
-                            variant="outlined"
-                            hide-details
-                          />
-                        </v-col>
-                        <v-col cols="2">
-                          <v-btn
-                            icon="mdi-delete"
-                            variant="text"
-                            color="error"
-                            size="small"
-                            @click="removeRoleAssignment(index)"
-                          />
-                        </v-col>
-                      </v-row>
-                    </v-card>
-                  </v-col>
-                </v-row>
-              </v-container>
+                      Add
+                    </v-btn>
+                  </div>
+                  <v-card
+                    v-for="(assignment, index) in editedItem.roleAssignments"
+                    :key="index"
+                    variant="outlined"
+                    class="mb-2 pa-3"
+                  >
+                    <v-row dense align="center">
+                      <v-col cols="5">
+                        <v-select
+                          v-model="assignment.tenantId"
+                          :items="tenants"
+                          item-title="name"
+                          item-value="id"
+                          label="Tenant"
+                          density="compact"
+                          variant="outlined"
+                          hide-details
+                        />
+                      </v-col>
+                      <v-col cols="5">
+                        <v-select
+                          v-model="assignment.role"
+                          :items="granularRoles"
+                          item-title="title"
+                          item-value="value"
+                          label="Role"
+                          density="compact"
+                          variant="outlined"
+                          hide-details
+                        />
+                      </v-col>
+                      <v-col cols="2">
+                        <v-btn
+                          icon="mdi-delete"
+                          variant="text"
+                          color="error"
+                          size="small"
+                          @click="removeRoleAssignment(index)"
+                        />
+                      </v-col>
+                    </v-row>
+                  </v-card>
+                </div>
+              </div>
             </v-card-text>
 
             <v-card-actions>
-              <v-spacer></v-spacer>
-              <v-btn color="error" text @click="closeDialog">Cancel</v-btn>
-              <v-btn color="primary" text @click="saveUser">Save</v-btn>
+              <v-spacer />
+              <v-btn variant="text" @click="closeDialog">Cancel</v-btn>
+              <v-btn color="primary" variant="tonal" @click="saveUser">Save</v-btn>
             </v-card-actions>
           </v-card>
         </v-dialog>
 
         <!-- Delete Confirmation Dialog -->
-        <v-dialog v-model="showDeleteDialog" max-width="400px">
+        <v-dialog v-model="showDeleteDialog" :max-width="400">
           <v-card>
-            <v-card-title class="text-h5">Delete User</v-card-title>
+            <v-card-title class="text-h6">Delete User</v-card-title>
             <v-card-text>
-              Are you sure you want to delete user {{ editedItem.email }}?
+              <p>Are you sure you want to delete user <strong>{{ editedItem.email }}</strong>?</p>
+              <p class="mt-2 text-medium-emphasis text-body-2">
+                This action cannot be undone.
+              </p>
             </v-card-text>
             <v-card-actions>
-              <v-spacer></v-spacer>
-              <v-btn color="primary" text @click="showDeleteDialog = false">Cancel</v-btn>
-              <v-btn color="error" text @click="deleteUser">Delete</v-btn>
+              <v-spacer />
+              <v-btn variant="text" @click="showDeleteDialog = false">Cancel</v-btn>
+              <v-btn color="error" variant="tonal" @click="deleteUser">Delete</v-btn>
             </v-card-actions>
           </v-card>
         </v-dialog>
-      </v-col>
-    </v-row>
   </v-container>
 </template>
 
 <style scoped>
-.v-data-table {
-  margin-top: var(--spacing-md);
+.users-table {
   border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
   box-shadow: var(--shadow-card);
+}
+
+.user-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
 }
 </style>

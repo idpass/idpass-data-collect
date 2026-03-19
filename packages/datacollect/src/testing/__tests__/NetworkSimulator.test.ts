@@ -154,6 +154,7 @@ describe("NetworkSimulator", () => {
       const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
       const next = jest.fn();
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       middleware(req, res as any, next);
 
       expect(next).toHaveBeenCalled();
@@ -167,12 +168,12 @@ describe("NetworkSimulator", () => {
       const res = { status: jest.fn().mockReturnValue({ json: jest.fn() }) };
       const next = jest.fn();
 
-      // First request succeeds
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       middleware(req, res as any, next);
       expect(next).toHaveBeenCalled();
 
-      // Second request fails
       next.mockClear();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       middleware(req, res as any, next);
       expect(next).not.toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(500);
@@ -185,6 +186,7 @@ describe("NetworkSimulator", () => {
       const res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
 
       const startTime = Date.now();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       middleware(req, res as any, () => {
         const elapsed = Date.now() - startTime;
         expect(elapsed).toBeGreaterThanOrEqual(20);
@@ -200,6 +202,7 @@ describe("NetworkSimulator", () => {
       const res = { status: jest.fn().mockReturnValue({ json: jsonFn }) };
       const next = jest.fn();
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       middleware(req, res as any, next);
 
       expect(next).not.toHaveBeenCalled();

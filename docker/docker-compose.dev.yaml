@@ -7,7 +7,7 @@ services:
     env_file: ./.env
     volumes:
       - postgres-data-dev:/var/lib/postgresql/data
-      - ./init-reset-dbs.sh:/docker-entrypoint-initdb.d/init-reset-dbs.sh
+      - ./init-reset-dbs.sh:/docker-entrypoint-initdb.d/init-reset-dbs.sh:z
     ports:
       - "5432:5432"
     networks:
@@ -34,7 +34,7 @@ services:
   sync-server:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/Dockerfile.dev
       target: backend
     develop:
       watch:
@@ -55,8 +55,8 @@ services:
         - action: rebuild
           path: ../pnpm-lock.yaml
     volumes:
-      - ../packages/backend/src:/app/packages/backend/src
-      - ../packages/datacollect/src:/app/packages/datacollect/src
+      - ../packages/backend/src:/app/packages/backend/src:z
+      - ../packages/datacollect/src:/app/packages/datacollect/src:z
     env_file: ./.env
     ports:
       - "${SYNC_SERVER_PORT:-3000}:3000"
@@ -72,7 +72,7 @@ services:
   admin-ui:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/Dockerfile.dev
       target: admin-ui
     develop:
       watch:
@@ -87,8 +87,8 @@ services:
         - action: rebuild
           path: ../pnpm-lock.yaml
     volumes:
-      - ../packages/admin/src:/app/packages/admin/src
-      - ../packages/admin/index.html:/app/packages/admin/index.html
+      - ../packages/admin/src:/app/packages/admin/src:z
+      - ../packages/admin/index.html:/app/packages/admin/index.html:z
     restart: unless-stopped
     environment:
       - VITE_API_URL=${ADMIN_API_URL:-http://localhost:3000}
@@ -108,7 +108,7 @@ services:
   mobile-app:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/Dockerfile.dev
       target: mobile-app
     develop:
       watch:
@@ -145,7 +145,7 @@ services:
   web-ui:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/Dockerfile.dev
       target: web-ui
     develop:
       watch:
@@ -160,8 +160,8 @@ services:
         - action: rebuild
           path: ../pnpm-lock.yaml
     volumes:
-      - ../packages/web/src:/app/packages/web/src
-      - ../packages/web/index.html:/app/packages/web/index.html
+      - ../packages/web/src:/app/packages/web/src:z
+      - ../packages/web/index.html:/app/packages/web/index.html:z
     environment:
       - VITE_API_URL=${WEB_API_URL:-http://localhost:3000}
     ports:

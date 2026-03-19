@@ -38,6 +38,7 @@ const router = createRouter({
       path: "/agent/login",
       name: "agent-login",
       component: () => import("@/views/agent/AgentLoginView.vue"),
+      meta: { userType: "agent" },
     },
     {
       path: "/agent/:tenantId",
@@ -93,6 +94,7 @@ const router = createRouter({
       path: "/citizen/login",
       name: "citizen-login",
       component: () => import("@/views/citizen/CitizenLoginView.vue"),
+      meta: { userType: "citizen" },
     },
     {
       path: "/citizen/:tenantId",

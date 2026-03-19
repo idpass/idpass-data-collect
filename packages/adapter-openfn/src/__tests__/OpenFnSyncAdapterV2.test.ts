@@ -138,7 +138,9 @@ describe("OpenFnSyncAdapterV2", () => {
       await adapter.initialize({ url: "http://openfn.org/inbox/123", apiKey: "key" });
 
       const axiosError = new Error("Request failed with status code 403");
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (axiosError as any).isAxiosError = true;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (axiosError as any).response = { status: 403 };
       mockedAxios.isAxiosError = jest.fn().mockReturnValue(true);
       mockedAxios.get.mockRejectedValue(axiosError);

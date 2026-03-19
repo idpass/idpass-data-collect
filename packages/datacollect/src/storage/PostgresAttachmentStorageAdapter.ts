@@ -21,7 +21,7 @@ import { Pool } from "pg";
 import { and, eq } from "drizzle-orm";
 import { AttachmentMetadata, AttachmentStore } from "../interfaces/types";
 import { createLogger } from "../utils/logger";
-import { createDrizzleFromPool, DrizzleDatabase } from "../db/connection";
+import { createDrizzleFromPool, DrizzleDatabase, withClient } from "../db/connection";
 import { attachments, attachmentData } from "../db/schema";
 
 const log = createLogger("PostgresAttachmentStorageAdapter");
@@ -51,8 +51,7 @@ export class PostgresAttachmentStorageAdapter implements AttachmentStore {
    * Creates tables if they do not already exist. Idempotent and safe to call multiple times.
    */
   async initialize(): Promise<void> {
-    const client = await this.pool.connect();
-    try {
+    await withClient(this.pool, async (client) => {
       await client.query(`
         CREATE TABLE IF NOT EXISTS attachments (
           guid TEXT PRIMARY KEY,
@@ -84,9 +83,7 @@ export class PostgresAttachmentStorageAdapter implements AttachmentStore {
           data BYTEA NOT NULL
         )
       `);
-    } finally {
-      client.release();
-    }
+    });
   }
 
   /**

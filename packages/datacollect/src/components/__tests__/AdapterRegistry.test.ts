@@ -33,10 +33,6 @@ import { z } from "zod";
 import { AdapterRegistry } from "../AdapterRegistry";
 import type {
   ExternalSyncAdapterV2,
-  AdapterDescriptor,
-  HealthCheckResult,
-  SyncResult,
-  EntityPushPayload,
 } from "../../interfaces/adapter";
 
 function createMockAdapter(type = "mock"): ExternalSyncAdapterV2 {
