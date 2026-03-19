@@ -7,6 +7,7 @@ import { initStore, closeStore, store } from '@/store'
 import { Barcode, BarcodeScanner } from '@capacitor-mlkit/barcode-scanning'
 import { Camera } from '@capacitor/camera'
 import { Capacitor } from '@capacitor/core'
+import { App as CapApp } from '@capacitor/app'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
@@ -23,6 +24,8 @@ const router = useRouter()
 
 const isMobile = ref(['android', 'ios'].includes(Capacitor.getPlatform()))
 const isGrantedPermissions = ref(false)
+const isScanning = ref(false)
+let cancelScan: (() => void) | null = null
 const isDevelop = import.meta.env.VITE_DEVELOP === 'true'
 
 const database = useDatabase()
@@ -137,16 +140,37 @@ const requestPermissions = async (): Promise<boolean> => {
 const scanSingleBarcode = (): Promise<Barcode> => {
   return new Promise((resolve, reject) => {
     document.querySelector('body')?.classList.add('barcode-scanner-active')
+    isScanning.value = true
     let activeListener: { remove: () => Promise<void> } | null = null
+    let backButtonListener: { remove: () => Promise<void> } | null = null
 
     const cleanup = async () => {
+      isScanning.value = false
+      cancelScan = null
       document.querySelector('body')?.classList.remove('barcode-scanner-active')
       await BarcodeScanner.stopScan().catch(() => {})
       if (activeListener) {
         await activeListener.remove().catch(() => {})
         activeListener = null
       }
+      if (backButtonListener) {
+        await backButtonListener.remove().catch(() => {})
+        backButtonListener = null
+      }
     }
+
+    cancelScan = async () => {
+      await cleanup()
+      reject(new Error('Scan cancelled'))
+    }
+
+    // Listen for hardware back button
+    CapApp.addListener('backButton', async () => {
+      await cleanup()
+      reject(new Error('Scan cancelled'))
+    }).then((listener) => {
+      backButtonListener = listener
+    })
 
     BarcodeScanner.addListener('barcodeScanned', async (result) => {
       try {
@@ -341,6 +365,7 @@ const handleScanApp = async () => {
     displayError(`Successfully added "${savedConfig?.name || 'Collection Program'}"`, 3000, true)
     
   } catch (error) {
+    if (error instanceof Error && error.message === 'Scan cancelled') return
     console.error('Error scanning QR code:', error)
     const message = error instanceof Error ? error.message : 'Unable to scan QR code. Please try again.'
     displayError(message)
@@ -564,6 +589,21 @@ const handleScanIdentity = () => {
       accept="application/json"
       @change="handleFileChange"
     />
+
+    <!-- Scanner overlay with cancel button (visible while camera is active) -->
+    <div v-if="isScanning" class="scanner-overlay barcode-scanner-modal">
+      <div class="scan-frame">
+        <div class="corner top-left"></div>
+        <div class="corner top-right"></div>
+        <div class="corner bottom-left"></div>
+        <div class="corner bottom-right"></div>
+        <div class="scan-line"></div>
+      </div>
+      <p class="scan-hint">Align QR code within frame</p>
+      <button class="cancel-scan-button" type="button" @click="cancelScan?.()">
+        Cancel
+      </button>
+    </div>
 
     <button
       v-if="isDevelop"
@@ -1011,6 +1051,68 @@ const handleScanIdentity = () => {
 .error-close svg {
   width: 18px;
   height: 18px;
+}
+
+.scanner-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  z-index: 100;
+}
+
+.scan-frame {
+  position: relative;
+  width: 280px;
+  height: 280px;
+}
+
+.corner {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--brand, #ff6d37);
+}
+
+.corner.top-left { top: 0; left: 0; border-right: none; border-bottom: none; border-radius: 8px 0 0 0; }
+.corner.top-right { top: 0; right: 0; border-left: none; border-bottom: none; border-radius: 0 8px 0 0; }
+.corner.bottom-left { bottom: 0; left: 0; border-right: none; border-top: none; border-radius: 0 0 0 8px; }
+.corner.bottom-right { bottom: 0; right: 0; border-left: none; border-top: none; border-radius: 0 0 8px 0; }
+
+.scan-line {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--brand, #ff6d37), transparent);
+  animation: scan 2s ease-in-out infinite;
+}
+
+@keyframes scan {
+  0%, 100% { top: 10px; }
+  50% { top: calc(100% - 10px); }
+}
+
+.scan-hint {
+  color: white;
+  font-size: var(--font-size-base);
+  margin-top: var(--spacing-lg);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.cancel-scan-button {
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-sm) var(--spacing-xl);
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  min-height: var(--touch-target);
 }
 
 .options-divider {

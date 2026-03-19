@@ -49,6 +49,9 @@ export const SecureStorageService = {
   },
 
   async set(key: string, value: string): Promise<void> {
+    if (value == null || typeof value !== 'string') {
+      return
+    }
     if (!Capacitor.isNativePlatform()) {
       localStorage.setItem(key, value)
       return

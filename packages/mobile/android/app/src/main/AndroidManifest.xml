@@ -65,8 +65,8 @@
     <uses-permission android:name="android.permission.FLASHLIGHT"/>
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <!-- Storage access for QR code scanning from gallery (Android 12 and below) -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <!-- Storage: required in manifest for @capacitor/camera permission checks (no-op on API 33+) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <!-- Storage access for Android 13+ (scoped media permissions) -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 

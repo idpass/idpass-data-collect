@@ -66,7 +66,7 @@ export const performLogin = fromPromise<LoginResult, {
     throw new Error('Auth system not initialized. Call initialize() first.')
   }
 
-  if (appId) {
+  if (appId && provider) {
     await mobileAuthStorage.saveTemporaryOAuthData(appId, provider)
   }
 
