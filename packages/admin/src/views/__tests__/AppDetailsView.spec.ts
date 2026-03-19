@@ -49,7 +49,7 @@ vi.mock('@/api', () => ({
   getAppConfigJsonUrl: vi.fn().mockReturnValue('http://localhost/config.json'),
   getAppQrCodeUrl: vi.fn().mockReturnValue('http://localhost/qr.png'),
   externalSync: vi.fn().mockResolvedValue({}),
-  deleteApp: vi.fn().mockResolvedValue({}),
+  archiveApp: vi.fn().mockResolvedValue({}),
 }))
 
 vi.mock('@/stores/auth', () => ({

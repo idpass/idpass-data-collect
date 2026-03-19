@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { AxiosError } from 'axios'
 import {
-  deleteApp as deleteAppApi,
+  archiveApp as archiveAppApi,
   externalSync as externalSyncApi,
   getApp,
   getAppConfigJsonUrl,
@@ -423,7 +423,7 @@ const confirmArchive = async () => {
 
   try {
     isDeleting.value = true
-    await deleteAppApi(app.value.id)
+    await archiveAppApi(app.value.id)
     snackBarStore.showSnackbar('Collection program archived', 'success')
     router.push({ name: 'home' })
   } catch (err) {
@@ -461,9 +461,11 @@ watch(
 
 <template>
   <v-container class="app-details" fluid>
-    <v-btn class="details-back" variant="text" prepend-icon="mdi-arrow-left" @click="goBack">
-      Back to Collection Programs
-    </v-btn>
+    <div class="subpage-nav">
+      <v-btn variant="text" size="small" prepend-icon="mdi-arrow-left" @click="goBack">
+        Collection Programs
+      </v-btn>
+    </div>
 
     <v-skeleton-loader v-if="isLoading" class="mt-6" type="card, list-item-two-line" />
 
@@ -488,56 +490,27 @@ watch(
         </div>
         <div class="details-header__actions">
           <v-btn
-            class="details-header__action details-header__edit-btn"
+            v-if="hasExternalSync"
             variant="flat"
+            color="primary"
+            prepend-icon="mdi-sync"
+            :loading="isSyncing"
+            :disabled="isSyncing"
+            @click="handleSync"
+          >
+            Trigger Sync
+          </v-btn>
+          <v-btn
+            variant="tonal"
             color="primary"
             prepend-icon="mdi-pencil"
             @click="openEditor()"
           >
             Edit
           </v-btn>
-          <v-btn
-            class="details-header__action"
-            variant="tonal"
-            color="primary"
-            prepend-icon="mdi-qrcode"
-            :disabled="!qrUrl"
-            @click="showQrDialog = true"
-          >
-            Show QR
-          </v-btn>
-          <v-btn
-            class="details-header__action"
-            color="primary"
-            prepend-icon="mdi-sync"
-            :loading="isSyncing"
-            :disabled="isSyncing || !hasExternalSync"
-            @click="handleSync"
-          >
-            Trigger Sync
-          </v-btn>
-          <v-btn
-            class="details-header__action"
-            variant="tonal"
-            color="secondary"
-            prepend-icon="mdi-content-duplicate"
-            @click="router.push({ name: 'duplicates', params: { id: routeId } })"
-          >
-            Duplicates
-          </v-btn>
-          <v-btn
-            class="details-header__action"
-            variant="tonal"
-            color="secondary"
-            prepend-icon="mdi-clipboard-check-outline"
-            @click="router.push({ name: 'review-config', params: { id: routeId } })"
-          >
-            Review Config
-          </v-btn>
           <v-menu location="bottom end">
             <template #activator="{ props }">
               <v-btn
-                class="details-header__action"
                 icon="mdi-dots-vertical"
                 variant="text"
                 color="primary"
@@ -546,15 +519,31 @@ watch(
             </template>
             <v-list density="compact">
               <v-list-item
+                prepend-icon="mdi-qrcode"
+                title="Deploy to Device"
+                :disabled="!qrUrl"
+                @click="showQrDialog = true"
+              />
+              <v-list-item
+                prepend-icon="mdi-content-duplicate"
+                title="Duplicates"
+                @click="router.push({ name: 'duplicates', params: { id: routeId } })"
+              />
+              <v-list-item
+                prepend-icon="mdi-clipboard-check-outline"
+                title="Review Config"
+                @click="router.push({ name: 'review-config', params: { id: routeId } })"
+              />
+              <v-list-item
                 prepend-icon="mdi-content-copy"
-                title="Duplicate"
+                title="Duplicate Config"
                 @click="duplicateConfig"
               />
               <v-list-item
                 v-if="downloadUrl"
                 :href="downloadUrl"
                 prepend-icon="mdi-download"
-                title="Download"
+                title="Download JSON"
                 target="_blank"
               />
               <v-divider class="my-1" />
@@ -570,8 +559,8 @@ watch(
         </div>
       </div>
 
-      <v-row class="mt-6" dense>
-        <v-col cols="12" lg="8">
+      <div class="details-grid">
+        <div>
           <v-card class="details-content" border="md" elevation="0">
             <v-tabs v-model="activeTab" class="details-tabs" color="primary" slider-color="primary" show-arrows>
               <v-tab value="entities">Entities</v-tab>
@@ -903,9 +892,9 @@ watch(
               </v-window-item>
             </v-window>
           </v-card>
-        </v-col>
+        </div>
 
-        <v-col cols="12" lg="4">
+        <aside>
           <v-card class="overview-card" border="md" elevation="0">
             <v-card-text>
               <div class="overview-card__header">
@@ -949,54 +938,42 @@ watch(
                 </div>
               </div>
             </v-card-text>
-            <v-divider />
-            <v-card-actions class="overview-card__actions">
-              <v-btn
-                variant="text"
-                color="primary"
-                prepend-icon="mdi-export"
-                disabled
-              >
-                Export Entities
-              </v-btn>
-            </v-card-actions>
           </v-card>
-        </v-col>
-      </v-row>
+        </aside>
+      </div>
+      <div v-if="app" class="diagnostic-container">
+        <DataDiagnostics :config-id="routeId" />
+      </div>
     </template>
   </v-container>
 
-  <div v-if="app" class="diagnostic-container">
-    <DataDiagnostics :config-id="routeId" />
-  </div>
-
-  <v-dialog v-model="showQrDialog" max-width="360">
+  <v-dialog v-model="showQrDialog" :max-width="400">
     <v-card>
-      <v-card-title class="text-h6">Scan to deploy</v-card-title>
+      <v-card-title class="text-h6">Deploy to Device</v-card-title>
       <v-card-text class="text-center">
-        <v-img 
-          :src="qrUrl" 
-          alt="QR Code" 
-          max-width="220" 
+        <v-img
+          :src="qrUrl"
+          alt="Deployment QR code"
+          max-width="220"
           class="mx-auto my-4"
           @error="handleQrError"
         >
           <template v-if="qrError" #placeholder>
             <div class="text-center pa-4">
               <v-icon icon="mdi-alert-circle" size="48" color="error" class="mb-2" />
-              <p class="text-body-2 text-error">Failed to load QR code</p>
+              <p class="text-body-2 text-error">Could not load deployment code</p>
               <p class="text-caption text-medium-emphasis mt-2">
-                The QR code image could not be loaded. Please ensure the backend is accessible and the artifact ID is valid.
+                Please ensure the backend is accessible and the artifact ID is valid.
               </p>
             </div>
           </template>
         </v-img>
         <p v-if="!qrError" class="text-body-2 text-medium-emphasis">
-          Share this code with field teams to load the configuration instantly on their devices.
+          Scan from the mobile app to load this program configuration onto a device.
         </p>
         <v-alert v-if="qrError" type="warning" variant="tonal" density="compact" class="mt-2">
-          <strong>Note:</strong> When scanning this QR code from a mobile device, ensure the URL in the code is accessible from your network. 
-          If you're using localhost, configure PUBLIC_BASE_URL in your backend environment.
+          Ensure the URL in the code is accessible from your network.
+          If using localhost, configure PUBLIC_BASE_URL in your backend environment.
         </v-alert>
       </v-card-text>
       <v-card-actions class="justify-end">
@@ -1009,7 +986,7 @@ watch(
           target="_blank"
           prepend-icon="mdi-download"
         >
-          Download JSON
+          Download Config
         </v-btn>
       </v-card-actions>
     </v-card>
@@ -1022,7 +999,7 @@ watch(
     @submit="onCredentialsSubmit"
   />
 
-  <v-dialog v-model="showArchiveDialog" max-width="500">
+  <v-dialog v-model="showArchiveDialog" :max-width="540">
     <v-card>
       <v-card-title class="text-h6">
         <v-icon icon="mdi-archive" start />
@@ -1031,7 +1008,7 @@ watch(
       <v-card-text>
         <p>Are you sure you want to archive <strong>{{ app?.name }}</strong>?</p>
         <p class="mt-2 text-medium-emphasis">
-          This will mark the collection program as archived. The data will remain accessible but the program will be hidden from the main list.
+          The program configuration will be removed. Collected entity data will not be affected.
         </p>
       </v-card-text>
       <v-card-actions>
@@ -1048,11 +1025,6 @@ watch(
 <style scoped>
 .app-details {
   padding-bottom: var(--spacing-2xl);
-}
-
-.details-back {
-  margin-top: var(--spacing-sm);
-  padding-left: 0;
 }
 
 .details-header {
@@ -1100,11 +1072,14 @@ watch(
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  flex-wrap: wrap;
 }
 
-.details-header__action {
-  min-width: 0;
+.details-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: var(--spacing-xl);
+  align-items: start;
+  margin-top: var(--spacing-lg);
 }
 
 .details-content {
@@ -1511,16 +1486,9 @@ watch(
   color: var(--brand);
 }
 
-.overview-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
-  justify-content: space-between;
-}
-
 @media (max-width: 1280px) {
-  .overview-card__actions {
-    justify-content: flex-start;
+  .details-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1531,13 +1499,10 @@ watch(
   .details-header__actions {
     justify-content: flex-start;
   }
-  .details-back {
-    padding-left: var(--spacing-sm);
-  }
 }
 
 .diagnostic-container {
-  margin-top: var(--spacing-lg);
+  margin-top: var(--spacing-xl);
   padding: var(--spacing-lg);
   background-color: var(--neutral-50);
   border-radius: var(--radius-xl);
