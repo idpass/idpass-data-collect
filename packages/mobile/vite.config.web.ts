@@ -18,8 +18,11 @@
  */
 
 import { defineConfig, mergeConfig } from 'vite'
-import { resolve } from 'path'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
 import baseConfig from './vite.config'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 export default mergeConfig(baseConfig, defineConfig({
   resolve: {
