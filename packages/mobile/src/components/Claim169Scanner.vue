@@ -18,25 +18,22 @@
  * under the License.
  */
 
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { BarcodeScanner, Barcode } from '@capacitor-mlkit/barcode-scanning'
-import { Camera } from '@capacitor/camera'
 import { decodeAndVerifyClaim169 } from '@/services/claim169Service'
 import { usePlatform } from '@/platform'
+import { useBarcodeScan } from '@/composables/useBarcodeScan'
 import type { VerifiedIdentity } from '@/services/claim169Service'
 
 const router = useRouter()
 const { isNative } = usePlatform()
+const { isScanning, requestPermissions, cleanup, scanBarcode } = useBarcodeScan()
 
-const isScanning = ref(false)
 const isProcessing = ref(false)
 const errorMessage = ref('')
 const showError = ref(false)
 const webQrInput = ref('')
 const isWebProcessing = ref(false)
-
-let activeListener: { remove: () => Promise<void> } | null = null
 
 const displayError = (message: string, duration = 5000) => {
   errorMessage.value = message
@@ -45,48 +42,6 @@ const displayError = (message: string, duration = 5000) => {
     showError.value = false
     errorMessage.value = ''
   }, duration)
-}
-
-const requestPermissions = async (): Promise<boolean> => {
-  const { camera } = await Camera.requestPermissions()
-  return camera === 'granted' || camera === 'limited'
-}
-
-const cleanup = async () => {
-  document.querySelector('body')?.classList.remove('barcode-scanner-active')
-  isScanning.value = false
-  await BarcodeScanner.stopScan().catch(() => {})
-  if (activeListener) {
-    await activeListener.remove().catch(() => {})
-    activeListener = null
-  }
-}
-
-const scanBarcode = (): Promise<Barcode> => {
-  return new Promise((resolve, reject) => {
-    document.querySelector('body')?.classList.add('barcode-scanner-active')
-    isScanning.value = true
-
-    BarcodeScanner.addListener('barcodeScanned', async (result) => {
-      try {
-        await cleanup()
-        resolve(result.barcode)
-      } catch (error) {
-        reject(error)
-      }
-    })
-      .then((listener) => {
-        activeListener = listener
-        void BarcodeScanner.startScan().catch(async (error) => {
-          await cleanup()
-          reject(error)
-        })
-      })
-      .catch(async (error) => {
-        await cleanup()
-        reject(error)
-      })
-  })
 }
 
 const processQrContent = async (content: string): Promise<VerifiedIdentity> => {
@@ -170,10 +125,6 @@ onMounted(() => {
   if (isNative.value) {
     handleScan()
   }
-})
-
-onUnmounted(() => {
-  cleanup()
 })
 </script>
 

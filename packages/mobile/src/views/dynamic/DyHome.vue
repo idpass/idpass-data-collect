@@ -5,9 +5,9 @@ import { useDatabase } from '@/database'
 import { TenantAppData } from '@/schemas/tenantApp.schema'
 import { initStore, closeStore, store } from '@/store'
 import { Barcode, BarcodeScanner } from '@capacitor-mlkit/barcode-scanning'
-import { Camera } from '@capacitor/camera'
 import { App as CapApp } from '@capacitor/app'
 import { usePlatform } from '@/platform'
+import { useBarcodeScan } from '@/composables/useBarcodeScan'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
@@ -24,6 +24,7 @@ const router = useRouter()
 
 const { isNative } = usePlatform()
 const isMobile = isNative
+const { requestPermissions } = useBarcodeScan()
 const isGrantedPermissions = ref(false)
 const isScanning = ref(false)
 let cancelScan: (() => void) | null = null
@@ -131,11 +132,6 @@ const devHandleClickClearData = async () => {
   // password mismatch on the next launch.
   await SecureStorageService.clear()
   window.location.reload()
-}
-
-const requestPermissions = async (): Promise<boolean> => {
-  const { camera } = await Camera.requestPermissions()
-  return camera === 'granted' || camera === 'limited'
 }
 
 const scanSingleBarcode = (): Promise<Barcode> => {
