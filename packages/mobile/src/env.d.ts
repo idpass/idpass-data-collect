@@ -21,7 +21,11 @@
 
 interface ImportMetaEnv {
   readonly VITE_ODOO_URL: string
-  // Add other env variables as needed
+  readonly VITE_DEVELOP: string
+  readonly VITE_BACKEND_API_URL: string
+  readonly VITE_SYNC_URL: string
+  readonly VITE_DB_ENCRYPTION_PASSWORD: string
+  readonly VITE_FEATURE_DYNAMIC: string
 }
 
 interface ImportMeta {

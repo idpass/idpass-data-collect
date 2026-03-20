@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "vite  --port 8081 --host",
+    "dev:web": "vite --config vite.config.web.ts --port 8081 --host",
     "build": "vue-tsc && vite build",
     "preview": "vite preview",
     "build:ios": "pnpm run build && cap sync ios && cap open ios",

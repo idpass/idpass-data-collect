@@ -6,8 +6,8 @@ import { TenantAppData } from '@/schemas/tenantApp.schema'
 import { initStore, closeStore, store } from '@/store'
 import { Barcode, BarcodeScanner } from '@capacitor-mlkit/barcode-scanning'
 import { Camera } from '@capacitor/camera'
-import { Capacitor } from '@capacitor/core'
 import { App as CapApp } from '@capacitor/app'
+import { usePlatform } from '@/platform'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
@@ -22,7 +22,8 @@ interface AppStats {
 
 const router = useRouter()
 
-const isMobile = ref(['android', 'ios'].includes(Capacitor.getPlatform()))
+const { isNative } = usePlatform()
+const isMobile = isNative
 const isGrantedPermissions = ref(false)
 const isScanning = ref(false)
 let cancelScan: (() => void) | null = null
@@ -503,7 +504,7 @@ const handleScanIdentity = () => {
           <p>Choose how you'd like to add a new form to your collection</p>
         </header>
         <div class="overlay__options">
-          <button class="option" type="button" @click="handleScanApp">
+          <button v-if="isMobile" class="option" type="button" @click="handleScanApp">
             <span class="option__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" focusable="false">
                 <path

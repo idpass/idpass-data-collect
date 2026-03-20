@@ -22,17 +22,19 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { BarcodeScanner, Barcode } from '@capacitor-mlkit/barcode-scanning'
 import { Camera } from '@capacitor/camera'
-import { Capacitor } from '@capacitor/core'
 import { decodeAndVerifyClaim169 } from '@/services/claim169Service'
+import { usePlatform } from '@/platform'
 import type { VerifiedIdentity } from '@/services/claim169Service'
 
 const router = useRouter()
+const { isNative } = usePlatform()
 
 const isScanning = ref(false)
 const isProcessing = ref(false)
 const errorMessage = ref('')
 const showError = ref(false)
-const isMobile = ref(['android', 'ios'].includes(Capacitor.getPlatform()))
+const webQrInput = ref('')
+const isWebProcessing = ref(false)
 
 let activeListener: { remove: () => Promise<void> } | null = null
 
@@ -95,10 +97,27 @@ const processQrContent = async (content: string): Promise<VerifiedIdentity> => {
   return result
 }
 
+const handleWebSubmit = async () => {
+  const raw = webQrInput.value.trim()
+  if (!raw) return
+  isWebProcessing.value = true
+  try {
+    const verifiedIdentity = await processQrContent(raw)
+    router.push({
+      name: 'claim169-identity',
+      state: { verifiedIdentity: JSON.stringify(verifiedIdentity) }
+    })
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    displayError(`Invalid QR data: ${msg}`)
+  } finally {
+    isWebProcessing.value = false
+  }
+}
+
 const handleScan = async () => {
   try {
-    if (!isMobile.value) {
-      displayError('QR scanning is only available on mobile devices')
+    if (!isNative.value) {
       return
     }
 
@@ -147,8 +166,8 @@ const handleCancel = async () => {
 }
 
 onMounted(() => {
-  // Auto-start scanning on mount
-  if (isMobile.value) {
+  // Auto-start scanning on mount (native only)
+  if (isNative.value) {
     handleScan()
   }
 })
@@ -188,7 +207,7 @@ onUnmounted(() => {
 
     <!-- Main content -->
     <div class="scanner-content">
-      <div v-if="!isScanning && !isProcessing" class="scanner-instructions">
+      <div v-if="isNative && !isScanning && !isProcessing" class="scanner-instructions">
         <div class="qr-icon">
           <svg viewBox="0 0 24 24" focusable="false">
             <path
@@ -229,15 +248,31 @@ onUnmounted(() => {
         <p>Processing identity data...</p>
       </div>
 
-      <!-- Desktop fallback -->
-      <div v-if="!isMobile" class="desktop-notice">
-        <svg viewBox="0 0 24 24" focusable="false">
-          <path
-            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h2v2h-2v-2zm0-8h2v6h-2V9z"
-            fill="currentColor"
-          />
-        </svg>
-        <p>QR scanning requires a mobile device with a camera.</p>
+      <!-- Web fallback: paste QR data -->
+      <div v-else-if="!isNative" class="desktop-notice">
+        <div class="qr-icon">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path
+              d="M3 11h2v2H3v-2zm16-6h2v2h-2V5zm-8 6h2v2h-2v-2zm8 0h2v2h-2v-2zm-8 6h2v2h-2v-2zm-8 0h2v2H3v-2zm16 0h2v2h-2v-2zM3 5h2v2H3V5zm4 0h2v2H7V5zm0 12h2v2H7v-2zm0-6h2v2H7v-2z"
+              fill="currentColor"
+            />
+          </svg>
+        </div>
+        <p>Paste raw Claim-169 QR data below to decode and verify.</p>
+        <textarea
+          v-model="webQrInput"
+          rows="4"
+          class="web-qr-input"
+          placeholder="Paste QR payload here..."
+        ></textarea>
+        <button
+          class="scan-button"
+          type="button"
+          :disabled="!webQrInput.trim() || isWebProcessing"
+          @click="handleWebSubmit"
+        >
+          {{ isWebProcessing ? 'Processing...' : 'Decode' }}
+        </button>
         <button class="back-link" type="button" @click="handleBack">
           Return to Home
         </button>
@@ -543,5 +578,16 @@ onUnmounted(() => {
   font-weight: 600;
   cursor: pointer;
   text-decoration: underline;
+}
+
+.web-qr-input {
+  width: 100%;
+  font-size: 0.8rem;
+  font-family: monospace;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  resize: vertical;
 }
 </style>

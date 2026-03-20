@@ -17,13 +17,20 @@
  * under the License.
  */
 
-import Formio from 'formiojs';
-import BiometricCapture from './components/BiometricCapture';
-import Claim169Scanner from './components/Claim169Scanner';
+/*
+ * Web stub for @capacitor-mlkit/barcode-scanning.
+ * Aliased in vite.config.web.ts so that components importing the barcode
+ * scanner can be bundled safely in the web dev build without pulling in
+ * native code that crashes in the browser.
+ */
 
-export function registerCustomComponents() {
-  if (Formio?.Components?.addComponent) {
-    Formio.Components.addComponent('biometricCapture', BiometricCapture);
-    Formio.Components.addComponent('claim169Scanner', Claim169Scanner);
-  }
+export const BarcodeScanner = {
+  addListener: (_event: string, _cb: unknown) => Promise.resolve({ remove: async () => {} }),
+  startScan: async () => {},
+  stopScan: async () => {},
+}
+
+export interface Barcode {
+  rawValue?: string
+  displayValue?: string
 }

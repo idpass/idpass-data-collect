@@ -17,13 +17,23 @@
  * under the License.
  */
 
-import Formio from 'formiojs';
-import BiometricCapture from './components/BiometricCapture';
-import Claim169Scanner from './components/Claim169Scanner';
+import { ref } from 'vue'
+import { Capacitor } from '@capacitor/core'
 
-export function registerCustomComponents() {
-  if (Formio?.Components?.addComponent) {
-    Formio.Components.addComponent('biometricCapture', BiometricCapture);
-    Formio.Components.addComponent('claim169Scanner', Claim169Scanner);
+const isNative = Capacitor.isNativePlatform()
+
+export const PlatformService = {
+  isNative,
+  isWeb: !isNative,
+} as const
+
+// Refs so that Vue template auto-unwrapping works correctly in v-if directives
+const isNativeRef = ref(isNative)
+const isWebRef = ref(!isNative)
+
+export function usePlatform() {
+  return {
+    isNative: isNativeRef,
+    isWeb: isWebRef,
   }
 }

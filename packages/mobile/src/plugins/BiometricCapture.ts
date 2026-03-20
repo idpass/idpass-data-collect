@@ -35,16 +35,33 @@ export interface BiometricCapturePlugin {
 
 const BiometricCapture = registerPlugin<BiometricCapturePlugin>('BiometricCapture', {
   web: {
-    launchCapture: async (options) => {
-      console.log('BiometricCapture (Web Fallback):', options);
-      // Mock response for web
+    launchCapture: async (options: { action: string; extras?: Record<string, string | number | boolean> }) => {
+      await new Promise(resolve => setTimeout(resolve, 800))
+
+      let fingers: string[] = ['Right_Thumb']
+      try {
+        const req = JSON.parse((options.extras?.request as string) || '{}')
+        if (Array.isArray(req.fingers) && req.fingers.length > 0) fingers = req.fingers
+      } catch { /* ignore parse errors */ }
+
+      const biometrics = fingers.map((f) => ({
+        bioSubType: f,
+        qualityScore: 75,
+        bioValue: 'MOCK_TEMPLATE_DATA',
+        error: null,
+      }))
+
+      // Minimal 1x1 grey PNG as a stand-in fingerprint preview
+      const MOCK_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+      const fingerprintImages: Record<string, string> = {}
+      fingers.forEach((f) => { fingerprintImages[f] = MOCK_PNG })
+
       return {
         result: {
-            mock: true,
-            status: 'success',
-            data: 'mock-biometric-data'
+          responseData: JSON.stringify({ biometrics }),
+          fingerprintImages: JSON.stringify(fingerprintImages),
         }
-      };
+      }
     }
   }
 });
