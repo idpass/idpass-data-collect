@@ -99,3 +99,5 @@ website/docs/packages/backend/api-reference-generated/
 !.claude/hooks/
 !.claude/settings.json
 *storybook.log
+.worktrees/
+docs/superpowers/
