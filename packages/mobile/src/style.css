@@ -269,10 +269,10 @@ a[class] {
   color: var(--brand);
 }
 
-/* Form Inputs - 48px touch targets */
-input:not([type="checkbox"]):not([type="radio"]),
-textarea,
-select {
+/* Form Inputs - 48px touch targets (excludes Vuetify inputs which handle their own styling) */
+input:not([type="checkbox"]):not([type="radio"]):not(.v-field input),
+textarea:not(.v-field textarea),
+select:not(.v-field select) {
   min-height: var(--touch-target);
   padding: var(--spacing-sm) var(--spacing-md);
   border: 1px solid var(--border-default);
