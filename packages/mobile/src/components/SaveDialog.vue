@@ -1,92 +1,36 @@
 <template>
-  <div>
-    <!-- Modal -->
-    <div
-      class="modal fade"
-      :class="{ show: isOpen }"
-      tabindex="-1"
-      style="display: block"
-      v-if="isOpen"
-    >
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">{{ title }}</h5>
-            <button type="button" class="close" @click="closeDialog" aria-label="Close">
-              <span aria-hidden="true">&times;</span>
-            </button>
-          </div>
-          <div class="modal-body">
-            <!-- Slot for form content -->
-            <slot name="form-content"></slot>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" @click="closeDialog">Close</button>
-            <button type="button" class="btn btn-primary" @click="saveForm">Save changes</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Backdrop -->
-    <div class="modal-backdrop fade" :class="{ show: isOpen }" v-if="isOpen"></div>
-  </div>
+  <v-dialog :model-value="open" @update:model-value="emit('update:open', $event)" max-width="480" persistent>
+    <v-card rounded="xl">
+      <v-card-title class="pa-4">{{ title }}</v-card-title>
+      <v-card-text class="pa-4 pt-0">
+        <slot name="form-content"></slot>
+      </v-card-text>
+      <v-card-actions class="pa-4 pt-0">
+        <v-spacer />
+        <v-btn variant="text" @click="closeDialog">Close</v-btn>
+        <v-btn color="secondary" variant="flat" @click="saveForm">Save changes</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
-<script setup>
-import { ref, watch } from 'vue'
+<script setup lang="ts">
+const props = defineProps<{
+  open: boolean
+  title?: string
+  onSave: () => void | Promise<void>
+}>()
 
-const props = defineProps({
-  open: {
-    type: Boolean,
-    required: true
-  },
-  title: {
-    type: String,
-    default: 'Dialog Title'
-  },
-  onSave: {
-    type: Function,
-    required: true
-  }
-})
-
-const emit = defineEmits(['update:open'])
-
-const isOpen = ref(props.open)
+const emit = defineEmits<{
+  'update:open': [value: boolean]
+}>()
 
 const closeDialog = () => {
-  isOpen.value = false
   emit('update:open', false)
 }
 
-const saveForm = () => {
-  props.onSave()
+const saveForm = async () => {
+  await props.onSave()
   closeDialog()
 }
-
-watch(
-  () => props.open,
-  (newVal) => {
-    isOpen.value = newVal
-  }
-)
 </script>
-
-<style>
-.modal {
-  display: none;
-}
-
-.modal.show {
-  display: block;
-}
-
-.modal-backdrop {
-  display: none;
-}
-
-.modal-backdrop.show {
-  display: block;
-}
-</style>

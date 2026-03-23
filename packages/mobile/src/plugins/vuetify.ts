@@ -17,16 +17,36 @@
  * under the License.
  */
 
-/// <reference types="vite/client" />
+import { createVuetify } from 'vuetify'
+import { md3 } from 'vuetify/blueprints'
+import 'vuetify/styles'
 
-interface ImportMetaEnv {
-  readonly VITE_ODOO_URL: string
-  readonly VITE_DEVELOP: string
-  readonly VITE_BACKEND_API_URL: string
-  readonly VITE_SYNC_URL: string
-  readonly VITE_DB_ENCRYPTION_PASSWORD: string
-}
-
-interface ImportMeta {
-  readonly env: ImportMetaEnv
-}
+export default createVuetify({
+  blueprint: md3,
+  theme: {
+    defaultTheme: 'idpass',
+    themes: {
+      idpass: {
+        dark: false,
+        colors: {
+          primary: '#2C3E50',
+          'on-primary': '#FFFFFF',
+          secondary: '#ff6d37',
+          'on-secondary': '#FFFFFF',
+          surface: '#FFFFFF',
+          background: '#F8F9FA',
+          error: '#E53E3E',
+          warning: '#D97706',
+          success: '#2D8A56',
+          info: '#3B82F6',
+        }
+      }
+    }
+  },
+  defaults: {
+    VBtn: { rounded: 'pill', minHeight: 48 },
+    VTextField: { variant: 'outlined', density: 'comfortable' },
+    VCard: { rounded: 'xl' },
+    VBottomNavigation: { height: 64 },
+  }
+})

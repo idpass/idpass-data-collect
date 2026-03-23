@@ -17,16 +17,37 @@
  * under the License.
  */
 
-/// <reference types="vite/client" />
+import { reactive } from 'vue'
 
-interface ImportMetaEnv {
-  readonly VITE_ODOO_URL: string
-  readonly VITE_DEVELOP: string
-  readonly VITE_BACKEND_API_URL: string
-  readonly VITE_SYNC_URL: string
-  readonly VITE_DB_ENCRYPTION_PASSWORD: string
+interface SnackbarState {
+  show: boolean
+  message: string
+  color: string
+  timeout: number
 }
 
-interface ImportMeta {
-  readonly env: ImportMetaEnv
+const snackbar = reactive<SnackbarState>({
+  show: false,
+  message: '',
+  color: 'info',
+  timeout: 5000,
+})
+
+function showMessage(message: string, color = 'info', timeout = 5000) {
+  snackbar.message = message
+  snackbar.color = color
+  snackbar.timeout = timeout
+  snackbar.show = true
+}
+
+function showError(message: string, timeout = 5000) {
+  showMessage(message, 'error', timeout)
+}
+
+function showSuccess(message: string, timeout = 3000) {
+  showMessage(message, 'success', timeout)
+}
+
+export function useSnackbar() {
+  return { snackbar, showMessage, showError, showSuccess }
 }

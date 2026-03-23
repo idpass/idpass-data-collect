@@ -283,9 +283,10 @@ select {
   transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-input:focus,
-textarea:focus,
-select:focus {
+/* Vuetify manages its own focus styles; only apply to non-Vuetify inputs (e.g. Formio) */
+input:not(.v-field input):focus,
+textarea:not(.v-field textarea):focus,
+select:not(.v-field select):focus {
   outline: none;
   border-color: var(--brand);
   box-shadow: var(--focus-ring);
@@ -364,7 +365,8 @@ h1, h2, h3, h4, h5, h6 {
    before this class is applied (~100-300ms window), so this is partial
    protection only. Android is fully covered by FLAG_SECURE (see MainActivity). */
 body.app-backgrounded #app,
-body.app-backgrounded #dy-app {
+body.app-backgrounded #dy-app,
+body.app-backgrounded .v-application {
   filter: blur(20px);
   pointer-events: none;
 }

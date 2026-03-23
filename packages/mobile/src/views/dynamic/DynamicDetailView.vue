@@ -3,8 +3,6 @@ import { useDatabase } from '@/database'
 import { TenantAppData } from '@/schemas/tenantApp.schema'
 import { store } from '@/store'
 import { EntityForm } from '@/utils/dynamicFormIoUtils'
-import ViewDialog from '@/components/ViewDialog.vue'
-import ChevronRight from '@/components/icons/ChevronRight.vue'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FormSubmission, EntityDoc } from '@idpass/data-collect-core'
@@ -18,9 +16,8 @@ const tenantapp = ref<TenantAppData>()
 const entityForm = ref<EntityForm>()
 const storedEntityData = ref<Array<{ initial: EntityDoc; modified: EntityDoc }> | undefined>()
 const dependentForms = ref<EntityForm[]>([])
-const openViewAppDialog = ref(false)
+const openViewDialog = ref(false)
 const events = ref<FormSubmission[]>([])
-const expandedEvents = ref<Set<string>>(new Set())
 const { isOffline } = useNetworkStatus()
 
 onMounted(async () => {
@@ -42,7 +39,6 @@ onMounted(async () => {
     (entity) => entity.dependsOn === entityForm.value.name
   )
 
-  // Load events for this entity
   const allEvents = await store.getAllEvents()
   events.value = allEvents
     .filter((event) => event.entityGuid === route.params.guid)
@@ -51,10 +47,6 @@ onMounted(async () => {
 
 const onBack = () => {
   router.go(-1)
-}
-
-const onView = () => {
-  openViewAppDialog.value = true
 }
 
 const formatEventType = (type: string) => {
@@ -75,23 +67,11 @@ const getSyncLabel = (syncLevel: SyncLevel) => {
   return 'Local'
 }
 
-const getSyncClass = (syncLevel: SyncLevel) => {
+const getSyncColor = (syncLevel: SyncLevel) => {
   if (syncLevel === SyncLevel.REMOTE || syncLevel === SyncLevel.EXTERNAL) {
-    return 'synced'
+    return 'success'
   }
-  return 'local'
-}
-
-const toggleEvent = (eventGuid: string) => {
-  if (expandedEvents.value.has(eventGuid)) {
-    expandedEvents.value.delete(eventGuid)
-  } else {
-    expandedEvents.value.add(eventGuid)
-  }
-}
-
-const isExpanded = (eventGuid: string) => {
-  return expandedEvents.value.has(eventGuid)
+  return 'warning'
 }
 
 const getEntityName = () => {
@@ -105,487 +85,107 @@ const getEntityName = () => {
 </script>
 
 <template>
-  <div v-if="tenantapp && storedEntityData" class="detail-view">
-    <div class="top-bar">
-      <div class="top-bar__left">
-        <button class="icon-button" type="button" @click="onBack" aria-label="Back to submissions">
-          <svg viewBox="0 0 24 24" focusable="false">
-            <path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z" fill="currentColor" />
-          </svg>
-        </button>
-        <span v-if="isOffline" class="offline-indicator" title="Offline - working locally">
-          <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-            <path d="M23.64 7c-.45-.34-4.93-4-11.64-4-1.5 0-2.89.19-4.15.48L18.18 13.8 23.64 7zm-6.6 8.22L3.27 1.44 2 2.72l2.05 2.06C1.91 5.76.59 6.82.36 7l11.63 14.49.01.01.01-.01 3.9-4.86 3.32 3.32 1.27-1.27-3.46-3.46z" fill="currentColor" />
-          </svg>
-        </span>
+  <v-container v-if="tenantapp && storedEntityData" fluid class="pa-4">
+    <div class="d-flex justify-space-between align-center mb-4">
+      <div class="d-flex align-center ga-2">
+        <v-btn icon="mdi-arrow-left" variant="tonal" size="small" @click="onBack" aria-label="Back to submissions" />
+        <v-chip v-if="isOffline" size="x-small" color="warning" variant="tonal" prepend-icon="mdi-wifi-off">
+          Offline
+        </v-chip>
       </div>
     </div>
 
-    <section class="detail-hero">
-      <header class="detail-hero__header">
-        <div class="header-content">
-          <h1>{{ getEntityName() }}</h1>
-          <div class="header-meta">
-            <span class="meta-inline">
-              Updated {{ storedEntityData && storedEntityData[0] ? new Date(storedEntityData[0].modified.lastUpdated).toLocaleString() : '' }}
-            </span>
-            <span class="meta-separator">•</span>
-            <span class="meta-inline">Version {{ storedEntityData && storedEntityData[0] ? storedEntityData[0].modified.version : '' }}</span>
+    <v-card elevation="2" class="mb-4">
+      <v-card-text>
+        <div class="d-flex justify-space-between align-start ga-3">
+          <div class="flex-grow-1">
+            <div class="text-h6 font-weight-bold">{{ getEntityName() }}</div>
+            <div class="d-flex align-center ga-2 flex-wrap mt-2">
+              <v-chip size="x-small" variant="tonal">
+                Updated {{ storedEntityData && storedEntityData[0] ? new Date(storedEntityData[0].modified.lastUpdated).toLocaleString() : '' }}
+              </v-chip>
+              <v-chip size="x-small" variant="tonal">
+                Version {{ storedEntityData && storedEntityData[0] ? storedEntityData[0].modified.version : '' }}
+              </v-chip>
+            </div>
+          </div>
+          <div class="d-flex ga-2 flex-shrink-0">
+            <v-btn icon="mdi-pencil" color="secondary" variant="flat" size="small" @click="router.push('edit')" aria-label="Edit" />
+            <v-btn icon="mdi-eye" variant="tonal" size="small" @click="openViewDialog = true" aria-label="View JSON" />
           </div>
         </div>
-        <div class="action-group">
-          <button class="action-button" type="button" @click="router.push('edit')" aria-label="Edit">
-            <svg viewBox="0 0 24 24" focusable="false">
-              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="currentColor" />
-            </svg>
-          </button>
-          <button class="action-button" type="button" @click="onView" aria-label="View JSON">
-            <svg viewBox="0 0 24 24" focusable="false">
-              <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z" fill="currentColor" />
-            </svg>
-          </button>
-        </div>
-      </header>
-    </section>
+      </v-card-text>
+    </v-card>
 
-    <section v-if="events.length > 0" class="events-section" aria-labelledby="events-heading">
-      <h2 id="events-heading">Events</h2>
-      <ul role="list" class="events-list">
-        <li v-for="event in events" :key="event.guid" class="event-card">
-          <div class="event-content" @click="toggleEvent(event.guid)">
-            <div class="event-header">
-              <div class="event-title-group">
-                <span class="event-type">{{ formatEventType(event.type) }}</span>
-                <span class="event-time">{{ formatTimestamp(event.timestamp) }}</span>
-              </div>
-              <button class="expand-button" type="button" :aria-expanded="isExpanded(event.guid)" aria-label="Toggle event details" @click.stop="toggleEvent(event.guid)">
-                <svg 
-                  class="expand-icon" 
-                  :class="{ 'expanded': isExpanded(event.guid) }"
-                  viewBox="0 0 24 24" 
-                  focusable="false"
-                >
-                  <path d="M16.59 8.59 12 13.17 7.41 8.59 6 10l6 6 6-6z" fill="currentColor" />
-                </svg>
-              </button>
-            </div>
-            <div class="event-meta">
-              <span class="event-user">by {{ event.userId }}</span>
-              <span class="event-sync" :class="`event-sync--${getSyncClass(event.syncLevel)}`">
-                {{ getSyncLabel(event.syncLevel) }}
-              </span>
-            </div>
-          </div>
-          <div v-if="isExpanded(event.guid)" class="event-details">
-            <div class="event-details-section">
-              <h4>Event Data</h4>
-              <div class="json-viewer-compact">
-                <pre class="json-block-compact">{{ JSON.stringify(event.data, null, 2) }}</pre>
+    <template v-if="events.length > 0">
+      <div class="text-subtitle-2 font-weight-bold mb-2">Events</div>
+      <v-expansion-panels variant="accordion" class="mb-4">
+        <v-expansion-panel v-for="event in events" :key="event.guid">
+          <v-expansion-panel-title>
+            <div class="d-flex flex-column ga-1 flex-grow-1 mr-2">
+              <span class="text-body-2 font-weight-bold">{{ formatEventType(event.type) }}</span>
+              <div class="d-flex align-center ga-2">
+                <span class="text-caption text-medium-emphasis">{{ formatTimestamp(event.timestamp) }}</span>
+                <v-chip size="x-small" :color="getSyncColor(event.syncLevel)" variant="tonal">
+                  {{ getSyncLabel(event.syncLevel) }}
+                </v-chip>
               </div>
             </div>
-            <div class="event-details-section">
-              <h4>Full Event</h4>
-              <div class="json-viewer-compact">
-                <pre class="json-block-compact">{{ JSON.stringify(event, null, 2) }}</pre>
-              </div>
-            </div>
-          </div>
-        </li>
-      </ul>
-    </section>
-
-    <section v-if="dependentForms.length > 0" class="dependent-section" aria-labelledby="dependent-heading">
-      <h2 id="dependent-heading">Dependent Forms</h2>
-      <ul role="list" class="dependent-list">
-        <li v-for="form in dependentForms" :key="form.name" class="dependent-card" @click="router.push(route.path + '/' + form.name)">
-          <div>
-            <h3>{{ form.title }}</h3>
-            <p>{{ form.description || 'Capture additional linked information.' }}</p>
-          </div>
-          <ChevronRight />
-        </li>
-      </ul>
-    </section>
-  </div>
-
-  <ViewDialog
-    :open="openViewAppDialog"
-    title="View Entity"
-    @update:open="openViewAppDialog = $event"
-  >
-    <template #form-content>
-      <div class="json-viewer">
-        <pre class="json-block">{{ storedEntityData && storedEntityData[0] ? JSON.stringify(storedEntityData[0].modified.data, null, 2) : '' }}</pre>
-      </div>
+          </v-expansion-panel-title>
+          <v-expansion-panel-text>
+            <div class="text-caption text-medium-emphasis mb-2">by {{ event.userId }}</div>
+            <div class="text-overline mb-1">Event Data</div>
+            <pre class="json-block mb-3">{{ JSON.stringify(event.data, null, 2) }}</pre>
+            <div class="text-overline mb-1">Full Event</div>
+            <pre class="json-block">{{ JSON.stringify(event, null, 2) }}</pre>
+          </v-expansion-panel-text>
+        </v-expansion-panel>
+      </v-expansion-panels>
     </template>
-  </ViewDialog>
+
+    <template v-if="dependentForms.length > 0">
+      <div class="text-subtitle-2 font-weight-bold mb-2">Dependent Forms</div>
+      <v-list lines="two" rounded="xl" elevation="1" bg-color="surface">
+        <v-list-item
+          v-for="form in dependentForms"
+          :key="form.name"
+          @click="router.push(route.path + '/' + form.name)"
+          append-icon="mdi-chevron-right"
+        >
+          <v-list-item-title class="font-weight-bold">{{ form.title }}</v-list-item-title>
+          <v-list-item-subtitle>{{ form.description || 'Capture additional linked information.' }}</v-list-item-subtitle>
+        </v-list-item>
+      </v-list>
+    </template>
+  </v-container>
+
+  <v-dialog v-model="openViewDialog" max-width="600" scrollable>
+    <v-card rounded="xl">
+      <v-card-title class="pa-4">View Entity</v-card-title>
+      <v-card-text class="pa-4 pt-0">
+        <pre class="json-block">{{ storedEntityData && storedEntityData[0] ? JSON.stringify(storedEntityData[0].modified.data, null, 2) : '' }}</pre>
+      </v-card-text>
+      <v-card-actions class="pa-4 pt-0">
+        <v-spacer />
+        <v-btn variant="text" @click="openViewDialog = false">Close</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <style scoped>
-.detail-view {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.top-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.25rem;
-}
-
-.top-bar__left {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.offline-indicator {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.25rem 0.5rem;
-  border-radius: 8px;
-  background: rgba(234, 179, 8, 0.15);
-  color: #92400e;
-}
-
-.offline-indicator svg {
-  width: 14px;
-  height: 14px;
-}
-
-.icon-button {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  border: none;
-  background: rgba(15, 23, 42, 0.08);
-  display: grid;
-  place-items: center;
-  color: #1f2937;
-}
-
-.breadcrumb {
-  font-size: 0.8rem;
-  color: #6b7280;
-}
-
-.detail-hero {
-  background: #ffffff;
-  border-radius: 20px;
-  padding: 1.5rem;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.detail-hero__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.75rem;
-}
-
-.header-content {
-  flex: 1;
-}
-
-.detail-hero__header h1 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #111827;
-  margin: 0 0 0.5rem 0;
-}
-
-.header-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.meta-inline {
-  font-size: 0.85rem;
-  color: #6b7280;
-}
-
-.meta-separator {
-  color: #d1d5db;
-  font-size: 0.85rem;
-}
-
-.action-group {
-  display: flex;
-  gap: 0.5rem;
-  flex-shrink: 0;
-}
-
-.action-button {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  border: none;
-  background: rgba(15, 23, 42, 0.08);
-  display: grid;
-  place-items: center;
-  color: #1f2937;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.action-button:first-child {
-  background: var(--brand, #ff6d37);
-  color: #ffffff;
-}
-
-.action-button:hover {
-  background: rgba(15, 23, 42, 0.12);
-}
-
-.action-button:first-child:hover {
-  opacity: 0.9;
-}
-
-.action-button svg {
-  width: 18px;
-  height: 18px;
-}
-
-.events-section {
-  background: transparent;
-  border-radius: 0;
-  padding: 0;
-  box-shadow: none;
-  border: none;
-}
-
-.events-section h2 {
-  font-size: 1rem;
-  font-weight: 700;
-  color: #1f2937;
-  margin: 0 0 0.5rem 0;
-}
-
-.events-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  background: #ffffff;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.event-card {
-  background: #ffffff;
-  border-radius: 0;
-  padding: 0;
-  border: none;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-  border-left: 3px solid var(--brand, #ff6d37);
-  overflow: hidden;
-}
-
-.event-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.75rem;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.event-content:active {
-  background: rgba(15, 23, 42, 0.05);
-}
-
-.event-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.5rem;
-}
-
-.event-title-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  flex: 1;
-}
-
-.expand-button {
-  background: none;
-  border: none;
-  padding: 0.25rem;
-  cursor: pointer;
-  display: grid;
-  place-items: center;
-  color: #6b7280;
-  flex-shrink: 0;
-  transition: transform 0.2s ease;
-}
-
-.expand-icon {
-  width: 20px;
-  height: 20px;
-  transition: transform 0.2s ease;
-}
-
-.expand-icon.expanded {
-  transform: rotate(180deg);
-}
-
-.event-type {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #111827;
-}
-
-.event-time {
-  font-size: 0.8rem;
-  color: #6b7280;
-}
-
-.event-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.event-user {
-  font-size: 0.8rem;
-  color: #6b7280;
-}
-
-.event-sync {
-  font-size: 0.75rem;
-  padding: 0.15rem 0.5rem;
-  border-radius: 8px;
-  font-weight: 500;
-}
-
-.event-sync--synced {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.event-sync--local {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.event-details {
-  border-top: 1px solid #e5e7eb;
-  padding: 0.75rem;
-  background: #ffffff;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.event-details-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.event-details-section h4 {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #374151;
-  margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.json-viewer-compact {
+.json-block {
   background: #0f172a;
   border-radius: 8px;
   padding: 0.75rem;
   color: #f8fafc;
   max-height: 300px;
   overflow-y: auto;
-}
-
-.json-block-compact {
   margin: 0;
   font-size: 0.75rem;
   line-height: 1.4;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-.dependent-section {
-  background: transparent;
-  border-radius: 0;
-  padding: 0;
-  box-shadow: none;
-  border: none;
-}
-
-.dependent-section h2 {
-  font-size: 1rem;
-  font-weight: 700;
-  color: #1f2937;
-  margin: 0 0 0.5rem 0;
-}
-
-.dependent-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  background: #ffffff;
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.dependent-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  background: #ffffff;
-  border-radius: 0;
-  padding: 0.875rem 1rem;
-  border: none;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.dependent-card:active {
-  background: #f9fafb;
-}
-
-.dependent-card h3 {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: #111827;
-}
-
-.dependent-card p {
-  margin-top: 0.25rem;
-  color: #6b7280;
-  font-size: 0.85rem;
-}
-
-.json-viewer {
-  background: #0f172a;
-  border-radius: 16px;
-  padding: 1rem;
-  color: #f8fafc;
-  max-height: 70vh;
-  overflow-y: auto;
-}
-
-.json-block {
-  margin: 0;
-  font-size: 0.85rem;
-  line-height: 1.5;
 }
 </style>

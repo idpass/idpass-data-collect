@@ -4,60 +4,54 @@ import { getSyncServerUrlByAppId } from '@/utils/getSyncServerByAppId'
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useErrorHandler } from '@/composables/useErrorHandler'
+import { useSnackbar } from '@/composables/useSnackbar'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const { showError } = useSnackbar()
 const form = ref({
   email: '',
   password: ''
 })
-const errorMessage = ref('')
-const showError = ref(false)
 
 const { getErrorMessage } = useErrorHandler()
 
-// Add function to show error messages
-const displayError = (message: string, duration = 5000) => {
-  errorMessage.value = message
-  showError.value = true
-  setTimeout(() => {
-    showError.value = false
-    errorMessage.value = ''
-  }, duration)
-}
-
 const onLogin = async () => {
-  errorMessage.value = ''
-  showError.value = false
   try {
     const serverUrl = await getSyncServerUrlByAppId(route.params.id as string)
     await authStore.loginSyncServer(serverUrl, form.value)
     router.push({ name: 'app', params: { id: route.params.id as string }, replace: true })
   } catch (error) {
     const message = getErrorMessage(error)
-    displayError(message)
+    showError(message)
     console.error(error)
   }
 }
 </script>
-<template>
-  <!-- Error Message Alert -->
-  <div v-if="showError" class="alert alert-danger alert-dismissible fade show mb-3" role="alert">
-    <i class="bi bi-exclamation-triangle"></i>
-    {{ errorMessage }}
-    <i class="bi bi-x" @click="showError = false" aria-label="Close"></i>
-  </div>
 
-  <form @submit.prevent="onLogin">
-    <div class="mb-3">
-      <label for="email" class="form-label">Email address</label>
-      <input type="email" class="form-control" id="email" v-model="form.email" />
-    </div>
-    <div class="mb-3">
-      <label for="password" class="form-label">Password</label>
-      <input type="password" v-model="form.password" class="form-control" id="password" />
-    </div>
-    <button type="submit" class="btn btn-primary">Login</button>
-  </form>
+<template>
+  <v-container class="fill-height">
+    <v-row justify="center" align="center" class="fill-height">
+      <v-col cols="12" sm="8" md="5" lg="4">
+        <v-form @submit.prevent="onLogin">
+          <v-text-field
+            v-model="form.email"
+            label="Email address"
+            type="email"
+            class="mb-3"
+          />
+          <v-text-field
+            v-model="form.password"
+            label="Password"
+            type="password"
+            class="mb-3"
+          />
+          <v-btn type="submit" color="secondary" variant="flat" size="large">
+            Login
+          </v-btn>
+        </v-form>
+      </v-col>
+    </v-row>
+  </v-container>
 </template>

@@ -23,22 +23,21 @@ declare global {
   }
 }
 
-import 'bootstrap/dist/css/bootstrap.min.css'
-import 'bootstrap/dist/css/bootstrap-grid.min.css'
+import '@mdi/font/css/materialdesignicons.min.css'
 import 'font-awesome/css/font-awesome.min.css'
 // Deps for calendar picker in Formio
 import 'flatpickr-formio/dist/flatpickr.min.css'
 import 'flatpickr-formio'
 import 'formiojs/dist/formio.full.min.css'
+// Bootstrap is scoped to .formio-container only — not loaded globally
+import './assets/css/formio-scope.css'
 
 import { createApp } from 'vue'
 import App from './App.vue'
-import DyApp from './DyApp.vue'
 import { createDatabase } from './database'
 import router from './router'
 import './style.css'
-// Bootstrap overrides for Humanitarian Tech theme - must come after Bootstrap
-import './assets/css/bootstrap-overrides.css'
+import vuetify from './plugins/vuetify'
 import { useAuthManagerStore } from './store/authManager'
 
 import { createPinia } from 'pinia'
@@ -48,12 +47,10 @@ import { AppLockService } from './services/AppLockService'
 
 async function initApp() {
   await registerCustomComponents()
-  const isFeatureDynamicTurnedOn = import.meta.env.VITE_FEATURE_DYNAMIC
-  const AppComponent = isFeatureDynamicTurnedOn ? DyApp : App
   const pinia = createPinia()
 
   const database = await createDatabase()
-  const app = createApp(AppComponent).use(database).use(pinia).use(router)
+  const app = createApp(App).use(database).use(pinia).use(vuetify).use(router)
 
   // Set up Capacitor URL listener for OAuth callbacks
   const authManager = useAuthManagerStore()

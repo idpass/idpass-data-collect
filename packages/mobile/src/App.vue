@@ -1,81 +1,128 @@
+<!-- Root component for dynamic app -->
+
 <script setup lang="ts">
-import { RouterView } from 'vue-router'
-import { onMounted } from 'vue'
-import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { RouterView, useRoute, useRouter } from 'vue-router'
+import { computed, onMounted } from 'vue'
 import Claim169ScannerOverlay from '@/components/Claim169ScannerOverlay.vue'
 import LockScreen from '@/components/LockScreen.vue'
+import AppSnackbar from '@/components/AppSnackbar.vue'
 import { AppLockService } from '@/services/AppLockService'
+import { useNetworkStatus } from '@/composables/useNetworkStatus'
 
+const route = useRoute()
+const router = useRouter()
 const { isOffline } = useNetworkStatus()
 
 onMounted(async () => {
   await AppLockService.init()
 })
+
+const topLevelRoutes = ['home', 'tools', 'settings', 'claim169-hub']
+
+const showBottomNav = computed(() => {
+  return topLevelRoutes.includes(route.name as string)
+})
+
+const activeTab = computed(() => {
+  const name = route.name as string
+  if (name === 'home') return 'home'
+  if (name === 'tools' || name === 'claim169-hub') return 'tools'
+  if (name === 'settings') return 'settings'
+  return undefined
+})
 </script>
 
 <template>
-  <div id="app" class="app-shell safe-top safe-bottom" @touchstart="AppLockService.resetInactivityTimer" @click="AppLockService.resetInactivityTimer">
+  <v-app
+    id="dy-app"
+    @touchstart="AppLockService.resetInactivityTimer"
+    @click="AppLockService.resetInactivityTimer"
+  >
     <LockScreen v-if="AppLockService.locked.value" />
-    <div v-if="isOffline" class="offline-banner" role="alert">
-      <svg class="offline-banner__icon" viewBox="0 0 24 24" focusable="false">
-        <path
-          d="M23.64 7c-.45-.34-4.93-4-11.64-4-1.5 0-2.89.19-4.15.48L18.18 13.8 23.64 7zm-6.6 8.22L3.27 1.44 2 2.72l2.05 2.06C1.91 5.76.59 6.82.36 7l11.63 14.49.01.01.01-.01 3.9-4.86 3.32 3.32 1.27-1.27-3.46-3.46z"
-          fill="currentColor"
-        />
-      </svg>
-      <span class="offline-banner__text">Offline mode - Working locally. Sync will resume when connection is restored.</span>
-    </div>
-    <main class="app-content disable-scrollbars">
-      <RouterView />
-    </main>
+
+    <v-app-bar flat color="surface" border="b" class="app-bar-safe">
+      <v-app-bar-title class="text-subtitle-1 font-weight-bold">
+        ID PASS DataCollect
+      </v-app-bar-title>
+      <template #append>
+        <v-chip
+          v-if="isOffline"
+          color="warning"
+          size="small"
+          variant="tonal"
+          prepend-icon="mdi-wifi-off"
+        >
+          Offline
+        </v-chip>
+      </template>
+    </v-app-bar>
+
+    <v-main class="disable-scrollbars">
+      <router-view v-slot="{ Component, route: viewRoute }">
+        <transition :name="viewRoute.meta.transition as string || 'fade'" mode="out-in">
+          <component :is="Component" :key="viewRoute.path" />
+        </transition>
+      </router-view>
+    </v-main>
+
+    <v-bottom-navigation
+      v-if="showBottomNav"
+      :model-value="activeTab"
+      :elevation="0"
+      border="t"
+      color="secondary"
+      class="bottom-nav-safe"
+    >
+      <v-btn value="home" @click="router.push({ name: 'home' })">
+        <v-icon>mdi-home-outline</v-icon>
+        <span>Home</span>
+      </v-btn>
+      <v-btn value="tools" @click="router.push({ name: 'tools' })">
+        <v-icon>mdi-apps</v-icon>
+        <span>Tools</span>
+      </v-btn>
+      <v-btn value="settings" @click="router.push({ name: 'settings' })">
+        <v-icon>mdi-cog-outline</v-icon>
+        <span>Settings</span>
+      </v-btn>
+    </v-bottom-navigation>
+
     <Claim169ScannerOverlay />
-  </div>
+    <AppSnackbar />
+  </v-app>
 </template>
 
 <style scoped>
-.app-shell {
-  min-height: 100vh;
-  background: var(--background);
-  color: var(--text-main);
+.app-bar-safe {
+  padding-top: env(safe-area-inset-top) !important;
 }
 
-.app-content {
-  padding: var(--spacing-lg) var(--spacing-md) var(--spacing-2xl);
-  max-width: 480px;
-  margin: 0 auto;
+.bottom-nav-safe {
+  padding-bottom: env(safe-area-inset-bottom) !important;
 }
 
-@media (min-width: 768px) {
-  .app-content {
-    padding: var(--spacing-xl) 0 var(--spacing-2xl);
-  }
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
 }
 
-.offline-banner {
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--status-warning-light);
-  border-bottom: 1px solid var(--status-warning);
-  color: var(--status-warning);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  box-shadow: var(--shadow-subtle);
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 
-.offline-banner__icon {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-  color: var(--status-warning);
+.slide-x-reverse-enter-active,
+.slide-x-reverse-leave-active {
+  transition: transform 0.25s ease, opacity 0.25s ease;
 }
 
-.offline-banner__text {
-  flex: 1;
-  line-height: var(--line-height-normal);
+.slide-x-reverse-enter-from {
+  transform: translateX(30px);
+  opacity: 0;
+}
+
+.slide-x-reverse-leave-to {
+  transform: translateX(-30px);
+  opacity: 0;
 }
 </style>

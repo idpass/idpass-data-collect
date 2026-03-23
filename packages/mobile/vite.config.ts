@@ -3,6 +3,7 @@ import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { execSync } from 'child_process'
 import vue from '@vitejs/plugin-vue'
+import vuetify from 'vite-plugin-vuetify'
 import wasm from 'vite-plugin-wasm'
 import topLevelAwait from 'vite-plugin-top-level-await'
 import fs from 'fs'
@@ -33,11 +34,10 @@ const getGitInfo = () => {
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [vue(), wasm(), topLevelAwait()],
+  plugins: [vue(), vuetify({ autoImport: true }), wasm(), topLevelAwait()],
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
-      '~bootstrap': resolve(__dirname, 'node_modules/bootstrap'),
       '@idpass/data-collect-core': resolve(__dirname, '../datacollect/src/browser.ts'),
     }
   },

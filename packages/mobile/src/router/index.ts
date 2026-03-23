@@ -19,13 +19,29 @@
 
 import { extractParentUUIDInPath } from '@/utils/dynamicFormIoUtils'
 import { createRouter, createWebHistory } from 'vue-router'
-import DynamicHome from '@/views/dynamic/DyHome.vue'
+import HomeView from '@/views/dynamic/HomeView.vue'
 import { useAuthManagerStore } from '@/store/authManager'
 
 const dynamicRouter = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    { path: '/', name: 'home', component: DynamicHome },
+    { path: '/', name: 'home', component: HomeView },
+    {
+      path: '/tools',
+      name: 'tools',
+      component: () => import('@/views/dynamic/ToolsView.vue')
+    },
+    {
+      path: '/tools/claim169',
+      name: 'claim169-hub',
+      component: () => import('@/views/dynamic/Claim169HubView.vue'),
+      meta: { transition: 'slide-x-reverse' }
+    },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: () => import('@/views/dynamic/SettingsView.vue')
+    },
     {
       path: '/login/:id',
       name: 'login',
@@ -35,7 +51,7 @@ const dynamicRouter = createRouter({
       path: '/app/:id',
       name: 'app',
       component: () => import('@/views/dynamic/DynamicAppView.vue'),
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, transition: 'slide-x-reverse' }
     },
     {
       path: '/app/:id/:rest(.+/)?:entity',
@@ -56,7 +72,7 @@ const dynamicRouter = createRouter({
 
         return { id, parentGuid, entity }
       },
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, transition: 'slide-x-reverse' }
     },
     {
       path: '/app/:id/:rest(.+/)?:entity/new',
@@ -70,19 +86,19 @@ const dynamicRouter = createRouter({
 
         return { id, parentGuid, entity }
       },
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, transition: 'slide-x-reverse' }
     },
     {
       path: '/app/:id/:rest(.+/)?:entity/:guid/detail',
       name: 'entity-detail',
       component: () => import('@/views/dynamic/DynamicDetailView.vue'),
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, transition: 'slide-x-reverse' }
     },
     {
       path: '/app/:id/:rest(.+/)?:entity/:guid/edit',
       name: 'entity-edit',
       component: () => import('@/views/dynamic/DynamicEditView.vue'),
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, transition: 'slide-x-reverse' }
     },
     {
       path: '/app/:id/login',

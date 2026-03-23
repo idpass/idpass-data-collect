@@ -192,7 +192,8 @@ a:hover {
 /* Focus States - Accessibility.
  * Uses outline instead of box-shadow to prevent overlap in nested inputs
  * (e.g., search boxes with affix icons or input-group wrappers). */
-:focus-visible {
+/* Vuetify manages its own focus styles; only apply to non-Vuetify elements */
+:focus-visible:not(.v-field *):not(.v-btn):not(.v-list-item):not(.v-expansion-panel *) {
   outline: var(--focus-outline-width) solid var(--focus-outline-color);
   outline-offset: var(--focus-outline-offset);
 }

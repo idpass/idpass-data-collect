@@ -168,7 +168,6 @@ vi.mock('@idpass/data-collect-core', () => ({
 vi.stubGlobal('import.meta', {
   env: {
     VITE_SYNC_URL: 'http://localhost:3000',
-    VITE_FEATURE_DYNAMIC: true,
   },
 })
 
