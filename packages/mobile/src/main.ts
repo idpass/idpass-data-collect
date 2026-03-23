@@ -47,7 +47,7 @@ import { App as CapacitorApp } from '@capacitor/app'
 import { AppLockService } from './services/AppLockService'
 
 async function initApp() {
-  registerCustomComponents()
+  await registerCustomComponents()
   const isFeatureDynamicTurnedOn = import.meta.env.VITE_FEATURE_DYNAMIC
   const AppComponent = isFeatureDynamicTurnedOn ? DyApp : App
   const pinia = createPinia()

@@ -18,11 +18,15 @@
  */
 
 import Formio from 'formiojs';
-import BiometricCapture from './components/BiometricCapture';
-import Claim169Scanner from './components/Claim169Scanner';
 
-export function registerCustomComponents() {
+export async function registerCustomComponents() {
   if (Formio?.Components?.addComponent) {
+    // Dynamic imports so that these modules are evaluated only after formiojs
+    // is fully initialized (their top-level code accesses Formio.Components).
+    const [{ default: BiometricCapture }, { default: Claim169Scanner }] = await Promise.all([
+      import('./components/BiometricCapture'),
+      import('./components/Claim169Scanner'),
+    ]);
     Formio.Components.addComponent('biometricCapture', BiometricCapture);
     Formio.Components.addComponent('claim169Scanner', Claim169Scanner);
   }
