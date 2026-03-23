@@ -21,7 +21,13 @@ import Formio from 'formiojs';
 import BiometricCapturePlugin, { CaptureResult } from '../../plugins/BiometricCapture';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const Field = (Formio as { Components: { components: { field: unknown } } }).Components.components.field as any;
+let Field: any;
+function getField() {
+  if (!Field) {
+    Field = (Formio as { Components: { components: { field: unknown } } }).Components.components.field;
+  }
+  return Field;
+}
 
 // Enable debug logging only in development environment
 const DEBUG = typeof process !== 'undefined' && process.env?.NODE_ENV === 'development';
@@ -68,7 +74,7 @@ interface StoredBiometricValue {
   lastUpdated?: string;
 }
 
-export default class BiometricCapture extends Field {
+export default class BiometricCapture extends getField() {
   static schema(...extend: unknown[]) {
     return Field.schema({
       type: 'biometricCapture',

@@ -22,7 +22,13 @@ import { Claim169ScannerService } from '../../services/Claim169ScannerService';
 import { registerIssuerKey, Claim169IdentityData, VerifiedIdentity, genderToString, imageFormatToMimeType } from '../../services/claim169Service';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const Field = (Formio as { Components: { components: { field: unknown } } }).Components.components.field as any;
+let Field: any;
+function getField() {
+  if (!Field) {
+    Field = (Formio as { Components: { components: { field: unknown } } }).Components.components.field;
+  }
+  return Field;
+}
 
 interface FieldMapping {
   claimField: string;
@@ -42,7 +48,7 @@ interface TrustedIssuerConfig {
   };
 }
 
-export default class Claim169Scanner extends Field {
+export default class Claim169Scanner extends getField() {
   static schema(...extend: unknown[]) {
     return Field.schema({
       type: 'claim169Scanner',

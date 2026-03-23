@@ -18,15 +18,15 @@
  */
 
 import Formio from 'formiojs';
+// Static imports are safe because the components use lazy getField() accessors
+// instead of accessing Formio.Components at module scope. This avoids the
+// inlineDynamicImports hoisting bug where dynamic import() gets flattened
+// into a synchronous reference before the target module is initialized.
+import BiometricCapture from './components/BiometricCapture';
+import Claim169Scanner from './components/Claim169Scanner';
 
 export async function registerCustomComponents() {
   if (Formio?.Components?.addComponent) {
-    // Dynamic imports so that these modules are evaluated only after formiojs
-    // is fully initialized (their top-level code accesses Formio.Components).
-    const [{ default: BiometricCapture }, { default: Claim169Scanner }] = await Promise.all([
-      import('./components/BiometricCapture'),
-      import('./components/Claim169Scanner'),
-    ]);
     Formio.Components.addComponent('biometricCapture', BiometricCapture);
     Formio.Components.addComponent('claim169Scanner', Claim169Scanner);
   }
