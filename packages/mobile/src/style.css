@@ -51,7 +51,8 @@ body.barcode-scanner-active {
   background-color: transparent !important;
 }
 
-body.barcode-scanner-active #app {
+body.barcode-scanner-active #app,
+body.barcode-scanner-active #dy-app {
   background-color: transparent !important;
 }
 

@@ -24,7 +24,6 @@ declare global {
 }
 
 import '@mdi/font/css/materialdesignicons.min.css'
-import 'font-awesome/css/font-awesome.min.css'
 // Deps for calendar picker in Formio
 import 'flatpickr-formio/dist/flatpickr.min.css'
 import 'flatpickr-formio'

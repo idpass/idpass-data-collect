@@ -7,7 +7,7 @@ const isDevelop = import.meta.env.VITE_DEVELOP === 'true'
 const database = useDatabase()
 const { isOffline } = useNetworkStatus()
 
-const appVersion = '2.0.0-beta.1'
+const appVersion = __APP_VERSION__
 
 const devHandleClickClearData = async () => {
   await database.tenantapps.remove()

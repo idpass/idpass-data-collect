@@ -15,11 +15,13 @@
 </template>
 
 <script setup lang="ts">
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   open: boolean
   title?: string
   onSave: () => void | Promise<void>
-}>()
+}>(), {
+  title: 'Dialog Title'
+})
 
 const emit = defineEmits<{
   'update:open': [value: boolean]

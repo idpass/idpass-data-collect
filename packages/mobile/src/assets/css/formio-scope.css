@@ -9,6 +9,7 @@
 
 @layer formio-bootstrap {
   @import 'bootstrap/dist/css/bootstrap.min.css';
+  @import 'font-awesome/css/font-awesome.min.css';
 }
 
 /* Brand-themed overrides for Formio form elements */

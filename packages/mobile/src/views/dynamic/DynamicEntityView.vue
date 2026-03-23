@@ -235,7 +235,6 @@ const formatTimestamp = (timestamp: string) => {
         v-for="submission in filteredSubmissions"
         :key="submission.guid"
         @click="router.push(route.path + '/' + submission.guid + '/detail')"
-        append-icon="mdi-chevron-right"
       >
         <v-list-item-title class="font-weight-bold">
           {{ submission.modified.data.name || submission.modified.name || 'Untitled submission' }}

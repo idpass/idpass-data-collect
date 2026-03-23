@@ -50,7 +50,8 @@ export default defineConfig({
 
   define: {
     __GIT_COMMIT_TITLE__: JSON.stringify(getGitInfo().commitTitle),
-    __GIT_COMMIT_HASH__: JSON.stringify(getGitInfo().commitHash)
+    __GIT_COMMIT_HASH__: JSON.stringify(getGitInfo().commitHash),
+    __APP_VERSION__: JSON.stringify(JSON.parse(fs.readFileSync(resolve(__dirname, 'package.json'), 'utf-8')).version)
   },
 
   // Optimize for offline usage — single bundle for Capacitor file:// loading.
