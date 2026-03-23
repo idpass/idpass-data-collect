@@ -165,7 +165,7 @@ const onLogin = async () => {
           <p class="text-body-2">Processing authentication...</p>
         </div>
 
-        <v-alert v-else-if="authError" type="error" variant="tonal" rounded="xl" class="text-center">
+        <v-alert v-else-if="authError" type="error" variant="tonal" rounded="lg" class="text-center">
           <strong class="d-block mb-2">Authentication Failed</strong>
           <p class="mb-3">{{ authError }}</p>
           <p class="text-caption">Redirecting to login page...</p>

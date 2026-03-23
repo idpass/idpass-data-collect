@@ -230,7 +230,7 @@ const formatTimestamp = (timestamp: string) => {
       {{ filteredSubmissions.length }} entities {{ filteredSubmissions.length === submissions.length ? 'total' : 'found' }}
     </div>
 
-    <v-list v-if="filteredSubmissions.length" lines="three" rounded="xl" elevation="1" bg-color="surface">
+    <v-list v-if="filteredSubmissions.length" lines="three" rounded="lg" elevation="1" bg-color="surface">
       <v-list-item
         v-for="submission in filteredSubmissions"
         :key="submission.guid"

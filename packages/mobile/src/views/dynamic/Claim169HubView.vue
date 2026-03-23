@@ -159,7 +159,7 @@ const handleBack = () => {
   align-items: center;
   gap: 14px;
   padding: 16px;
-  border-radius: 14px;
+  border-radius: 12px;
   border: none;
   cursor: pointer;
   text-align: left;
@@ -218,7 +218,7 @@ const handleBack = () => {
   padding: 16px;
   background: var(--surface, #fff);
   border: 1px solid var(--border-light, #dfe3e8);
-  border-radius: 14px;
+  border-radius: 12px;
 }
 
 .hub-info-item {

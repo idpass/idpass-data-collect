@@ -447,7 +447,7 @@ const getCardAccentColor = (appId: string) => {
 
     <!-- Bottom sheet: add options -->
     <v-bottom-sheet v-model="showAddOptions">
-      <v-card rounded="t-xl">
+      <v-card rounded="t-lg">
         <div class="sheet-handle"></div>
         <v-card-title class="pt-2">Add Program</v-card-title>
         <v-list nav class="pb-4">
@@ -476,7 +476,7 @@ const getCardAccentColor = (appId: string) => {
 
     <!-- Dialog: URL input -->
     <v-dialog v-model="openInputAppDialog" max-width="400">
-      <v-card rounded="xl">
+      <v-card rounded="lg">
         <v-card-title>Load Program</v-card-title>
         <v-card-text>
           <v-text-field
@@ -620,7 +620,7 @@ const getCardAccentColor = (appId: string) => {
   padding: 12px 14px;
   background: var(--surface, #fff);
   border: 1px solid var(--border-light, #dfe3e8);
-  border-radius: 14px;
+  border-radius: 12px;
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
@@ -721,7 +721,7 @@ const getCardAccentColor = (appId: string) => {
   display: flex;
   background: var(--surface, #fff);
   border: 1px solid var(--border-light, #dfe3e8);
-  border-radius: 14px;
+  border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
   transition: border-color 0.15s ease, transform 0.1s ease;
@@ -934,7 +934,7 @@ const getCardAccentColor = (appId: string) => {
   bottom: 84px;
   width: 52px;
   height: 52px;
-  border-radius: 16px;
+  border-radius: 12px;
   background: var(--brand, #ff6d37);
   color: #fff;
   border: none;

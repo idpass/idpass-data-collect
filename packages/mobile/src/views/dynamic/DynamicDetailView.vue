@@ -145,7 +145,7 @@ const getEntityName = () => {
 
     <template v-if="dependentForms.length > 0">
       <div class="text-subtitle-2 font-weight-bold mb-2">Dependent Forms</div>
-      <v-list lines="two" rounded="xl" elevation="1" bg-color="surface">
+      <v-list lines="two" rounded="lg" elevation="1" bg-color="surface">
         <v-list-item
           v-for="form in dependentForms"
           :key="form.name"
@@ -160,7 +160,7 @@ const getEntityName = () => {
   </v-container>
 
   <v-dialog v-model="openViewDialog" max-width="600" scrollable>
-    <v-card rounded="xl">
+    <v-card rounded="lg">
       <v-card-title class="pa-4">View Entity</v-card-title>
       <v-card-text class="pa-4 pt-0">
         <pre class="json-block">{{ storedEntityData && storedEntityData[0] ? JSON.stringify(storedEntityData[0].modified.data, null, 2) : '' }}</pre>

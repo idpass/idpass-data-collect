@@ -29,7 +29,7 @@ async function unlock() {
 
 <template>
   <div class="lock-screen" role="dialog" aria-modal="true" aria-label="App locked">
-    <v-card elevation="0" width="320" class="text-center pa-6" rounded="xl">
+    <v-card elevation="0" width="320" class="text-center pa-6" rounded="lg">
       <v-icon size="64" color="primary" class="mb-4">mdi-lock-outline</v-icon>
       <h1 class="text-h5 font-weight-bold mb-2">ID PASS DataCollect</h1>
       <p class="text-body-2 text-medium-emphasis mb-4">Verify your identity to continue</p>

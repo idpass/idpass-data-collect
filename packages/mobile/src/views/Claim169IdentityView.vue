@@ -182,7 +182,7 @@ const handleSaveToRecords = () => {
     <v-alert
       :type="statusType"
       variant="tonal"
-      rounded="xl"
+      rounded="lg"
       :icon="statusIcon"
       class="mb-4"
     >
@@ -287,7 +287,7 @@ const handleSaveToRecords = () => {
 
     <!-- App Selector -->
     <v-bottom-sheet v-model="showAppSelector">
-      <v-card rounded="t-xl">
+      <v-card rounded="t-lg">
         <v-card-title>Select Program</v-card-title>
         <v-card-subtitle>Choose a collection program to save this record to</v-card-subtitle>
         <v-list nav>

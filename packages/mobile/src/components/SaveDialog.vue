@@ -1,6 +1,6 @@
 <template>
   <v-dialog :model-value="open" @update:model-value="emit('update:open', $event)" max-width="480" persistent>
-    <v-card rounded="xl">
+    <v-card rounded="lg">
       <v-card-title class="pa-4">{{ title }}</v-card-title>
       <v-card-text class="pa-4 pt-0">
         <slot name="form-content"></slot>

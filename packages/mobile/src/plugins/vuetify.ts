@@ -44,9 +44,13 @@ export default createVuetify({
     }
   },
   defaults: {
-    VBtn: { rounded: 'pill', minHeight: 48 },
+    VBtn: { rounded: 'lg', minHeight: 48 },
     VTextField: { variant: 'outlined', density: 'comfortable' },
-    VCard: { rounded: 'xl' },
+    VCard: { rounded: 'lg' },
+    VList: { rounded: 'lg' },
+    VDialog: { rounded: 'lg' },
+    VExpansionPanels: { rounded: 'lg' },
+    VAlert: { rounded: 'lg' },
     VBottomNavigation: { height: 64 },
   }
 })

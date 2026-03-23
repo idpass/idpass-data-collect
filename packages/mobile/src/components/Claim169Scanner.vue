@@ -102,7 +102,7 @@ onMounted(() => {
     <div class="scanner-content d-flex flex-column align-center justify-center" style="min-height: 60vh;">
       <!-- Native idle state -->
       <div v-if="isNative && !isScanning && !isProcessing" class="text-center" style="max-width: 320px;">
-        <v-sheet rounded="xl" color="info" class="d-inline-flex pa-5 mb-4" style="opacity: 0.12;">
+        <v-sheet rounded="lg" color="info" class="d-inline-flex pa-5 mb-4" style="opacity: 0.12;">
           <v-icon size="48" color="info">mdi-qrcode</v-icon>
         </v-sheet>
         <h2 class="text-h6 font-weight-bold mb-2">Scan a Claim-169 Identity QR Code</h2>

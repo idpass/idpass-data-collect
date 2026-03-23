@@ -187,7 +187,7 @@ const stats = computed(() => [
 
     <div class="text-subtitle-2 font-weight-bold mb-2">Forms ({{ highLevelEntities.length }})</div>
 
-    <v-list lines="two" rounded="xl" elevation="1" bg-color="surface">
+    <v-list lines="two" rounded="lg" elevation="1" bg-color="surface">
       <v-list-item
         v-for="entity in highLevelEntities"
         :key="entity.name"

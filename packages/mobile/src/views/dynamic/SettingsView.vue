@@ -102,7 +102,7 @@ const devHandleClickClearData = async () => {
 .settings-card {
   background: var(--surface, #fff);
   border: 1px solid var(--border-light, #dfe3e8);
-  border-radius: 14px;
+  border-radius: 12px;
   overflow: hidden;
 }
 

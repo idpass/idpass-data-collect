@@ -71,7 +71,7 @@ const router = useRouter()
   padding: 16px;
   background: var(--surface, #fff);
   border: 1px solid var(--border-light, #dfe3e8);
-  border-radius: 14px;
+  border-radius: 12px;
   cursor: pointer;
   transition: border-color 0.15s ease, transform 0.1s ease;
 }
@@ -84,7 +84,7 @@ const router = useRouter()
 .tool-card-icon {
   width: 48px;
   height: 48px;
-  border-radius: 14px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
