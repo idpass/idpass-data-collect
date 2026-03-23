@@ -4,8 +4,6 @@ import Dialog from '@/components/SaveDialog.vue'
 import { useDatabase } from '@/database'
 import { TenantAppData } from '@/schemas/tenantApp.schema'
 import { initStore, closeStore, store } from '@/store'
-import { Barcode, BarcodeScanner } from '@capacitor-mlkit/barcode-scanning'
-import { App as CapApp } from '@capacitor/app'
 import { usePlatform } from '@/platform'
 import { useBarcodeScan } from '@/composables/useBarcodeScan'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -24,10 +22,8 @@ const router = useRouter()
 
 const { isNative } = usePlatform()
 const isMobile = isNative
-const { requestPermissions } = useBarcodeScan()
+const { isScanning, requestPermissions, scanBarcode, cancelScan } = useBarcodeScan()
 const isGrantedPermissions = ref(false)
-const isScanning = ref(false)
-let cancelScan: (() => void) | null = null
 const isDevelop = import.meta.env.VITE_DEVELOP === 'true'
 
 const database = useDatabase()
@@ -134,63 +130,6 @@ const devHandleClickClearData = async () => {
   window.location.reload()
 }
 
-const scanSingleBarcode = (): Promise<Barcode> => {
-  return new Promise((resolve, reject) => {
-    document.querySelector('body')?.classList.add('barcode-scanner-active')
-    isScanning.value = true
-    let activeListener: { remove: () => Promise<void> } | null = null
-    let backButtonListener: { remove: () => Promise<void> } | null = null
-
-    const cleanup = async () => {
-      isScanning.value = false
-      cancelScan = null
-      document.querySelector('body')?.classList.remove('barcode-scanner-active')
-      await BarcodeScanner.stopScan().catch(() => {})
-      if (activeListener) {
-        await activeListener.remove().catch(() => {})
-        activeListener = null
-      }
-      if (backButtonListener) {
-        await backButtonListener.remove().catch(() => {})
-        backButtonListener = null
-      }
-    }
-
-    cancelScan = async () => {
-      await cleanup()
-      reject(new Error('Scan cancelled'))
-    }
-
-    // Listen for hardware back button
-    CapApp.addListener('backButton', async () => {
-      await cleanup()
-      reject(new Error('Scan cancelled'))
-    }).then((listener) => {
-      backButtonListener = listener
-    })
-
-    BarcodeScanner.addListener('barcodeScanned', async (result) => {
-      try {
-        await cleanup()
-        resolve(result.barcode)
-      } catch (error) {
-        reject(error)
-      }
-    })
-      .then((listener) => {
-        activeListener = listener
-        void BarcodeScanner.startScan().catch(async (error) => {
-          await cleanup()
-          reject(error)
-        })
-      })
-      .catch(async (error) => {
-        await cleanup()
-        reject(error)
-      })
-  })
-}
-
 const scan = async () => {
   if (!isGrantedPermissions.value) {
     const granted = await requestPermissions()
@@ -200,7 +139,7 @@ const scan = async () => {
     }
   }
 
-  const code = await scanSingleBarcode()
+  const code = await scanBarcode({ handleBackButton: true })
   const url = code.displayValue
   
   if (!url) {
@@ -597,7 +536,7 @@ const handleScanIdentity = () => {
         <div class="scan-line"></div>
       </div>
       <p class="scan-hint">Align QR code within frame</p>
-      <button class="cancel-scan-button" type="button" @click="cancelScan?.()">
+      <button class="cancel-scan-button" type="button" @click="cancelScan()">
         Cancel
       </button>
     </div>

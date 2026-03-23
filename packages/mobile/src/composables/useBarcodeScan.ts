@@ -20,12 +20,21 @@
 import { ref, onUnmounted } from 'vue'
 import { BarcodeScanner, type Barcode } from '@capacitor-mlkit/barcode-scanning'
 import { Camera } from '@capacitor/camera'
+import { App as CapacitorApp } from '@capacitor/app'
+import { PlatformService } from '@/platform'
+
+export interface ScanOptions {
+  handleBackButton?: boolean
+}
 
 export function useBarcodeScan() {
   const isScanning = ref(false)
   let activeListener: { remove: () => Promise<void> } | null = null
+  let backButtonListener: { remove: () => Promise<void> } | null = null
+  let cancelFn: (() => void) | null = null
 
   const requestPermissions = async (): Promise<boolean> => {
+    if (!PlatformService.isNative) return true
     const { camera } = await Camera.requestPermissions()
     return camera === 'granted' || camera === 'limited'
   }
@@ -33,17 +42,36 @@ export function useBarcodeScan() {
   const cleanup = async () => {
     document.querySelector('body')?.classList.remove('barcode-scanner-active')
     isScanning.value = false
+    cancelFn = null
     await BarcodeScanner.stopScan().catch(() => {})
     if (activeListener) {
       await activeListener.remove().catch(() => {})
       activeListener = null
     }
+    if (backButtonListener) {
+      await backButtonListener.remove().catch(() => {})
+      backButtonListener = null
+    }
   }
 
-  const scanBarcode = (): Promise<Barcode> => {
+  const scanBarcode = (options?: ScanOptions): Promise<Barcode> => {
     return new Promise((resolve, reject) => {
       document.querySelector('body')?.classList.add('barcode-scanner-active')
       isScanning.value = true
+
+      cancelFn = async () => {
+        await cleanup()
+        reject(new Error('Scan cancelled'))
+      }
+
+      if (options?.handleBackButton) {
+        CapacitorApp.addListener('backButton', async () => {
+          await cleanup()
+          reject(new Error('Scan cancelled'))
+        }).then((listener) => {
+          backButtonListener = listener
+        })
+      }
 
       BarcodeScanner.addListener('barcodeScanned', async (result) => {
         try {
@@ -67,6 +95,10 @@ export function useBarcodeScan() {
     })
   }
 
+  const cancelScan = async () => {
+    if (cancelFn) cancelFn()
+  }
+
   onUnmounted(() => {
     cleanup()
   })
@@ -76,5 +108,6 @@ export function useBarcodeScan() {
     requestPermissions,
     cleanup,
     scanBarcode,
+    cancelScan,
   }
 }
