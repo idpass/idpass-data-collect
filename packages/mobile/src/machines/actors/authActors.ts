@@ -20,7 +20,7 @@
 import { fromPromise } from 'xstate'
 import { MobileAuthStorage } from '@/authentication/MobileAuthStorage'
 import { useTenantStore } from '@/store/tenant'
-import { initStore, store } from '@/store'
+import { initStore, store, saveCredentialsForReauth, clearCredentialsForReauth } from '@/store'
 import { getSyncServerUrlByAppId } from '@/utils/getSyncServerByAppId'
 import type { InitializeResult, LoginResult, CallbackResult, DefaultLoginResult, RefreshResult, AuthContext } from '../types'
 
@@ -72,6 +72,11 @@ export const performLogin = fromPromise<LoginResult, {
 
   try {
     await authManager.login(credentials || null, provider)
+    // Store credentials in SecureStorage for silent re-auth on token expiry.
+    // Only for default (username/password) login — OAuth uses its own refresh flow.
+    if (appId && credentials && 'username' in credentials && (!provider || provider === 'default')) {
+      await saveCredentialsForReauth(appId, credentials.username, credentials.password)
+    }
     return { success: true }
   } catch (err) {
     // Clean up temporary OAuth data on login failure
@@ -140,6 +145,9 @@ export const performLogout = fromPromise<void, { context: AuthContext; appId: st
   if (!authManager) return
 
   await authManager.logout()
+  if (appId) {
+    await clearCredentialsForReauth(appId)
+  }
   if (mobileAuthStorage) {
     await mobileAuthStorage.clearLastProvider(appId || undefined)
   }

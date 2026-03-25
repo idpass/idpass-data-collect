@@ -30,10 +30,28 @@ import {
   InternalSyncManager,
   IndexedDbAuthStorageAdapter
 } from '@idpass/data-collect-core'
+import { SecureStorageService } from '@/services/SecureStorageService'
+
+const CREDENTIAL_KEY_PREFIX = 'sync_cred_'
 
 export let store: EntityDataManager
 
 const storeCache = new Map<string, EntityDataManager>()
+
+/**
+ * Store login credentials in secure storage for silent re-authentication.
+ * Credentials are encrypted at rest via iOS Keychain / Android Keystore.
+ */
+export async function saveCredentialsForReauth(appId: string, username: string, password: string): Promise<void> {
+  await SecureStorageService.set(`${CREDENTIAL_KEY_PREFIX}${appId}`, JSON.stringify({ username, password }))
+}
+
+/**
+ * Remove stored credentials (called on explicit logout).
+ */
+export async function clearCredentialsForReauth(appId: string): Promise<void> {
+  await SecureStorageService.remove(`${CREDENTIAL_KEY_PREFIX}${appId}`)
+}
 
 export const initStore = async (
   appId: string = 'default',
@@ -57,6 +75,17 @@ export const initStore = async (
     authStorage.initialize()
   ])
 
+  // Silent re-authentication callback: attempts to re-login using credentials
+  // stored in SecureStorage when the JWT token has expired during sync.
+  const reauthenticate = async () => {
+    const raw = await SecureStorageService.get(`${CREDENTIAL_KEY_PREFIX}${appId}`)
+    if (!raw) {
+      throw new Error('No stored credentials available for re-authentication')
+    }
+    const { username, password } = JSON.parse(raw) as { username: string; password: string }
+    await authManagerInstance.login({ username, password })
+  }
+
   const eventApplierService = new EventApplierService(eventStore, entityStore)
   const internalSyncManager = new InternalSyncManager(
     eventStore,
@@ -64,11 +93,10 @@ export const initStore = async (
     eventApplierService,
     syncServerUrl,
     authStorage,
-    appId
+    appId,
+    reauthenticate
   )
 
-  // External sync adapter is not used in the client
-  // const syncAdapter = new SyncAdapterImpl('')
   store = new EntityDataManager(
     eventStore,
     entityStore,

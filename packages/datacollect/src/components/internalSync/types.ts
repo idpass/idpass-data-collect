@@ -40,6 +40,17 @@ export interface SelectiveSyncOptions {
 }
 
 /**
+ * Optional callback to silently re-authenticate when the stored token has
+ * expired. When provided, the sync machine calls this before failing with
+ * an auth error, giving the app a chance to refresh the token (e.g., by
+ * re-logging in with credentials stored in secure storage).
+ *
+ * @returns A promise that resolves when a fresh token has been persisted
+ *          to the auth storage, or rejects if re-authentication is not possible.
+ */
+export type ReauthenticateCallback = () => Promise<void>;
+
+/**
  * XState machine context for the sync statechart.
  */
 export interface SyncContext {
@@ -50,6 +61,7 @@ export interface SyncContext {
   authStorage: AuthStorageAdapter;
   axiosInstance: AxiosInstance;
   configId: string;
+  reauthenticate?: ReauthenticateCallback;
   // Sync options
   selectiveSyncOptions: SelectiveSyncOptions;
   // Upload tracking
@@ -84,4 +96,5 @@ export interface SyncMachineInput {
   authStorage: AuthStorageAdapter;
   axiosInstance: AxiosInstance;
   configId: string;
+  reauthenticate?: ReauthenticateCallback;
 }

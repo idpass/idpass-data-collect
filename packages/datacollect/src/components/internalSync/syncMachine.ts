@@ -46,32 +46,53 @@ export function createSyncMachine(
     actors: {
       loadAuthToken: fromPromise(
         async ({ input }: { input: { context: SyncContext } }) => {
-          const { authStorage, axiosInstance } = input.context;
-          const token = await authStorage.getToken();
-          if (!token) {
-            throw new Error("Sync authentication failed: no token found. Please log in again.");
-          }
+          const { authStorage, axiosInstance, reauthenticate } = input.context;
 
-          // Check JWT expiry before sending requests with a stale token.
-          // JWTs are base64url-encoded: header.payload.signature
-          try {
+          const loadAndValidateToken = async (): Promise<{ provider: string; token: string }> => {
+            const token = await authStorage.getToken();
+            if (!token) {
+              throw new Error("Sync authentication failed: no token found. Please log in again.");
+            }
+            // Check JWT expiry. JWTs are base64url-encoded: header.payload.signature
             const parts = token.token.split(".");
             if (parts.length === 3) {
-              const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
-              if (payload.exp && typeof payload.exp === "number") {
-                const nowSec = Math.floor(Date.now() / 1000);
-                if (payload.exp <= nowSec) {
-                  throw new Error(
-                    `Sync authentication failed: token expired ${Math.round((nowSec - payload.exp) / 60)} minutes ago. Please log in again.`,
-                  );
+              try {
+                const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+                if (payload.exp && typeof payload.exp === "number") {
+                  const nowSec = Math.floor(Date.now() / 1000);
+                  if (payload.exp <= nowSec) {
+                    const minutesAgo = Math.round((nowSec - payload.exp) / 60);
+                    throw new Error(`token expired ${minutesAgo} minutes ago`);
+                  }
                 }
+              } catch (e) {
+                if (e instanceof Error && e.message.includes("token expired")) throw e;
+                log.warn("Could not decode token for expiry check, proceeding with request");
               }
             }
-          } catch (e) {
-            // If the error is our own expiry message, re-throw it
-            if (e instanceof Error && e.message.startsWith("Sync authentication failed")) throw e;
-            // Otherwise, token is not a valid JWT — proceed and let the server reject it
-            log.warn("Could not decode token for expiry check, proceeding with request");
+            return token;
+          };
+
+          let token: { provider: string; token: string };
+          try {
+            token = await loadAndValidateToken();
+          } catch (firstError) {
+            // Token is missing or expired — attempt silent re-authentication
+            if (reauthenticate) {
+              log.info("Token expired or missing, attempting silent re-authentication");
+              try {
+                await reauthenticate();
+                token = await loadAndValidateToken();
+              } catch {
+                const detail = firstError instanceof Error ? firstError.message : "unknown";
+                throw new Error(
+                  `Sync authentication failed: ${detail}. Silent re-login also failed. Please log in again.`,
+                );
+              }
+            } else {
+              const detail = firstError instanceof Error ? firstError.message : "unknown";
+              throw new Error(`Sync authentication failed: ${detail}. Please log in again.`);
+            }
           }
 
           const provider = token.provider === "default" ? "Bearer" : token.provider;
@@ -316,6 +337,7 @@ export function createSyncMachine(
       authStorage: input.authStorage,
       axiosInstance: input.axiosInstance,
       configId: input.configId,
+      reauthenticate: input.reauthenticate,
       selectiveSyncOptions: {} as SelectiveSyncOptions,
       uploadChunks: [] as FormSubmission[][],
       uploadChunkIndex: 0,

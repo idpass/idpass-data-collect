@@ -25,7 +25,8 @@ import { registerIssuerKey, Claim169IdentityData, VerifiedIdentity, genderToStri
 let Field: any;
 function getField() {
   if (!Field) {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     Field = (Formio as any)?.Components?.components?.field ?? class {};
   }
   return Field;

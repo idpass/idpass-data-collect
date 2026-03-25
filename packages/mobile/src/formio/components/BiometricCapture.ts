@@ -28,7 +28,8 @@ function getField() {
     // build uses inlineDynamicImports (class extends evaluates at module load).
     // Fall back to a minimal base class so the module can load; the real base
     // is wired up at registration time when Formio is ready.
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     Field = (Formio as any)?.Components?.components?.field ?? class {};
   }
   return Field;

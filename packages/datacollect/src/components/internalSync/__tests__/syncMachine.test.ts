@@ -406,4 +406,69 @@ describe("syncMachine", () => {
     expect(errorMsg).toContain("Database connection lost");
     actor.stop();
   });
+
+  test("silent re-auth succeeds when token is expired but reauthenticate callback refreshes it", async () => {
+    // First call: expired token. After reauthenticate: valid token.
+    const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+    const expiredPayload = btoa(JSON.stringify({ sub: "u1", exp: Math.floor(Date.now() / 1000) - 3600 }));
+    const validPayload = btoa(JSON.stringify({ sub: "u1", exp: Math.floor(Date.now() / 1000) + 3600 }));
+    const expiredJwt = `${header}.${expiredPayload}.sig`;
+    const validJwt = `${header}.${validPayload}.sig`;
+
+    const authStorage = createMockAuthStorage();
+    let callCount = 0;
+    (authStorage.getToken as jest.Mock).mockImplementation(() => {
+      callCount++;
+      // First call returns expired, subsequent calls return valid (after re-auth)
+      const token = callCount === 1 ? expiredJwt : validJwt;
+      return Promise.resolve({ provider: "default", token });
+    });
+
+    const reauthenticate = jest.fn().mockResolvedValue(undefined);
+
+    const input = createInput({ authStorage, ...({ reauthenticate } as Partial<SyncMachineInput>) });
+    const actor = startActor(input);
+
+    const promise = new Promise<void>((resolve) => {
+      const check = setInterval(() => {
+        if (resolvedIds.includes("reauth-ok")) { clearInterval(check); resolve(); }
+      }, 10);
+    });
+
+    actor.send({ type: "SYNC", syncId: "reauth-ok" });
+    await promise;
+
+    expect(reauthenticate).toHaveBeenCalledTimes(1);
+    expect(resolvedIds).toContain("reauth-ok");
+    actor.stop();
+  });
+
+  test("sync fails with descriptive message when re-auth callback also fails", async () => {
+    const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+    const expiredPayload = btoa(JSON.stringify({ sub: "u1", exp: Math.floor(Date.now() / 1000) - 60 }));
+    const expiredJwt = `${header}.${expiredPayload}.sig`;
+
+    const authStorage = createMockAuthStorage();
+    (authStorage.getToken as jest.Mock).mockResolvedValue({ provider: "default", token: expiredJwt });
+
+    const reauthenticate = jest.fn().mockRejectedValue(new Error("Invalid credentials"));
+
+    const input = createInput({ authStorage, ...({ reauthenticate } as Partial<SyncMachineInput>) });
+    const actor = startActor(input);
+
+    const promise = new Promise<void>((resolve) => {
+      const check = setInterval(() => {
+        if (rejectedIds.has("reauth-fail")) { clearInterval(check); resolve(); }
+      }, 10);
+    });
+
+    actor.send({ type: "SYNC", syncId: "reauth-fail" });
+    await promise;
+
+    expect(reauthenticate).toHaveBeenCalledTimes(1);
+    const msg = rejectedIds.get("reauth-fail")?.message || "";
+    expect(msg).toContain("Silent re-login also failed");
+    expect(msg).toContain("log in again");
+    actor.stop();
+  });
 });

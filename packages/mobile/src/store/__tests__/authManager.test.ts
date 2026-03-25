@@ -66,6 +66,8 @@ vi.mock('@/store/index', () => {
     initStore: mockInitStore,
     store: mockStoreObject,
     closeStore: mockCloseStore,
+    saveCredentialsForReauth: vi.fn().mockResolvedValue(undefined),
+    clearCredentialsForReauth: vi.fn().mockResolvedValue(undefined),
   }
 })
 
