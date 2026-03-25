@@ -1,62 +1,45 @@
 <script setup lang="ts">
 import { TenantAppData } from '@/schemas/tenantApp.schema'
-import { store } from '@/store'
-import { EntityForm } from '@/utils/dynamicFormIoUtils'
+import { EntityForm } from '@/utils/formIoUtils'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTenantStore } from '@/store/tenant'
 import { isOnline, onNetworkChange } from '@/utils/networkUtils'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 import { useSnackbar } from '@/composables/useSnackbar'
+import { useSyncService } from '@/store/syncService'
 
 const route = useRoute()
 const router = useRouter()
 
 const tenantapp = ref<TenantAppData>()
 const highLevelEntities = ref<EntityForm[]>([])
-const totalEntities = ref(0)
-const pendingRecords = ref(0)
-const isSynced = ref(false)
 const isOffline = ref(false)
-const isSyncing = ref(false)
 const tenantStore = useTenantStore()
+const syncService = useSyncService()
 let networkCleanup: (() => void) | null = null
 const { showError, showSuccess } = useSnackbar()
 const { handleError, handleAuthError } = useErrorHandler(route.params.id as string)
 
-const statsSummary = computed(() => {
-  const synced = Math.max(totalEntities.value - pendingRecords.value, 0)
-  return {
-    synced,
-    pending: pendingRecords.value,
-    total: totalEntities.value
-  }
-})
+const statsSummary = computed(() => ({
+  synced: syncService.syncedCount,
+  pending: syncService.pendingCount,
+  total: syncService.totalEntities
+}))
 
 const syncWithErrorHandling = async (): Promise<boolean> => {
-  try {
-    isSyncing.value = true
-    await store.syncWithSyncServer()
-    return true
-  } catch (error) {
-    const errorResult = await handleError(error, route.params.id as string)
+  const appId = route.params.id as string
+  const success = await syncService.startSync(appId)
+  if (!success && syncService.lastSyncError) {
+    const errorResult = await handleError(
+      new Error(syncService.lastSyncError),
+      appId
+    )
     if (errorResult.handled) {
       showError(errorResult.message)
     }
-    return false
-  } finally {
-    isSyncing.value = false
   }
-}
-
-const refreshCounts = async () => {
-  const [entities, unsynced] = await Promise.all([
-    store.getAllEntities(),
-    store.getUnsyncedEventsCount()
-  ])
-  totalEntities.value = entities.length
-  pendingRecords.value = unsynced
-  isSynced.value = unsynced === 0
+  return success
 }
 
 onMounted(async () => {
@@ -64,8 +47,8 @@ onMounted(async () => {
 
   networkCleanup = onNetworkChange((online) => {
     isOffline.value = !online
-    if (online && !isSynced.value) {
-      onSync()
+    if (online && !syncService.isSynced) {
+      syncWithErrorHandling()
     }
   })
 
@@ -73,11 +56,10 @@ onMounted(async () => {
   tenantapp.value = tenant
   highLevelEntities.value = tenantapp.value.entityForms.filter((entity) => !entity.dependsOn)
 
-  await refreshCounts()
+  await syncService.refreshCounts()
 
   if (!isOffline.value) {
     await syncWithErrorHandling()
-    await refreshCounts()
   }
 })
 
@@ -103,23 +85,22 @@ const onSync = async () => {
 
   const syncSuccess = await syncWithErrorHandling()
   if (syncSuccess) {
-    await refreshCounts()
     showSuccess('Sync completed successfully!')
   }
 }
 
-const formattedVersion = computed(() => `v${tenantapp.value?.version ?? '—'}`)
+const formattedVersion = computed(() => `v${tenantapp.value?.version ?? '\u2014'}`)
 
 const statusLabel = computed(() => {
   if (isOffline.value) return 'Offline mode'
-  if (isSyncing.value) return 'Syncing...'
-  if (isSynced.value) return 'Synced'
+  if (syncService.isSyncing) return 'Syncing...'
+  if (syncService.isSynced) return 'Synced'
   return 'Pending sync'
 })
 
 const statusColor = computed(() => {
   if (isOffline.value) return 'warning'
-  if (isSynced.value) return 'success'
+  if (syncService.isSynced) return 'success'
   return 'info'
 })
 
@@ -140,8 +121,8 @@ const stats = computed(() => [
           color="secondary"
           variant="flat"
           size="small"
-          :disabled="isSyncing || isOffline"
-          :loading="isSyncing"
+          :disabled="syncService.isSyncing || isOffline"
+          :loading="syncService.isSyncing"
           :title="isOffline ? 'Sync requires an online connection' : 'Sync with server'"
           @click="onSync"
         >
@@ -168,7 +149,7 @@ const stats = computed(() => [
           <v-chip size="small" color="primary" variant="tonal">{{ formattedVersion }}</v-chip>
         </div>
         <div class="mt-3">
-          <v-chip size="small" :color="statusColor" variant="tonal" :prepend-icon="isOffline ? 'mdi-wifi-off' : isSynced ? 'mdi-check-circle' : 'mdi-sync'">
+          <v-chip size="small" :color="statusColor" variant="tonal" :prepend-icon="isOffline ? 'mdi-wifi-off' : syncService.isSynced ? 'mdi-check-circle' : 'mdi-sync'">
             {{ statusLabel }}
           </v-chip>
         </div>

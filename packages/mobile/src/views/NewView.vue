@@ -2,7 +2,7 @@
 import { useDatabase } from '@/database'
 import { TenantAppData } from '@/schemas/tenantApp.schema'
 import { store } from '@/store'
-import { EntityForm } from '@/utils/dynamicFormIoUtils'
+import { EntityForm } from '@/utils/formIoUtils'
 import FormioWrapper from '@/components/FormioWrapper.vue'
 import { SyncLevel, FormClassifier } from '@idpass/data-collect-core'
 import { v4 as uuidv4 } from 'uuid'
@@ -30,29 +30,42 @@ type FormSubmissionEvent = {
   data: Record<string, unknown>
 }
 
-onMounted(async () => {
-  const foundDocuments = await database.tenantapps
-    .find({
-      selector: {
-        id: route.params.id
-      }
-    })
-    .exec()
-  tenantapp.value = foundDocuments[0]
-  entityForm.value = tenantapp.value.entityForms.find(
-    (entity) => entity.name === route.params.entity
-  )
-  formio.value = entityForm.value.formio
+const navigateToEntityList = () => {
+  const appId = route.params.id as string
+  const entity = route.params.entity as string
+  const rest = route.params.rest as string | undefined
+  const basePath = rest ? `/app/${appId}/${rest}${entity}` : `/app/${appId}/${entity}`
+  router.push(basePath)
+}
 
-  const formDefs = tenantapp.value.entityForms.map((f: EntityForm) => ({
-    name: f.name,
-    dependsOn: f.dependsOn,
-    entityType: f.entityType,
-  }))
-  const classification = FormClassifier.classifyForm(entityForm.value.name, formDefs)
-  isGroup.value = classification.entityType === 'group'
-  const typeLabels: Record<string, string> = { group: 'Group', individual: 'Individual', record: 'Record' }
-  entityTypeLabel.value = typeLabels[classification.entityType] || 'Record'
+onMounted(async () => {
+  try {
+    const foundDocuments = await database.tenantapps
+      .find({
+        selector: {
+          id: route.params.id
+        }
+      })
+      .exec()
+    tenantapp.value = foundDocuments[0]
+    entityForm.value = tenantapp.value.entityForms.find(
+      (entity) => entity.name === route.params.entity
+    )
+    formio.value = entityForm.value.formio
+
+    const formDefs = tenantapp.value.entityForms.map((f: EntityForm) => ({
+      name: f.name,
+      dependsOn: f.dependsOn,
+      entityType: f.entityType,
+    }))
+    const classification = FormClassifier.classifyForm(entityForm.value.name, formDefs)
+    isGroup.value = classification.entityType === 'group'
+    const typeLabels: Record<string, string> = { group: 'Group', individual: 'Individual', record: 'Record' }
+    entityTypeLabel.value = typeLabels[classification.entityType] || 'Record'
+  } catch (error) {
+    console.error('Error loading new form:', error)
+    navigateToEntityList()
+  }
 })
 
 const onSubmit = async (submission: FormSubmissionEvent) => {
@@ -78,11 +91,11 @@ const onSubmit = async (submission: FormSubmissionEvent) => {
     userId: 'admin',
     syncLevel: SyncLevel.LOCAL
   })
-  router.go(-1)
+  navigateToEntityList()
 }
 
 const onBack = () => {
-  router.go(-1)
+  navigateToEntityList()
 }
 </script>
 

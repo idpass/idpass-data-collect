@@ -1,4 +1,4 @@
-<!-- Root component for dynamic app -->
+<!-- Root component -->
 
 <script setup lang="ts">
 import { RouterView, useRoute, useRouter } from 'vue-router'
@@ -59,7 +59,7 @@ const activeTab = computed(() => {
 
     <v-main class="disable-scrollbars">
       <router-view v-slot="{ Component, route: viewRoute }">
-        <transition :name="viewRoute.meta.transition as string || 'fade'" mode="out-in">
+        <transition :name="viewRoute.meta.transition as string || 'fade'">
           <component :is="Component" :key="viewRoute.path" />
         </transition>
       </router-view>

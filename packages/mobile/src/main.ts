@@ -73,7 +73,12 @@ async function initApp() {
 
   app.config.errorHandler = (err, _instance, info) => {
     const msg = err instanceof Error ? err.stack || err.message : String(err)
+    console.error(`Vue Error (${info}):`, msg)
     window.__showError?.('Vue Error (' + info + ')', msg)
+    // Navigate to home as a safe fallback to avoid white screens
+    if (router.currentRoute.value.name !== 'home') {
+      router.push({ name: 'home' }).catch(() => {})
+    }
   }
 
   app.mount('#app')

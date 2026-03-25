@@ -17,46 +17,46 @@
  * under the License.
  */
 
-import { extractParentUUIDInPath } from '@/utils/dynamicFormIoUtils'
+import { extractParentUUIDInPath } from '@/utils/formIoUtils'
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '@/views/dynamic/HomeView.vue'
+import HomeView from '@/views/HomeView.vue'
 import { useAuthManagerStore } from '@/store/authManager'
 
-const dynamicRouter = createRouter({
+const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     { path: '/', name: 'home', component: HomeView },
     {
       path: '/tools',
       name: 'tools',
-      component: () => import('@/views/dynamic/ToolsView.vue')
+      component: () => import('@/views/ToolsView.vue')
     },
     {
       path: '/tools/claim169',
       name: 'claim169-hub',
-      component: () => import('@/views/dynamic/Claim169HubView.vue'),
+      component: () => import('@/views/Claim169HubView.vue'),
       meta: { transition: 'slide-x-reverse' }
     },
     {
       path: '/settings',
       name: 'settings',
-      component: () => import('@/views/dynamic/SettingsView.vue')
+      component: () => import('@/views/SettingsView.vue')
     },
     {
       path: '/login/:id',
       name: 'login',
-      component: () => import('@/views/dynamic/DynamicLoginView.vue')
+      component: () => import('@/views/LoginView.vue')
     },
     {
       path: '/app/:id',
       name: 'app',
-      component: () => import('@/views/dynamic/DynamicAppView.vue'),
+      component: () => import('@/views/AppView.vue'),
       meta: { requiresAuth: true, transition: 'slide-x-reverse' }
     },
     {
       path: '/app/:id/:rest(.+/)?:entity',
       name: 'entity',
-      component: () => import('@/views/dynamic/DynamicEntityView.vue'),
+      component: () => import('@/views/EntityView.vue'),
       props: (route) => {
         const id = route.params.id
         const rest = route.params.rest
@@ -77,7 +77,7 @@ const dynamicRouter = createRouter({
     {
       path: '/app/:id/:rest(.+/)?:entity/new',
       name: 'entity-new',
-      component: () => import('@/views/dynamic/DynamicNewView.vue'),
+      component: () => import('@/views/NewView.vue'),
       props: (route) => {
         const id = route.params.id
         const entity = route.params.entity
@@ -91,29 +91,29 @@ const dynamicRouter = createRouter({
     {
       path: '/app/:id/:rest(.+/)?:entity/:guid/detail',
       name: 'entity-detail',
-      component: () => import('@/views/dynamic/DynamicDetailView.vue'),
+      component: () => import('@/views/DetailView.vue'),
       meta: { requiresAuth: true, transition: 'slide-x-reverse' }
     },
     {
       path: '/app/:id/:rest(.+/)?:entity/:guid/edit',
       name: 'entity-edit',
-      component: () => import('@/views/dynamic/DynamicEditView.vue'),
+      component: () => import('@/views/EditView.vue'),
       meta: { requiresAuth: true, transition: 'slide-x-reverse' }
     },
     {
       path: '/app/:id/login',
       name: 'app-login',
-      component: () => import('@/views/dynamic/auth/AuthScreen.vue')
+      component: () => import('@/views/auth/AuthScreen.vue')
     },
     {
       path: '/app/:id/oidc-login',
       name: 'oidc-login',
-      component: () => import('@/views/dynamic/auth/AuthScreen.vue')
+      component: () => import('@/views/auth/AuthScreen.vue')
     },
     {
       path: '/callback',
       name: 'callback',
-      component: () => import('@/views/dynamic/auth/AuthScreen.vue')
+      component: () => import('@/views/auth/AuthScreen.vue')
     },
     {
       path: '/scan-claim169',
@@ -138,7 +138,7 @@ const dynamicRouter = createRouter({
  * 2. If not authenticated, redirect to app-specific login
  * 3. Initialize authManager with proper configuration
  */
-dynamicRouter.beforeEach(async (to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const authManagerStore = useAuthManagerStore()
   // Force reinitialization for login routes or when app ID changes
   const appId = to.params.id as string
@@ -198,4 +198,4 @@ dynamicRouter.beforeEach(async (to, _from, next) => {
   }
 })
 
-export default dynamicRouter
+export default router

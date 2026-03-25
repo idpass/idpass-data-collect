@@ -18,7 +18,7 @@
  */
 
 import { RxCollection, RxDocument, RxJsonSchema } from 'rxdb'
-import { Config } from '@/utils/dynamicFormIoUtils'
+import { Config } from '@/utils/formIoUtils'
 
 export type TenantAppData = Config
 

@@ -2,7 +2,7 @@
 import { useDatabase } from '@/database'
 import { TenantAppData } from '@/schemas/tenantApp.schema'
 import { store } from '@/store'
-import { EntityForm } from '@/utils/dynamicFormIoUtils'
+import { EntityForm } from '@/utils/formIoUtils'
 import { SyncLevel } from '@idpass/data-collect-core'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -81,75 +81,99 @@ const resolveStatusSync = (
   return 'synced'
 }
 
+const navigateToParent = () => {
+  const appId = route.params.id as string
+  const rest = route.params.rest as string | undefined
+  if (rest) {
+    const parts = rest.replace(/\/$/, '').split('/')
+    const parentGuid = parts[parts.length - 2] || ''
+    const parentEntity = parts[parts.length - 3] || ''
+    if (parentGuid && parentEntity) {
+      const baseParts = parts.slice(0, -2)
+      const basePath = baseParts.length ? baseParts.join('/') + '/' : ''
+      router.push(`/app/${appId}/${basePath}${parentEntity}/${parentGuid}/detail`)
+    } else {
+      router.push({ name: 'app', params: { id: appId } })
+    }
+  } else {
+    router.push({ name: 'app', params: { id: appId } })
+  }
+}
+
 onMounted(async () => {
-  const foundDocuments = await database.tenantapps
-    .find({
-      selector: {
-        id: route.params.id
-      }
-    })
-    .exec()
-  tenantapp.value = foundDocuments[0]
+  try {
+    const foundDocuments = await database.tenantapps
+      .find({
+        selector: {
+          id: route.params.id
+        }
+      })
+      .exec()
+    tenantapp.value = foundDocuments[0]
 
-  entityForm.value = tenantapp.value.entityForms.find(
-    (entity) => entity.name === route.params.entity
-  )
-
-  const [allEntities, allEvents] = await Promise.all([
-    store.getAllEntities(),
-    store.getAllEvents()
-  ])
-
-  const entityList = allEntities.filter((entity) => {
-    const entityName = entity.modified.data.entityName as string | undefined
-    const formName = entityForm.value?.name
-
-    const matchesEntityName = entityName && (
-      entityName === formName ||
-      entityName.toLowerCase() === formName?.toLowerCase() ||
-      (formName && (entityName.includes(formName) || formName.includes(entityName)))
+    entityForm.value = tenantapp.value.entityForms.find(
+      (entity) => entity.name === route.params.entity
     )
 
-    const matchesParent = !entity.modified.data.parentGuid ||
-      entity.modified.data.parentGuid === props.parentGuid
+    const [allEntities, allEvents] = await Promise.all([
+      store.getAllEntities(),
+      store.getAllEvents()
+    ])
 
-    return (matchesEntityName || (!entityName && matchesParent)) && matchesParent
-  })
+    const entityList = allEntities.filter((entity) => {
+      const entityName = entity.modified.data.entityName as string | undefined
+      const formName = entityForm.value?.name
 
-  const entityEventsMap = new Map<string, typeof allEvents[0]>()
-  for (const event of allEvents) {
-    const existing = entityEventsMap.get(event.entityGuid)
-    if (!existing || new Date(event.timestamp) > new Date(existing.timestamp)) {
-      entityEventsMap.set(event.entityGuid, event)
-    }
-  }
+      const matchesEntityName = entityName && (
+        entityName === formName ||
+        entityName.toLowerCase() === formName?.toLowerCase() ||
+        (formName && (entityName.includes(formName) || formName.includes(entityName)))
+      )
 
-  submissions.value = entityList.map((entity) => {
-    const base = {
-      guid: entity.modified.guid,
-      initial: {
-        lastUpdated: entity.initial.lastUpdated,
-        version: entity.initial.version,
-        data: entity.initial.data,
-        name: entity.initial.name
-      },
-      modified: {
-        lastUpdated: entity.modified.lastUpdated,
-        version: entity.modified.version,
-        data: entity.modified.data,
-        name: entity.modified.name
+      const matchesParent = !entity.modified.data.parentGuid ||
+        entity.modified.data.parentGuid === props.parentGuid
+
+      return (matchesEntityName || (!entityName && matchesParent)) && matchesParent
+    })
+
+    const entityEventsMap = new Map<string, typeof allEvents[0]>()
+    for (const event of allEvents) {
+      const existing = entityEventsMap.get(event.entityGuid)
+      if (!existing || new Date(event.timestamp) > new Date(existing.timestamp)) {
+        entityEventsMap.set(event.entityGuid, event)
       }
     }
 
-    return {
-      ...base,
-      status: resolveStatusSync(base, entity.modified.guid, entityEventsMap.get(entity.modified.guid))
-    }
-  })
+    submissions.value = entityList.map((entity) => {
+      const base = {
+        guid: entity.modified.guid,
+        initial: {
+          lastUpdated: entity.initial.lastUpdated,
+          version: entity.initial.version,
+          data: entity.initial.data,
+          name: entity.initial.name
+        },
+        modified: {
+          lastUpdated: entity.modified.lastUpdated,
+          version: entity.modified.version,
+          data: entity.modified.data,
+          name: entity.modified.name
+        }
+      }
+
+      return {
+        ...base,
+        status: resolveStatusSync(base, entity.modified.guid, entityEventsMap.get(entity.modified.guid))
+      }
+    })
+  } catch (error) {
+    console.error('Error loading entity list:', error)
+    navigateToParent()
+  }
 })
 
 const onBack = () => {
-  router.go(-1)
+  navigateToParent()
 }
 
 const statusConfig = (status: SubmissionStatus) => {

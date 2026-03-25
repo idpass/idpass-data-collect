@@ -2,7 +2,7 @@
 import { useDatabase } from '@/database'
 import { TenantAppData } from '@/schemas/tenantApp.schema'
 import { store } from '@/store'
-import { EntityForm } from '@/utils/dynamicFormIoUtils'
+import { EntityForm } from '@/utils/formIoUtils'
 import { reverseTransformEntityData } from '@/utils/reverseTransformData'
 import FormioWrapper from '@/components/FormioWrapper.vue'
 import { SyncLevel, FormClassifier } from '@idpass/data-collect-core'
@@ -20,6 +20,15 @@ const storedEntityData = ref<unknown>()
 const formio = ref<unknown>()
 const { isOffline } = useNetworkStatus()
 
+const navigateToDetail = () => {
+  const appId = route.params.id as string
+  const entity = route.params.entity as string
+  const guid = route.params.guid as string
+  const rest = route.params.rest as string | undefined
+  const basePath = rest ? `/app/${appId}/${rest}${entity}` : `/app/${appId}/${entity}`
+  router.push(`${basePath}/${guid}/detail`)
+}
+
 onMounted(async () => {
   try {
     const foundDocuments = await database.tenantapps
@@ -36,7 +45,7 @@ onMounted(async () => {
 
     if (!entityForm.value) {
       console.error('Entity form not found for edit view')
-      router.go(-1)
+      navigateToDetail()
       return
     }
 
@@ -45,7 +54,7 @@ onMounted(async () => {
     const entityData = await store.searchEntities([{ guid: route.params.guid }])
     if (!entityData || entityData.length === 0) {
       console.error('Entity not found for edit view')
-      router.go(-1)
+      navigateToDetail()
       return
     }
 
@@ -67,7 +76,7 @@ onMounted(async () => {
     }
   } catch (error) {
     console.error('Error loading entity for editing:', error)
-    router.go(-1)
+    navigateToDetail()
   }
 })
 
@@ -93,11 +102,11 @@ const onSubmit = async (submission: any) => {
     userId: 'admin',
     syncLevel: SyncLevel.LOCAL
   })
-  router.go(-1)
+  navigateToDetail()
 }
 
 const onBack = () => {
-  router.go(-1)
+  navigateToDetail()
 }
 
 const onFormError = (error: unknown) => {

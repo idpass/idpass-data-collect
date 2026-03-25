@@ -2,12 +2,21 @@
 import { useDatabase } from '@/database'
 import { SecureStorageService } from '@/services/SecureStorageService'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
+import { useSyncService } from '@/store/syncService'
 
 const isDevelop = import.meta.env.VITE_DEVELOP === 'true'
 const database = useDatabase()
 const { isOffline } = useNetworkStatus()
+const syncService = useSyncService()
 
 const appVersion = __APP_VERSION__
+
+const formatTime = (iso: string | null) => {
+  if (!iso) return 'Never'
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return 'Never'
+  return d.toLocaleString()
+}
 
 const devHandleClickClearData = async () => {
   await database.tenantapps.remove()
@@ -44,6 +53,70 @@ const devHandleClickClearData = async () => {
             {{ isOffline ? 'Offline' : 'Online' }}
           </span>
         </div>
+      </div>
+    </section>
+
+    <!-- Sync Queue section -->
+    <section class="settings-section">
+      <h2 class="settings-section-label">Sync Queue</h2>
+      <div class="settings-card">
+        <div class="settings-row">
+          <span class="settings-row-label">Status</span>
+          <span
+            class="settings-row-value"
+            :class="{
+              'settings-row-value--ok': syncService.isSynced && !syncService.isSyncing,
+              'settings-row-value--warn': syncService.isSyncing,
+              'settings-row-value--danger': !!syncService.lastSyncError
+            }"
+          >
+            {{ syncService.isSyncing ? 'Syncing...' : syncService.lastSyncError ? 'Error' : syncService.isSynced ? 'Up to date' : 'Pending' }}
+          </span>
+        </div>
+        <div class="settings-divider"></div>
+        <div class="settings-row">
+          <span class="settings-row-label">Pending events</span>
+          <span class="settings-row-value settings-row-value--mono">{{ syncService.pendingCount }}</span>
+        </div>
+        <div class="settings-divider"></div>
+        <div class="settings-row">
+          <span class="settings-row-label">Total entities</span>
+          <span class="settings-row-value settings-row-value--mono">{{ syncService.totalEntities }}</span>
+        </div>
+        <div class="settings-divider"></div>
+        <div class="settings-row">
+          <span class="settings-row-label">Last sync</span>
+          <span class="settings-row-value">{{ formatTime(syncService.lastSyncTime) }}</span>
+        </div>
+        <template v-if="syncService.lastSyncError">
+          <div class="settings-divider"></div>
+          <div class="settings-row">
+            <span class="settings-row-label">Last error</span>
+            <span class="settings-row-value settings-row-value--danger">{{ syncService.lastSyncError }}</span>
+          </div>
+        </template>
+      </div>
+    </section>
+
+    <!-- Sync History section -->
+    <section v-if="syncService.syncHistory.length > 0" class="settings-section">
+      <h2 class="settings-section-label">Sync History</h2>
+      <div class="settings-card">
+        <template v-for="(entry, index) in syncService.syncHistory" :key="index">
+          <div v-if="index > 0" class="settings-divider"></div>
+          <div class="settings-row">
+            <div class="sync-history-entry">
+              <span class="settings-row-label">{{ formatTime(entry.timestamp) }}</span>
+              <span v-if="entry.error" class="settings-row-hint settings-row-value--danger">{{ entry.error }}</span>
+            </div>
+            <span
+              class="settings-row-value"
+              :class="entry.success ? 'settings-row-value--ok' : 'settings-row-value--danger'"
+            >
+              {{ entry.success ? 'OK' : 'Failed' }}
+            </span>
+          </div>
+        </template>
       </div>
     </section>
 
@@ -160,6 +233,11 @@ const devHandleClickClearData = async () => {
   font-weight: 600;
 }
 
+.settings-row-value--danger {
+  color: var(--status-danger, #e53e3e);
+  font-weight: 600;
+}
+
 .settings-row-hint {
   font-size: 0.75rem;
   color: var(--text-muted, #64748b);
@@ -177,5 +255,11 @@ const devHandleClickClearData = async () => {
   color: var(--text-muted, #64748b);
   padding: 8px 0;
   opacity: 0.5;
+}
+
+.sync-history-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 </style>

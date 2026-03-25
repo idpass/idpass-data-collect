@@ -2,7 +2,7 @@
 import { useDatabase } from '@/database'
 import { TenantAppData } from '@/schemas/tenantApp.schema'
 import { store } from '@/store'
-import { EntityForm } from '@/utils/dynamicFormIoUtils'
+import { EntityForm } from '@/utils/formIoUtils'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FormSubmission, EntityDoc } from '@idpass/data-collect-core'
@@ -20,33 +20,46 @@ const openViewDialog = ref(false)
 const events = ref<FormSubmission[]>([])
 const { isOffline } = useNetworkStatus()
 
+const navigateToEntityList = () => {
+  const appId = route.params.id as string
+  const entity = route.params.entity as string
+  const rest = route.params.rest as string | undefined
+  const basePath = rest ? `/app/${appId}/${rest}${entity}` : `/app/${appId}/${entity}`
+  router.push(basePath)
+}
+
 onMounted(async () => {
-  const foundDocuments = await database.tenantapps
-    .find({
-      selector: {
-        id: route.params.id
-      }
-    })
-    .exec()
-  tenantapp.value = foundDocuments[0]
-  entityForm.value = tenantapp.value.entityForms.find(
-    (entity) => entity.name === route.params.entity
-  )
-  const entityData = await store.searchEntities([{ guid: route.params.guid }])
-  storedEntityData.value = entityData
+  try {
+    const foundDocuments = await database.tenantapps
+      .find({
+        selector: {
+          id: route.params.id
+        }
+      })
+      .exec()
+    tenantapp.value = foundDocuments[0]
+    entityForm.value = tenantapp.value.entityForms.find(
+      (entity) => entity.name === route.params.entity
+    )
+    const entityData = await store.searchEntities([{ guid: route.params.guid }])
+    storedEntityData.value = entityData
 
-  dependentForms.value = tenantapp.value.entityForms.filter(
-    (entity) => entity.dependsOn === entityForm.value.name
-  )
+    dependentForms.value = tenantapp.value.entityForms.filter(
+      (entity) => entity.dependsOn === entityForm.value.name
+    )
 
-  const allEvents = await store.getAllEvents()
-  events.value = allEvents
-    .filter((event) => event.entityGuid === route.params.guid)
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    const allEvents = await store.getAllEvents()
+    events.value = allEvents
+      .filter((event) => event.entityGuid === route.params.guid)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+  } catch (error) {
+    console.error('Error loading entity detail:', error)
+    navigateToEntityList()
+  }
 })
 
 const onBack = () => {
-  router.go(-1)
+  navigateToEntityList()
 }
 
 const formatEventType = (type: string) => {
