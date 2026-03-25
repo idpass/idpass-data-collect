@@ -271,4 +271,139 @@ describe("syncMachine", () => {
     expect(actor.getSnapshot().value).toBe("idle");
     actor.stop();
   });
+
+  test("rejects with expiry message when JWT token is expired", async () => {
+    // Create an expired JWT (exp in the past)
+    const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+    const payload = btoa(JSON.stringify({ sub: "user1", exp: Math.floor(Date.now() / 1000) - 3600 }));
+    const expiredJwt = `${header}.${payload}.fakesignature`;
+
+    const authStorage = createMockAuthStorage();
+    (authStorage.getToken as jest.Mock).mockResolvedValue({ provider: "default", token: expiredJwt });
+    const input = createInput({ authStorage });
+    const actor = startActor(input);
+
+    const promise = new Promise<void>((resolve) => {
+      const check = setInterval(() => {
+        if (rejectedIds.has("expired-token")) { clearInterval(check); resolve(); }
+      }, 10);
+    });
+
+    actor.send({ type: "SYNC", syncId: "expired-token" });
+    await promise;
+
+    expect(rejectedIds.get("expired-token")?.message).toContain("token expired");
+    expect(rejectedIds.get("expired-token")?.message).toContain("log in again");
+    actor.stop();
+  });
+
+  test("proceeds normally with a valid (non-expired) JWT token", async () => {
+    // Create a valid JWT (exp 1 hour in the future)
+    const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+    const payload = btoa(JSON.stringify({ sub: "user1", exp: Math.floor(Date.now() / 1000) + 3600 }));
+    const validJwt = `${header}.${payload}.fakesignature`;
+
+    const authStorage = createMockAuthStorage();
+    (authStorage.getToken as jest.Mock).mockResolvedValue({ provider: "default", token: validJwt });
+    const input = createInput({ authStorage });
+    const actor = startActor(input);
+
+    const promise = new Promise<void>((resolve) => {
+      const check = setInterval(() => {
+        if (resolvedIds.includes("valid-token")) { clearInterval(check); resolve(); }
+      }, 10);
+    });
+
+    actor.send({ type: "SYNC", syncId: "valid-token" });
+    await promise;
+
+    expect(resolvedIds).toContain("valid-token");
+    actor.stop();
+  });
+
+  test("upload fails fast on 401 without retrying", async () => {
+    const eventStore = createMockEventStore();
+    const events: FormSubmission[] = [
+      { guid: "e1", entityGuid: "ent-1", type: "create-individual", data: {}, timestamp: "2025-01-01T00:00:00Z", userId: "u1", syncLevel: 0 as SyncLevel },
+    ];
+    (eventStore.getEventsSince as jest.Mock).mockResolvedValue(events);
+    (eventStore.getLastRemoteSyncTimestamp as jest.Mock).mockResolvedValue("");
+
+    // Create a valid JWT so auth passes
+    const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+    const payload = btoa(JSON.stringify({ sub: "user1", exp: Math.floor(Date.now() / 1000) + 3600 }));
+    const validJwt = `${header}.${payload}.fakesignature`;
+
+    const authStorage = createMockAuthStorage();
+    (authStorage.getToken as jest.Mock).mockResolvedValue({ provider: "default", token: validJwt });
+
+    const mockAxios = createMockAxiosInstance();
+    const err401 = Object.assign(new Error("Request failed"), {
+      response: { status: 401, data: { message: "Token expired" } },
+    });
+    mockAxios.post.mockRejectedValue(err401);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const input = createInput({ eventStore, authStorage, axiosInstance: mockAxios as any });
+    const actor = startActor(input);
+
+    const promise = new Promise<void>((resolve) => {
+      const check = setInterval(() => {
+        if (rejectedIds.has("auth-fail")) { clearInterval(check); resolve(); }
+      }, 10);
+    });
+
+    actor.send({ type: "SYNC", syncId: "auth-fail" });
+    await promise;
+
+    // Should only have been called once (no retries on 401)
+    expect(mockAxios.post).toHaveBeenCalledTimes(1);
+    expect(rejectedIds.get("auth-fail")?.message).toContain("401");
+    expect(rejectedIds.get("auth-fail")?.message).toContain("log in again");
+    actor.stop();
+  });
+
+  test("upload error message includes chunk progress and HTTP detail", async () => {
+    const eventStore = createMockEventStore();
+    const events: FormSubmission[] = [
+      { guid: "e1", entityGuid: "ent-1", type: "create-individual", data: {}, timestamp: "2025-01-01T00:00:00Z", userId: "u1", syncLevel: 0 as SyncLevel },
+    ];
+    (eventStore.getEventsSince as jest.Mock).mockResolvedValue(events);
+    (eventStore.getLastRemoteSyncTimestamp as jest.Mock).mockResolvedValue("");
+
+    const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+    const payload = btoa(JSON.stringify({ sub: "user1", exp: Math.floor(Date.now() / 1000) + 3600 }));
+    const validJwt = `${header}.${payload}.fakesignature`;
+
+    const authStorage = createMockAuthStorage();
+    (authStorage.getToken as jest.Mock).mockResolvedValue({ provider: "default", token: validJwt });
+
+    const mockAxios = createMockAxiosInstance();
+    const err500 = Object.assign(new Error("Internal Server Error"), {
+      response: { status: 500, data: { message: "Database connection lost" } },
+    });
+    mockAxios.post.mockRejectedValue(err500);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const input = createInput({ eventStore, authStorage, axiosInstance: mockAxios as any });
+    const actor = startActor(input);
+
+    const promise = new Promise<void>((resolve) => {
+      const check = setInterval(() => {
+        if (rejectedIds.has("chunk-err")) { clearInterval(check); resolve(); }
+      }, 10);
+    });
+
+    actor.send({ type: "SYNC", syncId: "chunk-err" });
+    await promise;
+
+    const errorMsg = rejectedIds.get("chunk-err")?.message || "";
+    // Should include chunk progress (e.g., "chunk 1/1")
+    expect(errorMsg).toContain("chunk 1/1");
+    // Should include HTTP status
+    expect(errorMsg).toContain("500");
+    // Should include server message
+    expect(errorMsg).toContain("Database connection lost");
+    actor.stop();
+  });
 });
