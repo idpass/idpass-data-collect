@@ -167,7 +167,7 @@ describe("syncMachine", () => {
     actor.send({ type: "SYNC", syncId: "test-sync-auth" });
     await promise;
 
-    expect(rejectedIds.get("test-sync-auth")?.message).toBe("Unauthorized");
+    expect(rejectedIds.get("test-sync-auth")?.message).toContain("no token found");
     actor.stop();
   });
 

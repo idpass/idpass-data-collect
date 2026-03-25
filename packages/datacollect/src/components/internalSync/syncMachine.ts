@@ -48,12 +48,34 @@ export function createSyncMachine(
         async ({ input }: { input: { context: SyncContext } }) => {
           const { authStorage, axiosInstance } = input.context;
           const token = await authStorage.getToken();
-          if (token) {
-            const provider = token.provider === "default" ? "Bearer" : token.provider;
-            axiosInstance.defaults.headers.Authorization = `${provider} ${token.token}`;
-            return;
+          if (!token) {
+            throw new Error("Sync authentication failed: no token found. Please log in again.");
           }
-          throw new Error("Unauthorized");
+
+          // Check JWT expiry before sending requests with a stale token.
+          // JWTs are base64url-encoded: header.payload.signature
+          try {
+            const parts = token.token.split(".");
+            if (parts.length === 3) {
+              const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+              if (payload.exp && typeof payload.exp === "number") {
+                const nowSec = Math.floor(Date.now() / 1000);
+                if (payload.exp <= nowSec) {
+                  throw new Error(
+                    `Sync authentication failed: token expired ${Math.round((nowSec - payload.exp) / 60)} minutes ago. Please log in again.`,
+                  );
+                }
+              }
+            }
+          } catch (e) {
+            // If the error is our own expiry message, re-throw it
+            if (e instanceof Error && e.message.startsWith("Sync authentication failed")) throw e;
+            // Otherwise, token is not a valid JWT — proceed and let the server reject it
+            log.warn("Could not decode token for expiry check, proceeding with request");
+          }
+
+          const provider = token.provider === "default" ? "Bearer" : token.provider;
+          axiosInstance.defaults.headers.Authorization = `${provider} ${token.token}`;
         },
       ),
 
@@ -93,10 +115,10 @@ export function createSyncMachine(
               await axiosInstance.post("/api/sync/push", { events: chunk, configId });
               return chunk;
             } catch (error: unknown) {
-              if (attempt === retryCount) {
-                // Enrich the error with HTTP details for diagnostics
-                const axiosErr = error as { response?: { status?: number; data?: unknown }; message?: string };
-                const status = axiosErr.response?.status;
+              const axiosErr = error as { response?: { status?: number; data?: unknown }; message?: string };
+              const status = axiosErr.response?.status;
+              // Don't retry auth errors — retrying with the same expired token is pointless
+              if (status === 401 || status === 403 || attempt === retryCount) {
                 const body = axiosErr.response?.data;
                 const serverMsg = typeof body === "object" && body !== null && "message" in body
                   ? (body as { message: string }).message
@@ -104,6 +126,7 @@ export function createSyncMachine(
                 const parts = [`HTTP ${status || "unknown"}`];
                 if (serverMsg) parts.push(serverMsg);
                 else if (axiosErr.message) parts.push(axiosErr.message);
+                if (status === 401) parts.push("Please log in again");
                 throw new Error(parts.join(" — "));
               }
               await new Promise((resolve) => setTimeout(resolve, delayMs * attempt));
