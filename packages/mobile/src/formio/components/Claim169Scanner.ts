@@ -25,7 +25,8 @@ import { registerIssuerKey, Claim169IdentityData, VerifiedIdentity, genderToStri
 let Field: any;
 function getField() {
   if (!Field) {
-    Field = (Formio as { Components: { components: { field: unknown } } }).Components.components.field;
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    Field = (Formio as any)?.Components?.components?.field ?? class {};
   }
   return Field;
 }

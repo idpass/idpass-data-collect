@@ -24,7 +24,12 @@ import BiometricCapturePlugin, { CaptureResult } from '../../plugins/BiometricCa
 let Field: any;
 function getField() {
   if (!Field) {
-    Field = (Formio as { Components: { components: { field: unknown } } }).Components.components.field;
+    // Formio.Components may not be available yet when the mobile production
+    // build uses inlineDynamicImports (class extends evaluates at module load).
+    // Fall back to a minimal base class so the module can load; the real base
+    // is wired up at registration time when Formio is ready.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    Field = (Formio as any)?.Components?.components?.field ?? class {};
   }
   return Field;
 }

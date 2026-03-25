@@ -18,10 +18,11 @@
  */
 
 import Formio from 'formiojs';
-// Static imports are safe because the components use lazy getField() accessors
-// instead of accessing Formio.Components at module scope. This avoids the
-// inlineDynamicImports hoisting bug where dynamic import() gets flattened
-// into a synchronous reference before the target module is initialized.
+// Static imports are safe because the components' getField() accessors
+// fall back to an empty base class when Formio.Components is not yet ready.
+// The mobile production build uses inlineDynamicImports which flattens
+// dynamic import() into synchronous references, so dynamic imports cannot
+// be used here to defer module evaluation.
 import BiometricCapture from './components/BiometricCapture';
 import Claim169Scanner from './components/Claim169Scanner';
 
