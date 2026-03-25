@@ -92,8 +92,20 @@ export function createSyncMachine(
             try {
               await axiosInstance.post("/api/sync/push", { events: chunk, configId });
               return chunk;
-            } catch (error) {
-              if (attempt === retryCount) throw error;
+            } catch (error: unknown) {
+              if (attempt === retryCount) {
+                // Enrich the error with HTTP details for diagnostics
+                const axiosErr = error as { response?: { status?: number; data?: unknown }; message?: string };
+                const status = axiosErr.response?.status;
+                const body = axiosErr.response?.data;
+                const serverMsg = typeof body === "object" && body !== null && "message" in body
+                  ? (body as { message: string }).message
+                  : typeof body === "string" ? body : undefined;
+                const parts = [`HTTP ${status || "unknown"}`];
+                if (serverMsg) parts.push(serverMsg);
+                else if (axiosErr.message) parts.push(axiosErr.message);
+                throw new Error(parts.join(" — "));
+              }
               await new Promise((resolve) => setTimeout(resolve, delayMs * attempt));
             }
           }
@@ -391,7 +403,13 @@ export function createSyncMachine(
                 actions: "advanceChunk",
                 target: "checkMoreChunks",
               },
-              onError: "uploadFailed",
+              onError: {
+                target: "uploadFailed",
+                actions: assign({
+                  error: ({ event }) =>
+                    event.error instanceof Error ? event.error : new Error(String(event.error)),
+                }),
+              },
             },
           },
           checkMoreChunks: {
@@ -421,7 +439,15 @@ export function createSyncMachine(
               onDone: {
                 target: "#sync.error",
                 actions: assign({
-                  error: () => new Error("Upload failed after partial chunks"),
+                  error: ({ context }) => {
+                    const uploaded = context.successfulChunks.length;
+                    const total = context.uploadChunks.length;
+                    const lastErr = context.error;
+                    const detail = lastErr?.message || "unknown error";
+                    return new Error(
+                      `Upload failed at chunk ${uploaded + 1}/${total}: ${detail}`,
+                    );
+                  },
                 }),
               },
               onError: {
@@ -475,7 +501,13 @@ export function createSyncMachine(
               src: "pullFromRemote",
               input: ({ context }) => ({ context }),
               onDone: "applyingEvents",
-              onError: "downloadFailed",
+              onError: {
+                target: "downloadFailed",
+                actions: assign({
+                  error: ({ event }) =>
+                    event.error instanceof Error ? event.error : new Error(String(event.error)),
+                }),
+              },
             },
           },
           applyingEvents: {
@@ -497,7 +529,13 @@ export function createSyncMachine(
                     event.output.latestEventTimestamp ?? context.lastSuccessfulDownloadTimestamp,
                 }),
               },
-              onError: "downloadFailed",
+              onError: {
+                target: "downloadFailed",
+                actions: assign({
+                  error: ({ event }) =>
+                    event.error instanceof Error ? event.error : new Error(String(event.error)),
+                }),
+              },
             },
           },
           checkMorePages: {
@@ -513,7 +551,10 @@ export function createSyncMachine(
               onDone: {
                 target: "#sync.error",
                 actions: assign({
-                  error: () => new Error("Download failed"),
+                  error: ({ context }) => {
+                    const detail = context.error?.message || "unknown error";
+                    return new Error(`Download failed: ${detail}`);
+                  },
                 }),
               },
               onError: {
