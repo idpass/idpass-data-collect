@@ -21,11 +21,48 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { store as entityStore } from '@/store'
 
+const isDev = import.meta.env.VITE_DEVELOP === 'true'
+
+export interface SyncDebugDetail {
+  requestUrl?: string
+  requestPayload?: unknown
+  responseStatus?: number
+  responseBody?: unknown
+  stack?: string
+}
+
 export interface SyncHistoryEntry {
   timestamp: string
   success: boolean
   error?: string
-  eventsUploaded?: number
+  debug?: SyncDebugDetail
+}
+
+function extractDebugDetail(error: unknown): SyncDebugDetail | undefined {
+  if (!isDev) return undefined
+
+  const detail: SyncDebugDetail = {}
+  const axiosErr = error as {
+    config?: { url?: string; data?: unknown }
+    response?: { status?: number; data?: unknown }
+    stack?: string
+  }
+
+  if (axiosErr.config?.url) detail.requestUrl = axiosErr.config.url
+  if (axiosErr.config?.data) {
+    try {
+      detail.requestPayload = typeof axiosErr.config.data === 'string'
+        ? JSON.parse(axiosErr.config.data)
+        : axiosErr.config.data
+    } catch {
+      detail.requestPayload = axiosErr.config.data
+    }
+  }
+  if (axiosErr.response?.status) detail.responseStatus = axiosErr.response.status
+  if (axiosErr.response?.data !== undefined) detail.responseBody = axiosErr.response.data
+  if (axiosErr.stack) detail.stack = axiosErr.stack
+
+  return Object.keys(detail).length > 0 ? detail : undefined
 }
 
 export const useSyncService = defineStore('syncService', () => {
@@ -79,7 +116,8 @@ export const useSyncService = defineStore('syncService', () => {
       addHistoryEntry({
         timestamp: new Date().toISOString(),
         success: false,
-        error: message
+        error: message,
+        debug: extractDebugDetail(error)
       })
       return false
     } finally {

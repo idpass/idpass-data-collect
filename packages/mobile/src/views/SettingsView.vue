@@ -116,6 +116,31 @@ const devHandleClickClearData = async () => {
               {{ entry.success ? 'OK' : 'Failed' }}
             </span>
           </div>
+          <template v-if="isDevelop && entry.debug">
+            <div class="settings-divider"></div>
+            <div class="debug-detail">
+              <div v-if="entry.debug.requestUrl" class="debug-row">
+                <span class="debug-label">URL</span>
+                <span class="debug-value">{{ entry.debug.requestUrl }}</span>
+              </div>
+              <div v-if="entry.debug.responseStatus" class="debug-row">
+                <span class="debug-label">Status</span>
+                <span class="debug-value">{{ entry.debug.responseStatus }}</span>
+              </div>
+              <div v-if="entry.debug.responseBody" class="debug-row">
+                <span class="debug-label">Response</span>
+                <pre class="debug-pre">{{ JSON.stringify(entry.debug.responseBody, null, 2) }}</pre>
+              </div>
+              <div v-if="entry.debug.requestPayload" class="debug-row">
+                <span class="debug-label">Request</span>
+                <pre class="debug-pre">{{ JSON.stringify(entry.debug.requestPayload, null, 2) }}</pre>
+              </div>
+              <div v-if="entry.debug.stack" class="debug-row">
+                <span class="debug-label">Stack</span>
+                <pre class="debug-pre">{{ entry.debug.stack }}</pre>
+              </div>
+            </div>
+          </template>
         </template>
       </div>
     </section>
@@ -261,5 +286,48 @@ const devHandleClickClearData = async () => {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.debug-detail {
+  padding: 8px 16px 12px;
+  background: var(--neutral-50, #f8f9fa);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.debug-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.debug-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-muted, #64748b);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.debug-value {
+  font-size: 0.75rem;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  color: var(--text-main, #1a202c);
+  word-break: break-all;
+}
+
+.debug-pre {
+  font-size: 0.7rem;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  background: #0f172a;
+  color: #f8fafc;
+  border-radius: 6px;
+  padding: 8px;
+  margin: 0;
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 </style>
