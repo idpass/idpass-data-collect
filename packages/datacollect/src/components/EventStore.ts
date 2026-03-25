@@ -34,6 +34,16 @@ const log = createLogger("EventStore");
 const HASH_V2_PREFIX = "v2:";
 
 /**
+ * Version prefix for hash anchors that exclude mutable operational metadata
+ * (syncLevel) from the hash computation. The v2 algorithm included syncLevel,
+ * which changes from LOCAL → REMOTE during sync, causing false tamper detection
+ * on app restart after a successful sync.
+ *
+ * @private
+ */
+const HASH_V3_PREFIX = "v3:";
+
+/**
  * Computes a SHA256 hash of the given data string.
  *
  * @private
@@ -71,10 +81,12 @@ function deterministicStringify(value: unknown): string {
 }
 
 /**
- * Extracts only the canonical FormSubmission fields from an event for hashing.
- * Storage adapters may add extra fields (e.g., IndexedDB auto-increment `id`),
- * which must be excluded to keep the hash chain consistent between save-time
- * and verification-time.
+ * Extracts only the immutable canonical FormSubmission fields from an event
+ * for hashing. Storage adapters may add extra fields (e.g., IndexedDB
+ * auto-increment `id`), and operational metadata like `syncLevel` changes
+ * during normal sync operations (LOCAL → REMOTE → EXTERNAL). Both are
+ * excluded to keep the hash chain consistent between save-time and
+ * verification-time.
  *
  * Timestamps are normalized to canonical ISO 8601 format to prevent
  * precision differences across storage backends from breaking the chain.
@@ -91,6 +103,9 @@ function normalizeEventForHash(event: FormSubmission): FormSubmission {
     normalizedTimestamp = parsed.toISOString();
   }
 
+  // syncLevel is deliberately excluded: it is mutable operational metadata
+  // that changes from LOCAL → REMOTE during sync. Including it caused false
+  // tamper detection on app restart after successful sync operations.
   const normalized: FormSubmission = {
     guid: event.guid,
     entityGuid: event.entityGuid,
@@ -98,7 +113,7 @@ function normalizeEventForHash(event: FormSubmission): FormSubmission {
     data: event.data,
     timestamp: normalizedTimestamp,
     userId: event.userId,
-    syncLevel: event.syncLevel,
+    syncLevel: SyncLevel.LOCAL,
   };
   if (event.schemaVersion !== undefined) {
     normalized.schemaVersion = event.schemaVersion;
@@ -215,9 +230,9 @@ export class EventStoreImpl implements EventStore {
     await this.rebuildHashChain();
 
     if (rawAnchor !== null && rawAnchor !== "" && this.latestHash !== "") {
-      if (rawAnchor.startsWith(HASH_V2_PREFIX)) {
-        // Current algorithm — strict tamper check
-        const persistedHash = rawAnchor.slice(HASH_V2_PREFIX.length);
+      if (rawAnchor.startsWith(HASH_V3_PREFIX)) {
+        // v3 algorithm — strict tamper check (excludes mutable syncLevel)
+        const persistedHash = rawAnchor.slice(HASH_V3_PREFIX.length);
         if (persistedHash !== this.latestHash) {
           log.error(
             { persistedHash, recomputedHash: this.latestHash },
@@ -225,18 +240,22 @@ export class EventStoreImpl implements EventStore {
           );
           throw new Error("Event store integrity check failed: hash chain has been tampered with");
         }
+      } else if (rawAnchor.startsWith(HASH_V2_PREFIX)) {
+        // v2 anchor included syncLevel in the hash, which changes during sync
+        // and caused false tamper detection. Migrate to v3 algorithm.
+        log.info("Migrating hash anchor from v2 to v3 algorithm (excludes mutable syncLevel)");
       } else {
         // Legacy anchor (no version prefix) — the old algorithm used non-deterministic
         // JSON.stringify which breaks on PostgreSQL JSONB key reordering. Migrate
         // gracefully by re-persisting with the deterministic algorithm.
-        log.info("Migrating hash anchor from legacy format to deterministic v2 algorithm");
+        log.info("Migrating hash anchor from legacy format to v3 algorithm");
       }
     }
 
     // Persist the current hash anchor with version prefix so future restarts
-    // can detect tampering using the deterministic algorithm.
+    // can detect tampering using the v3 algorithm.
     if (this.latestHash !== "") {
-      await this.storageAdapter.persistHashAnchor(HASH_V2_PREFIX + this.latestHash);
+      await this.storageAdapter.persistHashAnchor(HASH_V3_PREFIX + this.latestHash);
     }
   }
 
@@ -281,7 +300,7 @@ export class EventStoreImpl implements EventStore {
           }
           const guids = await this.storageAdapter.saveEvents([formToSave]);
           this.latestHash = this.computeNextHash(formToSave);
-          await this.storageAdapter.persistHashAnchor(HASH_V2_PREFIX + this.latestHash);
+          await this.storageAdapter.persistHashAnchor(HASH_V3_PREFIX + this.latestHash);
           resolve(guids[0]);
         } catch (error) {
           reject(error);
