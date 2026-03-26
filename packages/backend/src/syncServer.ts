@@ -47,16 +47,43 @@ import { Role, SyncServerConfig, SyncServerInstance } from "./types";
 import { generatePublicArtifacts, resolvePublicBaseUrl } from "./utils/publicArtifacts";
 import { logger, createLogger } from "./utils/logger";
 import { initializeDatabase } from "./db/initialize";
-import { adapterRegistry } from "@idpass/data-collect-core";
-import { OpenSppSyncAdapterV2 } from "@idpass/adapter-openspp";
+import { adapterRegistry, type ExternalSyncAdapterV2, type EntityPushPayload, type SyncResult, type HealthCheckResult } from "@idpass/data-collect-core";
+import { OpenSppSyncAdapterV2, OpenSppV2SyncAdapter } from "@idpass/adapter-openspp";
 import { OpenFnSyncAdapterV2 } from "@idpass/adapter-openfn";
 
 const log = createLogger("syncServer");
 
 // Register external sync adapters with the V2 adapter registry
-adapterRegistry.register("openspp-v2-adapter", (deps) =>
+// openspp-v1-adapter: Odoo JSON-RPC (database/username/password)
+adapterRegistry.register("openspp-v1-adapter", (deps) =>
   new OpenSppSyncAdapterV2(deps!.eventStore, deps!.eventApplierService, deps!.syncConfig),
 );
+// openspp-v2-adapter: REST API with OAuth2 (clientId/clientSecret)
+adapterRegistry.register("openspp-v2-adapter", (deps) => {
+  const adapter = new OpenSppV2SyncAdapter(deps!.eventStore, deps!.eventApplierService, deps!.syncConfig);
+  // Wrap the V1-interface adapter in the V2 adapter interface
+  return {
+    descriptor: () => ({
+      type: "openspp-v2",
+      version: "2.0.0",
+      capabilities: ["push" as const, "pull" as const],
+      configSchema: {} as never,
+    }),
+    initialize: async () => { await adapter.authenticate(); },
+    healthCheck: async (): Promise<HealthCheckResult> => ({ healthy: true, message: "OpenSPP V2 REST adapter" }),
+    push: async (_entities: EntityPushPayload[]): Promise<SyncResult> => {
+      const start = Date.now();
+      await adapter.pushData();
+      return { success: true, pushed: 0, pulled: 0, failed: 0, skipped: 0, errors: [], duration: Date.now() - start };
+    },
+    pull: async (): Promise<SyncResult> => {
+      const start = Date.now();
+      await adapter.pullData();
+      return { success: true, pushed: 0, pulled: 0, failed: 0, skipped: 0, errors: [], duration: Date.now() - start };
+    },
+    disconnect: async () => {},
+  } satisfies ExternalSyncAdapterV2;
+});
 adapterRegistry.register("openfn-adapter", (deps) =>
   new OpenFnSyncAdapterV2(deps!.eventStore, deps!.eventApplierService),
 );

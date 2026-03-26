@@ -133,7 +133,7 @@ describe("OpenSppSyncAdapterV2", () => {
 
       await expect(
         adapter.initialize({ url: "http://example.com" }),
-      ).rejects.toThrow("OpenSPP config requires either");
+      ).rejects.toThrow("Invalid OpenSPP config");
     });
 
     it("throws with empty strings", async () => {
