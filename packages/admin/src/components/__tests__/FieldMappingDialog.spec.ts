@@ -25,7 +25,12 @@ import type { ParsedOpenSppField, FieldMapping } from '@/api'
 // Vuetify v-dialog teleports content to document.body.
 // Mounting with attachTo ensures the dialog content is in the DOM tree.
 const wrappers: VueWrapper[] = []
-function mountDialog(props: Record<string, unknown>) {
+function mountDialog(props: {
+  modelValue: boolean
+  formFields: Array<{ key: string; label: string }>
+  opensppFields: ParsedOpenSppField[]
+  existingMappings?: FieldMapping[]
+}) {
   const w = mount(FieldMappingDialog, {
     props,
     attachTo: document.body,
