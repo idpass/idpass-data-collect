@@ -128,7 +128,7 @@ test.describe('JSON Config Upload', () => {
     })
 
     // Click the import button to open the dialog
-    await page.locator('.v-btn:has(.mdi-upload)').click()
+    await page.locator('.v-btn.v-btn--icon:has(.mdi-upload)').click()
     await expect(page.locator('.v-dialog')).toBeVisible()
 
     // Upload the file
@@ -148,7 +148,7 @@ test.describe('JSON Config Upload', () => {
     const filePath = writeTmpJson('invalid.json', { invalid: true })
 
     // Click the import button
-    await page.locator('.v-btn:has(.mdi-upload)').click()
+    await page.locator('.v-btn.v-btn--icon:has(.mdi-upload)').click()
     await expect(page.locator('.v-dialog')).toBeVisible()
 
     // Upload the invalid file (missing id and name)
@@ -217,7 +217,7 @@ test.describe('JSON Config Upload', () => {
     })
 
     // Click the import button
-    await page.locator('.v-btn:has(.mdi-upload)').click()
+    await page.locator('.v-btn.v-btn--icon:has(.mdi-upload)').click()
     await expect(page.locator('.v-dialog')).toBeVisible()
 
     const fileInput = page.locator('input[type="file"]')
