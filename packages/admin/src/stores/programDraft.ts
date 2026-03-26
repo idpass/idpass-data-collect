@@ -589,7 +589,7 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
     const generatedId = getGeneratedId()
     if (!generatedId) return null
     try {
-      const result = await getAppsApi({ search: generatedId, pageSize: 1 })
+      const result = await getAppsApi({ search: generatedId, pageSize: 10 })
       if (result.data.some((app) => app.id === generatedId)) {
         return generatedId
       }

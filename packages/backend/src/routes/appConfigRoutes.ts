@@ -76,7 +76,11 @@ const AppConfigSchema = z.object({
       }),
     }).nullish(),
   }).nullish(),
-}).passthrough();
+  // Extra fields present in downloaded artifacts — accepted on upload but not persisted
+  syncServerUrl: z.string().nullish(),
+  artifactId: z.string().nullish(),
+  archivedAt: z.unknown().nullish(),
+});
 
 /** Strip directory separators and special characters from filenames to prevent path traversal */
 function sanitizeFilename(filename: string): string {
