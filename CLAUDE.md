@@ -10,7 +10,7 @@ All principles are in a `principles/*` directory
 
 ### Commands
 
-Refer to `package.json` scripts
+Package manager: PNPM. Refer to `package.json` scripts.
 
 ## Project Overview
 
@@ -113,3 +113,23 @@ Before committing:
 - [ ] New external adapters return `SyncResult` (never throw for per-entity errors)
 - [ ] Conventional commit format: `feat(mobile):`, `fix(backend):`, etc.
 - [ ] Single-line commit messages only — no body, description, or co-author trailers
+
+---
+
+### Playwright Browser Configuration
+If Chromium is not found in the usual places, check Flatpak as well and do not use `npx playwright install`. Use the system's **Chromium Flatpak** to avoid library compatibility issues with the host.
+
+| Setting | Value |
+| :--- | :--- |
+| **Executable Path** | `/usr/bin/flatpak` |
+| **Required Args** | `['run', 'org.chromium.Chromium', '--remote-debugging-port=9222']` |
+| **App ID** | `org.chromium.Chromium` |
+
+### Environment Setup
+* **Permissions**: Ensure the development environment has access to the `org.chromium.Chromium` bus. Use `flatpak-spawn --host` if running from within another Flatpak container (like VS Code).
+* **Binary Discovery**: Always prefer absolute paths for system binaries (e.g., `/usr/bin/flatpak`) as `$PATH` can vary between the host and containerized shells.
+
+### Troubleshooting Commands
+* **Verify Installation**: `flatpak list --app | grep Chromium`
+* **Test Launch**: `flatpak run org.chromium.Chromium --version`
+* **Check Sandbox**: If launch fails, add `--no-sandbox` to the Playwright `args` array.
