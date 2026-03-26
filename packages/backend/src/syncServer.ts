@@ -71,6 +71,7 @@ adapterRegistry.register("openspp-v2-adapter", (deps) => {
     }),
     initialize: async () => { await adapter.authenticate(); },
     healthCheck: async (): Promise<HealthCheckResult> => ({ healthy: true, message: "OpenSPP V2 REST adapter" }),
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     push: async (_entities: EntityPushPayload[]): Promise<SyncResult> => {
       const start = Date.now();
       await adapter.pushData();
