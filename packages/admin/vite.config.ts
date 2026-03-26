@@ -32,16 +32,5 @@ export default defineConfig({
       '.up.railway.app', // Railway
       '.ts.net', // Tailscale
     ],
-    // Proxy OpenSPP V2 API to avoid CORS when testing against localhost:8069
-    // In Docker: use OPENSPP_PROXY_TARGET env var (e.g., http://openspp:8069)
-    // On host: defaults to http://localhost:8069
-    proxy: {
-      '/api/openspp-proxy': {
-        target: process.env.OPENSPP_PROXY_TARGET || 'http://localhost:8069',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/openspp-proxy/, ''),
-        secure: false,
-      },
-    },
   },
 })
