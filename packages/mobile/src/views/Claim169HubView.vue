@@ -4,18 +4,11 @@ import { usePlatform } from '@/platform'
 
 const router = useRouter()
 const { isNative } = usePlatform()
-
-const handleBack = () => {
-  router.back()
-}
 </script>
 
 <template>
   <div class="hub">
     <div class="hub-nav">
-      <button class="hub-back" type="button" @click="handleBack" aria-label="Back to Tools">
-        <v-icon size="22">mdi-arrow-left</v-icon>
-      </button>
       <span class="hub-nav-title">Claim-169</span>
     </div>
 

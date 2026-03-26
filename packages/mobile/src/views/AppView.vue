@@ -69,10 +69,6 @@ onUnmounted(() => {
   }
 })
 
-const onBack = () => {
-  router.replace({ name: 'home' })
-}
-
 const onLogout = async () => {
   await handleAuthError(route.params.id as string)
 }
@@ -113,8 +109,7 @@ const stats = computed(() => [
 
 <template>
   <v-container v-if="tenantapp" fluid class="pa-4">
-    <div class="d-flex justify-space-between align-center mb-4">
-      <v-btn icon="mdi-arrow-left" variant="tonal" size="small" @click="onBack" aria-label="Back to Collection Programs" />
+    <div class="d-flex justify-end align-center mb-4">
       <div class="d-flex ga-2">
         <v-btn
           prepend-icon="mdi-sync"

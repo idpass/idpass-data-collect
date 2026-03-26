@@ -116,7 +116,6 @@ const credentialInfo = computed(() => {
   return fields
 })
 
-const handleBack = () => router.back()
 const handleScanAnother = () => router.push({ name: 'scan-claim169' })
 
 const saveToApp = async (app: TenantAppData) => {
@@ -174,7 +173,6 @@ const handleSaveToRecords = () => {
 <template>
   <v-container v-if="verifiedIdentity" fluid class="pa-4">
     <div class="d-flex align-center ga-3 mb-4">
-      <v-btn icon="mdi-arrow-left" variant="tonal" size="small" @click="handleBack" aria-label="Go back" />
       <span class="text-h6 font-weight-bold">Identity Details</span>
     </div>
 

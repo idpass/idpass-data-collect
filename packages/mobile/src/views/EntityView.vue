@@ -172,10 +172,6 @@ onMounted(async () => {
   }
 })
 
-const onBack = () => {
-  navigateToParent()
-}
-
 const statusConfig = (status: SubmissionStatus) => {
   switch (status) {
     case 'synced': return { label: 'Synced', color: 'success', icon: 'mdi-check-circle' }
@@ -207,8 +203,7 @@ const formatTimestamp = (timestamp: string) => {
 
 <template>
   <v-container v-if="tenantapp" fluid class="pa-4">
-    <div class="d-flex justify-space-between align-center mb-4">
-      <v-btn icon="mdi-arrow-left" variant="tonal" size="small" @click="onBack" aria-label="Back to forms" />
+    <div class="d-flex justify-end align-center mb-4">
       <div class="d-flex align-center ga-2">
         <v-chip size="small" color="info" variant="tonal">{{ entityForm?.displayTemplate || 'Form' }}</v-chip>
         <v-chip v-if="isOffline" size="x-small" color="warning" variant="tonal" prepend-icon="mdi-wifi-off">

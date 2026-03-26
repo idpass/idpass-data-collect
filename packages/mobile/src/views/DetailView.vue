@@ -58,10 +58,6 @@ onMounted(async () => {
   }
 })
 
-const onBack = () => {
-  navigateToEntityList()
-}
-
 const formatEventType = (type: string) => {
   return type
     .split('-')
@@ -99,13 +95,10 @@ const getEntityName = () => {
 
 <template>
   <v-container v-if="tenantapp && storedEntityData" fluid class="pa-4">
-    <div class="d-flex justify-space-between align-center mb-4">
-      <div class="d-flex align-center ga-2">
-        <v-btn icon="mdi-arrow-left" variant="tonal" size="small" @click="onBack" aria-label="Back to submissions" />
-        <v-chip v-if="isOffline" size="x-small" color="warning" variant="tonal" prepend-icon="mdi-wifi-off">
-          Offline
-        </v-chip>
-      </div>
+    <div v-if="isOffline" class="d-flex justify-end align-center mb-4">
+      <v-chip size="x-small" color="warning" variant="tonal" prepend-icon="mdi-wifi-off">
+        Offline
+      </v-chip>
     </div>
 
     <v-card elevation="2" class="mb-4">

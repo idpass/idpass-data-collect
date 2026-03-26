@@ -94,15 +94,11 @@ const onSubmit = async (submission: FormSubmissionEvent) => {
   navigateToEntityList()
 }
 
-const onBack = () => {
-  navigateToEntityList()
-}
 </script>
 
 <template>
   <v-container v-if="tenantapp && formio" fluid class="pa-4">
-    <div class="d-flex justify-space-between align-center mb-4">
-      <v-btn icon="mdi-arrow-left" variant="tonal" size="small" @click="onBack" aria-label="Back to submissions" />
+    <div class="d-flex justify-end align-center mb-4">
       <div class="d-flex align-center ga-2">
         <v-chip size="small" color="info" variant="tonal">
           {{ entityForm?.displayTemplate || entityTypeLabel }}

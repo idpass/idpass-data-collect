@@ -18,10 +18,22 @@ onMounted(async () => {
 })
 
 const hiddenNavRoutes = ['login', 'app-login', 'oidc-login', 'callback']
+const rootRoutes = ['home', 'tools', 'settings']
 
 const showBottomNav = computed(() => {
   return !hiddenNavRoutes.includes(route.name as string)
 })
+
+const showBackButton = computed(() => {
+  const name = route.name as string
+  if (rootRoutes.includes(name)) return false
+  if (name === 'callback') return false
+  return true
+})
+
+const onGlobalBack = () => {
+  router.back()
+}
 
 const activeTab = computed(() => {
   const name = route.name as string
@@ -43,6 +55,15 @@ const activeTab = computed(() => {
     <LockScreen v-if="AppLockService.locked.value" />
 
     <v-app-bar flat color="surface" border="b" class="app-bar-safe">
+      <v-btn
+        v-if="showBackButton"
+        icon="mdi-arrow-left"
+        variant="text"
+        size="small"
+        class="ml-1"
+        aria-label="Go back"
+        @click="onGlobalBack"
+      />
       <v-app-bar-title class="text-subtitle-1 font-weight-bold">
         ID PASS DataCollect
       </v-app-bar-title>

@@ -105,10 +105,6 @@ const onSubmit = async (submission: any) => {
   navigateToDetail()
 }
 
-const onBack = () => {
-  navigateToDetail()
-}
-
 const onFormError = (error: unknown) => {
   console.error('Form.io renderer error:', error)
 }
@@ -116,8 +112,7 @@ const onFormError = (error: unknown) => {
 
 <template>
   <v-container v-if="storedEntityData" fluid class="pa-4">
-    <div class="d-flex justify-space-between align-center mb-4">
-      <v-btn icon="mdi-arrow-left" variant="tonal" size="small" @click="onBack" aria-label="Back" />
+    <div class="d-flex justify-end align-center mb-4">
       <div class="d-flex align-center ga-2">
         <v-chip size="small" color="info" variant="tonal">
           {{ entityForm?.displayTemplate || 'Edit' }}

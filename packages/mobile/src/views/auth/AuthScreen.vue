@@ -124,10 +124,6 @@ const authenticate = async (provider: string) => {
   }
 }
 
-const onBack = () => {
-  router.push(`/`)
-}
-
 const getProviderName = (provider: string) => {
   const config = authProviders.value.find((c) => c.type === provider)
   return config?.type || provider.charAt(0).toUpperCase() + provider.slice(1)
@@ -147,15 +143,6 @@ const onLogin = async () => {
 </script>
 
 <template>
-  <div class="pa-3">
-    <v-btn
-      v-if="!isCallback"
-      icon="mdi-arrow-left"
-      variant="text"
-      @click="onBack"
-      aria-label="Back"
-    />
-  </div>
   <AuthContainer>
     <div class="py-4">
       <!-- Callback processing state -->
