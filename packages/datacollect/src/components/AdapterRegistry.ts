@@ -51,7 +51,7 @@ export type AdapterFactory = (deps?: AdapterDeps) => ExternalSyncAdapterV2;
  * import { adapterRegistry } from "@idpass/data-collect-core";
  *
  * // Register an adapter
- * adapterRegistry.register("openspp", () => new OpenSppSyncAdapterV2(eventStore, eventApplierService));
+ * adapterRegistry.register("openspp", () => new OpenSppOdooSyncAdapter(eventStore, eventApplierService));
  *
  * // Create an instance
  * const adapter = adapterRegistry.create("openspp");
@@ -150,7 +150,7 @@ export class AdapterRegistry {
  * External adapter packages register their adapters at import time:
  * ```typescript
  * import { adapterRegistry } from "@idpass/data-collect-core";
- * adapterRegistry.register("openspp", () => new OpenSppSyncAdapterV2(...));
+ * adapterRegistry.register("openspp", () => new OpenSppOdooSyncAdapter(...));
  * ```
  */
 export const adapterRegistry = new AdapterRegistry();

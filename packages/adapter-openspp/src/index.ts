@@ -32,5 +32,5 @@ export { OpenSppV2Client } from "./v2/OpenSppV2Client";
 export { default as OpenSppV2SyncAdapter } from "./v2/OpenSppV2SyncAdapter";
 export * from "./v2/types";
 
-// V2 Adapter Interface Implementation
-export { OpenSppSyncAdapterV2 } from "./OpenSppSyncAdapterV2";
+// Odoo JSON-RPC adapter implementing the V2 adapter interface
+export { OpenSppOdooSyncAdapter } from "./OpenSppOdooSyncAdapter";

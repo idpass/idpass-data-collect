@@ -34,7 +34,7 @@ jest.mock("../../../datacollect/src/utils/logger", () => ({
 
 import type { EventStore, ExternalSyncConfig } from "@idpass/data-collect-core";
 import { EventApplierService } from "@idpass/data-collect-core";
-import { OpenSppSyncAdapterV2 } from "../OpenSppSyncAdapterV2";
+import { OpenSppOdooSyncAdapter } from "../OpenSppOdooSyncAdapter";
 import { runAdapterConformanceTests } from "../../../datacollect/src/interfaces/__tests__/adapterConformance";
 
 const mockOdooClientImplementation = {
@@ -92,7 +92,7 @@ function createMocks() {
   return { eventStore, eventApplierService, mockEntityStore, config };
 }
 
-describe("OpenSppSyncAdapterV2", () => {
+describe("OpenSppOdooSyncAdapter", () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -100,7 +100,7 @@ describe("OpenSppSyncAdapterV2", () => {
   describe("descriptor()", () => {
     it("returns correct metadata", () => {
       const { eventStore, eventApplierService, config } = createMocks();
-      const adapter = new OpenSppSyncAdapterV2(eventStore, eventApplierService, config);
+      const adapter = new OpenSppOdooSyncAdapter(eventStore, eventApplierService, config);
       const descriptor = adapter.descriptor();
 
       expect(descriptor.type).toBe("openspp");
@@ -113,7 +113,7 @@ describe("OpenSppSyncAdapterV2", () => {
   describe("initialize()", () => {
     it("succeeds with valid config", async () => {
       const { eventStore, eventApplierService, config } = createMocks();
-      const adapter = new OpenSppSyncAdapterV2(eventStore, eventApplierService, config);
+      const adapter = new OpenSppOdooSyncAdapter(eventStore, eventApplierService, config);
 
       await expect(
         adapter.initialize({
@@ -129,7 +129,7 @@ describe("OpenSppSyncAdapterV2", () => {
 
     it("throws with missing required fields", async () => {
       const { eventStore, eventApplierService, config } = createMocks();
-      const adapter = new OpenSppSyncAdapterV2(eventStore, eventApplierService, config);
+      const adapter = new OpenSppOdooSyncAdapter(eventStore, eventApplierService, config);
 
       await expect(
         adapter.initialize({ url: "http://example.com" }),
@@ -138,7 +138,7 @@ describe("OpenSppSyncAdapterV2", () => {
 
     it("throws with empty strings", async () => {
       const { eventStore, eventApplierService, config } = createMocks();
-      const adapter = new OpenSppSyncAdapterV2(eventStore, eventApplierService, config);
+      const adapter = new OpenSppOdooSyncAdapter(eventStore, eventApplierService, config);
 
       await expect(
         adapter.initialize({
@@ -154,7 +154,7 @@ describe("OpenSppSyncAdapterV2", () => {
   describe("healthCheck()", () => {
     it("returns healthy when authenticated", async () => {
       const { eventStore, eventApplierService, config } = createMocks();
-      const adapter = new OpenSppSyncAdapterV2(eventStore, eventApplierService, config);
+      const adapter = new OpenSppOdooSyncAdapter(eventStore, eventApplierService, config);
 
       await adapter.initialize({
         url: "http://openspp.example.com",
@@ -170,7 +170,7 @@ describe("OpenSppSyncAdapterV2", () => {
 
     it("returns not healthy when not initialized", async () => {
       const { eventStore, eventApplierService, config } = createMocks();
-      const adapter = new OpenSppSyncAdapterV2(eventStore, eventApplierService, config);
+      const adapter = new OpenSppOdooSyncAdapter(eventStore, eventApplierService, config);
 
       const result = await adapter.healthCheck();
       expect(result.healthy).toBe(false);
@@ -181,7 +181,7 @@ describe("OpenSppSyncAdapterV2", () => {
   describe("push()", () => {
     it("returns success with empty entities", async () => {
       const { eventStore, eventApplierService, config } = createMocks();
-      const adapter = new OpenSppSyncAdapterV2(eventStore, eventApplierService, config);
+      const adapter = new OpenSppOdooSyncAdapter(eventStore, eventApplierService, config);
 
       await adapter.initialize({
         url: "http://openspp.example.com",
@@ -199,7 +199,7 @@ describe("OpenSppSyncAdapterV2", () => {
 
     it("pushes individual entities", async () => {
       const { eventStore, eventApplierService, config, mockEntityStore } = createMocks();
-      const adapter = new OpenSppSyncAdapterV2(eventStore, eventApplierService, config);
+      const adapter = new OpenSppOdooSyncAdapter(eventStore, eventApplierService, config);
 
       mockOdooClientImplementation.createIndividual.mockResolvedValue(300);
       mockEntityStore.getEntity.mockResolvedValue(null);
@@ -228,7 +228,7 @@ describe("OpenSppSyncAdapterV2", () => {
 
     it("skips non-individual entity types", async () => {
       const { eventStore, eventApplierService, config } = createMocks();
-      const adapter = new OpenSppSyncAdapterV2(eventStore, eventApplierService, config);
+      const adapter = new OpenSppOdooSyncAdapter(eventStore, eventApplierService, config);
 
       await adapter.initialize({
         url: "http://openspp.example.com",
@@ -253,7 +253,7 @@ describe("OpenSppSyncAdapterV2", () => {
 
     it("returns error when not initialized", async () => {
       const { eventStore, eventApplierService, config } = createMocks();
-      const adapter = new OpenSppSyncAdapterV2(eventStore, eventApplierService, config);
+      const adapter = new OpenSppOdooSyncAdapter(eventStore, eventApplierService, config);
 
       const result = await adapter.push([
         {
@@ -273,7 +273,7 @@ describe("OpenSppSyncAdapterV2", () => {
   describe("pull()", () => {
     it("pulls and transforms individuals", async () => {
       const { eventStore, eventApplierService, config } = createMocks();
-      const adapter = new OpenSppSyncAdapterV2(eventStore, eventApplierService, config);
+      const adapter = new OpenSppOdooSyncAdapter(eventStore, eventApplierService, config);
 
       const mockIndividuals = [
         {
@@ -308,7 +308,7 @@ describe("OpenSppSyncAdapterV2", () => {
 
     it("returns error when not initialized", async () => {
       const { eventStore, eventApplierService, config } = createMocks();
-      const adapter = new OpenSppSyncAdapterV2(eventStore, eventApplierService, config);
+      const adapter = new OpenSppOdooSyncAdapter(eventStore, eventApplierService, config);
 
       const result = await adapter.pull();
 
@@ -319,7 +319,7 @@ describe("OpenSppSyncAdapterV2", () => {
 
     it("handles fetch errors gracefully", async () => {
       const { eventStore, eventApplierService, config } = createMocks();
-      const adapter = new OpenSppSyncAdapterV2(eventStore, eventApplierService, config);
+      const adapter = new OpenSppOdooSyncAdapter(eventStore, eventApplierService, config);
 
       mockOdooClientImplementation.fetchIndividualsSince.mockRejectedValue(new Error("Network error"));
 
@@ -340,7 +340,7 @@ describe("OpenSppSyncAdapterV2", () => {
   describe("disconnect()", () => {
     it("cleans up resources", async () => {
       const { eventStore, eventApplierService, config } = createMocks();
-      const adapter = new OpenSppSyncAdapterV2(eventStore, eventApplierService, config);
+      const adapter = new OpenSppOdooSyncAdapter(eventStore, eventApplierService, config);
 
       await adapter.initialize({
         url: "http://openspp.example.com",
@@ -361,11 +361,11 @@ describe("OpenSppSyncAdapterV2", () => {
 
 // Run conformance tests
 runAdapterConformanceTests(
-  "OpenSppSyncAdapterV2",
+  "OpenSppOdooSyncAdapter",
   () => {
     const { eventStore, eventApplierService, config } = createMocks();
     return {
-      adapter: new OpenSppSyncAdapterV2(eventStore, eventApplierService, config),
+      adapter: new OpenSppOdooSyncAdapter(eventStore, eventApplierService, config),
       validConfig: {
         url: "http://openspp.example.com",
         database: "openspp",

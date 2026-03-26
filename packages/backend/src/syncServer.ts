@@ -48,7 +48,7 @@ import { generatePublicArtifacts, resolvePublicBaseUrl } from "./utils/publicArt
 import { logger, createLogger } from "./utils/logger";
 import { initializeDatabase } from "./db/initialize";
 import { adapterRegistry, type ExternalSyncAdapterV2, type EntityPushPayload, type SyncResult, type HealthCheckResult } from "@idpass/data-collect-core";
-import { OpenSppSyncAdapterV2, OpenSppV2SyncAdapter } from "@idpass/adapter-openspp";
+import { OpenSppOdooSyncAdapter, OpenSppV2SyncAdapter } from "@idpass/adapter-openspp";
 import { OpenFnSyncAdapterV2 } from "@idpass/adapter-openfn";
 
 const log = createLogger("syncServer");
@@ -56,7 +56,7 @@ const log = createLogger("syncServer");
 // Register external sync adapters with the V2 adapter registry
 // openspp-v1-adapter: Odoo JSON-RPC (database/username/password)
 adapterRegistry.register("openspp-v1-adapter", (deps) =>
-  new OpenSppSyncAdapterV2(deps!.eventStore, deps!.eventApplierService, deps!.syncConfig),
+  new OpenSppOdooSyncAdapter(deps!.eventStore, deps!.eventApplierService, deps!.syncConfig),
 );
 // openspp-v2-adapter: REST API with OAuth2 (clientId/clientSecret)
 adapterRegistry.register("openspp-v2-adapter", (deps) => {

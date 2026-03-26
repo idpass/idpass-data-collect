@@ -67,7 +67,7 @@ const openSppConfigSchema = z.object({
  * V2 adapter contract, providing config validation, health checks, and
  * structured sync results.
  */
-export class OpenSppSyncAdapterV2 implements ExternalSyncAdapterV2 {
+export class OpenSppOdooSyncAdapter implements ExternalSyncAdapterV2 {
   private odooClient: InstanceType<typeof OdooClient> | null = null;
   private config: z.infer<typeof openSppConfigSchema> | null = null;
   private options: OpenSppAdapterOptions;
