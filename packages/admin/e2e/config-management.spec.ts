@@ -60,7 +60,7 @@ test.describe('Config Management', () => {
     await page.goto('/login')
     await page.fill('input[name="username"]', 'admin@example.com')
     await page.fill('input[type="password"]', 'password')
-    await page.locator('.v-btn:has-text("Login")').click()
+    await page.locator('.v-btn:has-text("Sign in")').click()
 
     // After successful login, should navigate to home
     await expect(page).toHaveURL('/')

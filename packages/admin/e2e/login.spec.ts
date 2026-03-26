@@ -46,7 +46,7 @@ test.describe('Admin Login Flow', () => {
 
     await page.fill('input[name="username"]', 'invalid@example.com')
     await page.fill('input[type="password"]', 'wrongpassword')
-    await page.locator('button[type="submit"], .v-btn:has-text("Login")').first().click()
+    await page.locator('button[type="submit"], .v-btn:has-text("Sign in")').first().click()
 
     await expect(
       page.locator('text=Invalid username or password').or(page.locator('text=An error occurred')),
@@ -67,7 +67,7 @@ test.describe('Admin Login Flow', () => {
     await page.goto('/login')
     await page.fill('input[name="username"]', 'admin@example.com')
     await page.fill('input[type="password"]', 'password')
-    await page.locator('.v-btn:has-text("Login")').click()
+    await page.locator('.v-btn:has-text("Sign in")').click()
 
     // The button should show a loading state (Vuetify adds v-btn--loading)
     await expect(page.locator('.v-btn--loading')).toBeVisible()
