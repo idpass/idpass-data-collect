@@ -110,7 +110,7 @@ describeIfPostgres("Auth e2e", () => {
 
   describe("User management (admin-only)", () => {
     const userEmail = "e2e-user@test.lan";
-    const userPassword = "user-password-123";
+    const userPassword = "User-password-123!";
 
     it("admin can create a new user", async () => {
       const res = await request(app.httpServer)

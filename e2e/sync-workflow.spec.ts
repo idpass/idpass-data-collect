@@ -32,7 +32,7 @@ const WEB_URL = process.env.WEB_URL || 'http://localhost:5174'
 
 const TEST_CONFIG_ID = `e2e-sync-${Date.now()}`
 const FIELDWORKER_EMAIL = `e2e-sync-fw-${Date.now()}@datacollect.lan`
-const FIELDWORKER_PASSWORD = 'synctest123!'
+const FIELDWORKER_PASSWORD = 'Synctest123!'
 
 const testConfig: AppConfig = {
   id: TEST_CONFIG_ID,

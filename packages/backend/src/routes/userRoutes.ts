@@ -27,16 +27,24 @@ import { verifyRoleFromDatabase } from "../middlewares/rbac";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { Role, UserStore } from "../types";
 
+const PASSWORD_RULES = z
+  .string()
+  .min(8, "Password must be at least 8 characters")
+  .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+  .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+  .regex(/[0-9]/, "Password must contain at least one number")
+  .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character");
+
 const CreateUserSchema = z.object({
   email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: PASSWORD_RULES,
   role: z.nativeEnum(Role),
   tenantIds: z.array(z.string()).optional().default([]),
 });
 
 const UpdateUserSchema = z.object({
   email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters").optional(),
+  password: PASSWORD_RULES.optional(),
   role: z.nativeEnum(Role),
   tenantIds: z.array(z.string()).optional(),
 });
@@ -46,7 +54,7 @@ const loginLimiter = rateLimit({
   limit: 15, // 15 attempts per window
   standardHeaders: "draft-7",
   legacyHeaders: false,
-  message: { message: "Too many login attempts, please try again later" },
+  message: { error: "Too many login attempts, please try again later" },
 });
 
 export function createUserRoutes(userStore: UserStore): Router {
@@ -60,11 +68,11 @@ export function createUserRoutes(userStore: UserStore): Router {
       const { email, password } = req.body;
       const user = await userStore.getUser(email);
       if (!user) {
-        return res.status(401).json({ message: "Invalid email or password" });
+        return res.status(401).json({ error: "Invalid email or password" });
       }
       const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
       if (!isPasswordValid) {
-        return res.status(401).json({ message: "Invalid email or password" });
+        return res.status(401).json({ error: "Invalid email or password" });
       }
 
       // generate JWT token with id, email, role, tenantIds, and roleAssignments
@@ -94,7 +102,7 @@ export function createUserRoutes(userStore: UserStore): Router {
       const decoded = (req as AuthenticatedRequest).user;
       const user = await userStore.getUser(decoded.email);
       if (!user) {
-        return res.status(401).json({ message: "User no longer exists" });
+        return res.status(401).json({ error: "User no longer exists" });
       }
 
       const token = jwt.sign(
@@ -124,7 +132,8 @@ export function createUserRoutes(userStore: UserStore): Router {
     asyncHandler(async (req, res) => {
       const parseResult = CreateUserSchema.safeParse(req.body);
       if (!parseResult.success) {
-        return res.status(400).json({ message: "Invalid user data", errors: parseResult.error.issues });
+        const messages = parseResult.error.issues.map((i) => i.message);
+        return res.status(400).json({ error: messages.join(". "), details: parseResult.error.issues });
       }
       const { email, password, role, tenantIds } = parseResult.data;
       const saltRounds = 10;
@@ -144,12 +153,13 @@ export function createUserRoutes(userStore: UserStore): Router {
       const { id } = req.params;
       const parseResult = UpdateUserSchema.safeParse(req.body);
       if (!parseResult.success) {
-        return res.status(400).json({ message: "Invalid user data", errors: parseResult.error.issues });
+        const messages = parseResult.error.issues.map((i) => i.message);
+        return res.status(400).json({ error: messages.join(". "), details: parseResult.error.issues });
       }
       const { email, password, role, tenantIds } = parseResult.data;
       const user = await userStore.getUserById(parseInt(id));
       if (!user) {
-        return res.status(404).json({ message: "User not found" });
+        return res.status(404).json({ error: "User not found" });
       }
       // Only hash the password if it's provided; otherwise keep the existing hash
       const saltRounds = 10;
@@ -180,7 +190,7 @@ export function createUserRoutes(userStore: UserStore): Router {
     asyncHandler(async (req, res) => {
       const user = await userStore.getUser((req as AuthenticatedRequest).user.email);
       if (!user) {
-        return res.status(404).json({ message: "User not found" });
+        return res.status(404).json({ error: "User not found" });
       }
 
       // eslint-disable-next-line @typescript-eslint/no-unused-vars

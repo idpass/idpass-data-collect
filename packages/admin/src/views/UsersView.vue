@@ -22,6 +22,7 @@ interface UserRecord {
 const snackBarStore = useSnackBarStore()
 
 // State
+const userForm = ref<{ validate: () => Promise<{ valid: boolean }> } | null>(null)
 const loading = ref(false)
 const users = ref<UserRecord[]>([])
 const tenants = ref<AppListItem[]>([])
@@ -47,6 +48,24 @@ const granularRoles = [
   { title: 'Enumerator', value: 'enumerator' },
   { title: 'Viewer', value: 'viewer' },
 ]
+
+const passwordRules = [
+  (v: string) => {
+    if (editedIndex.value > -1 && !v) return true // optional when editing
+    if (!v) return 'Password is required'
+    if (v.length < 8) return 'Must be at least 8 characters'
+    if (!/[A-Z]/.test(v)) return 'Must contain at least one uppercase letter'
+    if (!/[a-z]/.test(v)) return 'Must contain at least one lowercase letter'
+    if (!/[0-9]/.test(v)) return 'Must contain at least one number'
+    if (!/[^A-Za-z0-9]/.test(v)) return 'Must contain at least one special character'
+    return true
+  },
+]
+
+const passwordHint = computed(() => {
+  if (editedIndex.value > -1) return 'Leave blank to keep current password'
+  return 'Min 8 characters with uppercase, lowercase, number, and special character'
+})
 
 const defaultItem: UserRecord & { password: string } = {
   id: '',
@@ -144,6 +163,10 @@ const removeRoleAssignment = (index: number) => {
 }
 
 const saveUser = async () => {
+  if (userForm.value) {
+    const { valid } = await userForm.value.validate()
+    if (!valid) return
+  }
   const isEditing = editedIndex.value > -1
   try {
     if (editedIndex.value > -1) {
@@ -240,6 +263,7 @@ onMounted(() => {
             <v-card-title class="text-h6">{{ formTitle }}</v-card-title>
 
             <v-card-text>
+              <v-form ref="userForm">
               <div class="user-form">
                 <v-text-field
                   v-model="editedItem.email"
@@ -256,7 +280,8 @@ onMounted(() => {
                   variant="outlined"
                   density="comfortable"
                   :required="editedIndex === -1"
-                  :hint="editedIndex > -1 ? 'Leave blank to keep current password' : ''"
+                  :rules="passwordRules"
+                  :hint="passwordHint"
                   persistent-hint
                 />
                 <v-select
@@ -337,6 +362,7 @@ onMounted(() => {
                   </v-card>
                 </div>
               </div>
+              </v-form>
             </v-card-text>
 
             <v-card-actions>

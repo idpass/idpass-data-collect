@@ -35,7 +35,7 @@ const ADMIN_PASSWORD =
 
 const TEST_CONFIG_ID = `e2e-lifecycle-${Date.now()}`
 const FIELDWORKER_EMAIL = `e2e-fw-${Date.now()}@datacollect.lan`
-const FIELDWORKER_PASSWORD = 'testpassword123!'
+const FIELDWORKER_PASSWORD = 'Testpassword123!'
 
 const testConfig: AppConfig = {
   id: TEST_CONFIG_ID,
