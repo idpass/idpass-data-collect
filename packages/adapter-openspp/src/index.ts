@@ -17,20 +17,17 @@
  * under the License.
  */
 
-// OpenSPP V1 (Odoo JSON-RPC)
+// OpenSPP V1 — Odoo JSON-RPC adapter
 export { default as OdooClient } from "./OdooClient";
 export type { OdooConfig } from "./odoo-types";
 export * from "./odoo-types";
 export * from "./OpenSppAdapterOptions";
-export { default as OpenSppSyncAdapter } from "./OpenSppSyncAdapter";
+export { OpenSppOdooSyncAdapter, OpenSppOdooSyncAdapter as OpenSppSyncAdapter } from "./OpenSppOdooSyncAdapter";
 export { IndividualTransformer } from "./pullTransformers/IndividualTransformer";
 export { HouseholdTransformer } from "./pullTransformers/HouseholdTransformer";
 export * from "./models";
 
-// OpenSPP V2 (REST API with OAuth2)
+// OpenSPP V2 — REST API with OAuth2 adapter
 export { OpenSppV2Client } from "./v2/OpenSppV2Client";
 export { default as OpenSppV2SyncAdapter } from "./v2/OpenSppV2SyncAdapter";
 export * from "./v2/types";
-
-// Odoo JSON-RPC adapter implementing the V2 adapter interface
-export { OpenSppOdooSyncAdapter } from "./OpenSppOdooSyncAdapter";
