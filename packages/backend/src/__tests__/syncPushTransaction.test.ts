@@ -219,46 +219,41 @@ describeIfPostgres("Transactional Sync Push", () => {
     expect(allEntities).toHaveLength(0);
   });
 
-  it("should handle duplicate event guids by rolling back", async () => {
+  it("should silently skip duplicate event guids (idempotent re-push)", async () => {
     const currentApp = requireApp();
     const sharedGuid = uuidv4();
-    const entityGuid1 = uuidv4();
-    const entityGuid2 = uuidv4();
+    const entityGuid = uuidv4();
 
-    const events: FormSubmission[] = [
-      {
-        guid: sharedGuid,
-        entityGuid: entityGuid1,
-        type: "create-individual",
-        data: { name: "Alice", age: 25 },
-        timestamp: "2024-01-01T00:00:01.000Z",
-        userId: "user-1",
-        syncLevel: SyncLevel.LOCAL,
-      },
-      {
-        // Duplicate GUID should cause a unique constraint violation
-        guid: sharedGuid,
-        entityGuid: entityGuid2,
-        type: "create-individual",
-        data: { name: "Bob", age: 30 },
-        timestamp: "2024-01-01T00:00:02.000Z",
-        userId: "user-1",
-        syncLevel: SyncLevel.LOCAL,
-      },
-    ];
+    const event: FormSubmission = {
+      guid: sharedGuid,
+      entityGuid,
+      type: "create-individual",
+      data: { name: "Alice", age: 25 },
+      timestamp: "2024-01-01T00:00:01.000Z",
+      userId: "user-1",
+      syncLevel: SyncLevel.LOCAL,
+    };
 
-    const response = await request(currentApp.httpServer)
+    // First push — should succeed
+    const response1 = await request(currentApp.httpServer)
       .post("/api/sync/push")
-      .send({ events, configId: mockConfig.id })
+      .send({ events: [event], configId: mockConfig.id })
       .set("Authorization", `Bearer ${adminToken}`);
 
-    expect(response.status).toBe(422);
-    expect(response.body.status).toBe("error");
-    expect(response.body.applied).toBe(0);
+    expect(response1.status).toBe(200);
+    expect(response1.body.applied).toBe(1);
 
-    // Verify nothing was persisted
+    // Second push with the same event — should succeed (idempotent, duplicate skipped)
+    const response2 = await request(currentApp.httpServer)
+      .post("/api/sync/push")
+      .send({ events: [event], configId: mockConfig.id })
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(response2.status).toBe(200);
+
+    // Only one entity should exist (the duplicate was skipped, not duplicated)
     const manager = (await currentApp.appInstanceStore.getAppInstance(mockConfig.id))?.edm;
     const allEntities = await manager?.getAllEntities();
-    expect(allEntities).toHaveLength(0);
+    expect(allEntities).toHaveLength(1);
   });
 });
