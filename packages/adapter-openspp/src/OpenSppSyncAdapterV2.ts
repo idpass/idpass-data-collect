@@ -51,9 +51,13 @@ import {
  */
 const openSppConfigSchema = z.object({
   url: z.string().min(1),
-  database: z.string().min(1),
-  username: z.string().min(1),
-  password: z.string().min(1),
+  // V1 Odoo JSON-RPC credentials
+  database: z.string().min(1).optional(),
+  username: z.string().min(1).optional(),
+  password: z.string().min(1).optional(),
+  // V2 REST OAuth2 credentials
+  clientId: z.string().min(1).optional(),
+  clientSecret: z.string().min(1).optional(),
   registrarGroup: z.string().optional(),
   batchSize: z.union([z.number(), z.string().transform(Number)]).optional(),
   batchDelayMs: z.union([z.number(), z.string().transform(Number)]).optional(),
@@ -112,6 +116,16 @@ export class OpenSppSyncAdapterV2 implements ExternalSyncAdapterV2 {
     }
 
     this.config = result.data;
+
+    // V2 REST/OAuth2 configs use clientId/clientSecret — Odoo client not needed
+    if (this.config.clientId && this.config.clientSecret) {
+      return;
+    }
+
+    // V1 Odoo JSON-RPC configs require database/username/password
+    if (!this.config.database || !this.config.username || !this.config.password) {
+      throw new Error("OpenSPP config requires either clientId/clientSecret (V2) or database/username/password (V1)");
+    }
 
     const odooConfig: OdooConfig = {
       host: this.config.url,
