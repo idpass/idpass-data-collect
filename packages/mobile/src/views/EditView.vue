@@ -96,7 +96,7 @@ const onSubmit = async (submission: any) => {
     data: {
       ...submission.data,
       entityName: entityForm.value.name,
-      name: submission.data.name || entityGuid
+      name: submission.data[entityForm.value.nameField || 'name'] || entityGuid
     },
     timestamp: new Date().toISOString(),
     userId: 'admin',

@@ -29,6 +29,7 @@ export interface EntityForm {
   title: string
   dependsOn: string
   entityType: '' | 'group' | 'individual' | 'record'
+  nameField: string
   formio: unknown
 }
 
@@ -275,6 +276,7 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
           ...f,
           dependsOn: f.dependsOn ?? '',
           entityType: f.entityType ?? '',
+          nameField: (f.nameField as string) ?? '',
         })),
         externalSync: {
           type: config.externalSync?.type,
@@ -317,6 +319,7 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
           ...f,
           dependsOn: f.dependsOn ?? '',
           entityType: f.entityType ?? '',
+          nameField: (f.nameField as string) ?? '',
         })),
         externalSync: {
           type: config.externalSync?.type,
@@ -535,6 +538,7 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
       title: '',
       dependsOn: '',
       entityType: '',
+      nameField: '',
       formio: null,
     })
   }
@@ -610,9 +614,10 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
         description: draft.value.description,
         version: draft.value.version,
         entityForms: draft.value.entityForms.map((form) => {
-          const { entityType, ...rest } = form
+          const { entityType, nameField, ...rest } = form
           const withId = { id: form.name, ...rest }
-          return entityType ? { ...withId, entityType } : withId
+          const withType = entityType ? { ...withId, entityType } : withId
+          return nameField ? { ...withType, nameField } : withType
         }),
         externalSync: draft.value.externalSync,
         authConfigs: draft.value.authConfigs,
@@ -666,6 +671,7 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
       title: form.title,
       dependsOn: form.dependsOn ?? '',
       entityType: '',
+      nameField: '',
       formio: form.formio,
     }))
     errors.value.forms = { items: {} }

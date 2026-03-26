@@ -26,6 +26,7 @@ Here's a simple example of an entity form with explanations for each field:
     {
       "name": "individual",
       "title": "Individual Registration",
+      "nameField": "fullName",
       "formio": {
         "components": [
           {
@@ -59,6 +60,7 @@ interface EntityForm {
   name: string;           // Unique identifier for the form
   title: string;          // Display name for the form
   dependsOn?: string;     // Parent entity form (for hierarchical relationships)
+  nameField?: string;     // Form field key used as entity display name
   formio: object;         // Form.io configuration object
 }
 ```
@@ -70,6 +72,8 @@ interface EntityForm {
 - **`title`**: The human-readable display name that appears in the UI (e.g., "Household Information", "Individual Member").
 
 - **`dependsOn`**: Optional field that establishes a parent-child relationship with another entity form. This enables hierarchical data structures.
+
+- **`nameField`**: Optional field that specifies which form field key should be used as the entity's display name. For example, if your form has a field with `key: "fullName"`, setting `nameField: "fullName"` will display "John Smith" instead of the entity's GUID. Falls back to the `name` key if not set, and to the entity GUID if neither exists. Can be configured in the admin wizard via the "Display Name Field" dropdown.
 
 - **`formio`**: The complete Form.io configuration object that defines the form's fields, validation rules, and behavior.
 

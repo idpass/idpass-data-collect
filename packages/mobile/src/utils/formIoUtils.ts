@@ -67,6 +67,7 @@ export interface EntityForm {
   description?: string
   dependsOn?: string
   entityType?: 'group' | 'individual' | 'record'
+  nameField?: string
   formio?: unknown
 }
 

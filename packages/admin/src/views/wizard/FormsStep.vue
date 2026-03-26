@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProgramDraftStore, type EntityForm } from '@/stores/programDraft'
 import { parseOpenSppProgramSpecification } from '@/utils/openSppImport'
+import { getFormFields } from '@/utils/formioFields'
 import { useSnackBarStore } from '@/stores/snackBar'
 
 const router = useRouter()
@@ -262,6 +263,21 @@ const onSpecFileSelection = async (value: File[] | File | null) => {
               >
                 A dependent form set as "Group" is unusual. Groups are typically top-level entities.
               </v-alert>
+            </v-col>
+            <v-col v-if="getFormFields(form.formio).length > 0" cols="12" sm="6">
+              <v-select
+                v-model="form.nameField"
+                :items="getFormFields(form.formio)"
+                item-title="label"
+                item-value="key"
+                label="Display Name Field"
+                placeholder="Select field to use as entity name"
+                hint="The field used as the entity's display name. Without this, entities show their ID."
+                persistent-hint
+                variant="outlined"
+                density="compact"
+                clearable
+              />
             </v-col>
           </v-row>
 
