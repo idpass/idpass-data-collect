@@ -185,7 +185,7 @@ describeIfPostgres("Health and Security endpoints", () => {
         .send({ email: "admin@example.com", password: "wrong-password" });
 
       expect(response.status).toBe(401);
-      expect(response.body.message).toBe("Invalid email or password");
+      expect(response.body.error).toBe("Invalid email or password");
     });
 
     it("returns 401 on non-existent email", async () => {
@@ -195,7 +195,7 @@ describeIfPostgres("Health and Security endpoints", () => {
         .send({ email: "nonexistent@example.com", password: "any-password" });
 
       expect(response.status).toBe(401);
-      expect(response.body.message).toBe("Invalid email or password");
+      expect(response.body.error).toBe("Invalid email or password");
     });
   });
 
