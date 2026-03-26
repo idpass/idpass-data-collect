@@ -96,9 +96,15 @@ export async function processTransactionalBatch(
         const eventApplierService = new EventApplierService(eventStore, entityStore);
         const edm = new EntityDataManager(eventStore, entityStore, eventApplierService);
 
-        // Process each event sequentially within the transaction
+        // Process each event sequentially within the transaction.
+        // Skip events that already exist (idempotent re-push after client crash).
         for (let i = 0; i < events.length; i++) {
           try {
+            if (await eventStore.isEventExisted(events[i].guid)) {
+              log.info({ eventGuid: events[i].guid }, "Skipping duplicate event (already exists)");
+              batchApplied++;
+              continue;
+            }
             await edm.submitForm(events[i]);
             batchApplied++;
           } catch (error) {
