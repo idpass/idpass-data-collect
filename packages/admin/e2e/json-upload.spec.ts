@@ -225,7 +225,8 @@ test.describe('JSON Config Upload', () => {
 
     await page.locator('.v-dialog .v-btn:has-text("Import")').click()
 
-    // Should show duplicate ID error
-    await expect(page.locator('.v-dialog')).toContainText('already exists')
+    // Should show duplicate confirmation dialog
+    await expect(page.getByRole('dialog').filter({ hasText: 'Program Already Exists' })).toBeVisible()
+    await expect(page.getByRole('dialog').filter({ hasText: 'Program Already Exists' })).toContainText('already exists')
   })
 })
