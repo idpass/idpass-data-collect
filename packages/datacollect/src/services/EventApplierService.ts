@@ -716,7 +716,7 @@ export class EventApplierService {
     group.name = formData.data.name || group.name;
     group.data.name = group.name || "Unnamed Group";
 
-    if (formData.data?.members) {
+    if (Array.isArray(formData.data?.members)) {
       // log.debug(`Processing members: ${JSON.stringify(formData.data.members)}`);
       const newMemberIds = await Promise.all(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
