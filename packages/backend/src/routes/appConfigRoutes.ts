@@ -33,28 +33,28 @@ const isTest = process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID !==
 const AppConfigSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  description: z.string().optional(),
-  version: z.string().optional(),
-  url: z.string().optional(),
+  description: z.string().nullish(),
+  version: z.string().nullish(),
+  url: z.string().nullish(),
   entityForms: z.array(z.object({
     id: z.string(),
     name: z.string(),
     title: z.string(),
-    dependsOn: z.string().optional(),
+    dependsOn: z.string().nullish(),
     formio: z.record(z.string(), z.unknown()),
-  })).optional(),
+  })).nullish(),
   entityData: z.array(z.object({
     name: z.string(),
     data: z.array(z.object({
       id: z.string(),
       name: z.string(),
     }).passthrough()),
-  })).optional(),
-  externalSync: z.record(z.string(), z.unknown()).optional(),
+  })).nullish(),
+  externalSync: z.record(z.string(), z.unknown()).nullish(),
   authConfigs: z.array(z.object({
     type: z.string(),
     fields: z.record(z.string(), z.string()),
-  })).optional(),
+  })).nullish(),
   selfService: z.object({
     enabled: z.boolean(),
     authMethods: z.array(z.enum(["otp", "id", "qr", "oidc"])),
@@ -66,16 +66,16 @@ const AppConfigSchema = z.object({
       clientId: z.string().min(1),
       redirectUri: z.string().url(),
       scope: z.string().min(1),
-      acrValues: z.string().optional(),
+      acrValues: z.string().nullish(),
       entityMapping: z.object({
         primaryClaim: z.string().min(1),
-        fallbackClaim: z.string().optional(),
+        fallbackClaim: z.string().nullish(),
         entityField: z.string().min(1),
-        fallbackField: z.string().optional(),
+        fallbackField: z.string().nullish(),
       }),
-    }).optional(),
-  }).optional(),
-});
+    }).nullish(),
+  }).nullish(),
+}).passthrough();
 
 /** Strip directory separators and special characters from filenames to prevent path traversal */
 function sanitizeFilename(filename: string): string {

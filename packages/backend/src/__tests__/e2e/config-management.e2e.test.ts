@@ -147,6 +147,103 @@ describeIfPostgres("Config management e2e", () => {
     });
   });
 
+  describe("Download then re-upload (round-trip)", () => {
+    const roundTripId = "e2e-roundtrip";
+    const roundTripConfig: AppConfig = {
+      id: roundTripId,
+      name: "Round Trip Config",
+      description: "Config for round-trip test",
+      version: "1.0.0",
+      entityForms: [
+        {
+          id: "rt-form",
+          title: "RT Form",
+          formio: { components: [] },
+          name: "RT Form",
+          dependsOn: "",
+        },
+      ],
+    };
+
+    afterAll(async () => {
+      for (const id of [roundTripId, `${roundTripId}-reup`, `${roundTripId}-nulls`]) {
+        await request(app.httpServer)
+          .delete(`/api/apps/${id}/purge`)
+          .set("Authorization", `Bearer ${adminToken}`)
+          .catch(() => {});
+      }
+    });
+
+    it("uploads a config, downloads the artifact, and re-uploads it successfully", async () => {
+      // Step 1: Upload the config
+      const uploadPath = await writeTempConfig(roundTripConfig);
+      const createRes = await request(app.httpServer)
+        .post("/api/apps")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .attach("config", uploadPath, { contentType: "application/json" });
+
+      expect(createRes.status).toBe(200);
+      const { artifactId } = createRes.body;
+      expect(artifactId).toBeTruthy();
+
+      // Step 2: Download the public artifact JSON
+      const downloadRes = await request(app.httpServer)
+        .get(`/artifacts/${artifactId}.json`);
+
+      expect(downloadRes.status).toBe(200);
+      const downloadedConfig = downloadRes.body;
+      expect(downloadedConfig.id).toBe(roundTripId);
+      expect(downloadedConfig.syncServerUrl).toBeDefined();
+
+      // Step 3: Re-upload the downloaded JSON as a new config (with different id)
+      const reuploadConfig = { ...downloadedConfig, id: `${roundTripId}-reup`, name: "Re-uploaded Config" };
+      const reuploadPath = await writeTempConfig(reuploadConfig as AppConfig);
+      const reuploadRes = await request(app.httpServer)
+        .post("/api/apps")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .attach("config", reuploadPath, { contentType: "application/json" });
+
+      expect(reuploadRes.status).toBe(200);
+      expect(reuploadRes.body.status).toBe("success");
+
+      // Cleanup the re-uploaded config
+      await request(app.httpServer)
+        .delete(`/api/apps/${roundTripId}-reup/purge`)
+        .set("Authorization", `Bearer ${adminToken}`);
+    });
+
+    it("re-uploads a downloaded config with null fields successfully", async () => {
+      // Simulate a downloaded config with null optional fields (as the DB returns them)
+      const configWithNulls = {
+        id: `${roundTripId}-nulls`,
+        name: "Nulls Test",
+        description: null,
+        version: null,
+        url: null,
+        entityForms: [],
+        entityData: null,
+        externalSync: null,
+        authConfigs: null,
+        syncServerUrl: "http://localhost:3000",
+        artifactId: "some-artifact-id",
+      };
+      const filePath = await writeTempConfig(configWithNulls as unknown as AppConfig);
+
+      const res = await request(app.httpServer)
+        .post("/api/apps")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .attach("config", filePath, { contentType: "application/json" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("success");
+
+      // Cleanup
+      await request(app.httpServer)
+        .delete(`/api/apps/${roundTripId}-nulls/purge`)
+        .set("Authorization", `Bearer ${adminToken}`);
+    });
+  });
+
   describe("Config validation", () => {
     it("rejects POST without a file", async () => {
       const res = await request(app.httpServer)
