@@ -91,12 +91,12 @@ const navigateToParent = () => {
     if (parentGuid && parentEntity) {
       const baseParts = parts.slice(0, -2)
       const basePath = baseParts.length ? baseParts.join('/') + '/' : ''
-      router.push(`/app/${appId}/${basePath}${parentEntity}/${parentGuid}/detail`)
+      router.replace(`/app/${appId}/${basePath}${parentEntity}/${parentGuid}/detail`)
     } else {
-      router.push({ name: 'app', params: { id: appId } })
+      router.replace({ name: 'app', params: { id: appId } })
     }
   } else {
-    router.push({ name: 'app', params: { id: appId } })
+    router.replace({ name: 'app', params: { id: appId } })
   }
 }
 

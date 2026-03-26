@@ -70,7 +70,7 @@ onUnmounted(() => {
 })
 
 const onBack = () => {
-  router.push({ name: 'home' })
+  router.replace({ name: 'home' })
 }
 
 const onLogout = async () => {

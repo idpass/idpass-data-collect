@@ -35,7 +35,7 @@ const navigateToEntityList = () => {
   const entity = route.params.entity as string
   const rest = route.params.rest as string | undefined
   const basePath = rest ? `/app/${appId}/${rest}${entity}` : `/app/${appId}/${entity}`
-  router.push(basePath)
+  router.replace(basePath)
 }
 
 onMounted(async () => {

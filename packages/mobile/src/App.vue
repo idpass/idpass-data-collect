@@ -17,10 +17,10 @@ onMounted(async () => {
   await AppLockService.init()
 })
 
-const topLevelRoutes = ['home', 'tools', 'settings', 'claim169-hub']
+const hiddenNavRoutes = ['login', 'app-login', 'oidc-login', 'callback']
 
 const showBottomNav = computed(() => {
-  return topLevelRoutes.includes(route.name as string)
+  return !hiddenNavRoutes.includes(route.name as string)
 })
 
 const activeTab = computed(() => {
@@ -28,6 +28,8 @@ const activeTab = computed(() => {
   if (name === 'home') return 'home'
   if (name === 'tools' || name === 'claim169-hub') return 'tools'
   if (name === 'settings') return 'settings'
+  // App/entity routes highlight Home since programs are launched from there
+  if (route.path.startsWith('/app/')) return 'home'
   return undefined
 })
 </script>

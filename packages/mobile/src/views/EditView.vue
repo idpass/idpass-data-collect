@@ -26,7 +26,7 @@ const navigateToDetail = () => {
   const guid = route.params.guid as string
   const rest = route.params.rest as string | undefined
   const basePath = rest ? `/app/${appId}/${rest}${entity}` : `/app/${appId}/${entity}`
-  router.push(`${basePath}/${guid}/detail`)
+  router.replace(`${basePath}/${guid}/detail`)
 }
 
 onMounted(async () => {
