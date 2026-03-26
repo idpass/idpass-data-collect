@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProgramDraftStore } from '@/stores/programDraft'
 import { useSnackBarStore } from '@/stores/snackBar'
@@ -9,6 +9,8 @@ const draftStore = useProgramDraftStore()
 const snackBarStore = useSnackBarStore()
 
 const isSubmitting = computed(() => draftStore.isSaving)
+const showDuplicateDialog = ref(false)
+const duplicateId = ref('')
 
 // Validate on mount rather than on every render
 onMounted(() => {
@@ -63,6 +65,25 @@ const submitProgram = async () => {
     return
   }
 
+  // Check for duplicate before creating
+  if (draftStore.mode !== 'edit') {
+    const existingId = await draftStore.checkDuplicate()
+    if (existingId) {
+      duplicateId.value = existingId
+      showDuplicateDialog.value = true
+      return
+    }
+  }
+
+  await doSubmit()
+}
+
+const confirmOverwrite = async () => {
+  showDuplicateDialog.value = false
+  await doSubmit()
+}
+
+const doSubmit = async () => {
   try {
     const success = await draftStore.submit()
     if (success) {
@@ -280,6 +301,24 @@ const submitProgram = async () => {
         {{ draftStore.mode === 'edit' ? 'Update Program' : 'Create Program' }}
       </v-btn>
     </div>
+
+    <!-- Duplicate Program Confirmation Dialog -->
+    <v-dialog v-model="showDuplicateDialog" :max-width="480">
+      <v-card>
+        <v-card-title class="text-h6">Program Already Exists</v-card-title>
+        <v-card-text>
+          <p>
+            A program with this name already exists (ID: <strong>{{ duplicateId }}</strong>).
+            Continuing will overwrite the existing program. Do you want to proceed?
+          </p>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="showDuplicateDialog = false">Cancel</v-btn>
+          <v-btn color="warning" variant="tonal" @click="confirmOverwrite">Overwrite</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 

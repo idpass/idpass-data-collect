@@ -19,7 +19,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import { getApp, createApp as createAppApi, updateApp as updateAppApi, type FieldMapping } from '@/api'
+import { getApp, getApps as getAppsApi, createApp as createAppApi, updateApp as updateAppApi, type FieldMapping } from '@/api'
 import type { OpenSppV2Field } from '@/api/opensppV2'
 import type { ExternalSyncField } from '@idpass/data-collect-core'
 
@@ -573,6 +573,28 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
     draft.value.authConfigs.splice(index, 1)
   }
 
+  // Returns the generated config ID for the current draft
+  const getGeneratedId = (): string => {
+    if (mode.value === 'edit' && editingId.value) return editingId.value
+    return draft.value.name.toLowerCase().replace(/ /g, '-')
+  }
+
+  // Check if a program with the same generated ID already exists
+  const checkDuplicate = async (): Promise<string | null> => {
+    if (mode.value === 'edit') return null
+    const generatedId = getGeneratedId()
+    if (!generatedId) return null
+    try {
+      const result = await getAppsApi({ search: generatedId, pageSize: 1 })
+      if (result.data.some((app) => app.id === generatedId)) {
+        return generatedId
+      }
+    } catch {
+      // If check fails, proceed without blocking
+    }
+    return null
+  }
+
   // Submit
   const submit = async (): Promise<boolean> => {
     if (!validateAll()) {
@@ -583,7 +605,7 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
     try {
       const config = {
         artifactId: draft.value.artifactId || undefined,
-        id: mode.value === 'edit' && editingId.value ? editingId.value : draft.value.name.toLowerCase().replace(/ /g, '-'),
+        id: getGeneratedId(),
         name: draft.value.name,
         description: draft.value.description,
         version: draft.value.version,
@@ -699,6 +721,7 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
     removeAuthConfig,
 
     // Submit
+    checkDuplicate,
     submit,
 
     // Import

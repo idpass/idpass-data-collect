@@ -160,25 +160,36 @@ const showImportDialog = ref(false)
 const jsonFile = ref<File | null>(null)
 const jsonFileError = ref<string | null>(null)
 const isUploadingJson = ref(false)
+const showDuplicateConfirm = ref(false)
+const pendingImportJson = ref<Record<string, unknown> | null>(null)
+const pendingDuplicateId = ref('')
 
-const uploadJsonConfig = async () => {
+const uploadJsonConfig = async (force = false) => {
   if (!jsonFile.value) return
 
   isUploadingJson.value = true
   jsonFileError.value = null
 
   try {
-    const text = await jsonFile.value.text()
-    const json = JSON.parse(text)
+    let json: Record<string, unknown>
+    if (force && pendingImportJson.value) {
+      json = pendingImportJson.value
+    } else {
+      const text = await jsonFile.value.text()
+      json = JSON.parse(text)
 
-    if (!json || typeof json !== 'object') {
-      throw new Error('Invalid configuration format')
+      if (!json || typeof json !== 'object') {
+        throw new Error('Invalid configuration format')
+      }
     }
 
-    if (json.id) {
-      const existingApps = await getAppsApi({ search: json.id, pageSize: 1 })
+    if (!force && json.id) {
+      const existingApps = await getAppsApi({ search: json.id as string, pageSize: 1 })
       if (existingApps.data.some((app) => app.id === json.id)) {
-        jsonFileError.value = `A collection program with ID "${json.id}" already exists.`
+        pendingImportJson.value = json
+        pendingDuplicateId.value = json.id as string
+        isUploadingJson.value = false
+        showDuplicateConfirm.value = true
         return
       }
     }
@@ -192,8 +203,10 @@ const uploadJsonConfig = async () => {
 
     await createAppApi(formData)
     showImportDialog.value = false
+    showDuplicateConfirm.value = false
     jsonFile.value = null
     jsonFileError.value = null
+    pendingImportJson.value = null
     snackBarStore.showSnackbar('Collection program imported successfully', 'success')
     fetchApps()
   } catch (error) {
@@ -210,6 +223,16 @@ const uploadJsonConfig = async () => {
   } finally {
     isUploadingJson.value = false
   }
+}
+
+const confirmImportOverwrite = () => {
+  showDuplicateConfirm.value = false
+  uploadJsonConfig(true)
+}
+
+const cancelDuplicateConfirm = () => {
+  showDuplicateConfirm.value = false
+  pendingImportJson.value = null
 }
 
 const handleActivityClick = (activity: ActivityItem) => {
@@ -434,10 +457,28 @@ onBeforeUnmount(() => {
             color="primary"
             :loading="isUploadingJson"
             :disabled="!jsonFile || isUploadingJson"
-            @click="uploadJsonConfig"
+            @click="uploadJsonConfig()"
           >
             Import
           </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Duplicate Program Confirmation Dialog -->
+    <v-dialog v-model="showDuplicateConfirm" :max-width="480">
+      <v-card>
+        <v-card-title class="text-h6">Program Already Exists</v-card-title>
+        <v-card-text>
+          <p>
+            A program with this name already exists (ID: <strong>{{ pendingDuplicateId }}</strong>).
+            Continuing will overwrite the existing program. Do you want to proceed?
+          </p>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="cancelDuplicateConfirm">Cancel</v-btn>
+          <v-btn color="warning" variant="tonal" @click="confirmImportOverwrite">Overwrite</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
