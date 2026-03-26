@@ -25,7 +25,7 @@
  * for mapping configuration.
  */
 
-import axios, { type AxiosInstance } from 'axios'
+import axios from 'axios'
 
 /**
  * OAuth2 token response from the token endpoint
@@ -107,31 +107,6 @@ export interface OpenSppV2ClientConfig {
   clientSecret: string
 }
 
-const DEV_PROXY_KEY = 'datacollect:dev-proxy'
-
-/**
- * Check if development proxy is enabled via UI toggle.
- */
-function isDevProxyEnabled(): boolean {
-  if (!import.meta.env.DEV) return false
-  if (typeof window === 'undefined') return false
-  return localStorage.getItem(`${DEV_PROXY_KEY}:enabled`) === 'true'
-}
-
-/**
- * Resolve the base URL for OpenSPP API calls.
- * In development mode with proxy enabled, routes through Vite dev server.
- */
-function resolveBaseUrl(baseUrl: string): string {
-  if (!import.meta.env.DEV) return baseUrl
-
-  if (isDevProxyEnabled() && typeof window !== 'undefined') {
-    return `${window.location.origin}/api/openspp-proxy`
-  }
-
-  return baseUrl
-}
-
 /**
  * Core fields available in Individual resources
  */
@@ -172,264 +147,71 @@ const GROUP_CORE_FIELDS: CoreField[] = [
 ]
 
 /**
- * OpenSPP V2 API Client
- *
- * Handles OAuth2 authentication and field fetching for the admin UI.
- */
-export class OpenSppV2Client {
-  private config: OpenSppV2ClientConfig
-  private axiosInstance: AxiosInstance
-  private accessToken: string | null = null
-  private tokenExpiresAt: number | null = null
-
-  constructor(config: OpenSppV2ClientConfig) {
-    this.config = config
-    const baseUrl = resolveBaseUrl(config.baseUrl).replace(/\/+$/, '')
-    this.axiosInstance = axios.create({
-      baseURL: baseUrl,
-      timeout: 30000,
-    })
-  }
-
-  /**
-   * Authenticate with the OpenSPP V2 API using OAuth2 client credentials
-   */
-  async authenticate(): Promise<OAuth2TokenResponse> {
-    const tokenUrl = '/api/v2/spp/oauth/token'
-
-    const response = await this.axiosInstance.post<OAuth2TokenResponse>(
-      tokenUrl,
-      {
-        grant_type: 'client_credentials',
-        client_id: this.config.clientId,
-        client_secret: this.config.clientSecret,
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
-    )
-
-    this.accessToken = response.data.access_token
-    this.tokenExpiresAt = Date.now() + (response.data.expires_in - 60) * 1000
-
-    return response.data
-  }
-
-  /**
-   * Check if the current token is valid
-   */
-  private isTokenValid(): boolean {
-    return !!(this.accessToken && this.tokenExpiresAt && Date.now() < this.tokenExpiresAt)
-  }
-
-  /**
-   * Ensure we have a valid access token
-   */
-  private async ensureAuthenticated(): Promise<void> {
-    if (!this.isTokenValid()) {
-      await this.authenticate()
-    }
-  }
-
-  /**
-   * Make an authenticated request
-   */
-  private async request<T>(method: 'get' | 'post', url: string, data?: unknown): Promise<T> {
-    await this.ensureAuthenticated()
-
-    const response = await this.axiosInstance.request<T>({
-      method,
-      url,
-      data,
-      headers: {
-        Authorization: `Bearer ${this.accessToken}`,
-        'Content-Type': 'application/json',
-      },
-    })
-
-    return response.data
-  }
-
-  /**
-   * Fetch Studio fields from the API
-   */
-  async getStudioFields(
-    targetType?: 'individual' | 'group',
-    count = 100,
-    lastId?: number
-  ): Promise<StudioFieldsResponse> {
-    const params = new URLSearchParams()
-    params.set('api_exposed_only', 'true')
-    params.set('_count', count.toString())
-
-    if (targetType) {
-      params.set('target_type', targetType)
-    }
-    if (lastId !== undefined) {
-      params.set('_lastId', lastId.toString())
-    }
-
-    return this.request<StudioFieldsResponse>(
-      'get',
-      `/api/v2/spp/Studio/fields?${params.toString()}`
-    )
-  }
-
-  /**
-   * Get all available fields (core + studio) for mapping
-   */
-  async getAllFields(): Promise<OpenSppV2Field[]> {
-    const fields: OpenSppV2Field[] = []
-
-    // Add core Individual fields
-    for (const field of INDIVIDUAL_CORE_FIELDS) {
-      fields.push({
-        name: field.name,
-        label: field.label,
-        type: field.type,
-        targetType: field.targetType,
-        required: field.required,
-        source: 'core',
-      })
-    }
-
-    // Add core Group fields
-    for (const field of GROUP_CORE_FIELDS) {
-      fields.push({
-        name: field.name,
-        label: field.label,
-        type: field.type,
-        targetType: field.targetType,
-        required: field.required,
-        source: 'core',
-      })
-    }
-
-    // Fetch Studio fields
-    try {
-      let lastId: number | undefined
-      let hasMore = true
-
-      while (hasMore) {
-        const response = await this.getStudioFields(undefined, 100, lastId)
-
-        for (const studioField of response.items) {
-          fields.push({
-            name: `extension.${studioField.technicalName}`,
-            label: studioField.label,
-            type: studioField.fieldType,
-            targetType: studioField.targetType,
-            required: studioField.isRequired,
-            source: 'studio',
-            selectionOptions: studioField.selectionOptions,
-          })
-        }
-
-        if (response.nextPageId) {
-          lastId = response.nextPageId
-        } else {
-          hasMore = false
-        }
-      }
-    } catch (error) {
-      // Studio fields are optional, continue with core fields only
-      console.warn('Failed to fetch Studio fields:', error)
-    }
-
-    return fields
-  }
-}
-
-/**
- * Test connection to OpenSPP V2 API
- *
- * Attempts to authenticate and returns the result.
+ * Test connection to OpenSPP V2 API via the backend.
+ * The backend makes the OAuth2 request server-side, avoiding CORS.
  */
 export async function testOpenSppV2Connection(
   config: OpenSppV2ClientConfig
 ): Promise<ConnectionTestResult> {
   try {
-    const client = new OpenSppV2Client(config)
-    const tokenResponse = await client.authenticate()
+    const { default: api } = await import('./index').then((m) => ({ default: m.instance }))
+    if (!api) throw new Error('API not initialized')
 
-    return {
-      success: true,
-      scopes: tokenResponse.scope?.split(' ') || [],
-    }
+    const response = await api.post('/api/openspp-fields/v2/test-connection', {
+      baseUrl: config.baseUrl,
+      clientId: config.clientId,
+      clientSecret: config.clientSecret,
+    })
+
+    return response.data as ConnectionTestResult
   } catch (error) {
-    let errorMessage = 'Connection failed'
+    const message = axios.isAxiosError(error)
+      ? error.response?.data?.error || error.message
+      : error instanceof Error ? error.message : 'Connection failed'
 
-    if (axios.isAxiosError(error)) {
-      if (error.response) {
-        const status = error.response.status
-        const data = error.response.data as { detail?: string; title?: string; message?: string }
-
-        if (status === 401) {
-          errorMessage = 'Invalid client credentials'
-        } else if (status === 403) {
-          errorMessage = 'Access denied - check client permissions'
-        } else if (status === 404) {
-          errorMessage = 'API endpoint not found - check the URL'
-        } else if (data?.detail) {
-          errorMessage = data.detail
-        } else if (data?.title) {
-          errorMessage = data.title
-        } else if (data?.message) {
-          errorMessage = data.message
-        } else {
-          errorMessage = `Server error (${status})`
-        }
-      } else if (error.code === 'ECONNREFUSED') {
-        errorMessage = 'Connection refused - check the URL'
-      } else if (error.code === 'ENOTFOUND') {
-        errorMessage = 'Server not found - check the URL'
-      } else if (error.code === 'ETIMEDOUT') {
-        errorMessage = 'Connection timed out'
-      } else if (error.message) {
-        errorMessage = error.message
-      }
-    } else if (error instanceof Error) {
-      errorMessage = error.message
-    }
-
-    return {
-      success: false,
-      error: errorMessage,
-    }
+    return { success: false, error: message }
   }
 }
 
 /**
- * Fetch all available fields from OpenSPP V2 API
- *
- * Returns core fields and Studio custom fields.
+ * Fetch all available fields from OpenSPP V2 API via the backend.
+ * Returns core fields (hardcoded) and Studio custom fields (fetched server-side).
  */
 export async function fetchOpenSppV2Fields(
   config: OpenSppV2ClientConfig
 ): Promise<{ fields: OpenSppV2Field[]; error?: string }> {
+  // Core fields are known statically — no server call needed
+  const fields: OpenSppV2Field[] = [
+    ...INDIVIDUAL_CORE_FIELDS.map((f) => ({
+      name: f.name, label: f.label, type: f.type, targetType: f.targetType,
+      required: f.required, source: 'core' as const,
+    })),
+    ...GROUP_CORE_FIELDS.map((f) => ({
+      name: f.name, label: f.label, type: f.type, targetType: f.targetType,
+      required: f.required, source: 'core' as const,
+    })),
+  ]
+
+  // Fetch Studio fields from the backend
   try {
-    const client = new OpenSppV2Client(config)
-    const fields = await client.getAllFields()
+    const { default: api } = await import('./index').then((m) => ({ default: m.instance }))
+    if (!api) throw new Error('API not initialized')
 
-    return { fields }
+    const response = await api.post('/api/openspp-fields/v2/fields', {
+      baseUrl: config.baseUrl,
+      clientId: config.clientId,
+      clientSecret: config.clientSecret,
+    })
+
+    const studioFields = (response.data as { fields: OpenSppV2Field[] }).fields
+    fields.push(...studioFields)
   } catch (error) {
-    let errorMessage = 'Failed to fetch fields'
+    const message = axios.isAxiosError(error)
+      ? error.response?.data?.error || error.message
+      : error instanceof Error ? error.message : 'Failed to fetch fields'
 
-    if (axios.isAxiosError(error)) {
-      if (error.response?.data?.detail) {
-        errorMessage = error.response.data.detail
-      } else if (error.message) {
-        errorMessage = error.message
-      }
-    } else if (error instanceof Error) {
-      errorMessage = error.message
-    }
-
-    return {
-      fields: [],
-      error: errorMessage,
-    }
+    return { fields, error: message }
   }
+
+  return { fields }
 }

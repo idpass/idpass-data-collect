@@ -17,7 +17,7 @@
   under the License.
 -->
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { useProgramDraftStore } from '@/stores/programDraft'
 import { useSnackBarStore } from '@/stores/snackBar'
 import AdapterConfigFields from '@/components/AdapterConfigFields.vue'
@@ -26,23 +26,6 @@ import { testOpenSppV2Connection } from '@/api/opensppV2'
 
 const draftStore = useProgramDraftStore()
 const snackBarStore = useSnackBarStore()
-
-const isDev = import.meta.env.DEV
-
-const DEV_PROXY_KEY = 'datacollect:dev-proxy'
-const useDevProxy = ref(
-  typeof localStorage !== 'undefined' && localStorage.getItem(`${DEV_PROXY_KEY}:enabled`) === 'true'
-)
-
-watch(
-  useDevProxy,
-  (enabled) => {
-    if (isDev && typeof localStorage !== 'undefined') {
-      localStorage.setItem(`${DEV_PROXY_KEY}:enabled`, String(enabled))
-    }
-  },
-  { flush: 'sync' }
-)
 
 const isTestingConnection = ref(false)
 const connectionStatus = ref<'idle' | 'success' | 'error'>('idle')
@@ -165,31 +148,6 @@ const getAdapterDescription = computed(() => {
         variant="outlined"
         density="comfortable"
       />
-
-      <!-- Development-only proxy configuration -->
-      <v-expand-transition>
-        <v-card
-          v-if="isDev"
-          variant="outlined"
-          class="form-section dev-options-card pa-4"
-          color="warning"
-        >
-          <v-card-title class="text-body-1 font-weight-medium pa-0 mb-2">
-            <v-icon start size="small">mdi-wrench</v-icon>
-            Developer Options
-          </v-card-title>
-          <v-card-text class="pa-0">
-            <v-switch
-              v-model="useDevProxy"
-              label="Use development proxy (bypass CORS)"
-              hint="Routes OpenSPP API requests through Vite dev server to avoid CORS issues"
-              persistent-hint
-              density="compact"
-              color="warning"
-            />
-          </v-card-text>
-        </v-card>
-      </v-expand-transition>
 
       <!-- Adapter-specific configuration -->
       <div v-if="draftStore.draft.externalSync.type" class="form-section">

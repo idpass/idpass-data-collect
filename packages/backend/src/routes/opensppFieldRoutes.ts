@@ -21,11 +21,14 @@ import { Router } from "express";
 import { URL } from "url";
 import { authenticateJWT } from "../middlewares/authentication";
 import { AppError, asyncHandler } from "../middlewares/errorHandlers";
+import { createLogger } from "../utils/logger";
 import multer from "multer";
 import path from "path";
 import fs from "fs/promises";
 // @ts-expect-error OdooClient was moved to @idpass/adapter-openspp; needs dependency wiring
 import { OdooClient } from "@idpass/data-collect-core";
+
+const log = createLogger("openspp-fields");
 
 /**
  * Checks whether a URL targets a private/internal IP range or cloud metadata endpoint.
@@ -407,6 +410,174 @@ export function createOpenSppFieldRoutes(): Router {
         }
         throw new AppError("Failed to fetch fields from Odoo API", 500);
       }
+    }),
+  );
+
+  /**
+   * Test connection to OpenSPP V2 API via OAuth2 client credentials.
+   * Authenticates server-side to avoid browser CORS issues.
+   */
+  router.post(
+    "/v2/test-connection",
+    authenticateJWT,
+    asyncHandler(async (req, res) => {
+      const { baseUrl, clientId, clientSecret } = req.body;
+
+      if (!baseUrl || !clientId || !clientSecret) {
+        throw new AppError("baseUrl, clientId, and clientSecret are required", 400);
+      }
+
+      if (isPrivateOrMetadataUrl(baseUrl)) {
+        throw new AppError("URLs targeting private or internal networks are not allowed", 400);
+      }
+
+      const tokenUrl = `${baseUrl.replace(/\/+$/, "")}/api/v2/spp/oauth/token`;
+
+      try {
+        const response = await fetch(tokenUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            grant_type: "client_credentials",
+            client_id: clientId,
+            client_secret: clientSecret,
+          }),
+        });
+
+        if (!response.ok) {
+          const status = response.status;
+          if (status === 401) {
+            return res.json({ success: false, error: "Invalid client credentials" });
+          }
+          if (status === 403) {
+            return res.json({ success: false, error: "Access denied - check client permissions" });
+          }
+          if (status === 404) {
+            return res.json({ success: false, error: "API endpoint not found - check the URL" });
+          }
+          return res.json({ success: false, error: `Server error (${status})` });
+        }
+
+        const data = await response.json() as { scope?: string };
+        res.json({
+          success: true,
+          scopes: data.scope?.split(" ") || [],
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Connection failed";
+        log.warn({ err: error, baseUrl }, "OpenSPP V2 connection test failed");
+        res.json({ success: false, error: message });
+      }
+    }),
+  );
+
+  /**
+   * Fetch fields from OpenSPP V2 API (core + Studio fields).
+   * Authenticates and fetches server-side to avoid browser CORS issues.
+   */
+  router.post(
+    "/v2/fields",
+    authenticateJWT,
+    asyncHandler(async (req, res) => {
+      const { baseUrl, clientId, clientSecret } = req.body;
+
+      if (!baseUrl || !clientId || !clientSecret) {
+        throw new AppError("baseUrl, clientId, and clientSecret are required", 400);
+      }
+
+      if (isPrivateOrMetadataUrl(baseUrl)) {
+        throw new AppError("URLs targeting private or internal networks are not allowed", 400);
+      }
+
+      const base = baseUrl.replace(/\/+$/, "");
+      const tokenUrl = `${base}/api/v2/spp/oauth/token`;
+
+      // Authenticate
+      let accessToken: string;
+      try {
+        const tokenResponse = await fetch(tokenUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            grant_type: "client_credentials",
+            client_id: clientId,
+            client_secret: clientSecret,
+          }),
+        });
+
+        if (!tokenResponse.ok) {
+          throw new AppError(`Authentication failed (${tokenResponse.status})`, 401);
+        }
+
+        const tokenData = await tokenResponse.json() as { access_token: string };
+        accessToken = tokenData.access_token;
+      } catch (error) {
+        if (error instanceof AppError) throw error;
+        throw new AppError(`Authentication failed: ${error instanceof Error ? error.message : "Unknown error"}`, 502);
+      }
+
+      // Fetch Studio fields with pagination
+      interface StudioField {
+        technicalName: string;
+        label: string;
+        fieldType: string;
+        targetType: "individual" | "group";
+        isRequired?: boolean;
+        selectionOptions?: Array<{ value: string; label: string }>;
+      }
+
+      const studioFields: StudioField[] = [];
+      try {
+        let lastId: number | undefined;
+        let hasMore = true;
+
+        while (hasMore) {
+          const params = new URLSearchParams({
+            api_exposed_only: "true",
+            _count: "100",
+          });
+          if (lastId !== undefined) {
+            params.set("_lastId", lastId.toString());
+          }
+
+          const fieldsResponse = await fetch(`${base}/api/v2/spp/Studio/fields?${params}`, {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+          });
+
+          if (!fieldsResponse.ok) break;
+
+          const fieldsData = await fieldsResponse.json() as {
+            items: StudioField[];
+            nextPageId?: number;
+          };
+
+          studioFields.push(...fieldsData.items);
+
+          if (fieldsData.nextPageId) {
+            lastId = fieldsData.nextPageId;
+          } else {
+            hasMore = false;
+          }
+        }
+      } catch (error) {
+        log.warn({ err: error }, "Failed to fetch Studio fields, returning core fields only");
+      }
+
+      // Map studio fields to the combined format
+      const fields = studioFields.map((f) => ({
+        name: `extension.${f.technicalName}`,
+        label: f.label,
+        type: f.fieldType,
+        targetType: f.targetType,
+        required: f.isRequired,
+        source: "studio" as const,
+        selectionOptions: f.selectionOptions,
+      }));
+
+      res.json({ fields });
     }),
   );
 
