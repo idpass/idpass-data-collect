@@ -1,12 +1,10 @@
 /**
- * Security tests: Tenant isolation vulnerabilities
+ * Security tests: Tenant isolation
  *
  * Tests cover:
- * 4. Attachment download lacks tenant isolation (HIGH)
- * 5. Cross-tenant review approval (HIGH)
- * 6. Entities route missing validateTenantAccess (HIGH)
- *
- * These tests MUST FAIL against the current codebase.
+ * - Entities route enforces tenant isolation via validateTenantAccess
+ * - Attachment download tenant isolation
+ * - Cross-tenant review approval prevention
  */
 import "dotenv/config";
 import fs from "fs";
@@ -105,7 +103,7 @@ describeIfPostgres("SECURITY: Tenant isolation vulnerabilities", () => {
       .set("Authorization", `Bearer ${adminToken}`)
       .send({
         email: "user-a@example.com",
-        password: "password123",
+        password: "Password123!",
         role: "USER",
         tenantIds: ["tenant-a"],
       });
@@ -113,7 +111,7 @@ describeIfPostgres("SECURITY: Tenant isolation vulnerabilities", () => {
     // Login as tenant-a user
     const userALogin = await request(app.httpServer)
       .post("/api/users/login")
-      .send({ email: "user-a@example.com", password: "password123" });
+      .send({ email: "user-a@example.com", password: "Password123!" });
     tenantAUserToken = userALogin.body.token;
   });
 
@@ -145,9 +143,7 @@ describeIfPostgres("SECURITY: Tenant isolation vulnerabilities", () => {
         .get("/api/entities?configId=tenant-b")
         .set("Authorization", `Bearer ${tenantAUserToken}`);
 
-      // EXPECTED (secure): 403 Forbidden -- user-a does not have access to tenant-b
-      // ACTUAL (vulnerable): 200 with tenant-b entity data, because entities route
-      // uses authenticateJWT but NOT validateTenantAccess
+      // User-a must not access tenant-b entities
       expect(response.status).toBe(403);
     });
 
@@ -168,8 +164,7 @@ describeIfPostgres("SECURITY: Tenant isolation vulnerabilities", () => {
         .get("/api/entities/count?configId=tenant-b")
         .set("Authorization", `Bearer ${tenantAUserToken}`);
 
-      // EXPECTED (secure): 403 Forbidden
-      // ACTUAL (vulnerable): 200 with the count of tenant-b entities
+      // User-a must not count tenant-b entities
       expect(response.status).toBe(403);
     });
 
@@ -190,8 +185,7 @@ describeIfPostgres("SECURITY: Tenant isolation vulnerabilities", () => {
         .get(`/api/entities/${entityGuid}/events?configId=tenant-b`)
         .set("Authorization", `Bearer ${tenantAUserToken}`);
 
-      // EXPECTED (secure): 403 Forbidden
-      // ACTUAL (vulnerable): 200 with tenant-b event data
+      // User-a must not read tenant-b events
       expect(response.status).toBe(403);
     });
   });
