@@ -34,4 +34,9 @@ export default defineConfig({
       use: { browserName: 'chromium' },
     },
   ],
+  webServer: {
+    command: 'pnpm dev',
+    port: 5173,
+    reuseExistingServer: !process.env.CI,
+  },
 })
