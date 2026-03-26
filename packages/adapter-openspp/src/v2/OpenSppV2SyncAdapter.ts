@@ -442,42 +442,70 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       active: true,
     };
 
+    // Use field mappings to resolve core fields; fall back to conventional names
+    const resolve = (opensppField: string, ...fallbackKeys: string[]): string | undefined => {
+      // Check field mappings first
+      const mapping = fieldMappings.find((m) => m.opensppField === opensppField);
+      if (mapping) {
+        const raw = data[mapping.formField];
+        if (raw !== null && raw !== undefined && raw !== "") {
+          const transformer = createTransformer(
+            mapping.transformer.type as TransformerType,
+            mapping.transformer.options as Record<string, string> | undefined,
+          );
+          const val = transformer.transform(raw);
+          if (val !== null && val !== undefined && val !== "") return String(val);
+        }
+      }
+      // Fall back to conventional field names
+      for (const key of fallbackKeys) {
+        if (data[key] !== null && data[key] !== undefined && data[key] !== "") {
+          return String(data[key]);
+        }
+      }
+      return undefined;
+    };
+
     const name: HumanName = {};
-    if (data.firstName || data.first_name) {
-      name.given = String(data.firstName || data.first_name);
-    }
-    if (data.lastName || data.last_name) {
-      name.family = String(data.lastName || data.last_name);
-    }
-    if (data.middleName || data.middle_name) {
-      name.middle = String(data.middleName || data.middle_name);
-    }
+    name.given = resolve("name.given", "firstName", "first_name");
+    name.family = resolve("name.family", "lastName", "last_name");
+    name.middle = resolve("name.middle", "middleName", "middle_name");
+    const fullName = resolve("name.text", "name", "fullName", "full_name");
+
     if (name.given || name.family) {
-      name.text = [name.family, name.given].filter(Boolean).join(", ");
+      name.text = fullName || [name.family, name.given].filter(Boolean).join(", ");
+      resource.name = name;
+    } else if (fullName) {
+      name.text = fullName;
       resource.name = name;
     }
 
-    if (data.birthDate || data.dateOfBirth || data.date_of_birth) {
-      resource.birthDate = String(data.birthDate || data.dateOfBirth || data.date_of_birth);
+    const birthDate = resolve("birthDate", "birthDate", "dateOfBirth", "date_of_birth");
+    if (birthDate) {
+      resource.birthDate = birthDate;
     }
 
-    if (data.gender) {
-      resource.gender = this.buildGenderCoding(String(data.gender));
+    const gender = resolve("gender", "gender");
+    if (gender) {
+      resource.gender = this.buildGenderCoding(gender);
     }
 
-    if (data.phone || data.phoneNumber || data.phone_number) {
-      const phone = String(data.phone || data.phoneNumber || data.phone_number);
+    const phone = resolve("telecom.phone", "phone", "phoneNumber", "phone_number");
+    if (phone) {
       resource.telecom = [{ system: "phone", value: phone, use: "mobile" }];
     }
 
-    if (data.email || data.emailAddress || data.email_address) {
-      const email = String(data.email || data.emailAddress || data.email_address);
+    const email = resolve("telecom.email", "email", "emailAddress", "email_address");
+    if (email) {
       if (!resource.telecom) resource.telecom = [];
       resource.telecom.push({ system: "email", value: email });
     }
 
-    if (fieldMappings.length > 0 && this.includeStudioExtensions) {
-      const studioExtension = this.buildStudioExtension(data, fieldMappings);
+    // Studio extension fields from remaining mappings (not already used for core fields)
+    const coreOpenSppFields = new Set(["name.given", "name.family", "name.middle", "name.text", "birthDate", "gender", "telecom.phone", "telecom.email"]);
+    const studioMappings = fieldMappings.filter((m) => !coreOpenSppFields.has(m.opensppField));
+    if (studioMappings.length > 0 && this.includeStudioExtensions) {
+      const studioExtension = this.buildStudioExtension(data, studioMappings);
       if (Object.keys(studioExtension).length > 1) {
         resource.extension = {
           [STUDIO_INDIVIDUAL_EXTENSION_KEY]: studioExtension,
