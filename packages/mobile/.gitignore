@@ -24,3 +24,7 @@ dist-ssr
 *.sw?
 .env
 build/
+
+# Playwright
+test-results/
+playwright-report/

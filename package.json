@@ -40,6 +40,7 @@
     "ci:install": "pnpm run ci:setup && pnpm install",
     "prepare": "[ \"$CI\" != \"true\" ] && husky install || echo 'Skipping husky in CI'",
     "pr-check": "./scripts/pr-check.sh",
+    "test:e2e:mobile": "pnpm --filter @idpass/data-collect-mobile test:e2e",
     "test:e2e:integration": "pnpm exec playwright test --config e2e/playwright.config.ts"
   },
   "devDependencies": {
