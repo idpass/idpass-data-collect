@@ -649,7 +649,9 @@ export class OpenSppV2Client {
       }
 
       if (status === 422) {
-        return new Error(`${context}: Validation error - ${detail}`);
+        const fullBody = axiosError.response?.data;
+        const bodyStr = typeof fullBody === "object" ? JSON.stringify(fullBody) : String(fullBody);
+        return new Error(`${context}: Validation error (422) - ${bodyStr}`);
       }
 
       return new Error(`${context}: ${detail}`);

@@ -269,8 +269,23 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
       }
       const edm = appInstance.edm;
       try {
-        await edm.syncWithExternalSystem(credentials as ExternalSyncCredentials);
-        res.json({ status: "success" });
+        const result = await edm.syncWithExternalSystem(credentials as ExternalSyncCredentials);
+        if (result && !result.success) {
+          res.json({
+            status: "error",
+            message: `Sync completed with ${result.failed} failure(s)`,
+            pushed: result.pushed,
+            pulled: result.pulled,
+            failed: result.failed,
+            errors: result.errors.map((e) => typeof e === "string" ? e : e.message || String(e)),
+          });
+        } else {
+          res.json({
+            status: "success",
+            pushed: result?.pushed ?? 0,
+            pulled: result?.pulled ?? 0,
+          });
+        }
       } catch (error) {
         log.error({ err: error }, "Failed to sync with external system");
         const message = error instanceof Error ? error.message : String(error);

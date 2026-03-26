@@ -33,6 +33,7 @@ import {
   PasswordCredentials,
   TokenCredentials,
 } from "../interfaces/types";
+import type { SyncResult } from "../interfaces/adapter";
 import { EventApplierService } from "../services/EventApplierService";
 import { AppError } from "../utils/AppError";
 import { ExternalSyncManager } from "./ExternalSyncManager";
@@ -826,10 +827,11 @@ export class EntityDataManager {
    * await manager.syncWithExternalSystem();
    * ```
    */
-  async syncWithExternalSystem(credentials?: ExternalSyncCredentials): Promise<void> {
+  async syncWithExternalSystem(credentials?: ExternalSyncCredentials): Promise<SyncResult | undefined> {
     if (this.externalSyncManager) {
-      await this.externalSyncManager.synchronize(credentials);
+      return await this.externalSyncManager.synchronize(credentials);
     }
+    return undefined;
   }
 
   private async logReadAudit(
