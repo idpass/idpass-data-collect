@@ -218,9 +218,10 @@ describe('AppDetailsView', () => {
       const wrapper = await mountAndWait()
       const headerActions = wrapper.find('.details-header__actions')
       expect(headerActions.exists()).toBe(true)
-      const editButton = headerActions.find('.details-header__edit-btn')
-      expect(editButton.exists()).toBe(true)
-      expect(editButton.text()).toContain('Edit')
+      const buttons = headerActions.findAll('.v-btn')
+      const editButton = buttons.find((btn) => btn.text().includes('Edit'))
+      expect(editButton).toBeDefined()
+      expect(editButton!.text()).toContain('Edit')
     })
   })
 
