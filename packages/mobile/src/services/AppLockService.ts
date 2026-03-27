@@ -110,15 +110,21 @@ export const AppLockService = {
 /**
  * Wait until the actor reaches a state matching the predicate.
  * Resolves immediately if the predicate already holds.
+ * Rejects after timeoutMs to prevent indefinite hangs on mobile.
  */
-function waitForState(predicate: (snap: LockSnapshot) => boolean): Promise<void> {
-  return new Promise((resolve) => {
+function waitForState(predicate: (snap: LockSnapshot) => boolean, timeoutMs = 30_000): Promise<void> {
+  return new Promise((resolve, reject) => {
     if (predicate(lockActor.getSnapshot())) {
       resolve()
       return
     }
+    const timer = setTimeout(() => {
+      sub.unsubscribe()
+      reject(new Error(`waitForState timed out after ${timeoutMs}ms`))
+    }, timeoutMs)
     const sub = lockActor.subscribe((snap) => {
       if (predicate(snap)) {
+        clearTimeout(timer)
         sub.unsubscribe()
         resolve()
       }

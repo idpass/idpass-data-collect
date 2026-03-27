@@ -12,10 +12,23 @@
         el.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#1a1a2e;color:#e0e0e0;padding:24px;overflow:auto;font-family:monospace;font-size:14px;';
         document.body.appendChild(el);
       }
-      el.innerHTML += '<div style="margin-bottom:16px;"><div style="color:#ff6b6b;font-weight:bold;font-size:16px;margin-bottom:8px;">' + title + '</div>'
-        + '<pre style="white-space:pre-wrap;word-break:break-word;background:#2d2d44;padding:12px;border-radius:6px;border-left:4px solid #ff6b6b;">' + msg + '</pre>'
-        + (source ? '<div style="color:#888;font-size:12px;margin-top:4px;">' + source + '</div>' : '')
-        + '</div>';
+      var entry = document.createElement('div');
+      entry.style.cssText = 'margin-bottom:16px;';
+      var heading = document.createElement('div');
+      heading.style.cssText = 'color:#ff6b6b;font-weight:bold;font-size:16px;margin-bottom:8px;';
+      heading.textContent = title;
+      entry.appendChild(heading);
+      var pre = document.createElement('pre');
+      pre.style.cssText = 'white-space:pre-wrap;word-break:break-word;background:#2d2d44;padding:12px;border-radius:6px;border-left:4px solid #ff6b6b;';
+      pre.textContent = msg;
+      entry.appendChild(pre);
+      if (source) {
+        var src = document.createElement('div');
+        src.style.cssText = 'color:#888;font-size:12px;margin-top:4px;';
+        src.textContent = source;
+        entry.appendChild(src);
+      }
+      el.appendChild(entry);
     }
     window.onerror = function(msg, source, line, col) {
       showError('Uncaught Error', msg, source + ':' + line + ':' + col);

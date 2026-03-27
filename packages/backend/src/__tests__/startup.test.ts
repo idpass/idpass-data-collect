@@ -34,7 +34,7 @@ describe("Server startup validation", () => {
   });
 
   test("throws error when ADMIN_EMAIL is missing", () => {
-    process.env.ADMIN_PASSWORD = "password123";
+    process.env.ADMIN_PASSWORD = "Str0ng!Pass";
     process.env.POSTGRES = "postgresql://admin:admin@localhost:5432/postgres";
     process.env.JWT_SECRET = "test-secret";
     delete process.env.ADMIN_EMAIL;
@@ -47,7 +47,7 @@ describe("Server startup validation", () => {
 
   test("throws error when JWT_SECRET is missing", () => {
     process.env.ADMIN_EMAIL = "admin@example.com";
-    process.env.ADMIN_PASSWORD = "password123";
+    process.env.ADMIN_PASSWORD = "Str0ng!Pass";
     process.env.POSTGRES = "postgresql://admin:admin@localhost:5432/postgres";
     delete process.env.JWT_SECRET;
 
@@ -59,7 +59,7 @@ describe("Server startup validation", () => {
 
   test("throws error when JWT_SECRET is too short", () => {
     process.env.ADMIN_EMAIL = "admin@example.com";
-    process.env.ADMIN_PASSWORD = "password123";
+    process.env.ADMIN_PASSWORD = "Str0ng!Pass";
     process.env.JWT_SECRET = "too-short";
     process.env.POSTGRES = "postgresql://admin:admin@localhost:5432/postgres";
 
@@ -71,7 +71,7 @@ describe("Server startup validation", () => {
 
   test("throws error when POSTGRES connection string is missing", () => {
     process.env.ADMIN_EMAIL = "admin@example.com";
-    process.env.ADMIN_PASSWORD = "password123";
+    process.env.ADMIN_PASSWORD = "Str0ng!Pass";
     process.env.JWT_SECRET = "a-very-long-secret-that-is-at-least-32-chars";
     delete process.env.POSTGRES;
     delete process.env.DATABASE_URL;

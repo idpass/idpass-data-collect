@@ -120,22 +120,16 @@ export class DateTransformer implements FieldTransformer {
       if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
         return this.parseYYYYMMDD(trimmed);
       }
-      // Try MM/DD/YYYY
+      // Try slash-delimited date (MM/DD/YYYY or DD/MM/YYYY)
       if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmed)) {
-        return this.parseMMDDYYYY(trimmed);
-      }
-      // Try DD/MM/YYYY
-      if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmed) && trimmed.includes("/")) {
         const parts = trimmed.split("/");
-        if (parts.length === 3) {
-          const day = parseInt(parts[0], 10);
-          const month = parseInt(parts[1], 10);
-          const year = parseInt(parts[2], 10);
-          // Heuristic: if day > 12, it's likely DD/MM/YYYY
-          if (day > 12 && day <= 31) {
-            return new Date(year, month - 1, day);
-          }
+        const first = parseInt(parts[0], 10);
+        // Heuristic: if first component > 12, it must be a day (DD/MM/YYYY)
+        if (first > 12 && first <= 31) {
+          return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, first);
         }
+        // Otherwise default to MM/DD/YYYY
+        return this.parseMMDDYYYY(trimmed);
       }
       // Fallback to native Date parsing
       const parsed = new Date(trimmed);

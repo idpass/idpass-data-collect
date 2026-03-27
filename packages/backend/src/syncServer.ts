@@ -113,6 +113,10 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   const corsOrigins = process.env.CORS_ORIGINS;
   const corsOptions: cors.CorsOptions = { origin: false };
   if (corsOrigins === "*") {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("CORS_ORIGINS=* is not allowed in production. Specify explicit origins instead.");
+    }
+    log.warn("CORS_ORIGINS=* allows any origin with credentials — do not use in production");
     corsOptions.origin = true;
     corsOptions.credentials = true;
   } else if (corsOrigins) {

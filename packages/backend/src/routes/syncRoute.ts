@@ -91,7 +91,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
       // check if duplicates exist
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
       if (!appInstance) {
-        return res.json({ status: "error", message: "App instance not found" });
+        return res.status(404).json({ status: "error", message: "App instance not found" });
       }
       const edm = appInstance.edm;
       const duplicates = await edm.getPotentialDuplicates();
@@ -146,7 +146,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
       const { configId = "default" } = req.query;
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
       if (!appInstance) {
-        return res.json({ status: "error", message: "App instance not found" });
+        return res.status(404).json({ status: "error", message: "App instance not found" });
       }
       // TODO: support async pull
       // this will be used as a callback endpoint for external systems to push data back to our system
@@ -169,7 +169,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
       const tenantId = configId || "default";
       const appInstance = await appInstanceStore.getAppInstance(tenantId);
       if (!appInstance) {
-        return res.json({ status: "error", message: "App instance not found" });
+        return res.status(404).json({ status: "error", message: "App instance not found" });
       }
 
       const sorted = events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
@@ -219,7 +219,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
 
       const appInstance = await appInstanceStore.getAppInstance(configId || "default");
       if (!appInstance) {
-        return res.json({ status: "error", message: "App instance not found" });
+        return res.status(404).json({ status: "error", message: "App instance not found" });
       }
       const edm = appInstance.edm;
 
@@ -245,7 +245,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
 
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
       if (!appInstance) {
-        return res.json({ status: "error", message: "App instance not found" });
+        return res.status(404).json({ status: "error", message: "App instance not found" });
       }
       const edm = appInstance.edm;
       const auditLogs = await edm.getAuditLogsSince(since as string);
@@ -265,13 +265,13 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
       const { configId, credentials } = parseResult.data;
       const appInstance = await appInstanceStore.getAppInstance((configId || "default") as string);
       if (!appInstance) {
-        return res.json({ status: "error", message: "App instance not found" });
+        return res.status(404).json({ status: "error", message: "App instance not found" });
       }
       const edm = appInstance.edm;
       try {
         const result = await edm.syncWithExternalSystem(credentials as ExternalSyncCredentials);
         if (result && !result.success) {
-          res.json({
+          res.status(422).json({
             status: "error",
             message: `Sync completed with ${result.failed} failure(s)`,
             pushed: result.pushed,
@@ -289,7 +289,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
       } catch (error) {
         log.error({ err: error }, "Failed to sync with external system");
         const message = error instanceof Error ? error.message : String(error);
-        res.json({
+        res.status(502).json({
           status: "error",
           message: "Failed to sync with external system",
           details: message,

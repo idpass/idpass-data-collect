@@ -21,7 +21,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { store as entityStore } from '@/store'
 
-const isDev = import.meta.env.VITE_DEVELOP === 'true'
+const isDev = import.meta.env.DEV && import.meta.env.VITE_DEVELOP === 'true'
 
 export interface SyncDebugDetail {
   requestUrl?: string

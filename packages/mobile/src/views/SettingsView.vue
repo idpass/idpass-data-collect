@@ -4,7 +4,7 @@ import { SecureStorageService } from '@/services/SecureStorageService'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useSyncService } from '@/store/syncService'
 
-const isDevelop = import.meta.env.VITE_DEVELOP === 'true'
+const isDevelop = import.meta.env.DEV && import.meta.env.VITE_DEVELOP === 'true'
 const database = useDatabase()
 const { isOffline } = useNetworkStatus()
 const syncService = useSyncService()

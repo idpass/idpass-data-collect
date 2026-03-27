@@ -236,7 +236,8 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
         // onConflictDoNothing: if the event was already pushed (e.g., client
         // retried after the server accepted but before the client updated its
         // local sync cursor), silently skip the duplicate instead of throwing.
-        await tx.insert(events).values({
+        // Use .returning() so only actually-inserted rows produce guids.
+        const inserted = await tx.insert(events).values({
           guid: event.guid,
           tenantId: this.tenantId,
           entityGuid: event.entityGuid,
@@ -245,8 +246,10 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
           timestamp: new Date(event.timestamp),
           userId: event.userId,
           syncLevel: event.syncLevel,
-        }).onConflictDoNothing({ target: events.guid });
-        guids.push(event.guid);
+        }).onConflictDoNothing({ target: events.guid }).returning({ guid: events.guid });
+        if (inserted.length > 0) {
+          guids.push(inserted[0].guid);
+        }
       }
     });
     return guids;

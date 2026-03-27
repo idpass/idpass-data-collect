@@ -145,7 +145,16 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
           guids.push(event.guid);
           resolve();
         };
-        request.onerror = () => reject(request.error);
+        request.onerror = (e) => {
+          // Silently skip duplicates (unique guid index constraint),
+          // matching Postgres onConflictDoNothing behavior.
+          if (request.error?.name === "ConstraintError") {
+            e.preventDefault(); // prevent transaction abort
+            resolve();
+            return;
+          }
+          reject(request.error);
+        };
       });
     }
     return guids;
