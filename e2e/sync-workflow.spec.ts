@@ -17,6 +17,7 @@
  * under the License.
  */
 
+import { randomUUID } from 'crypto'
 import { test, expect } from '@playwright/test'
 import { getAdminToken } from './helpers/auth'
 import {
@@ -81,7 +82,7 @@ test.describe('Sync Workflow', () => {
     const now = new Date().toISOString()
     await pushEvents(adminToken, TEST_CONFIG_ID, [
       {
-        guid: `evt-${Date.now()}`,
+        guid: randomUUID(),
         entityGuid,
         type: 'create-group',
         data: {
@@ -129,7 +130,7 @@ test.describe('Sync Workflow', () => {
     const now = new Date().toISOString()
     await pushEvents(adminToken, TEST_CONFIG_ID, [
       {
-        guid: `evt-upd-${Date.now()}`,
+        guid: randomUUID(),
         entityGuid,
         type: 'update-group',
         data: {

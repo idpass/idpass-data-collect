@@ -17,6 +17,7 @@
  * under the License.
  */
 
+import { randomUUID } from 'crypto'
 import { test, expect } from '@playwright/test'
 import { getAdminToken } from './helpers/auth'
 import {
@@ -127,7 +128,7 @@ test.describe('Data Lifecycle', () => {
     const entityGuid = `e2e-hh-${Date.now()}`
     await pushEvents(adminToken, TEST_CONFIG_ID, [
       {
-        guid: `evt-${Date.now()}`,
+        guid: randomUUID(),
         entityGuid,
         type: 'create-group',
         data: { entityName: 'household', name: 'Test Household Alpha' },
