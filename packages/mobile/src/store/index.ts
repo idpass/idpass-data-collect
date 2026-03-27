@@ -32,25 +32,26 @@ import {
 } from '@idpass/data-collect-core'
 import { SecureStorageService } from '@/services/SecureStorageService'
 
-const CREDENTIAL_KEY_PREFIX = 'sync_cred_'
+const REFRESH_TOKEN_KEY_PREFIX = 'sync_refresh_'
 
 export let store: EntityDataManager
 
 const storeCache = new Map<string, EntityDataManager>()
 
 /**
- * Store login credentials in secure storage for silent re-authentication.
- * Credentials are encrypted at rest via iOS Keychain / Android Keystore.
+ * Store refresh token in secure storage for silent re-authentication.
+ * Encrypted at rest via iOS Keychain / Android Keystore.
+ * Uses a long-lived refresh token (30d) instead of raw credentials.
  */
-export async function saveCredentialsForReauth(appId: string, username: string, password: string): Promise<void> {
-  await SecureStorageService.set(`${CREDENTIAL_KEY_PREFIX}${appId}`, JSON.stringify({ username, password }))
+export async function saveRefreshTokenForReauth(appId: string, refreshToken: string): Promise<void> {
+  await SecureStorageService.set(`${REFRESH_TOKEN_KEY_PREFIX}${appId}`, refreshToken)
 }
 
 /**
- * Remove stored credentials (called on explicit logout).
+ * Remove stored refresh token (called on explicit logout).
  */
-export async function clearCredentialsForReauth(appId: string): Promise<void> {
-  await SecureStorageService.remove(`${CREDENTIAL_KEY_PREFIX}${appId}`)
+export async function clearRefreshTokenForReauth(appId: string): Promise<void> {
+  await SecureStorageService.remove(`${REFRESH_TOKEN_KEY_PREFIX}${appId}`)
 }
 
 export const initStore = async (
@@ -75,15 +76,25 @@ export const initStore = async (
     authStorage.initialize()
   ])
 
-  // Silent re-authentication callback: attempts to re-login using credentials
-  // stored in SecureStorage when the JWT token has expired during sync.
+  // Silent re-authentication callback: uses refresh token stored in SecureStorage
+  // to obtain a fresh access token when the JWT has expired during sync.
   const reauthenticate = async () => {
-    const raw = await SecureStorageService.get(`${CREDENTIAL_KEY_PREFIX}${appId}`)
-    if (!raw) {
-      throw new Error('No stored credentials available for re-authentication')
+    const refreshToken = await SecureStorageService.get(`${REFRESH_TOKEN_KEY_PREFIX}${appId}`)
+    if (!refreshToken) {
+      throw new Error('No stored refresh token available for re-authentication')
     }
-    const { username, password } = JSON.parse(raw) as { username: string; password: string }
-    await authManagerInstance.login({ username, password })
+    const response = await fetch(`${syncServerUrl}/api/users/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    })
+    if (!response.ok) {
+      await clearRefreshTokenForReauth(appId)
+      throw new Error('Refresh token expired or invalid — re-login required')
+    }
+    const data = await response.json() as { token: string; refreshToken: string }
+    await authStorage.setToken('default', data.token)
+    await saveRefreshTokenForReauth(appId, data.refreshToken)
   }
 
   const eventApplierService = new EventApplierService(eventStore, entityStore)

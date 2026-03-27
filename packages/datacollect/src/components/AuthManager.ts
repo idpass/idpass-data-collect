@@ -102,6 +102,7 @@ export class AuthManager {
   ) {}
   private adapters: Record<string, AuthAdapter> = {};
   private currentUser: { id: string; username?: string } | null = null;
+  lastRefreshToken: string | null = null;
 
   /**
    * Initializes the AuthManager by instantiating and configuring authentication adapters.
@@ -237,6 +238,7 @@ export class AuthManager {
         this.currentUser = { id: credentials.username, username: credentials.username };
       }
       await this.authStorage.setUsername(credentials.username);
+      this.lastRefreshToken = response.data.refreshToken ?? null;
       return;
     } catch (error) {
       log.error({ err: error }, "Failed to login to sync server using default login");

@@ -49,7 +49,7 @@ import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election'
 addRxPlugin(RxDBLeaderElectionPlugin)
 
 // dev-mode
-const isDevelop = import.meta.env.VITE_DEVELOP
+const isDevelop = import.meta.env.DEV && import.meta.env.VITE_DEVELOP
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode'
 if (isDevelop) {
   addRxPlugin(RxDBDevModePlugin)
@@ -220,7 +220,7 @@ export async function getDatabase(): Promise<RxDatabase> {
     }
   }
 
-  if (import.meta.env.VITE_DEVELOP) {
+  if (import.meta.env.DEV && import.meta.env.VITE_DEVELOP) {
     ;(window as unknown as { db: RxDatabase }).db = dbInstance // write to window for debugging
   }
 

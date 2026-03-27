@@ -230,15 +230,21 @@ export const useAuthManagerStore = defineStore('authManager', () => {
   // ── Helper ───────────────────────────────────────────────────────
 
   function waitForState(
-    predicate: (snap: ReturnType<typeof actor.getSnapshot>) => boolean
+    predicate: (snap: ReturnType<typeof actor.getSnapshot>) => boolean,
+    timeoutMs = 30_000
   ): Promise<void> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       if (predicate(actor.getSnapshot())) {
         resolve()
         return
       }
+      const timer = setTimeout(() => {
+        sub.unsubscribe()
+        reject(new Error(`waitForState timed out after ${timeoutMs}ms`))
+      }, timeoutMs)
       const sub = actor.subscribe((snap) => {
         if (predicate(snap)) {
+          clearTimeout(timer)
           sub.unsubscribe()
           resolve()
         }

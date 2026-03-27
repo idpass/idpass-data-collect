@@ -7,6 +7,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useAuthManagerStore } from '../authManager'
 import { useTenantStore } from '../tenant'
 import { MobileAuthStorage } from '@/authentication/MobileAuthStorage'
+import router from '@/router'
 
 // Mock global IndexedDB API
 Object.defineProperty(global, 'indexedDB', {
@@ -24,6 +25,9 @@ vi.mock('@/store/tenant')
 vi.mock('@/utils/device')
 vi.mock('@/utils/getSyncServerByAppId')
 vi.mock('@capacitor/app')
+vi.mock('@/router', () => ({
+  default: { push: vi.fn().mockResolvedValue(undefined) },
+}))
 
 // Mock IndexedDB-related modules from idpass-data-collect with proper implementations
 vi.mock('@idpass/data-collect-core', () => ({
@@ -66,8 +70,8 @@ vi.mock('@/store/index', () => {
     initStore: mockInitStore,
     store: mockStoreObject,
     closeStore: mockCloseStore,
-    saveCredentialsForReauth: vi.fn().mockResolvedValue(undefined),
-    clearCredentialsForReauth: vi.fn().mockResolvedValue(undefined),
+    saveRefreshTokenForReauth: vi.fn().mockResolvedValue(undefined),
+    clearRefreshTokenForReauth: vi.fn().mockResolvedValue(undefined),
   }
 })
 
@@ -351,7 +355,7 @@ describe('AuthManager Store', () => {
       await authManagerStore.handleDefaultLogin()
 
       expect(mockMobileAuthStorage.setLastProvider).toHaveBeenCalledWith('default', 'test-app-id')
-      expect(window.location.href).toBe('/app/test-app-id')
+      expect(router.push).toHaveBeenCalledWith('/app/test-app-id')
     })
 
     it('should not redirect if not authenticated', async () => {

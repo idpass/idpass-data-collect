@@ -13,6 +13,9 @@ import type { Router } from 'vue-router'
 vi.mock('vue-router')
 vi.mock('@/store/authManager')
 vi.mock('@/utils/networkUtils')
+vi.mock('@/router', () => ({
+  default: { push: vi.fn(), beforeEach: vi.fn() },
+}))
 
 describe('useErrorHandler', () => {
   let mockRouter: Record<string, ReturnType<typeof vi.fn>>

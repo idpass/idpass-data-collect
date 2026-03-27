@@ -204,6 +204,12 @@ const saveTenantApp = async (config: TenantAppData, sourceUrl = '') => {
 
 const loadAppFromUrl = async (url: string) => {
   try {
+    const parsed = new URL(url)
+    const allowedSchemes = import.meta.env.DEV ? ['https:', 'http:'] : ['https:']
+    if (!allowedSchemes.includes(parsed.protocol)) {
+      throw new Error(`Invalid URL scheme "${parsed.protocol}" — only ${allowedSchemes.join(', ')} allowed`)
+    }
+
     const response = await fetch(url)
 
     if (!response.ok) {

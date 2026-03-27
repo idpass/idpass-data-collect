@@ -26,14 +26,7 @@ import { AuthenticatedRequest, authenticateJWT, createAuthAdminMiddleware } from
 import { verifyRoleFromDatabase } from "../middlewares/rbac";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { Role, UserStore } from "../types";
-
-const PASSWORD_RULES = z
-  .string()
-  .min(8, "Password must be at least 8 characters")
-  .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-  .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-  .regex(/[0-9]/, "Password must contain at least one number")
-  .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character");
+import { PASSWORD_RULES } from "../utils/passwordRules";
 
 const CreateUserSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -75,13 +68,15 @@ export function createUserRoutes(userStore: UserStore): Router {
         return res.status(401).json({ error: "Invalid email or password" });
       }
 
-      // generate JWT token with id, email, role, tenantIds, and roleAssignments
-      const token = jwt.sign(
-        { id: user.id, email: user.email, role: user.role, tenantIds: user.tenantIds, roleAssignments: user.roleAssignments ?? [] },
+      // generate JWT access token (short-lived) and refresh token (long-lived for offline field agents)
+      const tokenPayload = { id: user.id, email: user.email, role: user.role, tenantIds: user.tenantIds, roleAssignments: user.roleAssignments ?? [] };
+      const token = jwt.sign(tokenPayload, process.env.JWT_SECRET!, { expiresIn: "1h" });
+      const refreshToken = jwt.sign(
+        { id: user.id, email: user.email, type: "refresh" },
         process.env.JWT_SECRET!,
-        { expiresIn: "1h" },
+        { expiresIn: "30d" },
       );
-      res.json({ token, userId: user.id });
+      res.json({ token, refreshToken, userId: user.id });
     }),
   );
 
@@ -94,23 +89,50 @@ export function createUserRoutes(userStore: UserStore): Router {
     }),
   );
 
-  // Refresh token — issue a fresh access token from the current valid one
+  // Refresh token — issue a fresh access token from a valid access token or refresh token
   router.post(
     "/refresh",
-    authenticateJWT,
     asyncHandler(async (req, res) => {
-      const decoded = (req as AuthenticatedRequest).user;
-      const user = await userStore.getUser(decoded.email);
+      const { refreshToken: bodyRefreshToken } = req.body ?? {};
+      const authHeader = req.headers.authorization;
+
+      let email: string | undefined;
+
+      // Try refresh token from body first, then fall back to access token from header
+      if (bodyRefreshToken) {
+        try {
+          const decoded = jwt.verify(bodyRefreshToken, process.env.JWT_SECRET!) as jwt.JwtPayload;
+          if (decoded.type !== "refresh") {
+            return res.status(401).json({ error: "Invalid refresh token" });
+          }
+          email = decoded.email;
+        } catch {
+          return res.status(401).json({ error: "Invalid or expired refresh token" });
+        }
+      } else if (authHeader?.startsWith("Bearer ")) {
+        try {
+          const decoded = jwt.verify(authHeader.slice(7), process.env.JWT_SECRET!) as jwt.JwtPayload;
+          email = decoded.email;
+        } catch {
+          return res.status(401).json({ error: "Invalid or expired access token" });
+        }
+      } else {
+        return res.status(401).json({ error: "No token provided" });
+      }
+
+      const user = await userStore.getUser(email!);
       if (!user) {
         return res.status(401).json({ error: "User no longer exists" });
       }
 
-      const token = jwt.sign(
-        { id: user.id, email: user.email, role: user.role, tenantIds: user.tenantIds, roleAssignments: user.roleAssignments ?? [] },
+      const tokenPayload = { id: user.id, email: user.email, role: user.role, tenantIds: user.tenantIds, roleAssignments: user.roleAssignments ?? [] };
+      const token = jwt.sign(tokenPayload, process.env.JWT_SECRET!, { expiresIn: "1h" });
+      const newRefreshToken = jwt.sign(
+        { id: user.id, email: user.email, type: "refresh" },
         process.env.JWT_SECRET!,
-        { expiresIn: "1h" },
+        { expiresIn: "30d" },
       );
-      res.json({ token, userId: user.id });
+      res.json({ token, refreshToken: newRefreshToken, userId: user.id });
     }),
   );
 
@@ -151,13 +173,17 @@ export function createUserRoutes(userStore: UserStore): Router {
     verifyRoleFromDatabase(userStore),
     asyncHandler(async (req, res) => {
       const { id } = req.params;
+      const numericId = parseInt(id, 10);
+      if (isNaN(numericId)) {
+        return res.status(400).json({ error: "Invalid user ID" });
+      }
       const parseResult = UpdateUserSchema.safeParse(req.body);
       if (!parseResult.success) {
         const messages = parseResult.error.issues.map((i) => i.message);
         return res.status(400).json({ error: messages.join(". "), details: parseResult.error.issues });
       }
       const { email, password, role, tenantIds } = parseResult.data;
-      const user = await userStore.getUserById(parseInt(id));
+      const user = await userStore.getUserById(numericId);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }

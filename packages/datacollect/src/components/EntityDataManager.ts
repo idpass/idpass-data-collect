@@ -161,6 +161,14 @@ export class EntityDataManager {
   ) {}
 
   /**
+   * Returns the last refresh token received from the sync server after login.
+   * Used by mobile clients to store the token for offline silent re-authentication.
+   */
+  get lastRefreshToken(): string | null {
+    return this.authManager?.lastRefreshToken ?? null;
+  }
+
+  /**
    * Checks if a synchronization operation is currently in progress.
    *
    * @returns True if sync is active, false otherwise.

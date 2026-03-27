@@ -19,6 +19,7 @@
 
 import "dotenv/config";
 import { run } from "./syncServer";
+import { validatePasswordOrThrow } from "./utils/passwordRules";
 
 const {
   SYNC_SERVER_PORT: port = "3000",
@@ -33,6 +34,8 @@ const {
 if (!adminPassword || !adminEmail) {
   throw new Error("Initial admin credentials must be set");
 }
+
+validatePasswordOrThrow(adminPassword, "ADMIN_PASSWORD");
 
 if (!jwtSecret) {
   throw new Error("JWT_SECRET must be set");

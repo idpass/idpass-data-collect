@@ -20,8 +20,9 @@
 import { fromPromise } from 'xstate'
 import { MobileAuthStorage } from '@/authentication/MobileAuthStorage'
 import { useTenantStore } from '@/store/tenant'
-import { initStore, store, saveCredentialsForReauth, clearCredentialsForReauth } from '@/store'
+import { initStore, store, saveRefreshTokenForReauth, clearRefreshTokenForReauth } from '@/store'
 import { getSyncServerUrlByAppId } from '@/utils/getSyncServerByAppId'
+import router from '@/router'
 import type { InitializeResult, LoginResult, CallbackResult, DefaultLoginResult, RefreshResult, AuthContext } from '../types'
 
 interface AuthConfig {
@@ -72,10 +73,10 @@ export const performLogin = fromPromise<LoginResult, {
 
   try {
     await authManager.login(credentials || null, provider)
-    // Store credentials in SecureStorage for silent re-auth on token expiry.
+    // Store refresh token in SecureStorage for silent re-auth on token expiry.
     // Only for default (username/password) login — OAuth uses its own refresh flow.
-    if (appId && credentials && 'username' in credentials && (!provider || provider === 'default')) {
-      await saveCredentialsForReauth(appId, credentials.username, credentials.password)
+    if (appId && authManager.lastRefreshToken && (!provider || provider === 'default')) {
+      await saveRefreshTokenForReauth(appId, authManager.lastRefreshToken)
     }
     return { success: true }
   } catch (err) {
@@ -113,10 +114,10 @@ export const handleDefaultLogin = fromPromise<DefaultLoginResult, { context: Aut
   const { mobileAuthStorage, appId } = context
 
   const isAuthenticated = !!context.authManager && await context.authManager.isAuthenticated()
-  if (isAuthenticated && typeof window !== 'undefined') {
+  if (isAuthenticated) {
     await mobileAuthStorage.setLastProvider('default', appId || undefined)
     const redirectUrl = appId ? `/app/${appId}` : '/'
-    window.location.href = redirectUrl
+    await router.push(redirectUrl)
   }
   return { isAuthenticated }
 })
@@ -146,7 +147,7 @@ export const performLogout = fromPromise<void, { context: AuthContext; appId: st
 
   await authManager.logout()
   if (appId) {
-    await clearCredentialsForReauth(appId)
+    await clearRefreshTokenForReauth(appId)
   }
   if (mobileAuthStorage) {
     await mobileAuthStorage.clearLastProvider(appId || undefined)

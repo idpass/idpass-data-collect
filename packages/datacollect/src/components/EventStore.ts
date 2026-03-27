@@ -299,9 +299,11 @@ export class EventStoreImpl implements EventStore {
             formToSave.schemaVersion = this.upcasterService.getCurrentVersion(formToSave.type);
           }
           const guids = await this.storageAdapter.saveEvents([formToSave]);
-          this.latestHash = this.computeNextHash(formToSave);
-          await this.storageAdapter.persistHashAnchor(HASH_V3_PREFIX + this.latestHash);
-          resolve(guids[0]);
+          if (guids.length > 0) {
+            this.latestHash = this.computeNextHash(formToSave);
+            await this.storageAdapter.persistHashAnchor(HASH_V3_PREFIX + this.latestHash);
+          }
+          resolve(guids[0] ?? formToSave.guid);
         } catch (error) {
           reject(error);
         }
