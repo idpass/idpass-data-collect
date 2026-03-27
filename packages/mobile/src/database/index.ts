@@ -220,10 +220,6 @@ export async function getDatabase(): Promise<RxDatabase> {
     }
   }
 
-  if (import.meta.env.DEV && import.meta.env.VITE_DEVELOP) {
-    ;(window as unknown as { db: RxDatabase }).db = dbInstance // write to window for debugging
-  }
-
   console.log('setting up collections...')
   try {
     await dbInstance.addCollections({
@@ -260,6 +256,9 @@ export async function getDatabase(): Promise<RxDatabase> {
         schema: TenantAppSchema
       }
     })
+    if (import.meta.env.DEV && import.meta.env.VITE_DEVELOP) {
+      ;(window as unknown as { db: RxDatabase }).db = dbInstance // write to window for debugging
+    }
   } catch (error) {
     console.error('Error adding collections:', error)
     if (

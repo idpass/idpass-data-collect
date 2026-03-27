@@ -136,7 +136,7 @@ router.beforeEach((to, _from, next) => {
     return;
   }
 
-  if (to.meta.userType && authStore.userType !== to.meta.userType) {
+  if (to.meta.userType && authStore.userType && authStore.userType !== to.meta.userType) {
     next({ name: "home" });
     return;
   }

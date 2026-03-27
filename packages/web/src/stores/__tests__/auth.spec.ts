@@ -95,8 +95,8 @@ describe('useAuthStore', () => {
       const store = useAuthStore()
       await store.loginAsAgent({ email: 'agent@test.com', password: 'pass' })
 
-      expect(localStorage.getItem('web_token')).toBe(mockToken)
-      expect(localStorage.getItem('web_user_type')).toBe('agent')
+      expect(sessionStorage.getItem('web_token')).toBe(mockToken)
+      expect(sessionStorage.getItem('web_user_type')).toBe('agent')
     })
   })
 
@@ -162,13 +162,13 @@ describe('useAuthStore', () => {
       expect(store.token).toBeNull()
       expect(store.agentPayload).toBeNull()
       expect(store.citizenPayload).toBeNull()
-      expect(localStorage.getItem('web_token')).toBeNull()
+      expect(sessionStorage.getItem('web_token')).toBeNull()
       expect(sessionStorage.getItem('web_citizen_token')).toBeNull()
     })
   })
 
   describe('initializeAuth', () => {
-    it('restores agent session from localStorage', () => {
+    it('restores agent session from sessionStorage', () => {
       const mockToken = createMockJwt({
         id: '1',
         email: 'agent@test.com',
@@ -176,8 +176,8 @@ describe('useAuthStore', () => {
         exp: Math.floor(Date.now() / 1000) + 3600,
       })
 
-      localStorage.setItem('web_token', mockToken)
-      localStorage.setItem('web_user_type', 'agent')
+      sessionStorage.setItem('web_token', mockToken)
+      sessionStorage.setItem('web_user_type', 'agent')
 
       const store = useAuthStore()
       store.initializeAuth()
@@ -214,14 +214,14 @@ describe('useAuthStore', () => {
         exp: Math.floor(Date.now() / 1000) - 100, // expired
       })
 
-      localStorage.setItem('web_token', mockToken)
-      localStorage.setItem('web_user_type', 'agent')
+      sessionStorage.setItem('web_token', mockToken)
+      sessionStorage.setItem('web_user_type', 'agent')
 
       const store = useAuthStore()
       store.initializeAuth()
 
       expect(store.isAuthenticated).toBe(false)
-      expect(localStorage.getItem('web_token')).toBeNull()
+      expect(sessionStorage.getItem('web_token')).toBeNull()
     })
 
     it('logs out when citizen token is expired', () => {
