@@ -98,6 +98,12 @@ website/docs/packages/backend/api-reference-generated/
 .claude/
 !.claude/hooks/
 !.claude/settings.json
+# Playwright
+test-results/
+playwright-report/
+**/test-results/
+**/playwright-report/
+
 *storybook.log
 .worktrees/
 docs/superpowers/
