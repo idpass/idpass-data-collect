@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       HUSKY: 0
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
 
@@ -46,6 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       HUSKY: 0
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     needs: license-check
 
     strategy:
@@ -111,6 +113,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       HUSKY: 0
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     needs: license-check
     steps:
       - uses: actions/checkout@v4

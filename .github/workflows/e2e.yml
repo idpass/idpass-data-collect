@@ -16,6 +16,7 @@ jobs:
     timeout-minutes: 30
     env:
       HUSKY: 0
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       # Backend configuration
       POSTGRES: postgresql://test:test@localhost:5432/test
       POSTGRES_TEST: postgresql://test:test@localhost:5432/test
