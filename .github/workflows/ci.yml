@@ -96,7 +96,7 @@ jobs:
         run: HUSKY=0 pnpm run ci:install
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       - name: Run pr-check
         env:

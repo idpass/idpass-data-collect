@@ -100,7 +100,7 @@ jobs:
 
       # --- Install Playwright browsers ---
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
 
       # --- Backend e2e tests ---
       - name: Run backend e2e tests
