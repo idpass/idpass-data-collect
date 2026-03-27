@@ -99,9 +99,9 @@ jobs:
         env:
           POSTGRES: postgresql://test:test@localhost:5432/test
           POSTGRES_TEST: postgresql://test:test@localhost:5432/test
-          JWT_SECRET: test_secret
+          JWT_SECRET: ci_test_secret_that_is_at_least_32_chars_long!
           ADMIN_EMAIL: admin@example.com
-          ADMIN_PASSWORD: test_password
+          ADMIN_PASSWORD: "Correct horse battery staple 42!"
         run: pnpm run pr-check
 
   security:

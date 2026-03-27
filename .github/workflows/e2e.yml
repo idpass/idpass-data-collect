@@ -21,7 +21,7 @@ jobs:
       POSTGRES_TEST: postgresql://test:test@localhost:5432/test
       JWT_SECRET: e2e_test_secret_that_is_at_least_32_chars_long!
       ADMIN_EMAIL: admin@datacollect.lan
-      ADMIN_PASSWORD: "correct horse battery staple 42!"
+      ADMIN_PASSWORD: "Correct horse battery staple 42!"
       SYNC_SERVER_PORT: 3000
 
     services:
