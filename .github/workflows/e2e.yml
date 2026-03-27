@@ -18,6 +18,7 @@ jobs:
       HUSKY: 0
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       # Backend configuration
+      VITE_API_URL: http://localhost:3000
       POSTGRES: postgresql://test:test@localhost:5432/test
       POSTGRES_TEST: postgresql://test:test@localhost:5432/test
       JWT_SECRET: e2e_test_secret_that_is_at_least_32_chars_long!

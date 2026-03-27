@@ -22,7 +22,7 @@ import { BACKEND_URL } from './api'
 export const ADMIN_EMAIL =
   process.env.ADMIN_EMAIL || 'admin@datacollect.lan'
 export const ADMIN_PASSWORD =
-  process.env.ADMIN_PASSWORD || 'correct horse battery staple 42!'
+  process.env.ADMIN_PASSWORD || 'Correct horse battery staple 42!'
 
 export async function getToken(
   email: string,

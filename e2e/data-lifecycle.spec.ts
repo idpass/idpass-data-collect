@@ -32,7 +32,7 @@ const ADMIN_URL = process.env.ADMIN_URL || 'http://localhost:5173'
 const WEB_URL = process.env.WEB_URL || 'http://localhost:5174'
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@datacollect.lan'
 const ADMIN_PASSWORD =
-  process.env.ADMIN_PASSWORD || 'correct horse battery staple 42!'
+  process.env.ADMIN_PASSWORD || 'Correct horse battery staple 42!'
 
 const TEST_CONFIG_ID = `e2e-lifecycle-${Date.now()}`
 const FIELDWORKER_EMAIL = `e2e-fw-${Date.now()}@datacollect.lan`
@@ -146,7 +146,7 @@ test.describe('Data Lifecycle', () => {
     // Admin login uses name="username" (mapped to email) and type="password"
     await adminPage.fill('input[name="username"]', ADMIN_EMAIL)
     await adminPage.fill('input[type="password"]', ADMIN_PASSWORD)
-    await adminPage.locator('.v-btn:has-text("Login")').click()
+    await adminPage.locator('button[type="submit"]').click()
 
     await adminPage.waitForURL(`${ADMIN_URL}/`)
     await expect(adminPage.getByText('E2E Lifecycle Test')).toBeVisible({
