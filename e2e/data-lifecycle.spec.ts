@@ -169,7 +169,7 @@ test.describe('Data Lifecycle', () => {
     await webPage.waitForURL(new RegExp(`/agent/${TEST_CONFIG_ID}`), {
       timeout: 30000,
     })
-    await expect(webPage.getByText('E2E Lifecycle Test')).toBeVisible({
+    await expect(webPage.getByRole('heading', { name: 'E2E Lifecycle Test' })).toBeVisible({
       timeout: 15000,
     })
 
