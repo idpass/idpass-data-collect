@@ -150,7 +150,7 @@ test.describe('Data Lifecycle', () => {
     await adminPage.locator('button[type="submit"]').click()
 
     await adminPage.waitForURL(`${ADMIN_URL}/`)
-    await expect(adminPage.getByText('E2E Lifecycle Test')).toBeVisible({
+    await expect(adminPage.getByRole('heading', { name: 'E2E Lifecycle Test' })).toBeVisible({
       timeout: 30000,
     })
 
