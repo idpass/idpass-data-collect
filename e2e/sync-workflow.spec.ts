@@ -119,7 +119,7 @@ test.describe('Sync Workflow', () => {
     })
 
     // Verify the seeded entity appears in the dashboard
-    await expect(page.getByText('Synced Household Beta')).toBeVisible({
+    await expect(page.getByText('Synced Household Beta', { exact: true })).toBeVisible({
       timeout: 30000,
     })
   })
@@ -164,7 +164,7 @@ test.describe('Sync Workflow', () => {
     })
 
     await expect(
-      page.getByText('Synced Household Beta (Updated)'),
+      page.getByText('Synced Household Beta (Updated)', { exact: true }),
     ).toBeVisible({ timeout: 30000 })
   })
 })
