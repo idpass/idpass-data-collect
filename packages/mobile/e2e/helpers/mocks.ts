@@ -66,9 +66,16 @@ export async function seedTenantConfig(
   page: Page,
   config: Record<string, unknown> = TEST_TENANT_CONFIG,
 ) {
-  await page.waitForFunction(() => (window as Record<string, unknown>).db, null, {
-    timeout: 15000,
-  })
+  await page.waitForFunction(
+    () => {
+      const db = (window as Record<string, unknown>).db as
+        | { tenantapps?: unknown }
+        | undefined
+      return db?.tenantapps
+    },
+    null,
+    { timeout: 15000 },
+  )
   await page.evaluate(async (cfg) => {
     const db = (window as Record<string, unknown>).db as {
       tenantapps: { upsert: (doc: unknown) => Promise<unknown> }

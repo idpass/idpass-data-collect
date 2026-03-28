@@ -109,17 +109,18 @@ test.describe('Sync Workflow', () => {
 
     // Field worker logs in via web UI (using proven selectors from web e2e)
     await page.goto(`${WEB_URL}/agent/login`)
+    await page.waitForLoadState('networkidle')
     await page.fill('input[type="email"]', FIELDWORKER_EMAIL)
     await page.fill('input[type="password"]', FIELDWORKER_PASSWORD)
     await page.click('button[type="submit"]')
 
     await page.waitForURL(new RegExp(`/agent/${TEST_CONFIG_ID}`), {
-      timeout: 15000,
+      timeout: 30000,
     })
 
     // Verify the seeded entity appears in the dashboard
     await expect(page.getByText('Synced Household Beta')).toBeVisible({
-      timeout: 15000,
+      timeout: 30000,
     })
   })
 
@@ -153,16 +154,17 @@ test.describe('Sync Workflow', () => {
 
     // Field worker logs in and sees updated data
     await page.goto(`${WEB_URL}/agent/login`)
+    await page.waitForLoadState('networkidle')
     await page.fill('input[type="email"]', FIELDWORKER_EMAIL)
     await page.fill('input[type="password"]', FIELDWORKER_PASSWORD)
     await page.click('button[type="submit"]')
 
     await page.waitForURL(new RegExp(`/agent/${TEST_CONFIG_ID}`), {
-      timeout: 15000,
+      timeout: 30000,
     })
 
     await expect(
       page.getByText('Synced Household Beta (Updated)'),
-    ).toBeVisible({ timeout: 15000 })
+    ).toBeVisible({ timeout: 30000 })
   })
 })

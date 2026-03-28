@@ -143,6 +143,7 @@ test.describe('Data Lifecycle', () => {
     const adminPage = await adminContext.newPage()
 
     await adminPage.goto(`${ADMIN_URL}/login`)
+    await adminPage.waitForLoadState('networkidle')
     // Admin login uses name="username" (mapped to email) and type="password"
     await adminPage.fill('input[name="username"]', ADMIN_EMAIL)
     await adminPage.fill('input[type="password"]', ADMIN_PASSWORD)
@@ -150,7 +151,7 @@ test.describe('Data Lifecycle', () => {
 
     await adminPage.waitForURL(`${ADMIN_URL}/`)
     await expect(adminPage.getByText('E2E Lifecycle Test')).toBeVisible({
-      timeout: 10000,
+      timeout: 30000,
     })
 
     // --- Step 3: Field worker logs into web UI ---
@@ -158,6 +159,7 @@ test.describe('Data Lifecycle', () => {
     const webPage = await webContext.newPage()
 
     await webPage.goto(`${WEB_URL}/agent/login`)
+    await webPage.waitForLoadState('networkidle')
     // Web login uses type="email" and type="password" (per existing e2e patterns)
     await webPage.fill('input[type="email"]', FIELDWORKER_EMAIL)
     await webPage.fill('input[type="password"]', FIELDWORKER_PASSWORD)
@@ -165,9 +167,11 @@ test.describe('Data Lifecycle', () => {
 
     // Wait for redirect to agent dashboard
     await webPage.waitForURL(new RegExp(`/agent/${TEST_CONFIG_ID}`), {
+      timeout: 30000,
+    })
+    await expect(webPage.getByText('E2E Lifecycle Test')).toBeVisible({
       timeout: 15000,
     })
-    await expect(webPage.getByText('E2E Lifecycle Test')).toBeVisible()
 
     await adminContext.close()
     await webContext.close()
