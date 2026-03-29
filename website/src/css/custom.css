@@ -1,7 +1,48 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* ID PASS Humanitarian Tech Theme — mapped from admin design tokens */
+:root {
+  /* Primary: Deep Slate Blue (trust, authority) */
+  --ifm-color-primary: #2C3E50;
+  --ifm-color-primary-dark: #1A252F;
+  --ifm-color-primary-darker: #151E26;
+  --ifm-color-primary-darkest: #111920;
+  --ifm-color-primary-light: #34495E;
+  --ifm-color-primary-lighter: #3D566E;
+  --ifm-color-primary-lightest: #4A6580;
+
+  /* Brand accent: ID PASS Orange */
+  --ifm-color-brand: #ff6d37;
+  --ifm-color-brand-light: #ff956b;
+  --ifm-color-brand-dark: #e6521f;
+
+  /* Status colors from admin design tokens */
+  --ifm-color-success: #2D8A56;
+  --ifm-color-info: #3B82F6;
+  --ifm-color-warning: #D97706;
+  --ifm-color-danger: #E53E3E;
+
+  /* Typography: Inter (matching admin app) */
+  --ifm-font-family-base: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* Spacing and radius */
+  --ifm-global-radius: 0.375rem;
+}
+
+/* Dark mode overrides — primary lightened for readability on dark backgrounds */
+[data-theme='dark'] {
+  --ifm-color-primary: #7B9AB8;
+  --ifm-color-primary-dark: #6489A9;
+  --ifm-color-primary-darker: #5980A2;
+  --ifm-color-primary-darkest: #436A8D;
+  --ifm-color-primary-light: #92ABC7;
+  --ifm-color-primary-lighter: #9DB4CE;
+  --ifm-color-primary-lightest: #BED0E2;
+}
 
 /* Clean, professional hero section */
 .hero {
-  background-color: var(--ifm-color-primary);
+  background: linear-gradient(135deg, #2C3E50 0%, #34495E 50%, #ff6d37 100%);
   color: white;
   padding: 4rem 0;
   text-align: center;
@@ -42,13 +83,13 @@
 }
 
 .hero__cta .button--primary {
-  background: white;
-  color: var(--ifm-color-primary);
+  background: var(--ifm-color-brand, #ff6d37);
+  color: white;
 }
 
 .hero__cta .button--primary:hover {
-  background: var(--ifm-color-emphasis-100);
-  color: var(--ifm-color-primary);
+  background: var(--ifm-color-brand-dark, #e6521f);
+  color: white;
 }
 
 .hero__cta .button--secondary {
@@ -250,17 +291,17 @@ table thead {
 }
 
 .badge--success {
-  background-color: #4caf50;
+  background-color: var(--ifm-color-success);
   color: white;
 }
 
 .badge--warning {
-  background-color: #ff9800;
+  background-color: var(--ifm-color-warning);
   color: white;
 }
 
 .badge--danger {
-  background-color: #f44336;
+  background-color: var(--ifm-color-danger);
   color: white;
 }
 
