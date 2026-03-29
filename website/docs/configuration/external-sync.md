@@ -470,7 +470,7 @@ class CustomSyncAdapter implements ExternalSyncAdapter {
 const adaptersMapping = {
   "mock-sync-server": MockSyncServerAdapter,
   "openfn-adapter": OpenFnSyncAdapter,
-  "openspp-adapter": OpenSppSyncAdapter,
+  "openspp-adapter": OpenSppOdooSyncAdapter,
   "custom-adapter": CustomSyncAdapter, // Add new adapter
 };
 ```
@@ -529,7 +529,7 @@ interface CustomSyncConfig extends ExternalSyncConfig {
 - **FieldMappingDialog.vue**: Visual interface for field mapping configuration
 - **MockSyncServerAdapter**: Testing adapter for development
 - **OpenFnSyncAdapter**: OpenFn platform integration
-- **OpenSppSyncAdapter**: OpenSPP platform integration with field mapping
+- **OpenSppOdooSyncAdapter**: OpenSPP platform integration with field mapping
 - **EventStore**: Event storage and timestamp management
 - **EventApplierService**: Event application to entities
 - **FieldTransformers**: Data transformation utilities (text, date, id, multiselect, boolean)
