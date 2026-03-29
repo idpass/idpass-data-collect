@@ -99,7 +99,10 @@ This will build the app and open Xcode for further configuration and deployment.
 - Camera integration for photo capture
 - Geolocation support
 - Barcode scanning
-- Secure authentication with Auth0/Keycloak
+- Secure authentication with JWT-based login
+- Biometric lock screen with device fingerprint/face unlock
+- Secure encrypted local storage for sensitive data
+- XState-driven authentication and app-lock state machines
 - Bidirectional sync with backend server
 - Biometric Capture App (BCA) integration for enrollment
 
@@ -138,11 +141,12 @@ pnpm test:coverage
 
 - Vue 3 with Composition API
 - Capacitor for native mobile features
+- Vuetify 3 (Material Design 3) for UI components
 - Form.io for dynamic forms
 - Pinia for state management
 - Vue Router for navigation
-- Bootstrap for UI styling
-- RxDB for local database (IndexedDB)
+- XState for authentication and app-lock state machines
+- IndexedDB (via @idpass/data-collect-core) for local offline storage
 
 ## Related Documentation
 
