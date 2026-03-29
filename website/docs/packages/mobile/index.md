@@ -97,11 +97,91 @@ Offline-first data collection:
 - **Conflict Resolution**: Handle data conflicts during sync via the core library's event-sourcing model
 
 ### Biometric App Lock (v2.0.0)
-A `lockMachine` (XState v5) manages the app lock lifecycle:
-- Automatically locks after a configurable inactivity timeout (default: 5 minutes)
-- Prompts for biometric authentication (fingerprint/face ID) on unlock
-- The `LockScreen` component renders over all app content while locked
-- Lock state is persisted via `@aparajita/capacitor-secure-storage`
+
+The mobile app protects sensitive beneficiary data with a biometric app lock that activates automatically after a period of inactivity. The lock is managed by a dedicated `lockMachine` (XState v5) that persists state across app restarts.
+
+#### How it works
+
+When the app starts on a native device (iOS or Android), `AppLockService.init()` loads the last persisted lock state from secure storage. If the app was previously locked (or has no persisted state — the safe default for cold starts), the `LockScreen` overlay is shown immediately and the user must authenticate before accessing any data.
+
+While unlocked, the `lockMachine` runs an inactivity timer. Any user interaction (pointer or touch event) resets the timer via `AppLockService.resetInactivityTimer()`. After **5 minutes of inactivity** the machine transitions to the `locked` state automatically.
+
+Authentication is handled by the `@aparajita/capacitor-biometric-auth` plugin. The plugin uses whatever the device has available — fingerprint, face recognition, or the device screen lock PIN/pattern/passcode — controlled by the `allowDeviceCredential: true` flag. On devices with no screen lock configured the lock remains engaged and cannot be bypassed, protecting data on unsecured devices.
+
+The feature is native-platform only. On web builds `Capacitor.isNativePlatform()` returns `false`, so the lock machine transitions directly to `unlocked` on init and all biometric calls are no-ops.
+
+#### XState lock machine states
+
+```
+idle → initializing → locked ←→ authenticating
+                   ↘ unlocked (5 min timer → locked)
+```
+
+| State | Description |
+| :--- | :--- |
+| `idle` | Machine created but not yet started |
+| `initializing` | Loading persisted lock state from secure storage |
+| `locked` | App locked; persists `isLocked=true`; waits for `AUTHENTICATE` event |
+| `authenticating` | Biometric prompt shown; transitions to `unlocked` on success or back to `locked` on failure/cancel |
+| `unlocked` | Normal operation; inactivity timer running; transitions to `locked` after 5 minutes or on explicit `LOCK` event |
+
+#### AppLockService API
+
+The `AppLockService` singleton wraps the XState actor and exposes a Vue-reactive API:
+
+```typescript
+import { AppLockService } from '@/services/AppLockService'
+
+// Initialise on app mount (loads persisted lock state)
+await AppLockService.init()
+
+// Reactive boolean — use in Vue templates
+AppLockService.locked.value  // true when locked
+
+// Trigger biometric prompt programmatically
+const success = await AppLockService.authenticate()
+
+// Lock immediately (e.g. on a "lock now" button)
+await AppLockService.lock()
+
+// Reset the inactivity timer on user activity
+AppLockService.resetInactivityTimer()
+
+// Check whether biometrics are available on this device
+const available = await AppLockService.isAvailable()
+```
+
+#### Root component integration
+
+`App.vue` shows the `LockScreen` overlay when the machine is in the locked state and calls `resetInactivityTimer` on all user interactions:
+
+```vue
+<template>
+  <v-app @pointerdown="AppLockService.resetInactivityTimer()">
+    <LockScreen v-if="AppLockService.locked.value" />
+    <!-- rest of app -->
+  </v-app>
+</template>
+
+<script setup lang="ts">
+import { onMounted } from 'vue'
+import { AppLockService } from '@/services/AppLockService'
+
+onMounted(async () => {
+  await AppLockService.init()
+})
+</script>
+```
+
+#### Inactivity timeout
+
+The timeout is defined as a constant in `lockMachine.ts`:
+
+```typescript
+const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000  // 5 minutes
+```
+
+To change the timeout, modify this constant. Future versions may expose it as a configurable setting.
 
 ### XState Auth/Lock Flows (v2.0.0)
 Authentication and lock state are managed by two XState v5 state machines:

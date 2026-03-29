@@ -65,6 +65,7 @@ Analytics and reporting dashboard:
 - **Sync Status**: Real-time synchronization monitoring
 - **User Activity**: Track user actions and system usage
 - **Data Export**: Export data in various formats
+- **Duplicate Review**: Queue of potential duplicate entity pairs for admin resolution
 
 ## Quick Start
 
@@ -128,6 +129,52 @@ Entity and data visualization:
 - Export functionality
 - Data validation reports
 - Potential duplicates review queue fed by sync conflict detection
+
+## Duplicate Detection (v2.0.0)
+
+DataCollect automatically detects potential duplicate entities during data entry and surfaces them in the Admin interface for review. Unresolved duplicates block external sync, so the review queue should be checked before triggering external synchronisation.
+
+### How detection works
+
+After every `create` or `update` form submission, the `DuplicateDetectionService` asynchronously scans the entity store for other entities that share the same data field values. Detection runs **off the write path** using a background queue (setTimeout) so that `submitForm()` returns immediately and data collection is never blocked.
+
+The algorithm flattens the entity's `data` object into dot-notation key-value pairs (e.g. `address.city`) and runs a search for other entities sharing those values. Any match other than the entity itself is flagged as a potential duplicate pair and stored in the `potential_duplicates` table.
+
+Detection results are **advisory only**: they never block writes, sync, or any other operation — except external sync (see below).
+
+### Impact on external sync
+
+External sync will not run while there are unresolved potential duplicate pairs in the queue. This prevents duplicate records from being pushed to integrated systems such as OpenSPP. Resolve all outstanding duplicates in the Admin interface before triggering external sync.
+
+### Resolving duplicates in the Admin UI
+
+Administrators access the duplicate review queue via the **Data Viewer** section of the admin interface (requires the Admin role).
+
+For each flagged pair, two resolution options are available:
+
+| Action | Effect |
+| :--- | :--- |
+| **Keep both** | Marks the pair as reviewed without deleting either entity. Both records remain in the system. |
+| **Delete new** | Submits a `resolve-duplicate` form with `shouldDelete: true`, which deletes the newly created entity and retains the existing one. |
+
+The resolution is submitted as a standard form event and is therefore audited and synchronised like any other data change.
+
+### REST API
+
+The duplicate detection endpoints are available under `/api/potential-duplicates` and require the Admin JWT role:
+
+```
+GET  /api/potential-duplicates?configId=<tenant-id>
+     Returns an array of { entityGuid, duplicateGuid } pairs.
+
+POST /api/potential-duplicates/resolve
+     Body: { newItem, existingItem, shouldDeleteNewItem, configId }
+     Resolves a single pair.
+```
+
+### Configuration
+
+Duplicate detection is always enabled and requires no configuration. Detection rules are based on the entity's data fields: any two entities sharing at least one non-empty field value will be flagged as a potential duplicate pair.
 
 ## Authentication Flow
 
