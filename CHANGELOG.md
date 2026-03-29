@@ -5,6 +5,67 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-MM-DD
+
+Major release introducing offline-first web and mobile applications with event sourcing, multi-tenant sync, and comprehensive security hardening. See [2.0.0-beta.1](#200-beta1---2026-03-18), [2.0.0-beta.2](#200-beta2---2026-03-26), and [2.0.0-beta.3](#200-beta3---2026-03-29) for detailed per-change history.
+
+### Breaking Changes
+- `EntityPair.initial` is now nullable (entities not yet synced have `null`)
+- Adapter imports moved: `@idpass/data-collect-core` → `@idpass/adapter-openspp`, `@idpass/adapter-openfn`
+- Adapters must register via `AdapterRegistry` at startup
+- `EntityDataManager.getEntity()` returns `EntityPair` (adds `guid`, nullable `initial`)
+- JWT tokens expire after 1 hour (previously no expiry)
+- `JWT_SECRET` must be ≥32 characters (server refuses to start otherwise)
+- `CORS_ORIGINS` defaults to deny-all (must be set explicitly)
+- `OpenSppSyncAdapter` removed — replaced by `OpenSppOdooSyncAdapter` (from `@idpass/adapter-openspp`)
+
+### Added
+- Web App (`packages/web`) for agent data collection and citizen self-service with OTP, National ID, and OIDC authentication
+- Mobile UI redesigned with Vuetify 3 and Material Design 3
+- Hash chain integrity replaces Merkle tree for event store tamper detection
+- XState v5 statecharts for sync orchestration and mobile auth/lock flows
+- Selective sync by area IDs and entity GUIDs
+- Biometric app lock (fingerprint/PIN) with auto-lock on background
+- Secure storage on mobile (iOS Keychain / Android Keystore)
+- Review workflow with submission pipeline (pending/approved/rejected)
+- Duplicate detection with async resolution UI
+- File attachments with MIME type detection from magic bytes
+- Record entity type for activities, services, and home visits
+- Adapter registry with Zod validation and dynamic registration
+- OpenSPP, OpenFn, and Mock adapters extracted to standalone packages
+- 13 new backend services (RBAC, Area, Assignment, Attachment, Review, and more)
+- 41+ Playwright E2E tests across admin, backend, and integration
+- Drizzle ORM schema definitions alongside raw SQL
+- Configurable display name field for entity forms
+- Strong password validation with clear error messages
+
+### Security
+- JWT 1-hour expiry with token refresh
+- OIDC: JWKS URI origin validation, issuer pre-validation, audience + nonce checks
+- Tenant isolation middleware on all tenant-scoped routes
+- Self-service token scope enforcement and entity isolation
+- OTP codes hashed with HMAC-SHA256 and constant-time comparison
+- Rate limiting on OTP, verification, and public endpoints
+- Zod input validation on all self-service endpoints
+- Filename sanitization (null bytes, path traversal, header injection)
+- HTTPS-only in production mobile builds
+- Non-root Docker containers
+
+### Improved
+- Pino-based structured logging replaces console.log throughout
+- Composite cursor pagination prevents event skipping during sync
+- Transactional sync push (batch commit or rollback atomically)
+- Docker multi-stage builds with nginx for frontend SPAs
+- Node.js 24 support in CI
+
+### Deployment Notes
+1. Set `JWT_SECRET` to ≥32 characters (server won't start otherwise)
+2. Set `CORS_ORIGINS` explicitly (defaults to deny-all)
+3. Run DB migrations — new tables: `users`, `areas`, `userAssignments`, `entityOverrides`, `entitySnapshots`, `attachments`, `attachmentData`, `otp_codes`, `submission_reviews`, `review_configs`, `verifications`
+4. Update adapter imports from `@idpass/data-collect-core` to `@idpass/adapter-openspp` / `@idpass/adapter-openfn`
+5. Audit all `entityPair.initial` access for null checks
+6. Replace `OpenSppSyncAdapter` with `OpenSppOdooSyncAdapter`
+
 ## [2.0.0-beta.2] - 2026-03-26
 
 ### Added
