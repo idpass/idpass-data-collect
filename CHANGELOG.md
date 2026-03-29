@@ -44,6 +44,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### CI
 - Backend, admin, and mobile E2E tests included in pr-check
 
+## [2.0.0-beta.3] - 2026-03-29
+
+### Fixed
+- Address v2.0.0 release review findings C1-C5, I1-I11
+- Router guard blocking login pages and `window.db` race condition
+- E2E: strict mode violations with exact text matching and getByRole selectors
+- E2E: stabilize mobile seedTenantConfig and increase integration test timeouts
+- E2E: add CORS_ORIGINS for admin and web dev servers in CI
+- E2E: use randomUUID() for event GUIDs in integration tests
+- E2E: fix admin button selector and default password in CI
+
+### CI
+- Opt into Node.js 24 for all GitHub Actions; update pnpm action to v4
+- Scope Playwright browser install to admin package
+- Use `pnpm exec` instead of `npx` for Playwright install
+- Update workflow passwords and JWT secret to meet strength requirements
+- Allow Playwright to reuse existing dev server in all environments
+
 ## [2.0.0-beta.1] - 2026-03-18
 
 ### Breaking Changes
