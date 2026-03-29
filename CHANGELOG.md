@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-beta.2] - 2026-03-26
+
+### Added
+- Mobile UI redesigned with Vuetify 3 and Material Design 3
+- Web dev mode with platform service and native stubs
+- Configurable display name field for entity forms
+- Confirmation dialog when creating a program with a duplicate name
+- Strong password validation with clear error messages
+- Silent re-authentication on token expiry during sync
+- Sync history shows request/response payloads in dev builds
+- Global back button in mobile app bar
+- Mobile Playwright E2E tests for auth and sync flows
+
+### Fixed
+- Hash chain false tamper detection — syncLevel excluded from hash
+- Mobile white screen instability — sync decoupled from UI lifecycle
+- FormIO component initialization error in production builds
+- JWT expiry check and fail-fast on 401 during sync
+- Enriched sync error messages with HTTP status and server response
+- Duplicate event push handled idempotently with ON CONFLICT DO NOTHING
+- Duplicate events skipped in transactional batch before processing
+- Config schema validation and duplicate check reliability
+- Accept null fields in uploaded config JSON
+- External sync errors propagated to admin UI
+- Members processing guarded with Array.isArray
+- OpenSPP V2 test-connection and field-fetch moved to backend endpoints
+- OpenSPP adapter registered correctly per protocol version
+- V2 adapter accepts both OAuth2 and Odoo credentials
+- Field mappings used for core individual fields instead of hardcoded names
+
+### Changed
+- `OpenSppSyncAdapterV2` renamed to `OpenSppOdooSyncAdapter`
+- Legacy `OpenSppSyncAdapter` removed — `OpenSppOdooSyncAdapter` is canonical V1
+- `useBarcodeScan` composable extracted from duplicated scanner logic
+- ESM-compatible Vite configs for mobile and web packages
+
+### CI
+- Backend, admin, and mobile E2E tests included in pr-check
+
 ## [2.0.0-beta.1] - 2026-03-18
 
 ### Breaking Changes
