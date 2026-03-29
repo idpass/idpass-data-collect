@@ -57,16 +57,11 @@ The EventStore manages immutable event storage with cryptographic integrity:
 
 ```typescript
 class EventStoreImpl implements EventStore {
-  private merkleRoot: MerkleNode | null = null;
   private storageAdapter: EventStorageAdapter;
 
   async saveEvent(form: FormSubmission): Promise<string> {
-    // Store event immutably
+    // Store event immutably, appending to the hash chain
     const guids = await this.storageAdapter.saveEvents([form]);
-    
-    // Update Merkle tree for integrity
-    await this.loadMerkleTree();
-    
     return guids[0];
   }
 }
@@ -510,7 +505,7 @@ interface EventMetrics {
   averageEventSize: number;
   eventTypeDistribution: Record<string, number>;
   failedEvents: number;
-  merkleTreeDepth: number;
+  hashChainLength: number;
 }
 ```
 
@@ -521,11 +516,8 @@ interface EventMetrics {
 async function inspectEvent(eventId: string): Promise<void> {
   const event = await eventStore.getEvent(eventId);
   console.log('Event:', event);
-  
-  const proof = await eventStore.getProof(event);
-  console.log('Merkle Proof:', proof);
-  
-  const isValid = eventStore.verifyEvent(event, proof);
+
+  const isValid = await eventStore.verifyHashChain(eventId);
   console.log('Integrity Valid:', isValid);
 }
 

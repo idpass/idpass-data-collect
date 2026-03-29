@@ -27,7 +27,7 @@ Central orchestrator for all data operations, providing a clean API for:
 - Synchronization coordination
 
 ### EventStore & EntityStore
-- **EventStore**: Immutable event log with Merkle tree integrity
+- **EventStore**: Immutable event log with hash chain integrity
 - **EntityStore**: Current state of all entities (Groups and Individuals)
 
 ### Sync Managers

@@ -70,8 +70,8 @@ interface EventStore {
   // Get events for specific entity
   async getEventsForEntity(entityId: string): Promise<FormSubmission[]>
   
-  // Merkle tree operations
-  async getMerkleRoot(): Promise<string>
+  // Hash chain operations
+  async verifyHashChain(startEventGuid?: string): Promise<boolean>
   async verifyIntegrity(): Promise<boolean>
 }
 ```
