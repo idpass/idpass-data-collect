@@ -323,6 +323,12 @@ table thead {
   color: white;
 }
 
+/* ── Code block accent ────────────────────────────────────────────────
+   Subtle top border in brand orange to tie code blocks to the palette. */
+.prism-code {
+  border-top: 2px solid var(--ifm-color-brand, #ff6d37);
+}
+
 /* ── Diff syntax highlighting ─────────────────────────────────────────
    Color removed/added lines in ```diff blocks like GitHub. */
 .prism-code .token-line:has(> .token.deleted) {
