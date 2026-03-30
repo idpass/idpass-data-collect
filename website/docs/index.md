@@ -1,9 +1,10 @@
 ---
 id: index
-title: Welcome to ID PASS DataCollect
+title: ID PASS DataCollect
 sidebar_position: 1
 slug: /
 hide_table_of_contents: true
+hide_title: true
 ---
 
 import HomepageHero from '@site/src/components/HomepageHero';

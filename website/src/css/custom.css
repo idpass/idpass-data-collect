@@ -457,13 +457,17 @@ html[data-theme='dark'] .prism-code .token.inserted {
 
 /* Navbar branding */
 .navbar__logo img {
-  height: 28px;
+  height: 26px;
   width: auto;
+  top: 2px;
+  position: relative;
 }
 
 .navbar__title {
-  font-size: 1.2rem;
-  font-weight: 600;
+  font-size: 2rem;
+  font-weight: bold;
+  margin-left: 4px;
+  line-height: 2rem;
 }
 
 .navbar__items {
