@@ -5,6 +5,47 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0-rc.1] - 2026-03-30
+
+Release candidate for v2.0.0. Includes all beta.3 fixes plus documentation overhaul, website redesign, and package publishing infrastructure.
+
+### Documentation
+- Complete documentation audit: replaced Merkle tree references with hash chain, updated OpenSPP adapter class names after beta.2 rename, added OTP and National ID auth adapters to architecture docs
+- Rewrote mobile package docs for Vuetify 3 / Material Design 3 (removed RxDB and Bootstrap references)
+- Added missing documentation for biometric app lock, record entity type, duplicate detection, and strong password validation
+- Created READMEs for web, backend, adapter-openspp, adapter-openfn, and adapter-mock packages
+- Updated existing READMEs (admin, datacollect, mobile) for v2.0.0
+- Updated entity-forms config, web app guide, and deployment docs
+- Added changelog entries for beta.2, beta.3, and the final v2.0.0 release summary
+
+### Website
+- Redesigned docs site theme with ID PASS slate blue (#2C3E50) and orange (#ff6d37) palette
+- Replaced gradient hero with solid slate blue and orange accent stripe
+- Added diff syntax highlighting with green/red line backgrounds
+- Converted developer and user guide overview pages to card-grid layouts
+- Updated Mermaid component to use `theme: 'base'` with brand colors (fixes ColorTheme errors on Cloudflare Pages)
+- Added ID PASS logo and favicon from idpass.org
+- Simplified homepage to hero and two routing cards
+- Removed OpenSPP V2 adapter beta label (adapter is production-ready)
+
+### Package Publishing
+- Added `.npmrc` with `@idpass` scope pointed at GitHub Packages registry
+- Added `publishConfig` to all 5 publishable packages (core, backend, adapter-openspp, adapter-openfn, adapter-mock)
+- Added `files` field to adapter packages to prevent shipping source and tests
+- Created `publish-packages.yml` workflow with tag-driven and manual dispatch triggers
+- Simplified `ci:install` script (removed dynamic `.npmrc` generation)
+
+### Fixed
+- Address v2.0.0 release review findings C1-C5, I1-I11
+- Router guard blocking login pages and `window.db` race condition
+- E2E test stabilization: strict mode violations, CORS_ORIGINS for dev servers, randomUUID for event GUIDs
+- Deployment docs CORS_ORIGINS default corrected from `*` to deny-all
+
+### CI
+- Opt into Node.js 24 for all GitHub Actions; update pnpm action to v4
+- Scope Playwright browser install to admin package
+- Update workflow passwords and JWT secret to meet strength requirements
+
 ## [2.0.0] - 2026-MM-DD
 
 Major release introducing offline-first web and mobile applications with event sourcing, multi-tenant sync, and comprehensive security hardening. See [2.0.0-beta.1](#200-beta1---2026-03-18), [2.0.0-beta.2](#200-beta2---2026-03-26), and [2.0.0-beta.3](#200-beta3---2026-03-29) for detailed per-change history.
