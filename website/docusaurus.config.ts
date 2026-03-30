@@ -6,7 +6,7 @@ import remarkMermaid from './src/plugin/remark-mermaid/index.js';
 const config: Config = {
   title: 'ID PASS  DataCollect',
   tagline: 'Offline-first data management for social protection and humanitarian assistance',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/favicon.png',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
@@ -98,10 +98,10 @@ const config: Config = {
     // Replace with your project's social card
     image: 'img/docusaurus-social-card.jpg',
     navbar: {
-      title: 'ID PASS DataCollect',
+      title: 'DataCollect',
       logo: {
-        alt: 'ID PASS DataCollect Logo',
-        src: 'img/logo.svg',
+        alt: 'ID PASS',
+        src: 'img/idpass-logo.svg',
       },
       items: [
         {

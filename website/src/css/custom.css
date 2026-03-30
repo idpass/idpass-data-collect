@@ -48,7 +48,7 @@
   color: white;
   padding: 4.5rem 0 3.5rem;
   text-align: center;
-  margin-bottom: 0;
+  margin-bottom: 2.5rem;
   position: relative;
 }
 
@@ -453,6 +453,17 @@ html[data-theme='dark'] .prism-code .token.inserted {
   .cards-grid--3col {
     grid-template-columns: 1fr;
   }
+}
+
+/* Navbar logo sizing */
+.navbar__logo img {
+  height: 28px;
+  width: auto;
+}
+
+/* White logo for dark mode */
+html[data-theme='dark'] .navbar__logo img {
+  filter: brightness(0) invert(1);
 }
 
 .header-github-link {

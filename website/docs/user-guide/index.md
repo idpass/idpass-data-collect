@@ -10,15 +10,15 @@ Whether you are an administrator managing configurations or a field agent collec
 
 <div className="guide-section">Available Guides</div>
 <div className="guide-cards">
-  <a href="./admin-ui-dashboard" className="guide-card">
+  <a href="/user-guide/admin-ui-dashboard" className="guide-card">
     <div className="guide-card__title">Admin UI Dashboard</div>
     <p className="guide-card__desc">Manage application configurations, users, and monitor data through the web-based admin interface.</p>
   </a>
-  <a href="./mobile-app" className="guide-card">
+  <a href="/user-guide/mobile-app" className="guide-card">
     <div className="guide-card__title">Mobile App Guide</div>
     <p className="guide-card__desc">Use the mobile application for offline data collection and synchronization in the field.</p>
   </a>
-  <a href="./web-app" className="guide-card">
+  <a href="/user-guide/web-app" className="guide-card">
     <div className="guide-card__title">Web App Guide</div>
     <p className="guide-card__desc">Agent data collection and citizen self-service with OTP, National ID, and OIDC authentication.</p>
   </a>
