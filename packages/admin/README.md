@@ -67,9 +67,20 @@ The built files will be in the `dist/` directory.
 - Map form fields to OpenSPP fields with transformers
 - Configure batch processing settings
 
+### Submission Review Workflow
+- Review submitted form data through a pending/approved/rejected pipeline
+- Approve or reject individual submissions with optional reviewer comments
+- Audit trail of all review decisions
+
+### Duplicate Detection and Resolution
+- Automatic flagging of potential duplicate entities
+- Side-by-side comparison UI for reviewing suspected duplicates
+- Merge or dismiss duplicate candidates
+
 ### User Management
 - Create and manage user accounts
 - Assign roles (admin, user)
+- Strong password validation enforced on account creation and updates
 - View user list and details
 
 ### Data Monitoring

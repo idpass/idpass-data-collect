@@ -1,64 +1,123 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
-/* Clean, professional hero section */
+/* ID PASS Humanitarian Tech Theme — mapped from admin design tokens */
+:root {
+  /* Primary: Deep Slate Blue (trust, authority) */
+  --ifm-color-primary: #2C3E50;
+  --ifm-color-primary-dark: #1A252F;
+  --ifm-color-primary-darker: #151E26;
+  --ifm-color-primary-darkest: #111920;
+  --ifm-color-primary-light: #34495E;
+  --ifm-color-primary-lighter: #3D566E;
+  --ifm-color-primary-lightest: #4A6580;
+
+  /* Brand accent: ID PASS Orange */
+  --ifm-color-brand: #ff6d37;
+  --ifm-color-brand-light: #ff956b;
+  --ifm-color-brand-dark: #e6521f;
+
+  /* Status colors from admin design tokens */
+  --ifm-color-success: #2D8A56;
+  --ifm-color-info: #3B82F6;
+  --ifm-color-warning: #D97706;
+  --ifm-color-danger: #E53E3E;
+
+  /* Typography: Inter (matching admin app) */
+  --ifm-font-family-base: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* Spacing and radius */
+  --ifm-global-radius: 0.375rem;
+}
+
+/* Dark mode overrides — primary lightened for readability on dark backgrounds */
+[data-theme='dark'] {
+  --ifm-color-primary: #7B9AB8;
+  --ifm-color-primary-dark: #6489A9;
+  --ifm-color-primary-darker: #5980A2;
+  --ifm-color-primary-darkest: #436A8D;
+  --ifm-color-primary-light: #92ABC7;
+  --ifm-color-primary-lighter: #9DB4CE;
+  --ifm-color-primary-lightest: #BED0E2;
+}
+
+/* ── Hero ─────────────────────────────────────────────────────────────
+   Solid slate blue with a strong orange accent stripe at the bottom.
+   No gradients. The color block does the work. */
 .hero {
-  background-color: var(--ifm-color-primary);
+  background: #2C3E50;
   color: white;
-  padding: 4rem 0;
+  padding: 4.5rem 0 3.5rem;
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 2.5rem;
+  position: relative;
+}
+
+.hero::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: #ff6d37;
 }
 
 .hero__title {
-  font-size: 3rem;
-  font-weight: 600;
-  margin-bottom: 1rem;
+  font-size: 2.75rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
   color: white;
+  letter-spacing: -0.02em;
 }
 
 .hero__subtitle {
-  font-size: 1.4rem;
+  font-size: 1.15rem;
   font-weight: 400;
-  opacity: 0.9;
+  color: rgba(255, 255, 255, 0.75);
   margin-bottom: 2rem;
-  line-height: 1.5;
-  max-width: 600px;
+  line-height: 1.6;
+  max-width: 520px;
   margin-left: auto;
   margin-right: auto;
 }
 
 .hero__cta {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   justify-content: center;
   flex-wrap: wrap;
 }
 
 .hero__cta .button {
-  padding: 0.75rem 1.5rem;
-  font-size: 1rem;
-  font-weight: 500;
-  border-radius: 4px;
+  padding: 0.6rem 1.4rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 3px;
   text-decoration: none;
+  letter-spacing: 0.01em;
+  transition: background 150ms ease, border-color 150ms ease;
 }
 
 .hero__cta .button--primary {
-  background: white;
-  color: var(--ifm-color-primary);
+  background: #ff6d37;
+  color: white;
+  border: 2px solid #ff6d37;
 }
 
 .hero__cta .button--primary:hover {
-  background: var(--ifm-color-emphasis-100);
-  color: var(--ifm-color-primary);
+  background: #e6521f;
+  border-color: #e6521f;
+  color: white;
 }
 
 .hero__cta .button--secondary {
   background: transparent;
   color: white;
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.35);
 }
 
 .hero__cta .button--secondary:hover {
-  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.7);
   color: white;
 }
 
@@ -250,18 +309,133 @@ table thead {
 }
 
 .badge--success {
-  background-color: #4caf50;
+  background-color: var(--ifm-color-success);
   color: white;
 }
 
 .badge--warning {
-  background-color: #ff9800;
+  background-color: var(--ifm-color-warning);
   color: white;
 }
 
 .badge--danger {
-  background-color: #f44336;
+  background-color: var(--ifm-color-danger);
   color: white;
+}
+
+/* ── Code block accent ────────────────────────────────────────────────
+   Subtle top border in brand orange to tie code blocks to the palette. */
+.prism-code {
+  border-top: 2px solid var(--ifm-color-brand, #ff6d37);
+}
+
+/* ── Diff syntax highlighting ─────────────────────────────────────────
+   Color removed/added lines in ```diff blocks like GitHub. */
+.prism-code .token-line:has(> .token.deleted) {
+  background: rgba(255, 59, 48, 0.1);
+}
+
+.prism-code .token-line:has(> .token.inserted) {
+  background: rgba(45, 138, 86, 0.1);
+}
+
+.prism-code .token.deleted {
+  color: #b31d28;
+}
+
+.prism-code .token.inserted {
+  color: #22863a;
+}
+
+.prism-code .token.deleted .token.prefix {
+  color: #b31d28;
+  user-select: none;
+}
+
+.prism-code .token.inserted .token.prefix {
+  color: #22863a;
+  user-select: none;
+}
+
+html[data-theme='dark'] .prism-code .token-line:has(> .token.deleted) {
+  background: rgba(248, 81, 73, 0.12);
+}
+
+html[data-theme='dark'] .prism-code .token-line:has(> .token.inserted) {
+  background: rgba(63, 185, 80, 0.12);
+}
+
+html[data-theme='dark'] .prism-code .token.deleted {
+  color: #f85149;
+}
+
+html[data-theme='dark'] .prism-code .token.inserted {
+  color: #3fb950;
+}
+
+/* ── Guide cards ──────────────────────────────────────────────────────
+   For overview/index pages: replace plain bullet lists with cards that
+   have a left-border accent and clear link styling. */
+.guide-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.guide-card {
+  display: block;
+  padding: 1.25rem 1.25rem 1.25rem 1.5rem;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-left: 3px solid var(--ifm-color-emphasis-300);
+  border-radius: 3px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.guide-card:hover {
+  border-left-color: var(--ifm-color-brand, #ff6d37);
+  box-shadow: 0 2px 8px rgba(44, 62, 80, 0.08);
+  text-decoration: none;
+  color: inherit;
+}
+
+.guide-card__title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--ifm-color-primary);
+  margin-bottom: 0.35rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.guide-card:hover .guide-card__title {
+  color: var(--ifm-color-brand, #ff6d37);
+}
+
+.guide-card__desc {
+  font-size: 0.85rem;
+  color: var(--ifm-font-color-secondary);
+  line-height: 1.45;
+  margin: 0;
+}
+
+/* Section header for guide card groups */
+.guide-section {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ifm-font-color-secondary);
+  margin: 2rem 0 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.guide-section:first-child {
+  margin-top: 0.5rem;
 }
 
 /* Simple responsive adjustments */
@@ -285,6 +459,34 @@ table thead {
   .cards-grid--3col {
     grid-template-columns: 1fr;
   }
+}
+
+/* Navbar branding */
+.navbar__logo img {
+  height: 26px;
+  width: auto;
+  top: 2px;
+  position: relative;
+}
+
+.navbar__title {
+  font-size: 2rem;
+  font-weight: bold;
+  margin-left: 4px;
+  line-height: 2rem;
+}
+
+.navbar__items {
+  gap: 0.5rem;
+}
+
+.navbar__brand {
+  margin-right: 1.5rem;
+}
+
+/* White logo for dark mode */
+html[data-theme='dark'] .navbar__logo img {
+  filter: brightness(0) invert(1);
 }
 
 .header-github-link {

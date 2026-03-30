@@ -5,6 +5,124 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-MM-DD
+
+Major release introducing offline-first web and mobile applications with event sourcing, multi-tenant sync, and comprehensive security hardening. See [2.0.0-beta.1](#200-beta1---2026-03-18), [2.0.0-beta.2](#200-beta2---2026-03-26), and [2.0.0-beta.3](#200-beta3---2026-03-29) for detailed per-change history.
+
+### Breaking Changes
+- `EntityPair.initial` is now nullable (entities not yet synced have `null`)
+- Adapter imports moved: `@idpass/data-collect-core` → `@idpass/adapter-openspp`, `@idpass/adapter-openfn`
+- Adapters must register via `AdapterRegistry` at startup
+- `EntityDataManager.getEntity()` returns `EntityPair` (adds `guid`, nullable `initial`)
+- JWT tokens expire after 1 hour (previously no expiry)
+- `JWT_SECRET` must be ≥32 characters (server refuses to start otherwise)
+- `CORS_ORIGINS` defaults to deny-all (must be set explicitly)
+- `OpenSppSyncAdapter` removed — replaced by `OpenSppOdooSyncAdapter` (from `@idpass/adapter-openspp`)
+
+### Added
+- Web App (`packages/web`) for agent data collection and citizen self-service with OTP, National ID, and OIDC authentication
+- Mobile UI redesigned with Vuetify 3 and Material Design 3
+- Hash chain integrity replaces Merkle tree for event store tamper detection
+- XState v5 statecharts for sync orchestration and mobile auth/lock flows
+- Selective sync by area IDs and entity GUIDs
+- Biometric app lock (fingerprint/PIN) with auto-lock on background
+- Secure storage on mobile (iOS Keychain / Android Keystore)
+- Review workflow with submission pipeline (pending/approved/rejected)
+- Duplicate detection with async resolution UI
+- File attachments with MIME type detection from magic bytes
+- Record entity type for activities, services, and home visits
+- Adapter registry with Zod validation and dynamic registration
+- OpenSPP, OpenFn, and Mock adapters extracted to standalone packages
+- 13 new backend services (RBAC, Area, Assignment, Attachment, Review, and more)
+- 41+ Playwright E2E tests across admin, backend, and integration
+- Drizzle ORM schema definitions alongside raw SQL
+- Configurable display name field for entity forms
+- Strong password validation with clear error messages
+
+### Security
+- JWT 1-hour expiry with token refresh
+- OIDC: JWKS URI origin validation, issuer pre-validation, audience + nonce checks
+- Tenant isolation middleware on all tenant-scoped routes
+- Self-service token scope enforcement and entity isolation
+- OTP codes hashed with HMAC-SHA256 and constant-time comparison
+- Rate limiting on OTP, verification, and public endpoints
+- Zod input validation on all self-service endpoints
+- Filename sanitization (null bytes, path traversal, header injection)
+- HTTPS-only in production mobile builds
+- Non-root Docker containers
+
+### Improved
+- Pino-based structured logging replaces console.log throughout
+- Composite cursor pagination prevents event skipping during sync
+- Transactional sync push (batch commit or rollback atomically)
+- Docker multi-stage builds with nginx for frontend SPAs
+- Node.js 24 support in CI
+
+### Deployment Notes
+1. Set `JWT_SECRET` to ≥32 characters (server won't start otherwise)
+2. Set `CORS_ORIGINS` explicitly (defaults to deny-all)
+3. Run DB migrations — new tables: `users`, `areas`, `userAssignments`, `entityOverrides`, `entitySnapshots`, `attachments`, `attachmentData`, `otp_codes`, `submission_reviews`, `review_configs`, `verifications`
+4. Update adapter imports from `@idpass/data-collect-core` to `@idpass/adapter-openspp` / `@idpass/adapter-openfn`
+5. Audit all `entityPair.initial` access for null checks
+6. Replace `OpenSppSyncAdapter` with `OpenSppOdooSyncAdapter`
+
+## [2.0.0-beta.2] - 2026-03-26
+
+### Added
+- Mobile UI redesigned with Vuetify 3 and Material Design 3
+- Web dev mode with platform service and native stubs
+- Configurable display name field for entity forms
+- Confirmation dialog when creating a program with a duplicate name
+- Strong password validation with clear error messages
+- Silent re-authentication on token expiry during sync
+- Sync history shows request/response payloads in dev builds
+- Global back button in mobile app bar
+- Mobile Playwright E2E tests for auth and sync flows
+
+### Fixed
+- Hash chain false tamper detection — syncLevel excluded from hash
+- Mobile white screen instability — sync decoupled from UI lifecycle
+- FormIO component initialization error in production builds
+- JWT expiry check and fail-fast on 401 during sync
+- Enriched sync error messages with HTTP status and server response
+- Duplicate event push handled idempotently with ON CONFLICT DO NOTHING
+- Duplicate events skipped in transactional batch before processing
+- Config schema validation and duplicate check reliability
+- Accept null fields in uploaded config JSON
+- External sync errors propagated to admin UI
+- Members processing guarded with Array.isArray
+- OpenSPP V2 test-connection and field-fetch moved to backend endpoints
+- OpenSPP adapter registered correctly per protocol version
+- V2 adapter accepts both OAuth2 and Odoo credentials
+- Field mappings used for core individual fields instead of hardcoded names
+
+### Changed
+- `OpenSppSyncAdapterV2` renamed to `OpenSppOdooSyncAdapter`
+- Legacy `OpenSppSyncAdapter` removed — `OpenSppOdooSyncAdapter` is canonical V1
+- `useBarcodeScan` composable extracted from duplicated scanner logic
+- ESM-compatible Vite configs for mobile and web packages
+
+### CI
+- Backend, admin, and mobile E2E tests included in pr-check
+
+## [2.0.0-beta.3] - 2026-03-29
+
+### Fixed
+- Address v2.0.0 release review findings C1-C5, I1-I11
+- Router guard blocking login pages and `window.db` race condition
+- E2E: strict mode violations with exact text matching and getByRole selectors
+- E2E: stabilize mobile seedTenantConfig and increase integration test timeouts
+- E2E: add CORS_ORIGINS for admin and web dev servers in CI
+- E2E: use randomUUID() for event GUIDs in integration tests
+- E2E: fix admin button selector and default password in CI
+
+### CI
+- Opt into Node.js 24 for all GitHub Actions; update pnpm action to v4
+- Scope Playwright browser install to admin package
+- Use `pnpm exec` instead of `npx` for Playwright install
+- Update workflow passwords and JWT secret to meet strength requirements
+- Allow Playwright to reuse existing dev server in all environments
+
 ## [2.0.0-beta.1] - 2026-03-18
 
 ### Breaking Changes

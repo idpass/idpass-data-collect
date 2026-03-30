@@ -57,11 +57,12 @@ Each Entity Form consists of the following properties:
 
 ```typescript
 interface EntityForm {
-  name: string;           // Unique identifier for the form
-  title: string;          // Display name for the form
-  dependsOn?: string;     // Parent entity form (for hierarchical relationships)
-  nameField?: string;     // Form field key used as entity display name
-  formio: object;         // Form.io configuration object
+  name: string;                               // Unique identifier for the form
+  title: string;                              // Display name for the form
+  dependsOn?: string;                         // Parent entity form (for hierarchical relationships)
+  entityType?: "group" | "individual" | "record"; // Storage type for this entity
+  nameField?: string;                         // Form field key used as entity display name
+  formio: object;                             // Form.io configuration object
 }
 ```
 
@@ -72,6 +73,8 @@ interface EntityForm {
 - **`title`**: The human-readable display name that appears in the UI (e.g., "Household Information", "Individual Member").
 
 - **`dependsOn`**: Optional field that establishes a parent-child relationship with another entity form. This enables hierarchical data structures.
+
+- **`entityType`**: Optional field that controls how the entity is stored and treated internally. Accepted values are `"group"`, `"individual"`, and `"record"`. When omitted the system infers the type from context (root-level forms default to `"group"`, child forms to `"individual"`).
 
 - **`nameField`**: Optional field that specifies which form field key should be used as the entity's display name. For example, if your form has a field with `key: "fullName"`, setting `nameField: "fullName"` will display "John Smith" instead of the entity's GUID. Falls back to the `name` key if not set, and to the entity GUID if neither exists. Can be configured in the admin wizard via the "Display Name Field" dropdown.
 
@@ -214,6 +217,7 @@ Forms can include conditional logic to show/hide fields based on other field val
    - **Name**: Unique identifier (e.g., "household")
    - **Title**: Display name (e.g., "Household Information")
    - **Depends On**: Select parent form if creating a child entity
+   - **Display Name Field**: Select which form field is used as the entity label in lists and search results (corresponds to `nameField` in the JSON config)
 4. Click "Build Form" to open the Form.io builder
 5. Design your form using the visual builder
 6. Save the form configuration

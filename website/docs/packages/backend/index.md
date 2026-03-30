@@ -89,11 +89,25 @@ ADMIN_EMAIL=admin@hdm.example
 ADMIN_PASSWORD=your-secure-password
 JWT_SECRET=your-jwt-secret
 
-
-
 # Server Configuration
 PORT=3000
 ```
+
+#### Password requirements
+
+The `ADMIN_PASSWORD` value (and all passwords set through the user management API) must satisfy the following rules. The server will refuse to start if `ADMIN_PASSWORD` does not meet these requirements.
+
+| Rule | Requirement |
+| :--- | :--- |
+| Minimum length | 8 characters |
+| Uppercase letters | At least one (A–Z) |
+| Lowercase letters | At least one (a–z) |
+| Numbers | At least one (0–9) |
+| Special characters | At least one (any character that is not A–Z, a–z, or 0–9) |
+
+Example of a valid password: `S3cur3!Pass`
+
+The same rules apply when creating or updating users via the `POST /api/users` and `PUT /api/users/:id` endpoints.
 
 ### Development
 

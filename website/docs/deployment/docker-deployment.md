@@ -12,11 +12,17 @@ ID PASS DataCollect v2.0 uses a consolidated **multi-stage Dockerfile** that bui
 
 The Dockerfile builds in stages:
 
-1. **Base** — installs pnpm and dependencies
-2. **Build** — compiles TypeScript for all packages
-3. **Backend** — production Node.js image with only backend artifacts
-4. **Admin** — nginx image serving the admin SPA
-5. **Web** — nginx image serving the web app SPA
+1. **base** — installs pnpm on top of `node:22-bookworm-slim`
+2. **build** — installs all dependencies and compiles TypeScript for all packages
+3. **backend** — production Node.js image; copies build artifacts and starts `packages/backend/dist/index.js`
+4. **admin-ui** — nginx image serving the compiled admin SPA from `packages/admin/dist`
+5. **web-ui** — nginx image serving the compiled web app SPA from `packages/web/dist`
+
+The frontend stages accept a `VITE_API_URL` build argument that is baked into the SPA at build time:
+
+```bash
+docker compose build --build-arg VITE_API_URL=https://api.example.com
+```
 
 ```bash
 # Build all images
@@ -40,15 +46,30 @@ docker compose up -d
 docker compose logs -f backend
 ```
 
-### Required Environment Variables
+### Environment Variables
 
 Set these in your `.env` or Compose environment:
 
-| Variable | Description |
-|----------|-------------|
-| `JWT_SECRET` | ≥32 characters (server won't start otherwise) |
-| `CORS_ORIGINS` | Comma-separated allowed origins |
-| `DATABASE_URL` | PostgreSQL connection string |
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `JWT_SECRET` | Yes | — | ≥32 characters; the server will not start without it |
+| `CORS_ORIGINS` | Yes | (deny all) | Comma-separated allowed origins |
+| `POSTGRES` | Yes | — | PostgreSQL connection string (e.g. `postgresql://user:pass@host:5432/db`) |
+| `ADMIN_EMAIL` | No | `admin@datacollect.lan` | Initial admin user email |
+| `ADMIN_PASSWORD` | No | `admin` | Initial admin user password |
+| `PUBLIC_BASE_URL` | No | `` | Public URL of the backend, used in OTP emails and OIDC redirects |
+| `EXTERNAL_SYNC_ENABLED` | No | `false` | Enable the external sync scheduler |
+| `NODE_ENV` | No | `production` | Set to `development` to expose OTP codes in API responses |
+
+The Compose file also exposes the following port mappings by default:
+
+| Service | Host port | Container port |
+|---------|-----------|----------------|
+| `sync-server` | `3000` | `3000` |
+| `admin-ui` | `4173` | `80` |
+| `web-ui` | `5174` | `80` |
+
+Override the host ports with `SYNC_SERVER_PORT`, `ADMIN_API_URL`, and `WEB_API_URL` environment variables.
 
 ## Non-Root Containers
 

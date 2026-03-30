@@ -14,7 +14,7 @@ Sync adapters have been extracted into standalone packages. Update your imports:
 
 ```diff
 - import { OpenSppSyncAdapter } from '@idpass/data-collect-core';
-+ import { OpenSppSyncAdapter } from '@idpass/adapter-openspp';
++ import { OpenSppOdooSyncAdapter } from '@idpass/adapter-openspp';
 
 - import { OpenFnSyncAdapter } from '@idpass/data-collect-core';
 + import { OpenFnSyncAdapter } from '@idpass/adapter-openfn';

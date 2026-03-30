@@ -312,7 +312,7 @@ interface ExternalSyncAdapter {
 ### OpenSPP Adapter Implementation
 
 ```typescript
-class OpenSppSyncAdapter implements ExternalSyncAdapter {
+class OpenSppOdooSyncAdapter implements ExternalSyncAdapter {
   private client: OpenSppClient;
   
   async push(entities: EntityDoc[]): Promise<PushResult> {

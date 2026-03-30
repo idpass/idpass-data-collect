@@ -8,23 +8,56 @@ description: Build, deploy, and extend ID PASS DataCollect as a developer.
 
 Whether you're packaging the platform for production or extending it with custom integrations, this guide gathers everything developers need in one place.
 
-## Start here
+<div className="guide-section">Start here</div>
+<div className="guide-cards">
+  <a href="../getting-started/installation" className="guide-card">
+    <div className="guide-card__title">Installation</div>
+    <p className="guide-card__desc">Prepare your workstation, install dependencies, and run the stack locally.</p>
+  </a>
+  <a href="../getting-started/configuration" className="guide-card">
+    <div className="guide-card__title">Configuration walkthrough</div>
+    <p className="guide-card__desc">Tailor authentication, forms, and sync behaviour before shipping to teams.</p>
+  </a>
+  <a href="../deployment/docker-deployment" className="guide-card">
+    <div className="guide-card__title">Docker deployment</div>
+    <p className="guide-card__desc">Containerize the backend and supporting services with opinionated steps.</p>
+  </a>
+</div>
 
-- **[Installation](../getting-started/installation.md):** Prepare your workstation, install dependencies, and run the stack locally.
-- **[Configuration walkthrough](../getting-started/configuration.md):** Learn how to tailor authentication, forms, and sync behaviour before shipping to teams.
-- **[Docker deployment](../deployment/docker-deployment.md):** Follow opinionated steps to containerize the backend and supporting services.
+<div className="guide-section">Deep dives</div>
+<div className="guide-cards">
+  <a href="../getting-started/tutorials" className="guide-card">
+    <div className="guide-card__title">Development guides</div>
+    <p className="guide-card__desc">Tutorials for authenticated sync, form management, and entity search.</p>
+  </a>
+  <a href="../architecture" className="guide-card">
+    <div className="guide-card__title">Architecture overview</div>
+    <p className="guide-card__desc">Event-sourced design, synchronization model, and security boundaries.</p>
+  </a>
+  <a href="../configuration" className="guide-card">
+    <div className="guide-card__title">Configuration & deployment</div>
+    <p className="guide-card__desc">Manage tenant-specific forms, integrations, and rollout processes.</p>
+  </a>
+</div>
 
-## Deep dives
-
-- **[Development guides](../getting-started/tutorials.md):** Explore tutorials for common scenarios like authenticated sync, form management, and entity search.
-- **[Architecture overview](../architecture/index.md):** Understand the event-sourced design, synchronization model, and security boundaries.
-- **[Configuration & deployment](../configuration/index.md):** Manage tenant-specific forms, integrations, and rollout processes.
-
-## Reference & tooling
-
-- **[Package documentation](../packages/index.md):** Discover the responsibilities of each workspace package.
-- **[Core TypeScript API](../packages/datacollect/api-reference.md):** Review the generated SDK documentation.
-- **[Backend REST API](../packages/backend/api-reference-overview.md):** Browse endpoints grouped by capability with example requests.
-- **[Adapter guides](../adapters/openfn-adapter.md):** Integrate external identity and workflow systems.
+<div className="guide-section">Reference & tooling</div>
+<div className="guide-cards">
+  <a href="../packages" className="guide-card">
+    <div className="guide-card__title">Package documentation</div>
+    <p className="guide-card__desc">Discover the responsibilities of each workspace package.</p>
+  </a>
+  <a href="../packages/datacollect/api-reference" className="guide-card">
+    <div className="guide-card__title">Core TypeScript API</div>
+    <p className="guide-card__desc">Generated SDK documentation for the datacollect library.</p>
+  </a>
+  <a href="../packages/backend/api-reference-overview" className="guide-card">
+    <div className="guide-card__title">Backend REST API</div>
+    <p className="guide-card__desc">Endpoints grouped by capability with example requests.</p>
+  </a>
+  <a href="../adapters/openfn-adapter" className="guide-card">
+    <div className="guide-card__title">Adapter guides</div>
+    <p className="guide-card__desc">Integrate external identity and workflow systems.</p>
+  </a>
+</div>
 
 Looking for something else? Use the sidebar to jump directly into the area that matches your current task.

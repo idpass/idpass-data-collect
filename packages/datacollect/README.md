@@ -13,11 +13,11 @@ ID PASS DataCollect is a TypeScript library that provides a comprehensive offlin
 ## Key Features
 
 - **Offline-First Architecture**: Full functionality without network connectivity
-- **Event Sourcing**: Complete audit trail with tamper-evident Merkle tree verification
+- **Event Sourcing**: Complete audit trail with tamper-evident hash chain verification
 - **CQRS Pattern**: Separate command and query responsibilities
-- **Multi-Level Sync**: Client ↔ Server ↔ External Systems
-- **Pluggable Storage**: IndexedDB for browsers, PostgreSQL for servers
-- **Cryptographic Integrity**: SHA256-based Merkle tree for data verification
+- **Multi-Level Sync**: Client ↔ Server ↔ External Systems driven by XState state machines
+- **Pluggable Storage**: IndexedDB for browsers, PostgreSQL for servers, with a pluggable adapter registry for custom backends
+- **Cryptographic Integrity**: SHA256-based hash chain for tamper-evident data verification
 - **Duplicate Detection**: Automatic detection of potential duplicate entities
 - **External Integration**: Built-in adapters for OpenFn and OpenSPP (in beta)
 
@@ -184,7 +184,7 @@ For complete API documentation, see the generated TypeDoc documentation.
 The library follows Domain-Driven Design principles with clear separation of concerns:
 
 - **EntityDataManager**: Main API facade
-- **EventStore**: Immutable event storage with Merkle tree integrity
+- **EventStore**: Immutable event storage with hash chain integrity
 - **EntityStore**: Current entity state with change tracking
 - **EventApplierService**: Event sourcing engine
 - **SyncManagers**: Internal and external synchronization
