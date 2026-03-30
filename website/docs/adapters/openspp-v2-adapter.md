@@ -1,14 +1,10 @@
 ---
 id: openspp-v2-adapter
-title: OpenSPP V2 Adapter (Beta)
+title: OpenSPP V2 Adapter
 sidebar_position: 2
 ---
 
-# OpenSPP V2 Adapter (Beta)
-
-:::warning Beta Feature
-The OpenSPP V2 adapter is currently in **beta**. The API and configuration options may change in future releases. Use in production environments at your own discretion and report any issues to the project repository.
-:::
+# OpenSPP V2 Adapter
 
 The OpenSPP V2 adapter enables bidirectional synchronization with [OpenSPP](https://openspp.org/) using the modern `spp_api_v2` REST API. Unlike the original OpenSPP adapter (which uses JSON-RPC), this adapter uses OAuth2 client credentials and a standards-aligned REST API that is G2P Connect / DCI compliant.
 
@@ -25,7 +21,7 @@ The OpenSPP V2 adapter supports:
 
 ## Differences from the Original OpenSPP Adapter
 
-| Feature | OpenSPP Adapter | OpenSPP V2 Adapter (Beta) |
+| Feature | OpenSPP Adapter | OpenSPP V2 Adapter |
 |---|---|---|
 | Authentication | Basic auth (Odoo JSON-RPC) | OAuth2 client credentials |
 | API Protocol | JSON-RPC (`/web/dataset/call_kw`) | REST (`/api/v2/spp/`) |
@@ -332,9 +328,8 @@ A complete example for syncing household and individual data:
 - Verify the API Client has the `studio:read` scope
 - Check that Studio fields have `api_exposed` enabled in OpenSPP
 
-## Known Limitations (Beta)
+## Known Limitations
 
-- Pull sync support is under active development
 - Consent-based access control behavior depends on the OpenSPP instance configuration
 - Studio field write operations require the field to have `api_exposed` enabled in OpenSPP
 

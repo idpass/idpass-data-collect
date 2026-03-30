@@ -220,7 +220,7 @@ const config: Config = {
     prism: {
       theme: prismThemes.oneLight,
       darkTheme: prismThemes.oneDark,
-      additionalLanguages: ['typescript', 'javascript', 'bash', 'json', 'yaml', 'markdown'],
+      additionalLanguages: ['typescript', 'javascript', 'bash', 'json', 'yaml', 'markdown', 'diff'],
     },
   } satisfies Preset.ThemeConfig,
 };

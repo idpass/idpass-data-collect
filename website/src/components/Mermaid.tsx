@@ -17,20 +17,24 @@ export default function Mermaid({ chart, title }: MermaidProps): React.JSX.Eleme
 
     mermaid.initialize({
       startOnLoad: false,
-      theme: 'default',
+      theme: 'base',
       securityLevel: 'loose',
       fontFamily: 'inherit',
       themeVariables: {
-        primaryColor: '#4caf50',
+        primaryColor: '#34495E',
         primaryTextColor: '#fff',
-        primaryBorderColor: '#7e57c2',
-        lineColor: '#333',
-        secondaryTextColor: '#333',
-        tertiaryColor: '#f0f0f0',
+        primaryBorderColor: '#2C3E50',
+        lineColor: '#2C3E50',
+        secondaryColor: '#fff0eb',
+        secondaryTextColor: '#2C3E50',
+        tertiaryColor: '#F8F9FA',
         background: '#fff',
-        mainBkgColor: '#fff',
-        secondBkgColor: '#f5f5f5',
-        textColor: '#333',
+        mainBkg: '#34495E',
+        secondBkg: '#F8F9FA',
+        textColor: '#2C3E50',
+        nodeBorder: '#2C3E50',
+        clusterBkg: '#F8F9FA',
+        clusterBorder: '#2C3E50',
       },
     });
 
