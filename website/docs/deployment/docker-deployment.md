@@ -53,7 +53,7 @@ Set these in your `.env` or Compose environment:
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `JWT_SECRET` | Yes | — | ≥32 characters; the server will not start without it |
-| `CORS_ORIGINS` | Yes | `*` | Comma-separated allowed origins |
+| `CORS_ORIGINS` | Yes | (deny all) | Comma-separated allowed origins |
 | `POSTGRES` | Yes | — | PostgreSQL connection string (e.g. `postgresql://user:pass@host:5432/db`) |
 | `ADMIN_EMAIL` | No | `admin@datacollect.lan` | Initial admin user email |
 | `ADMIN_PASSWORD` | No | `admin` | Initial admin user password |

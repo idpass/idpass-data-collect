@@ -437,7 +437,7 @@ interface TenantAppData {
 ### Auth Config Schema
 ```typescript
 interface AuthConfig {
-  type: 'auth0' | 'keycloak';
+  type: 'auth0' | 'keycloak' | 'otp' | 'id';
   fields: {
     domain?: string;        // Auth0 domain
     clientId: string;       // Client ID

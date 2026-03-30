@@ -4,7 +4,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 import remarkMermaid from './src/plugin/remark-mermaid/index.js';
 
 const config: Config = {
-  title: 'ID PASS  DataCollect',
+  title: 'ID PASS DataCollect',
   tagline: 'Offline-first data management for social protection and humanitarian assistance',
   favicon: 'img/favicon.png',
 

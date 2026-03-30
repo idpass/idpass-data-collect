@@ -16,7 +16,7 @@
 - **JWT Authentication**: Role-based access with admin and field-worker roles
 - **External Sync Adapters**: Built-in support for OpenSPP (V1 and V2) and OpenFn integrations
 - **Review Workflow**: Submission review and approval before data is committed
-- **Hash Chain Verification**: Merkle tree integrity verification for tamper-evident audit trails
+- **Hash Chain Verification**: Hash chain integrity verification for tamper-evident audit trails
 - **OpenAPI Spec**: Machine-readable API documentation served at `/api-docs/openapi.json`
 
 ## Quick Start

@@ -49,7 +49,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "push" ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
             SHORT_NAME="${TAG%%@*}"
-            VERSION="${TAG#*@}"
+            VERSION=""
             DRY_RUN="false"
           else
             case "${{ inputs.package }}" in
