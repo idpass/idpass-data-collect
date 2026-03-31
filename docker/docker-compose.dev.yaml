@@ -14,7 +14,7 @@ services:
       - datacollect-network-dev
     command: ["postgres"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-admin}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-admin} -d $${POSTGRES_DB:-datacollect}"]
       interval: 2s
       timeout: 3s
       retries: 15

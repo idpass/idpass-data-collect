@@ -15,7 +15,7 @@ services:
       - internal
     command: ["postgres"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-admin}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-admin} -d $${POSTGRES_DB:-datacollect}"]
       interval: 5s
       timeout: 3s
       start_period: 30s
