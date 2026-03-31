@@ -5,11 +5,13 @@ import { useDatabase } from '@/database'
 import { SecureStorageService } from '@/services/SecureStorageService'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import { useSyncService } from '@/store/syncService'
+import { useErrorHandler } from '@/composables/useErrorHandler'
 
 const isDevelop = import.meta.env.DEV && import.meta.env.VITE_DEVELOP === 'true'
 const database = useDatabase()
 const { isOffline } = useNetworkStatus()
 const syncService = useSyncService()
+const { handleAuthError } = useErrorHandler()
 
 const appVersion = __APP_VERSION__
 const errorExpanded = ref(false)
@@ -27,6 +29,10 @@ const copyErrorToClipboard = async () => {
   await Clipboard.write({ string: syncService.lastSyncError })
   errorCopied.value = true
   setTimeout(() => { errorCopied.value = false }, 2000)
+}
+
+const onReLogin = async () => {
+  await handleAuthError(syncService.currentAppId ?? undefined)
 }
 
 const devHandleClickClearData = async () => {
@@ -112,15 +118,25 @@ const devHandleClickClearData = async () => {
               <div class="error-preview" :class="{ 'error-preview--open': errorExpanded }">
                 {{ syncService.lastSyncError }}
               </div>
-              <button
-                v-if="errorExpanded"
-                class="error-copy-btn"
-                type="button"
-                @click.stop="copyErrorToClipboard"
-              >
-                <span class="mdi" :class="errorCopied ? 'mdi-check' : 'mdi-content-copy'"></span>
-                {{ errorCopied ? 'Copied' : 'Copy error' }}
-              </button>
+              <div v-if="errorExpanded" class="error-actions">
+                <button
+                  class="error-copy-btn"
+                  type="button"
+                  @click.stop="copyErrorToClipboard"
+                >
+                  <span class="mdi" :class="errorCopied ? 'mdi-check' : 'mdi-content-copy'"></span>
+                  {{ errorCopied ? 'Copied' : 'Copy error' }}
+                </button>
+                <button
+                  v-if="syncService.currentAppId"
+                  class="error-relogin-btn"
+                  type="button"
+                  @click.stop="onReLogin"
+                >
+                  <span class="mdi mdi-logout"></span>
+                  Re-login
+                </button>
+              </div>
             </div>
           </div>
         </template>
@@ -371,25 +387,43 @@ const devHandleClickClearData = async () => {
   overflow: visible;
 }
 
-.error-copy-btn {
+.error-actions {
+  display: flex;
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+
+.error-copy-btn,
+.error-relogin-btn {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 0 16px 12px;
   padding: 7px 12px;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--status-danger, #e53e3e);
-  background: color-mix(in srgb, var(--status-danger, #e53e3e) 8%, transparent);
-  border: 1px solid color-mix(in srgb, var(--status-danger, #e53e3e) 20%, transparent);
   border-radius: 8px;
   cursor: pointer;
   transition: background 0.15s ease;
-  width: fit-content;
+}
+
+.error-copy-btn {
+  color: var(--status-danger, #e53e3e);
+  background: color-mix(in srgb, var(--status-danger, #e53e3e) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-danger, #e53e3e) 20%, transparent);
 }
 
 .error-copy-btn:active {
   background: color-mix(in srgb, var(--status-danger, #e53e3e) 15%, transparent);
+}
+
+.error-relogin-btn {
+  color: var(--text-main, #1a202c);
+  background: var(--neutral-50, #f8f9fa);
+  border: 1px solid var(--border-light, #dfe3e8);
+}
+
+.error-relogin-btn:active {
+  background: var(--border-light, #dfe3e8);
 }
 
 .sync-history-entry {
