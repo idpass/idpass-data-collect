@@ -467,8 +467,8 @@ describe("syncMachine", () => {
 
     expect(reauthenticate).toHaveBeenCalledTimes(1);
     const msg = rejectedIds.get("reauth-fail")?.message || "";
-    expect(msg).toContain("Silent re-login also failed");
-    expect(msg).toContain("log in again");
+    expect(msg).toContain("silent re-login also failed");
+    expect(msg).toContain("Invalid credentials");
     actor.stop();
   });
 });
