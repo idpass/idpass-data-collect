@@ -20,7 +20,7 @@
 import { Router } from "express";
 import bodyParser from "body-parser";
 import { Pool } from "pg";
-import { ExternalSyncCredentials } from "@idpass/data-collect-core";
+import { ExternalSyncCredentials, SyncAlreadyInProgressError } from "@idpass/data-collect-core";
 import { z } from "zod";
 import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware, validateTenantAccess } from "../middlewares/authentication";
 import { requireAction } from "../middlewares/rbac";
@@ -287,6 +287,12 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
           });
         }
       } catch (error) {
+        if (error instanceof SyncAlreadyInProgressError) {
+          return res.status(409).json({
+            status: "error",
+            message: error.message,
+          });
+        }
         log.error({ err: error }, "Failed to sync with external system");
         const message = error instanceof Error ? error.message : String(error);
         res.status(502).json({

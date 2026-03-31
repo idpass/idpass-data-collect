@@ -29,6 +29,16 @@ import MockSyncServerAdapter from "../services/MockSyncServerAdapter";
 import { adapterRegistry } from "./AdapterRegistry";
 import { createLogger } from "../utils/logger";
 
+/**
+ * Error thrown when a sync is requested while another is already in progress.
+ */
+export class SyncAlreadyInProgressError extends Error {
+  constructor() {
+    super("External sync already in progress");
+    this.name = "SyncAlreadyInProgressError";
+  }
+}
+
 const log = createLogger("ExternalSyncManager");
 
 /**
@@ -236,6 +246,7 @@ class LegacyAdapterWrapper implements ExternalSyncAdapterV2 {
 export class ExternalSyncManager {
   private adapter: ExternalSyncAdapter | null = null;
   private v2Adapter: ExternalSyncAdapterV2 | null = null;
+  private _isSyncing = false;
 
   /**
    * Creates a new ExternalSyncManager instance.
@@ -397,6 +408,29 @@ export class ExternalSyncManager {
    * ```
    */
   async synchronize(credentials?: ExternalSyncCredentials): Promise<SyncResult> {
+    if (this._isSyncing) {
+      throw new SyncAlreadyInProgressError();
+    }
+    this._isSyncing = true;
+    try {
+      return await this.performSync(credentials);
+    } finally {
+      this._isSyncing = false;
+    }
+  }
+
+  /**
+   * Whether an external sync is currently in progress.
+   */
+  get isSyncing(): boolean {
+    return this._isSyncing;
+  }
+
+  /**
+   * Internal sync implementation.
+   * @private
+   */
+  private async performSync(credentials?: ExternalSyncCredentials): Promise<SyncResult> {
     const startTime = Date.now();
 
     // Gather entities from the entity store to push to the external system
@@ -404,12 +438,12 @@ export class ExternalSyncManager {
 
     // Use V2 adapter if available
     if (this.v2Adapter) {
-      log.info("SYNC_STARTED (V2)");
+      log.info("SYNC_STARTED");
 
       const pushResult = await this.v2Adapter.push(entityPayloads);
       const pullResult = await this.v2Adapter.pull();
 
-      const combinedResult: SyncResult = {
+      return {
         success: pushResult.success && pullResult.success,
         pushed: pushResult.pushed,
         pulled: pullResult.pulled,
@@ -418,9 +452,6 @@ export class ExternalSyncManager {
         errors: [...pushResult.errors, ...pullResult.errors],
         duration: Date.now() - startTime,
       };
-
-      log.info("SYNC_COMPLETED (V2)");
-      return combinedResult;
     }
 
     // Fall back to legacy adapter
@@ -465,7 +496,6 @@ export class ExternalSyncManager {
       }
     }
 
-    log.info("SYNC_COMPLETED");
     return combinedResult;
   }
 
