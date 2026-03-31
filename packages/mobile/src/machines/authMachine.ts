@@ -223,6 +223,15 @@ export const authMachine = setup({
             }
           }
         }
+      },
+      on: {
+        INITIALIZE: {
+          target: 'initializing',
+          actions: assign({
+            appId: ({ event }) => event.appId,
+            error: null
+          })
+        }
       }
     },
     authenticated: {
@@ -272,6 +281,13 @@ export const authMachine = setup({
         }
       },
       on: {
+        INITIALIZE: {
+          target: 'initializing',
+          actions: assign({
+            appId: ({ event }) => event.appId,
+            error: null
+          })
+        },
         LOGOUT: 'loggingOut'
       }
     },
