@@ -83,10 +83,11 @@ export function createSyncMachine(
               try {
                 await reauthenticate();
                 token = await loadAndValidateToken();
-              } catch {
+              } catch (refreshError) {
                 const detail = firstError instanceof Error ? firstError.message : "unknown";
+                const refreshDetail = refreshError instanceof Error ? refreshError.message : "unknown";
                 throw new Error(
-                  `Sync authentication failed: ${detail}. Silent re-login also failed. Please log in again.`,
+                  `Sync authentication failed: ${detail} — silent re-login also failed: ${refreshDetail}`,
                 );
               }
             } else {
