@@ -191,6 +191,7 @@ const saveTenantApp = async (config: TenantAppData, sourceUrl = '') => {
       entityData: config.entityData,
       syncServerUrl: config.syncServerUrl,
       externalSync: config.externalSync,
+      authConfigs: config.authConfigs,
       trustedIssuers: config.trustedIssuers,
     })
     return

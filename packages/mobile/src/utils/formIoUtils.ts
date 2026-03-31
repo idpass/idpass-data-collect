@@ -49,6 +49,7 @@ export interface Config {
   entityData: EntityData[]
   syncServerUrl: string
   externalSync?: ExternalSync
+  authConfigs?: Record<string, unknown>[]
   trustedIssuers?: TrustedIssuer[]
 }
 
