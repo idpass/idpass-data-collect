@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { ref } from 'vue'
+import { Clipboard } from '@capacitor/clipboard'
 import { useDatabase } from '@/database'
 import { SecureStorageService } from '@/services/SecureStorageService'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
@@ -10,12 +12,21 @@ const { isOffline } = useNetworkStatus()
 const syncService = useSyncService()
 
 const appVersion = __APP_VERSION__
+const errorExpanded = ref(false)
+const errorCopied = ref(false)
 
 const formatTime = (iso: string | null) => {
   if (!iso) return 'Never'
   const d = new Date(iso)
   if (isNaN(d.getTime())) return 'Never'
   return d.toLocaleString()
+}
+
+const copyErrorToClipboard = async () => {
+  if (!syncService.lastSyncError) return
+  await Clipboard.write({ string: syncService.lastSyncError })
+  errorCopied.value = true
+  setTimeout(() => { errorCopied.value = false }, 2000)
 }
 
 const devHandleClickClearData = async () => {
@@ -90,9 +101,27 @@ const devHandleClickClearData = async () => {
         </div>
         <template v-if="syncService.lastSyncError">
           <div class="settings-divider"></div>
-          <div class="settings-row">
-            <span class="settings-row-label">Last error</span>
-            <span class="settings-row-value settings-row-value--danger">{{ syncService.lastSyncError }}</span>
+          <div class="error-block">
+            <button class="error-header" type="button" @click="errorExpanded = !errorExpanded">
+              <span class="settings-row-label">Last error</span>
+              <span class="error-toggle" :class="{ 'error-toggle--open': errorExpanded }">
+                <span class="mdi mdi-chevron-down"></span>
+              </span>
+            </button>
+            <div class="error-body" :class="{ 'error-body--open': errorExpanded }">
+              <div class="error-preview" :class="{ 'error-preview--open': errorExpanded }">
+                {{ syncService.lastSyncError }}
+              </div>
+              <button
+                v-if="errorExpanded"
+                class="error-copy-btn"
+                type="button"
+                @click.stop="copyErrorToClipboard"
+              >
+                <span class="mdi" :class="errorCopied ? 'mdi-check' : 'mdi-content-copy'"></span>
+                {{ errorCopied ? 'Copied' : 'Copy error' }}
+              </button>
+            </div>
           </div>
         </template>
       </div>
@@ -280,6 +309,87 @@ const devHandleClickClearData = async () => {
   color: var(--text-muted, #64748b);
   padding: 8px 0;
   opacity: 0.5;
+}
+
+.error-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.error-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  min-height: 48px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.error-header:active {
+  background: var(--neutral-50, #f8f9fa);
+}
+
+.error-toggle {
+  color: var(--text-muted, #64748b);
+  font-size: 1.1rem;
+  transition: transform 0.2s ease;
+  display: flex;
+}
+
+.error-toggle--open {
+  transform: rotate(180deg);
+}
+
+.error-body {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.25s ease;
+}
+
+.error-body--open {
+  max-height: 500px;
+}
+
+.error-preview {
+  padding: 0 16px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--status-danger, #e53e3e);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.error-preview--open {
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+.error-copy-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 16px 12px;
+  padding: 7px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--status-danger, #e53e3e);
+  background: color-mix(in srgb, var(--status-danger, #e53e3e) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--status-danger, #e53e3e) 20%, transparent);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  width: fit-content;
+}
+
+.error-copy-btn:active {
+  background: color-mix(in srgb, var(--status-danger, #e53e3e) 15%, transparent);
 }
 
 .sync-history-entry {
