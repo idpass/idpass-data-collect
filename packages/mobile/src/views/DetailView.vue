@@ -88,7 +88,7 @@ const getEntityName = () => {
     return entityForm.value?.title || 'Entity'
   }
   const entity = storedEntityData.value[0]
-  const name = entity?.modified?.data?.name || entity?.modified?.name
+  const name = entity?.modified?.data?._displayName || entity?.modified?.data?.name || entity?.modified?.name
   return name || entityForm.value?.title || 'Entity'
 }
 </script>

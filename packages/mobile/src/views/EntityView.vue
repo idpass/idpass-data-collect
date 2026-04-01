@@ -187,7 +187,7 @@ const filteredSubmissions = computed(() => {
     return submissions.value
   }
   return submissions.value.filter((submission) => {
-    const name = (submission.modified.data.name as string | undefined)?.toLowerCase() || ''
+    const name = ((submission.modified.data._displayName || submission.modified.data.name) as string | undefined)?.toLowerCase() || ''
     const description = JSON.stringify(submission.modified.data).toLowerCase()
     return name.includes(term) || description.includes(term)
   })
@@ -256,7 +256,7 @@ const formatTimestamp = (timestamp: string) => {
         @click="router.push(route.path + '/' + submission.guid + '/detail')"
       >
         <v-list-item-title class="font-weight-bold">
-          {{ submission.modified.data.name || submission.modified.name || 'Untitled submission' }}
+          {{ submission.modified.data._displayName || submission.modified.data.name || submission.modified.name || 'Untitled submission' }}
         </v-list-item-title>
         <v-list-item-subtitle>
           Last updated {{ formatTimestamp(submission.modified.lastUpdated) }}
