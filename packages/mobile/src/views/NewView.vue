@@ -6,7 +6,7 @@ import { EntityForm } from '@/utils/formIoUtils'
 import FormioWrapper from '@/components/FormioWrapper.vue'
 import { SyncLevel, FormClassifier } from '@idpass/data-collect-core'
 import { v4 as uuidv4 } from 'uuid'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
 
@@ -24,6 +24,24 @@ const entityForm = ref<EntityForm>()
 const formio = ref<unknown>()
 const isGroup = ref(false)
 const entityTypeLabel = ref('')
+
+const nameFieldLabel = computed(() => {
+  if (!entityForm.value?.nameField || !entityForm.value?.formio) return ''
+  const formio = entityForm.value.formio as { components?: unknown[] }
+  if (!formio.components) return entityForm.value.nameField
+  const findLabel = (components: unknown[]): string => {
+    for (const comp of components) {
+      if (!comp || typeof comp !== 'object') continue
+      const c = comp as { key?: string; label?: string; components?: unknown[]; columns?: Array<{ components?: unknown[] }> }
+      if (c.key === entityForm.value!.nameField) return c.label || c.key
+      if (Array.isArray(c.components)) { const r = findLabel(c.components); if (r) return r }
+      if (Array.isArray(c.columns)) { for (const col of c.columns) { if (Array.isArray(col.components)) { const r = findLabel(col.components); if (r) return r } } }
+    }
+    return ''
+  }
+  return findLabel(formio.components)
+})
+
 const { isOffline } = useNetworkStatus()
 
 type FormSubmissionEvent = {
@@ -119,6 +137,10 @@ const onSubmit = async (submission: FormSubmissionEvent) => {
         </p>
       </v-card-text>
     </v-card>
+
+    <v-chip v-if="nameFieldLabel" size="small" variant="tonal" color="info" prepend-icon="mdi-badge-account-horizontal" class="mb-3">
+      Display name: {{ nameFieldLabel }}
+    </v-chip>
 
     <v-card elevation="2">
       <v-card-text>
