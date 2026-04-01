@@ -85,7 +85,9 @@ const onSubmit = async (submission: FormSubmissionEvent) => {
       ...submission.data,
       parentGuid: props.parentGuid,
       entityName: entityForm.value.name,
-      name: (submission.data[entityForm.value.nameField || 'name'] as string | undefined) || entityGuid
+      _displayName: entityForm.value.nameField
+        ? (submission.data[entityForm.value.nameField] as string | undefined) || entityGuid
+        : (submission.data.name as string | undefined) || entityGuid,
     },
     timestamp: new Date().toISOString(),
     userId: 'admin',
