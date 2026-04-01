@@ -28,7 +28,7 @@ onMounted(loadData)
 function getDisplayName(): string {
   if (!entityData.value?.entity.data) return 'Citizen'
   const data = entityData.value.entity.data
-  const name = data.firstName || data.name || data.fullName || ''
+  const name = data._displayName || data.firstName || data.name || data.fullName || ''
   return String(name) || 'Citizen'
 }
 </script>
