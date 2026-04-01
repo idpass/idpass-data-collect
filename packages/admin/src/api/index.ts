@@ -210,8 +210,10 @@ export const getUsers = async (): Promise<{ id: string; email: string; role: str
   return response.data
 }
 
-export const createUser = async (user: { email: string; password: string; role: string; tenantIds?: string[] }) => {
-  const response = await api().post(USERS_URL, user)
+export const createUser = async (user: { email: string; password: string; role: string; programIds?: string[] }) => {
+  // Backend still expects tenantIds
+  const { programIds, ...rest } = user
+  const response = await api().post(USERS_URL, { ...rest, tenantIds: programIds })
   return response.data
 }
 
@@ -220,9 +222,11 @@ export const updateUser = async (user: {
   email: string
   password?: string
   role: string
-  tenantIds?: string[]
+  programIds?: string[]
 }) => {
-  const response = await api().put(`${USERS_URL}/${user.id}`, user)
+  // Backend still expects tenantIds
+  const { programIds, ...rest } = user
+  const response = await api().put(`${USERS_URL}/${user.id}`, { ...rest, tenantIds: programIds })
   return response.data
 }
 
@@ -306,7 +310,7 @@ export interface ReviewFormData {
 export interface ReviewRecord {
   id: string
   submissionGuid: string
-  tenantId: string
+  programId: string
   status: 'pending' | 'approved' | 'rejected'
   submittedBy: string
   reviewedBy: string | null
@@ -326,55 +330,71 @@ export interface ReviewConfigRecord {
 }
 
 export const getReviews = async (
-  tenantId: string,
+  programId: string,
   status?: 'pending' | 'approved' | 'rejected',
 ): Promise<{ reviews: ReviewRecord[] }> => {
-  const params: Record<string, string> = { tenantId }
+  // Backend still expects tenantId
+  const params: Record<string, string> = { tenantId: programId }
   if (status) {
     params.status = status
   }
   const response = await api().get(REVIEWS_URL, { params })
-  return response.data
+  const data = response.data as { reviews: Array<Record<string, unknown>> }
+  return {
+    reviews: data.reviews.map(({ tenantId: tid, ...rest }) => ({
+      ...rest,
+      programId: tid,
+    })) as ReviewRecord[],
+  }
 }
 
 export const approveReview = async (
   id: string,
-  tenantId: string,
+  programId: string,
 ): Promise<{ review: ReviewRecord }> => {
-  const response = await api().post(`${REVIEWS_URL}/${id}/approve`, { tenantId })
-  return response.data
+  // Backend still expects tenantId
+  const response = await api().post(`${REVIEWS_URL}/${id}/approve`, { tenantId: programId })
+  const data = response.data as { review: Record<string, unknown> }
+  const { tenantId: tid, ...rest } = data.review
+  return { review: { ...rest, programId: tid } as ReviewRecord }
 }
 
 export const rejectReview = async (
   id: string,
-  tenantId: string,
+  programId: string,
   reason: string,
 ): Promise<{ review: ReviewRecord }> => {
-  const response = await api().post(`${REVIEWS_URL}/${id}/reject`, { tenantId, reason })
-  return response.data
+  // Backend still expects tenantId
+  const response = await api().post(`${REVIEWS_URL}/${id}/reject`, { tenantId: programId, reason })
+  const data = response.data as { review: Record<string, unknown> }
+  const { tenantId: tid, ...rest } = data.review
+  return { review: { ...rest, programId: tid } as ReviewRecord }
 }
 
 export const bulkApproveReviews = async (
   reviewIds: string[],
-  tenantId: string,
+  programId: string,
 ): Promise<{ approved: number; failed: number; errors: Array<{ reviewId: string; error: string }> }> => {
-  const response = await api().post(`${REVIEWS_URL}/bulk-approve`, { reviewIds, tenantId })
+  // Backend still expects tenantId
+  const response = await api().post(`${REVIEWS_URL}/bulk-approve`, { reviewIds, tenantId: programId })
   return response.data
 }
 
 export const getReviewConfigs = async (
-  tenantId: string,
+  programId: string,
 ): Promise<{ configs: ReviewConfigRecord[] }> => {
-  const response = await api().get(`${REVIEWS_URL}/config/${tenantId}`)
+  // Backend URL still uses tenantId path segment
+  const response = await api().get(`${REVIEWS_URL}/config/${programId}`)
   return response.data
 }
 
 export const setReviewConfig = async (
-  tenantId: string,
+  programId: string,
   eventType: string,
   config: { policy: string; requiredRole?: string; externalAdapterType?: string },
 ): Promise<{ status: string; config: ReviewConfigRecord }> => {
-  const response = await api().put(`${REVIEWS_URL}/config/${tenantId}/${eventType}`, config)
+  // Backend URL still uses tenantId path segment
+  const response = await api().put(`${REVIEWS_URL}/config/${programId}/${eventType}`, config)
   return response.data
 }
 
@@ -464,9 +484,20 @@ export const getCurrentUser = async (): Promise<{
   id: string
   email: string
   role: string
-  tenantIds: string[]
-  roleAssignments?: Array<{ tenantId: string; role: string; areaId?: string }>
+  programIds: string[]
+  roleAssignments?: Array<{ programId: string; role: string; areaId?: string }>
 }> => {
   const response = await api().get(`${USERS_URL}/me`)
-  return response.data
+  const data = response.data
+  // Backend returns tenantIds/tenantId — map to programIds/programId
+  return {
+    ...data,
+    programIds: data.tenantIds ?? data.programIds ?? [],
+    roleAssignments: data.roleAssignments?.map(
+      ({ tenantId: tid, ...rest }: { tenantId?: string; programId?: string; role: string; areaId?: string }) => ({
+        ...rest,
+        programId: tid ?? rest.programId,
+      }),
+    ),
+  }
 }

@@ -29,7 +29,7 @@ const router = useRouter()
 const reviewsStore = useReviewsStore()
 const snackBarStore = useSnackBarStore()
 
-const tenantId = ref(route.params.id as string)
+const programId = ref(route.params.id as string)
 const loading = ref(false)
 
 const policyOptions = [
@@ -67,7 +67,7 @@ const saveConfig = async () => {
   if (!editingConfig.value) return
   loading.value = true
   try {
-    await reviewsStore.updateConfig(tenantId.value, editingConfig.value.eventType, {
+    await reviewsStore.updateConfig(programId.value, editingConfig.value.eventType, {
       policy: editPolicy.value,
       requiredRole: editPolicy.value === 'internal-review' ? editRequiredRole.value : undefined,
     })
@@ -82,13 +82,13 @@ const saveConfig = async () => {
 }
 
 const goBack = () => {
-  router.push({ name: 'app-details', params: { id: tenantId.value } })
+  router.push({ name: 'app-details', params: { id: programId.value } })
 }
 
 onMounted(async () => {
   loading.value = true
   try {
-    await reviewsStore.fetchConfigs(tenantId.value)
+    await reviewsStore.fetchConfigs(programId.value)
   } catch (error) {
     snackBarStore.showSnackbar('Failed to load review configurations', 'error')
     console.error('Failed to load configs', error)
