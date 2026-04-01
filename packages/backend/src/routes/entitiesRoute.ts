@@ -84,7 +84,7 @@ export function createEntitiesRouter(appInstanceStore: AppInstanceStore): Router
           ?.map((pair) => ({
             guid: pair.modified.guid,
             id: pair.modified.id,
-            name: pair.modified.data?.name || pair.modified.name,
+            name: pair.modified.data?._displayName || pair.modified.data?.name || pair.modified.name,
             entityName: pair.modified.data?.entityName,
             type: pair.modified.type,
             data: pair.modified.data,
@@ -139,7 +139,7 @@ export function createEntitiesRouter(appInstanceStore: AppInstanceStore): Router
         .map((pair) => ({
           guid: pair.modified.guid,
           id: pair.modified.id,
-          name: pair.modified.data?.name || pair.modified.name,
+          name: pair.modified.data?._displayName || pair.modified.data?.name || pair.modified.name,
           entityName: pair.modified.data?.entityName,
           type: pair.modified.type,
           data: pair.modified.data,
@@ -169,7 +169,7 @@ export function createEntitiesRouter(appInstanceStore: AppInstanceStore): Router
         const memberList = members.map((pair) => ({
           guid: pair.modified.guid,
           id: pair.modified.id,
-          name: pair.modified.data?.name || pair.modified.name,
+          name: pair.modified.data?._displayName || pair.modified.data?.name || pair.modified.name,
           entityName: pair.modified.data?.entityName,
           type: pair.modified.type,
           data: pair.modified.data,
@@ -205,7 +205,7 @@ export function createEntitiesRouter(appInstanceStore: AppInstanceStore): Router
         res.json({
           guid: entity.guid,
           id: entity.id,
-          name: entity.data?.name || entity.name,
+          name: entity.data?._displayName || entity.data?.name || entity.name,
           entityName: entity.data?.entityName,
           type: entity.type,
           data: entity.data,
