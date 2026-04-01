@@ -566,8 +566,18 @@ export class ExternalSyncManager {
     return allEntities.map((pair) => ({
       guid: pair.guid,
       type: pair.modified.type,
-      data: pair.modified.data as Record<string, unknown>,
+      data: this.stripInternalFields(pair.modified.data as Record<string, unknown>),
       version: pair.modified.version,
     }));
+  }
+
+  private stripInternalFields(data: Record<string, unknown>): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (!key.startsWith("_")) {
+        result[key] = value;
+      }
+    }
+    return result;
   }
 }

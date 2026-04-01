@@ -148,6 +148,86 @@ describe("ExternalSyncManager", () => {
     });
   });
 
+  test("push payload should exclude _ prefixed internal fields from entity data", async () => {
+    let capturedPushPayload: EntityPushPayload[] = [];
+
+    const mockV2Adapter: ExternalSyncAdapterV2 = {
+      descriptor: jest.fn().mockReturnValue({
+        type: "strip-internal-adapter",
+        version: "1.0.0",
+        capabilities: ["push", "pull"],
+        configSchema: { safeParse: jest.fn().mockReturnValue({ success: true }) } as never,
+      }),
+      initialize: jest.fn().mockResolvedValue(undefined),
+      healthCheck: jest.fn().mockResolvedValue({ healthy: true }),
+      push: jest.fn().mockImplementation((entities: EntityPushPayload[]) => {
+        capturedPushPayload = entities;
+        return { success: true, pushed: entities.length, pulled: 0, failed: 0, skipped: 0, errors: [], duration: 0 };
+      }),
+      pull: jest.fn().mockResolvedValue({ success: true, pushed: 0, pulled: 0, failed: 0, skipped: 0, errors: [], duration: 0 }),
+      disconnect: jest.fn(),
+    };
+
+    adapterRegistry.register("strip-internal-adapter", () => mockV2Adapter);
+
+    // Set up entity with _ prefixed internal fields alongside normal fields
+    const entityWithInternalFields = {
+      guid: "entity-1",
+      modified: {
+        guid: "entity-1",
+        type: "individual",
+        version: 1,
+        lastUpdated: new Date().toISOString(),
+        data: {
+          firstName: "Peter",
+          lastName: "Granger",
+          _displayName: "Peter Granger",
+          _internalFlag: true,
+          entityName: "individual",
+        },
+        name: "Peter Granger",
+      },
+      initial: {
+        guid: "entity-1",
+        type: "individual",
+        version: 1,
+        lastUpdated: new Date().toISOString(),
+        data: {
+          firstName: "Peter",
+          lastName: "Granger",
+          _displayName: "Peter Granger",
+          _internalFlag: true,
+          entityName: "individual",
+        },
+        name: "Peter Granger",
+      },
+    };
+
+    const entityStore = mockEventApplierService.getEntityStore();
+    (entityStore.getAllEntities as jest.Mock).mockResolvedValue([entityWithInternalFields]);
+
+    const config: ExternalSyncConfig = {
+      type: "strip-internal-adapter",
+      url: "http://test.example.com",
+    };
+
+    const manager = new ExternalSyncManager(mockEventStore, mockEventApplierService, config);
+    await manager.initialize();
+    await manager.synchronize();
+
+    expect(capturedPushPayload.length).toBe(1);
+    const pushedData = capturedPushPayload[0].data;
+
+    // Normal fields should be present
+    expect(pushedData.firstName).toBe("Peter");
+    expect(pushedData.lastName).toBe("Granger");
+    expect(pushedData.entityName).toBe("individual");
+
+    // _ prefixed fields should be stripped
+    expect(pushedData._displayName).toBeUndefined();
+    expect(pushedData._internalFlag).toBeUndefined();
+  });
+
   describe("initialize() with invalid config type", () => {
     test("initialize() should warn and leave manager uninitialized for unknown adapter type", async () => {
       const config: ExternalSyncConfig = {
