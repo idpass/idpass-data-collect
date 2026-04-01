@@ -27,8 +27,8 @@ import { useSnackBarStore } from '@/stores/snackBar'
 const reviewsStore = useReviewsStore()
 const snackBarStore = useSnackBarStore()
 
-const tenants = ref<AppListItem[]>([])
-const selectedTenantId = ref<string | null>(null)
+const programs = ref<AppListItem[]>([])
+const selectedProgramId = ref<string | null>(null)
 const selectedStatus = ref<string | null>(null)
 const selectedReviewIds = ref<string[]>([])
 const showRejectDialog = ref(false)
@@ -124,19 +124,19 @@ const displayedReviews = computed(() => {
 
 const hasSelectedReviews = computed(() => selectedReviewIds.value.length > 0)
 
-const loadTenants = async () => {
+const loadPrograms = async () => {
   try {
     const response = await getApps()
-    tenants.value = response.data
+    programs.value = response.data
   } catch (error) {
-    console.error('Failed to load tenants', error)
+    console.error('Failed to load programs list', error)
   }
 }
 
 const loadReviews = async () => {
-  if (!selectedTenantId.value) return
+  if (!selectedProgramId.value) return
   try {
-    await reviewsStore.fetchReviews(selectedTenantId.value)
+    await reviewsStore.fetchReviews(selectedProgramId.value)
   } catch (error) {
     snackBarStore.showSnackbar('Failed to load reviews', 'error')
     console.error('Failed to load reviews', error)
@@ -184,13 +184,13 @@ const handleBulkApprove = async () => {
   }
 }
 
-watch(selectedTenantId, () => {
+watch(selectedProgramId, () => {
   selectedReviewIds.value = []
   loadReviews()
 })
 
 onMounted(() => {
-  loadTenants()
+  loadPrograms()
 })
 </script>
 
@@ -217,8 +217,8 @@ onMounted(() => {
     <v-row class="mb-4" align="center">
       <v-col cols="12" md="5">
         <v-select
-          v-model="selectedTenantId"
-          :items="tenants"
+          v-model="selectedProgramId"
+          :items="programs"
           item-title="name"
           item-value="id"
           label="Select Collection Program"
@@ -242,12 +242,12 @@ onMounted(() => {
       </v-col>
     </v-row>
 
-    <v-alert v-if="!selectedTenantId" type="info" variant="tonal" class="mb-4">
+    <v-alert v-if="!selectedProgramId" type="info" variant="tonal" class="mb-4">
       Select a collection program to view its reviews.
     </v-alert>
 
     <v-data-table
-      v-if="selectedTenantId"
+      v-if="selectedProgramId"
       v-model="selectedReviewIds"
       :headers="headers"
       :items="displayedReviews"

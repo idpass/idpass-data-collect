@@ -23,7 +23,7 @@ function makeReview(overrides: Partial<ReviewRecord> = {}): ReviewRecord {
   return {
     id: 'review-1',
     submissionGuid: 'sub-1',
-    tenantId: 'tenant-1',
+    programId: 'tenant-1',
     status: 'pending',
     submittedBy: 'user-1',
     reviewedBy: null,
