@@ -15,8 +15,8 @@ interface UserRecord {
   id: string
   email: string
   role: string
-  tenantIds?: string[]
-  roleAssignments?: Array<{ tenantId: string; role: string; areaId?: string }>
+  programIds?: string[]
+  roleAssignments?: Array<{ programId: string; role: string; areaId?: string }>
 }
 
 const snackBarStore = useSnackBarStore()
@@ -25,7 +25,7 @@ const snackBarStore = useSnackBarStore()
 const userForm = ref<{ validate: () => Promise<{ valid: boolean }> } | null>(null)
 const loading = ref(false)
 const users = ref<UserRecord[]>([])
-const tenants = ref<AppListItem[]>([])
+const programs = ref<AppListItem[]>([])
 const showCreateDialog = ref(false)
 const showDeleteDialog = ref(false)
 const editedIndex = ref(-1)
@@ -33,7 +33,7 @@ const editedIndex = ref(-1)
 const headers = [
   { title: 'Email', value: 'email' },
   { title: 'Role', value: 'role' },
-  { title: 'Tenants', value: 'tenantCount', sortable: false },
+  { title: 'Programs', value: 'programCount', sortable: false },
   { title: 'Actions', value: 'actions', sortable: false },
 ]
 
@@ -72,7 +72,7 @@ const defaultItem: UserRecord & { password: string } = {
   email: '',
   password: '',
   role: 'USER',
-  tenantIds: [],
+  programIds: [],
   roleAssignments: [],
 }
 
@@ -85,9 +85,9 @@ const formTitle = computed(() => {
   return editedIndex.value === -1 ? 'Create User' : 'Edit User'
 })
 
-const _tenantNames = computed(() => {
+const _programNames = computed(() => {
   const map: Record<string, string> = {}
-  for (const t of tenants.value) {
+  for (const t of programs.value) {
     map[t.id] = t.name
   }
   return map
@@ -107,12 +107,12 @@ const fetchUsers = async () => {
   }
 }
 
-const loadTenants = async () => {
+const loadPrograms = async () => {
   try {
     const response = await getApps()
-    tenants.value = response.data
+    programs.value = response.data
   } catch (error) {
-    console.error('Error fetching tenants:', error)
+    console.error('Error fetching programs list:', error)
   }
 }
 
@@ -121,7 +121,7 @@ const editUser = (item: UserRecord) => {
   Object.assign(editedItem, {
     ...item,
     password: '',
-    tenantIds: item.tenantIds ?? [],
+    programIds: item.programIds ?? [],
     roleAssignments: item.roleAssignments ?? [],
   })
   showCreateDialog.value = true
@@ -155,7 +155,7 @@ const addRoleAssignment = () => {
   if (!editedItem.roleAssignments) {
     editedItem.roleAssignments = []
   }
-  editedItem.roleAssignments.push({ tenantId: '', role: 'viewer' })
+  editedItem.roleAssignments.push({ programId: '', role: 'viewer' })
 }
 
 const removeRoleAssignment = (index: number) => {
@@ -175,7 +175,7 @@ const saveUser = async () => {
         id: editedItem.id,
         email: editedItem.email,
         role: editedItem.role,
-        tenantIds: editedItem.tenantIds,
+        programIds: editedItem.programIds,
       }
       if (editedItem.password) {
         payload.password = editedItem.password
@@ -188,7 +188,7 @@ const saveUser = async () => {
         email: editedItem.email,
         password: editedItem.password,
         role: editedItem.role,
-        tenantIds: editedItem.tenantIds,
+        programIds: editedItem.programIds,
       })
       users.value.push({ ...editedItem })
     }
@@ -200,14 +200,14 @@ const saveUser = async () => {
   }
 }
 
-const getTenantCount = (item: UserRecord): number => {
-  return item.tenantIds?.length ?? 0
+const getProgramCount = (item: UserRecord): number => {
+  return item.programIds?.length ?? 0
 }
 
 // Lifecycle hooks
 onMounted(() => {
   fetchUsers()
-  loadTenants()
+  loadPrograms()
 })
 </script>
 
@@ -232,9 +232,9 @@ onMounted(() => {
 
         <!-- Users Table -->
         <v-data-table :headers="headers" :items="users" :loading="loading" class="users-table">
-          <template #[`item.tenantCount`]="{ item }">
+          <template #[`item.programCount`]="{ item }">
             <v-chip size="small" variant="tonal">
-              {{ getTenantCount(item) }} tenant(s)
+              {{ getProgramCount(item) }} program(s)
             </v-chip>
           </template>
           <template v-slot:[itemActionsSlot]="{ item }">
@@ -293,11 +293,11 @@ onMounted(() => {
                   required
                 />
                 <v-autocomplete
-                  v-model="editedItem.tenantIds"
-                  :items="tenants"
+                  v-model="editedItem.programIds"
+                  :items="programs"
                   item-title="name"
                   item-value="id"
-                  label="Assigned Tenants"
+                  label="Assigned Programs"
                   multiple
                   chips
                   closable-chips
@@ -305,7 +305,7 @@ onMounted(() => {
                   density="comfortable"
                 />
 
-                <!-- Per-tenant role assignments -->
+                <!-- Per-program role assignments -->
                 <div>
                   <div class="d-flex align-center justify-space-between mb-2">
                     <span class="text-subtitle-2">Role Assignments</span>
@@ -327,11 +327,11 @@ onMounted(() => {
                     <v-row dense align="center">
                       <v-col cols="5">
                         <v-select
-                          v-model="assignment.tenantId"
-                          :items="tenants"
+                          v-model="assignment.programId"
+                          :items="programs"
                           item-title="name"
                           item-value="id"
-                          label="Tenant"
+                          label="Program"
                           density="compact"
                           variant="outlined"
                           hide-details

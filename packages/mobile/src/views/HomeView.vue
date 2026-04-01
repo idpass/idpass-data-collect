@@ -31,6 +31,7 @@ const searchTerm = ref('')
 
 const openInputAppDialog = ref(false)
 const showAddOptions = ref(false)
+const isLoadingApp = ref(false)
 const appUrl = ref('')
 const filePickerRef = ref<HTMLInputElement | null>(null)
 
@@ -230,6 +231,7 @@ const loadAppFromUrl = async (url: string) => {
 }
 
 const handleLoadAppFromInput = async () => {
+  isLoadingApp.value = true
   try {
     const savedConfig = await loadAppFromUrl(appUrl.value)
     openInputAppDialog.value = false
@@ -237,6 +239,8 @@ const handleLoadAppFromInput = async () => {
     showSuccess(`Successfully loaded "${savedConfig?.name || 'Collection Program'}"`)
   } catch {
     // Error already handled by loadAppFromUrl
+  } finally {
+    isLoadingApp.value = false
   }
 }
 
@@ -252,6 +256,7 @@ const handleFileChange = async (event: Event) => {
     return
   }
 
+  isLoadingApp.value = true
   try {
     const text = await file.text()
     const json = JSON.parse(text) as TenantAppData
@@ -263,6 +268,7 @@ const handleFileChange = async (event: Event) => {
     showError(message)
   } finally {
     target.value = ''
+    isLoadingApp.value = false
   }
 }
 
@@ -276,6 +282,7 @@ const handleScanApp = async () => {
 
     showAddOptions.value = false
 
+    isLoadingApp.value = true
     const url = await scan()
     const savedConfig = await loadAppFromUrl(url)
 
@@ -285,6 +292,8 @@ const handleScanApp = async () => {
     console.error('Error scanning QR code:', error)
     const message = error instanceof Error ? error.message : 'Unable to scan QR code. Please try again.'
     showError(message)
+  } finally {
+    isLoadingApp.value = false
   }
 }
 
@@ -463,18 +472,21 @@ const getCardAccentColor = (appId: string) => {
             prepend-icon="mdi-qrcode-scan"
             title="Scan QR Code"
             subtitle="Scan a program configuration QR"
+            :disabled="isLoadingApp"
             @click="handleScanApp"
           />
           <v-list-item
             prepend-icon="mdi-link"
             title="Enter URL"
             subtitle="Load from a download URL"
+            :disabled="isLoadingApp"
             @click="handleEnterUrl"
           />
           <v-list-item
             prepend-icon="mdi-file-upload-outline"
             title="Import JSON File"
             subtitle="Select a file from your device"
+            :disabled="isLoadingApp"
             @click="handleSelectFile"
           />
         </v-list>
@@ -496,7 +508,7 @@ const getCardAccentColor = (appId: string) => {
         <v-card-actions>
           <v-spacer />
           <v-btn variant="text" @click="openInputAppDialog = false">Cancel</v-btn>
-          <v-btn color="secondary" variant="flat" @click="handleLoadAppFromInput">Load</v-btn>
+          <v-btn color="secondary" variant="flat" :loading="isLoadingApp" :disabled="isLoadingApp" @click="handleLoadAppFromInput">Load</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>

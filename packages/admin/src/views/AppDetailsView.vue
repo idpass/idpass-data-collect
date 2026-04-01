@@ -376,13 +376,26 @@ const triggerSync = async (credentials?: { username: string; password: string })
 
   try {
     isSyncing.value = true
-    await externalSyncApi(app.value.id, credentials)
-    snackBarStore.showSnackbar('External sync completed successfully', 'success')
+    const result = await externalSyncApi(app.value.id, credentials)
+    const pushed = result?.pushed ?? 0
+    const pulled = result?.pulled ?? 0
+    snackBarStore.showSnackbar(
+      `External sync completed: ${pushed} pushed, ${pulled} pulled`,
+      'success',
+    )
     // Refresh the page data after successful sync
     await fetchApp()
   } catch (err) {
-    console.error('Failed to sync collection program', err)
-    snackBarStore.showSnackbar('Failed to trigger external sync', 'red')
+    if (err instanceof AxiosError && err.response?.status === 409) {
+      snackBarStore.showSnackbar('A sync is already in progress. Please wait.', 'warning')
+    } else if (err instanceof AxiosError && err.response?.status === 422) {
+      const failed = err.response.data?.failed ?? 0
+      snackBarStore.showSnackbar(`Sync completed with ${failed} failure(s)`, 'warning')
+      await fetchApp()
+    } else {
+      console.error('Failed to sync collection program', err)
+      snackBarStore.showSnackbar('Failed to trigger external sync', 'red')
+    }
   } finally {
     isSyncing.value = false
   }
