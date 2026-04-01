@@ -82,6 +82,17 @@ export const performLogin = fromPromise<LoginResult, {
   } catch (err) {
     // Clean up temporary OAuth data on login failure
     await mobileAuthStorage.clearTemporaryOAuthData()
+    // Extract backend error message from axios response so the UI can display it.
+    // Without this, the xstate machine only stores err.message ("Request failed with status code 401")
+    // and the human-readable backend response (e.g. "Invalid email or password") is lost.
+    const axiosResponse = (err as { response?: { status?: number; data?: { error?: string }; headers?: Record<string, string> } }).response
+    if (axiosResponse?.data?.error) {
+      const retryAfter = axiosResponse.headers?.['retry-after']
+      const detail = retryAfter
+        ? `${axiosResponse.data.error} (retry in ${retryAfter}s)`
+        : axiosResponse.data.error
+      throw new Error(detail)
+    }
     throw err
   }
 })
