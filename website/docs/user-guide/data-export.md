@@ -27,15 +27,6 @@ const binaryBuffer = await exportImportManager.exportData('binary')
 - `json` — human-readable JSON; suitable for interoperability with other systems
 - `binary` — compact binary format; suitable for backups and full data transfers
 
-### Admin Interface Export
-
-Administrators can export data through the admin UI:
-
-1. Log in to the admin interface
-2. Navigate to the program you want to export
-3. Use the entity list view to access export options
-4. Select the desired format and download
-
 ### Direct Database Export
 
 For server-side deployments, data can be exported using standard PostgreSQL tools:

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-ID PASS DataCollect is maintained by the [Association pour la Cooperation Numerique](https://acn.fr) (ACN) as part of its commitment to digital public goods.
+ID PASS DataCollect is maintained by the [Association pour la Coopération Numérique](https://acn.fr) (ACN) as part of its commitment to digital public goods.
 
 ## Decision-Making
 
@@ -52,6 +52,6 @@ Security vulnerabilities should be reported to security@acn.fr. See [SECURITY.md
 
 ## Contact
 
-- **Organization**: Association pour la Cooperation Numerique (ACN)
+- **Organization**: Association pour la Coopération Numérique (ACN)
 - **Website**: https://acn.fr
 - **GitHub**: https://github.com/idpass/idpass-data-collect

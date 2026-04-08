@@ -56,13 +56,13 @@ When used in humanitarian contexts:
 
 ## Content Safeguards
 
-DataCollect processes structured beneficiary data (names, household composition, program-specific fields). It does not:
+DataCollect processes structured beneficiary data (names, household composition, program-specific fields) and supports file attachments (including images) linked to entity records. It does not:
 
 - Host user-generated content (no comments, forums, or social features)
-- Process images, videos, or other media
 - Enable direct communication between users
+- Provide a public-facing content platform
 
-This significantly reduces the risk of the platform being used to distribute harmful or inappropriate content.
+Attachments are stored within the same access-controlled, tenant-isolated infrastructure as entity data. This significantly reduces the risk of the platform being used to distribute harmful or inappropriate content.
 
 ## Preventing Misuse
 
@@ -107,4 +107,4 @@ To report concerns about potential harm related to DataCollect:
 
 - **Security issues**: security@acn.fr
 - **General concerns**: https://github.com/idpass/idpass-data-collect/issues
-- **Organization**: Association pour la Cooperation Numerique (ACN) — https://acn.fr
+- **Organization**: Association pour la Coopération Numérique (ACN) — https://acn.fr

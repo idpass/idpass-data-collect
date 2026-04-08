@@ -114,7 +114,7 @@ For detailed security measures, vulnerability reporting, and security best pract
 
 ## Contact
 
-- **Maintainer**: Association pour la Cooperation Numerique (ACN)
+- **Maintainer**: Association pour la Coopération Numérique (ACN)
 - **Security issues**: security@acn.fr
 - **General inquiries**: https://github.com/idpass/idpass-data-collect/issues
 - **Website**: https://acn.fr
