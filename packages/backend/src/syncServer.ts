@@ -131,8 +131,11 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   app.use(bodyParser.json({ limit: "1mb" }));
   app.use(
     express.static(path.join(__dirname, "public"), {
-      setHeaders: (res, path) => {
-        if (path.endsWith(".json")) {
+      setHeaders: (res, filePath) => {
+        if (filePath.includes("/artifacts/")) {
+          res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+        }
+        if (filePath.endsWith(".json")) {
           res.setHeader("Content-Type", "application/json");
           res.setHeader("Content-Disposition", "attachment");
         }
