@@ -154,6 +154,16 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 - Submitting pull requests
 - Coding standards
 
+## 📋 Policies and Governance
+
+- [Privacy Policy](PRIVACY.md)
+- [Governance](GOVERNANCE.md)
+- [Do No Harm Assessment](DO_NO_HARM.md)
+- [Accessibility](ACCESSIBILITY.md)
+- [Security Policy](SECURITY.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Contributing](CONTRIBUTING.md)
+
 ## 📄 License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
