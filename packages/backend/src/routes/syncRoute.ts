@@ -28,6 +28,7 @@ import { asyncHandler } from "../middlewares/errorHandlers";
 import { AppInstanceStore } from "../types";
 import { createLogger } from "../utils/logger";
 import { processTransactionalBatch } from "../utils/transactionalEdm";
+import { SyncEventStore } from "../stores/SyncEventStore";
 
 const log = createLogger("syncRoute");
 
@@ -74,7 +75,8 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
 
   // Create a shared pool for transactional batch processing, reused across requests
   const txPool = postgresUrl ? new Pool({ connectionString: postgresUrl }) : null;
-  
+  const syncEventStore = postgresUrl ? new SyncEventStore(new Pool({ connectionString: postgresUrl })) : null;
+
   // Apply increased body parser limit only to sync routes that handle biometric data
   // This prevents DoS attacks on other endpoints while allowing large biometric payloads
   router.use(bodyParser.json({ limit: "50mb" }));
@@ -253,6 +255,42 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
     }),
   );
 
+  router.get(
+    "/status",
+    authenticateJWT,
+    asyncHandler(async (req, res) => {
+      const configId = req.query.configId as string;
+      if (!configId) {
+        return res.status(400).json({ status: "error", message: "configId query parameter is required" });
+      }
+
+      let isSyncing = false;
+      const appInstance = await appInstanceStore.getAppInstance(configId);
+      if (appInstance) {
+        isSyncing = appInstance.edm.isExternalSyncing();
+      }
+
+      const lastEvent = syncEventStore ? await syncEventStore.getLastByConfigId(configId) : null;
+
+      res.json({ isSyncing, lastEvent });
+    }),
+  );
+
+  router.get(
+    "/events",
+    authenticateJWT,
+    asyncHandler(async (req, res) => {
+      const configId = req.query.configId as string;
+      if (!configId) {
+        return res.status(400).json({ status: "error", message: "configId query parameter is required" });
+      }
+
+      const events = syncEventStore ? await syncEventStore.getByConfigId(configId, 20) : [];
+
+      res.json({ events });
+    }),
+  );
+
   router.post(
     "/external",
     authenticateJWT,
@@ -270,6 +308,41 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
       const edm = appInstance.edm;
       try {
         const result = await edm.syncWithExternalSystem(credentials as ExternalSyncCredentials);
+
+        // Record sync event
+        if (syncEventStore) {
+          const triggeredBy = (req as AuthenticatedRequest).user?.email || "unknown";
+          if (result && !result.success) {
+            await syncEventStore.insert({
+              configId: (configId || "default") as string,
+              status: result.failed > 0 ? "partial" : "failed",
+              pushed: result.pushed,
+              pulled: result.pulled,
+              failed: result.failed,
+              skipped: result.skipped,
+              durationMs: result.duration,
+              errors: result.errors.map((e) => ({
+                entityGuid: e.entityGuid,
+                code: e.code,
+                message: e.message,
+              })),
+              triggeredBy,
+            });
+          } else if (result) {
+            await syncEventStore.insert({
+              configId: (configId || "default") as string,
+              status: "success",
+              pushed: result.pushed,
+              pulled: result.pulled,
+              failed: 0,
+              skipped: result.skipped,
+              durationMs: result.duration,
+              errors: null,
+              triggeredBy,
+            });
+          }
+        }
+
         if (result && !result.success) {
           res.status(422).json({
             status: "error",
@@ -293,6 +366,24 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
             message: error.message,
           });
         }
+
+        // Record failed sync event
+        if (syncEventStore) {
+          const triggeredBy = (req as AuthenticatedRequest).user?.email || "unknown";
+          const message = error instanceof Error ? error.message : String(error);
+          await syncEventStore.insert({
+            configId: (configId || "default") as string,
+            status: "failed",
+            pushed: 0,
+            pulled: 0,
+            failed: 0,
+            skipped: 0,
+            durationMs: 0,
+            errors: [{ code: "SYNC_ERROR", message }],
+            triggeredBy,
+          });
+        }
+
         log.error({ err: error }, "Failed to sync with external system");
         const message = error instanceof Error ? error.message : String(error);
         res.status(502).json({
