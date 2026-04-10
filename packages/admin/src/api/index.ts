@@ -217,9 +217,12 @@ export const getSyncEvents = async (configId: string) => {
   return response.data
 }
 
-export const getUsers = async (): Promise<{ id: string; email: string; role: string }[]> => {
+export const getUsers = async (): Promise<{ id: string; email: string; role: string; programIds?: string[] }[]> => {
   const response = await api().get(USERS_URL)
-  return response.data
+  return response.data.map((user: { tenantIds?: string[]; [key: string]: unknown }) => {
+    const { tenantIds, ...rest } = user
+    return { ...rest, programIds: tenantIds }
+  })
 }
 
 export const createUser = async (user: { email: string; password: string; role: string; programIds?: string[] }) => {
