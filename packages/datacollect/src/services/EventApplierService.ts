@@ -609,13 +609,13 @@ export class EventApplierService {
           id: formData.entityGuid,
           guid: formData.entityGuid,
           type: EntityType.Individual,
-          name: formData.data.name || "Unnamed Individual",
+          name: formData.data._displayName || formData.data.name || "Unnamed Individual",
           version: 0,
           data: { name: "Unnamed Individual" },
           lastUpdated: new Date().toISOString(),
         };
     individual.data = { ...individual.data, ...formData.data };
-    individual.name = individual.data.name || individual.name;
+    individual.name = individual.data._displayName || individual.data.name || individual.name;
 
     if (formData.data.externalId) {
       individual.externalId = formData.data.externalId;
@@ -706,14 +706,14 @@ export class EventApplierService {
       id: formData.entityGuid,
       guid: formData.entityGuid,
       type: EntityType.Group,
-      name: formData.data.name || "Unnamed Group",
+      name: formData.data._displayName || formData.data.name || "Unnamed Group",
       version: 0,
       data: formData.data,
       lastUpdated: new Date().toISOString(),
       memberIds: [],
     };
 
-    group.name = formData.data.name || group.name;
+    group.name = formData.data._displayName || formData.data.name || group.name;
     group.data.name = group.name || "Unnamed Group";
 
     if (Array.isArray(formData.data?.members)) {
