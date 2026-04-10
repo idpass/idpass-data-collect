@@ -212,8 +212,8 @@ async function executeSync(credentials?: { username: string; password: string })
       failed,
       skipped: 0,
       durationMs: elapsedSeconds.value * 1000,
-      errors: Array.isArray(errors) ? errors.map((e: string | { message: string }) =>
-        typeof e === 'string' ? { code: 'ERROR', message: e } : { code: 'ERROR', message: e.message || String(e) }
+      errors: Array.isArray(errors) ? errors.map((e: string | { code?: string; message: string }) =>
+        typeof e === 'string' ? { code: 'ERROR', message: e } : { code: e.code || 'ERROR', message: e.message || String(e) }
       ) : null,
       triggeredBy: '',
       createdAt: new Date().toISOString(),
@@ -228,6 +228,7 @@ async function executeSync(credentials?: { username: string; password: string })
   } finally {
     isSyncing.value = false
     stopElapsedTimer()
+    historyLoaded.value = false
   }
 }
 
