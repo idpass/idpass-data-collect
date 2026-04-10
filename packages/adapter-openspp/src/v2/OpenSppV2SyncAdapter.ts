@@ -532,8 +532,8 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       groupType: "household",
     };
 
-    if (data.name || data.groupName || data.group_name) {
-      resource.name = String(data.name || data.groupName || data.group_name);
+    if (data._displayName || data.name || data.groupName || data.group_name) {
+      resource.name = String(data._displayName || data.name || data.groupName || data.group_name);
     }
 
     if (data.groupType || data.group_type) {
