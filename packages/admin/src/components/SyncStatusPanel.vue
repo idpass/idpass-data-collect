@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { AxiosError } from 'axios'
-import { getSyncStatus, getSyncEvents, externalSync as externalSyncApi } from '@/api'
+import { getSyncStatus, getSyncEvents, externalSync as externalSyncApi, getSyncJobStatus, cancelSyncJob } from '@/api'
 
 interface SyncEvent {
   id: number
@@ -15,6 +15,11 @@ interface SyncEvent {
   errors: Array<{ entityGuid?: string; code: string; message: string }> | null
   triggeredBy: string
   createdAt: string
+  jobId: string | null
+  phase: string | null
+  startedAt: string | null
+  updatedAt: string | null
+  errorMessage: string | null
 }
 
 const props = defineProps<{
@@ -35,6 +40,12 @@ const history = ref<SyncEvent[]>([])
 const historyLoaded = ref(false)
 const elapsedSeconds = ref(0)
 const expandedEventId = ref<number | null>(null)
+const activeJobId = ref<string | null>(null)
+const currentPhase = ref<string | null>(null)
+const livePushed = ref(0)
+const livePulled = ref(0)
+const liveFailed = ref(0)
+let pollingTimer: ReturnType<typeof setInterval> | null = null
 
 let elapsedTimer: ReturnType<typeof setInterval> | null = null
 
@@ -50,7 +61,10 @@ const statusDot = computed(() => {
 })
 
 const statusLabel = computed(() => {
-  if (isSyncing.value) return 'Syncing'
+  if (isSyncing.value) {
+    if (currentPhase.value === 'pulling') return 'Pulling'
+    return 'Pushing'
+  }
   return 'Idle'
 })
 
@@ -126,13 +140,64 @@ function stopElapsedTimer() {
   }
 }
 
+function startPolling() {
+  stopPolling()
+  pollingTimer = setInterval(async () => {
+    if (!activeJobId.value) return
+    try {
+      const job = await getSyncJobStatus(activeJobId.value)
+      currentPhase.value = job.phase
+      livePushed.value = job.pushed ?? 0
+      livePulled.value = job.pulled ?? 0
+      liveFailed.value = job.failed ?? 0
+
+      if (job.phase === 'completed' || job.phase === 'failed' || job.phase === 'cancelled') {
+        stopPolling()
+        stopElapsedTimer()
+        isSyncing.value = false
+        activeJobId.value = null
+        currentPhase.value = null
+
+        // Refresh status and history from server
+        await fetchStatus()
+        historyLoaded.value = false
+
+        if (job.phase === 'completed') {
+          emit('sync-completed')
+        }
+      }
+    } catch (err) {
+      console.error('Failed to poll sync job status', err)
+    }
+  }, 2000)
+}
+
+function stopPolling() {
+  if (pollingTimer) {
+    clearInterval(pollingTimer)
+    pollingTimer = null
+  }
+}
+
 async function fetchStatus() {
   if (!props.hasExternalSync) return
   try {
     const data = await getSyncStatus(props.configId)
-    isSyncing.value = data.isSyncing
     lastEvent.value = data.lastEvent
-    if (data.isSyncing) startElapsedTimer()
+
+    // Resume polling if there's an active job
+    if (data.activeJob && data.activeJob.phase && !['completed', 'failed', 'cancelled'].includes(data.activeJob.phase)) {
+      isSyncing.value = true
+      activeJobId.value = data.activeJob.jobId
+      currentPhase.value = data.activeJob.phase
+      livePushed.value = data.activeJob.pushed ?? 0
+      livePulled.value = data.activeJob.pulled ?? 0
+      liveFailed.value = data.activeJob.failed ?? 0
+      startElapsedTimer()
+      startPolling()
+    } else {
+      isSyncing.value = false
+    }
   } catch (err) {
     console.error('Failed to fetch sync status', err)
   }
@@ -170,65 +235,34 @@ async function handleTriggerSync() {
 
 async function executeSync(credentials?: { username: string; password: string }) {
   isSyncing.value = true
+  livePushed.value = 0
+  livePulled.value = 0
+  liveFailed.value = 0
+  currentPhase.value = 'pending'
   startElapsedTimer()
 
   try {
     const result = await externalSyncApi(props.configId, credentials)
-    const newEvent: SyncEvent = {
-      id: Date.now(),
-      configId: props.configId,
-      status: 'success',
-      pushed: result?.pushed ?? 0,
-      pulled: result?.pulled ?? 0,
-      failed: 0,
-      skipped: 0,
-      durationMs: elapsedSeconds.value * 1000,
-      errors: null,
-      triggeredBy: '',
-      createdAt: new Date().toISOString(),
-    }
-    lastEvent.value = newEvent
-    if (historyLoaded.value) {
-      history.value.unshift(newEvent)
-    }
-    emit('sync-completed')
+    activeJobId.value = result.jobId
+    startPolling()
   } catch (err) {
     if (err instanceof AxiosError && err.response?.status === 409) {
+      // Already syncing — fetch status to get the active job
+      await fetchStatus()
       return
     }
-
-    const failed = (err instanceof AxiosError && err.response?.data?.failed) ?? 0
-    const pushed = (err instanceof AxiosError && err.response?.data?.pushed) ?? 0
-    const pulled = (err instanceof AxiosError && err.response?.data?.pulled) ?? 0
-    const errors = (err instanceof AxiosError && err.response?.data?.errors) ?? []
-    const isPartial = err instanceof AxiosError && err.response?.status === 422
-
-    const newEvent: SyncEvent = {
-      id: Date.now(),
-      configId: props.configId,
-      status: isPartial ? 'partial' : 'failed',
-      pushed,
-      pulled,
-      failed,
-      skipped: 0,
-      durationMs: elapsedSeconds.value * 1000,
-      errors: Array.isArray(errors) ? errors.map((e: string | { code?: string; message: string }) =>
-        typeof e === 'string' ? { code: 'ERROR', message: e } : { code: e.code || 'ERROR', message: e.message || String(e) }
-      ) : null,
-      triggeredBy: '',
-      createdAt: new Date().toISOString(),
-    }
-    lastEvent.value = newEvent
-    if (historyLoaded.value) {
-      history.value.unshift(newEvent)
-    }
-    if (isPartial) {
-      emit('sync-completed')
-    }
-  } finally {
     isSyncing.value = false
     stopElapsedTimer()
-    historyLoaded.value = false
+    console.error('Failed to trigger sync', err)
+  }
+}
+
+async function handleCancel() {
+  if (!activeJobId.value) return
+  try {
+    await cancelSyncJob(activeJobId.value)
+  } catch (err) {
+    console.error('Failed to cancel sync', err)
   }
 }
 
@@ -239,7 +273,10 @@ function triggerWithCredentials(credentials: { username: string; password: strin
 defineExpose({ lastEvent, isSyncing, lastSyncRelativeTime, triggerWithCredentials })
 
 onMounted(fetchStatus)
-onUnmounted(stopElapsedTimer)
+onUnmounted(() => {
+  stopElapsedTimer()
+  stopPolling()
+})
 
 watch(() => props.configId, () => {
   historyLoaded.value = false
@@ -261,7 +298,11 @@ watch(() => props.configId, () => {
         <span class="sync-panel__label">{{ statusLabel }}</span>
 
         <span v-if="isSyncing" class="sync-panel__elapsed">
-          Elapsed: {{ elapsedSeconds }}s
+          {{ statusLabel }}... {{ elapsedSeconds }}s
+          <span v-if="livePushed > 0 || livePulled > 0" class="sync-panel__live-counts">
+            &mdash; {{ livePushed }} pushed, {{ livePulled }} pulled
+            <span v-if="liveFailed > 0" class="text-error">, {{ liveFailed }} failed</span>
+          </span>
         </span>
         <span v-else class="sync-panel__summary">
           {{ lastSyncSummary }}
@@ -288,6 +329,16 @@ watch(() => props.configId, () => {
         @click="handleTriggerSync"
       >
         {{ isSyncing ? 'Syncing...' : 'Trigger Sync' }}
+      </v-btn>
+      <v-btn
+        v-if="isSyncing"
+        data-testid="cancel-sync-btn"
+        variant="text"
+        color="error"
+        size="small"
+        @click="handleCancel"
+      >
+        Cancel
       </v-btn>
     </div>
 
@@ -449,6 +500,11 @@ watch(() => props.configId, () => {
   background: rgba(var(--v-theme-on-surface), 0.06);
   padding: 1px 6px;
   border-radius: 3px;
+}
+
+.sync-panel__live-counts {
+  font-size: 11px;
+  color: rgba(var(--v-theme-on-surface), 0.5);
 }
 
 .rotate-180 {
