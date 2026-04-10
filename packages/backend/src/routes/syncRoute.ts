@@ -20,7 +20,8 @@
 import { Router } from "express";
 import bodyParser from "body-parser";
 import { Pool } from "pg";
-import { ExternalSyncCredentials, SyncAlreadyInProgressError } from "@idpass/data-collect-core";
+import { ExternalSyncCredentials, SyncProgress } from "@idpass/data-collect-core";
+import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
 import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware, validateTenantAccess } from "../middlewares/authentication";
 import { requireAction } from "../middlewares/rbac";
@@ -29,6 +30,7 @@ import { AppInstanceStore } from "../types";
 import { createLogger } from "../utils/logger";
 import { processTransactionalBatch } from "../utils/transactionalEdm";
 import { SyncEventStore } from "../stores/SyncEventStore";
+import { SyncJobRegistry } from "../stores/SyncJobRegistry";
 
 const log = createLogger("syncRoute");
 
@@ -76,6 +78,81 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
   // Create a shared pool for transactional batch processing, reused across requests
   const txPool = postgresUrl ? new Pool({ connectionString: postgresUrl }) : null;
   const syncEventStore = postgresUrl ? new SyncEventStore(new Pool({ connectionString: postgresUrl })) : null;
+  const syncJobRegistry = new SyncJobRegistry();
+
+  async function executeSyncJob(
+    jobId: string,
+    resolvedConfigId: string,
+    appInstance: Awaited<ReturnType<typeof appInstanceStore.getAppInstance>>,
+    triggeredBy: string,
+  ): Promise<void> {
+    if (!appInstance || !syncEventStore) return;
+
+    const job = syncJobRegistry.getByJobId(jobId);
+    const credentials = job?.credentials;
+
+    try {
+      await syncEventStore.markJobStarted(jobId);
+
+      let lastProgressWrite = 0;
+      const onProgress = async (progress: SyncProgress) => {
+        const now = Date.now();
+        if (now - lastProgressWrite < 1000) return;
+        lastProgressWrite = now;
+        await syncEventStore.updateJobProgress(jobId, {
+          phase: progress.phase,
+          pushed: progress.pushed,
+          pulled: progress.pulled,
+          failed: progress.failed,
+          skipped: progress.skipped,
+        });
+      };
+
+      const result = await appInstance.edm.syncWithExternalSystem(
+        credentials as ExternalSyncCredentials | undefined,
+        { onProgress, signal: job?.abortController.signal },
+      );
+
+      if (result) {
+        const status = result.success ? "success" : result.failed > 0 ? "partial" : "failed";
+        await syncEventStore.completeJob(jobId, {
+          status,
+          phase: "completed",
+          pushed: result.pushed,
+          pulled: result.pulled,
+          failed: result.failed,
+          skipped: result.skipped,
+          durationMs: result.duration,
+          errors: result.errors.length > 0
+            ? result.errors.map((e) => ({ entityGuid: e.entityGuid, code: e.code, message: e.message }))
+            : null,
+        });
+      }
+    } catch (error) {
+      const isAbort = error instanceof Error && error.name === "AbortError";
+      const message = error instanceof Error ? error.message : String(error);
+
+      if (syncEventStore) {
+        await syncEventStore.completeJob(jobId, {
+          status: "failed",
+          phase: isAbort ? "cancelled" : "failed",
+          pushed: 0,
+          pulled: 0,
+          failed: 0,
+          skipped: 0,
+          durationMs: 0,
+          errors: isAbort ? null : [{ code: "SYNC_ERROR", message }],
+          errorMessage: message,
+        });
+      }
+
+      if (!isAbort) {
+        log.error({ err: error }, "Failed to sync with external system");
+      }
+    } finally {
+      syncJobRegistry.remove(jobId);
+    }
+  }
 
   // Apply increased body parser limit only to sync routes that handle biometric data
   // This prevents DoS attacks on other endpoints while allowing large biometric payloads
@@ -272,7 +349,27 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
 
       const lastEvent = syncEventStore ? await syncEventStore.getLastByConfigId(configId) : null;
 
-      res.json({ isSyncing, lastEvent });
+      // Check for active job
+      let activeJob = syncEventStore ? await syncEventStore.getActiveJobByConfigId(configId) : null;
+
+      // Orphan detection: DB says in-progress but no in-memory job exists (server restart)
+      if (activeJob && activeJob.jobId && !syncJobRegistry.getByJobId(activeJob.jobId)) {
+        await syncEventStore!.completeJob(activeJob.jobId, {
+          status: "failed",
+          phase: "failed",
+          pushed: activeJob.pushed,
+          pulled: activeJob.pulled,
+          failed: activeJob.failed,
+          skipped: activeJob.skipped,
+          durationMs: 0,
+          errors: [{ code: "SERVER_RESTART", message: "Server restarted during sync" }],
+          errorMessage: "Server restarted during sync",
+        });
+        activeJob = null;
+        isSyncing = false;
+      }
+
+      res.json({ isSyncing, lastEvent, activeJob });
     }),
   );
 
@@ -301,98 +398,131 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
         return res.status(400).json({ status: "error", message: "Invalid external sync payload", errors: parseResult.error.issues });
       }
       const { configId, credentials } = parseResult.data;
-      const appInstance = await appInstanceStore.getAppInstance((configId || "default") as string);
+      const resolvedConfigId = (configId || "default") as string;
+
+      // Check if a sync is already in progress for this config
+      if (syncJobRegistry.getByConfigId(resolvedConfigId)) {
+        return res.status(409).json({ status: "error", message: "A sync is already in progress for this configuration." });
+      }
+
+      const appInstance = await appInstanceStore.getAppInstance(resolvedConfigId);
       if (!appInstance) {
         return res.status(404).json({ status: "error", message: "App instance not found" });
       }
-      const edm = appInstance.edm;
-      try {
-        const result = await edm.syncWithExternalSystem(credentials as ExternalSyncCredentials);
 
-        // Record sync event
-        if (syncEventStore) {
-          const triggeredBy = (req as AuthenticatedRequest).user?.email || "unknown";
-          if (result && !result.success) {
-            await syncEventStore.insert({
-              configId: (configId || "default") as string,
-              status: result.failed > 0 ? "partial" : "failed",
-              pushed: result.pushed,
-              pulled: result.pulled,
-              failed: result.failed,
-              skipped: result.skipped,
-              durationMs: result.duration,
-              errors: result.errors.map((e) => ({
-                entityGuid: e.entityGuid,
-                code: e.code,
-                message: e.message,
-              })),
-              triggeredBy,
-            });
-          } else if (result) {
-            await syncEventStore.insert({
-              configId: (configId || "default") as string,
-              status: "success",
-              pushed: result.pushed,
-              pulled: result.pulled,
-              failed: 0,
-              skipped: result.skipped,
-              durationMs: result.duration,
-              errors: null,
-              triggeredBy,
-            });
-          }
-        }
-
-        if (result && !result.success) {
-          res.status(422).json({
-            status: "error",
-            message: `Sync completed with ${result.failed} failure(s)`,
-            pushed: result.pushed,
-            pulled: result.pulled,
-            failed: result.failed,
-            errors: result.errors.map((e) => typeof e === "string" ? e : e.message || String(e)),
-          });
-        } else {
-          res.json({
-            status: "success",
-            pushed: result?.pushed ?? 0,
-            pulled: result?.pulled ?? 0,
-          });
-        }
-      } catch (error) {
-        if (error instanceof SyncAlreadyInProgressError) {
-          return res.status(409).json({
-            status: "error",
-            message: error.message,
-          });
-        }
-
-        // Record failed sync event
-        if (syncEventStore) {
-          const triggeredBy = (req as AuthenticatedRequest).user?.email || "unknown";
-          const message = error instanceof Error ? error.message : String(error);
-          await syncEventStore.insert({
-            configId: (configId || "default") as string,
-            status: "failed",
-            pushed: 0,
-            pulled: 0,
-            failed: 0,
-            skipped: 0,
-            durationMs: 0,
-            errors: [{ code: "SYNC_ERROR", message }],
-            triggeredBy,
-          });
-        }
-
-        log.error({ err: error }, "Failed to sync with external system");
-        const message = error instanceof Error ? error.message : String(error);
-        res.status(502).json({
-          status: "error",
-          message: "Failed to sync with external system",
-          details: message,
-        });
+      if (!syncEventStore) {
+        return res.status(503).json({ status: "error", message: "Sync event store not available" });
       }
+
+      const jobId = uuidv4();
+      const triggeredBy = (req as AuthenticatedRequest).user?.email || "unknown";
+
+      // Insert pending job record
+      await syncEventStore.insertJob({
+        configId: resolvedConfigId,
+        status: "pending" as "success" | "partial" | "failed",
+        pushed: 0,
+        pulled: 0,
+        failed: 0,
+        skipped: 0,
+        durationMs: 0,
+        errors: null,
+        triggeredBy,
+        jobId,
+      });
+
+      // Register job in memory (holds AbortController and credentials)
+      syncJobRegistry.register(jobId, resolvedConfigId, credentials as ExternalSyncCredentials | undefined);
+
+      // Fire and forget — do NOT await
+      executeSyncJob(jobId, resolvedConfigId, appInstance, triggeredBy);
+
+      res.status(202).json({ jobId, status: "pending" });
     }),
   );
+
+  router.get(
+    "/external/:jobId",
+    authenticateJWT,
+    asyncHandler(async (req, res) => {
+      const { jobId } = req.params;
+      if (!syncEventStore) {
+        return res.status(503).json({ status: "error", message: "Sync event store not available" });
+      }
+
+      const job = await syncEventStore.getByJobId(jobId);
+      if (!job) {
+        return res.status(404).json({ status: "error", message: "Sync job not found" });
+      }
+
+      res.json(job);
+    }),
+  );
+
+  router.post(
+    "/external/:jobId/cancel",
+    authenticateJWT,
+    asyncHandler(async (req, res) => {
+      const { jobId } = req.params;
+
+      const cancelled = syncJobRegistry.cancel(jobId);
+      if (!cancelled) {
+        return res.status(404).json({ status: "error", message: "No active sync job found with that ID" });
+      }
+
+      res.json({ status: "cancelling" });
+    }),
+  );
+
+  router.post(
+    "/external/:jobId/retry",
+    authenticateJWT,
+    validateTenantAccess,
+    asyncHandler(async (req, res) => {
+      if (!syncEventStore) {
+        return res.status(503).json({ status: "error", message: "Sync event store not available" });
+      }
+
+      const { jobId } = req.params;
+      const originalJob = await syncEventStore.getByJobId(jobId);
+      if (!originalJob) {
+        return res.status(404).json({ status: "error", message: "Original sync job not found" });
+      }
+
+      const resolvedConfigId = originalJob.configId;
+
+      if (syncJobRegistry.getByConfigId(resolvedConfigId)) {
+        return res.status(409).json({ status: "error", message: "A sync is already in progress for this configuration." });
+      }
+
+      const appInstance = await appInstanceStore.getAppInstance(resolvedConfigId);
+      if (!appInstance) {
+        return res.status(404).json({ status: "error", message: "App instance not found" });
+      }
+
+      const newJobId = uuidv4();
+      const triggeredBy = (req as AuthenticatedRequest).user?.email || "unknown";
+
+      await syncEventStore.insertJob({
+        configId: resolvedConfigId,
+        status: "pending" as "success" | "partial" | "failed",
+        pushed: 0,
+        pulled: 0,
+        failed: 0,
+        skipped: 0,
+        durationMs: 0,
+        errors: null,
+        triggeredBy,
+        jobId: newJobId,
+      });
+
+      syncJobRegistry.register(newJobId, resolvedConfigId);
+
+      executeSyncJob(newJobId, resolvedConfigId, appInstance, triggeredBy);
+
+      res.status(202).json({ jobId: newJobId, status: "pending" });
+    }),
+  );
+
   return router;
 }
