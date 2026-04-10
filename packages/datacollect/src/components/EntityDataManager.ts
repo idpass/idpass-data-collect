@@ -181,6 +181,18 @@ export class EntityDataManager {
   }
 
   /**
+   * Checks if an external synchronization operation is currently in progress.
+   *
+   * @returns True if external sync is active, false otherwise.
+   */
+  isExternalSyncing(): boolean {
+    if (this.externalSyncManager) {
+      return this.externalSyncManager.isSyncing;
+    }
+    return false;
+  }
+
+  /**
    * Submits a form to create or modify entities through the event sourcing system.
    *
    * All modifications go through events (FormSubmissions) which are applied to create the new state.
