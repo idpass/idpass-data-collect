@@ -24,6 +24,8 @@ const API_URL = import.meta.env.VITE_API_URL
 const APPS_URL = '/api/apps'
 const ENTITIES_URL = '/api/entities'
 const EXTERNAL_SYNC_URL = '/api/sync/external'
+const SYNC_STATUS_URL = '/api/sync/status'
+const SYNC_EVENTS_URL = '/api/sync/events'
 const USERS_URL = '/api/users'
 const REVIEWS_URL = '/api/reviews'
 const DUPLICATES_URL = '/api/potential-duplicates'
@@ -202,6 +204,16 @@ export const getEntityEvents = async (entityGuid: string, configId: string): Pro
 
 export const externalSync = async (configId: string, credentials?: unknown) => {
   const response = await api().post(EXTERNAL_SYNC_URL, { configId, credentials })
+  return response.data
+}
+
+export const getSyncStatus = async (configId: string) => {
+  const response = await api().get(SYNC_STATUS_URL, { params: { configId } })
+  return response.data
+}
+
+export const getSyncEvents = async (configId: string) => {
+  const response = await api().get(SYNC_EVENTS_URL, { params: { configId } })
   return response.data
 }
 
