@@ -18,9 +18,6 @@
  */
 
 import { Pool } from "pg";
-import { createLogger } from "../utils/logger";
-
-const log = createLogger("SyncEventStore");
 
 export interface SyncEventInput {
   configId: string;
