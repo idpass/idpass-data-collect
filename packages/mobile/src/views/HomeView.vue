@@ -461,6 +461,18 @@ const getCardAccentColor = (appId: string) => {
       <v-icon size="24">mdi-plus</v-icon>
     </button>
 
+    <!-- Loading overlay for add-program flows -->
+    <v-overlay
+      :model-value="isLoadingApp"
+      class="align-center justify-center"
+      persistent
+    >
+      <div class="loading-overlay-content">
+        <v-progress-circular indeterminate color="primary" size="40" />
+        <span class="loading-overlay-text">Loading program...</span>
+      </div>
+    </v-overlay>
+
     <!-- Bottom sheet: add options -->
     <v-bottom-sheet v-model="showAddOptions">
       <v-card rounded="t-lg">
@@ -546,6 +558,19 @@ const getCardAccentColor = (appId: string) => {
   flex-direction: column;
   padding: 20px 16px 100px;
   gap: 16px;
+}
+
+.loading-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.loading-overlay-text {
+  font-size: 14px;
+  color: #fff;
+  font-weight: 500;
 }
 
 /* ── Header ── */
