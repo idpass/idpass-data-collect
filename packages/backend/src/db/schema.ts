@@ -17,7 +17,7 @@
  * under the License.
  */
 
-import { pgTable, text, jsonb, serial, timestamp, integer, boolean, index } from "drizzle-orm/pg-core";
+import { pgTable, text, jsonb, serial, timestamp, integer, boolean, index, varchar } from "drizzle-orm/pg-core";
 
 /**
  * Users table for authentication and authorization.
@@ -144,3 +144,20 @@ export const verifications = pgTable(
     index("idx_verifications_tenant_id").on(table.tenantId),
   ],
 );
+
+export const syncEvents = pgTable("sync_events", {
+  id: serial("id").primaryKey(),
+  configId: text("config_id").notNull().references(() => appConfigs.id, { onDelete: "cascade" }),
+  status: varchar("status", { length: 20 }).notNull(),
+  pushed: integer("pushed").notNull().default(0),
+  pulled: integer("pulled").notNull().default(0),
+  failed: integer("failed").notNull().default(0),
+  skipped: integer("skipped").notNull().default(0),
+  durationMs: integer("duration_ms").notNull().default(0),
+  errors: jsonb("errors"),
+  triggeredBy: varchar("triggered_by", { length: 255 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type SyncEventRow = typeof syncEvents.$inferSelect;
+export type NewSyncEventRow = typeof syncEvents.$inferInsert;
