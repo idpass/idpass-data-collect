@@ -297,9 +297,16 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       if (since) {
         params._lastUpdated = since;
       }
-      const searchResult = await this.getClient().searchIndividuals(params);
 
-      const individuals = searchResult.data || [];
+      let individuals: IndividualResource[];
+      try {
+        const searchResult = await this.getClient().searchIndividuals(params);
+        individuals = searchResult.data || [];
+      } catch (error) {
+        console.error(`Failed to search individuals (offset=${offset}):`, error);
+        break;
+      }
+
       if (individuals.length === 0) {
         hasMore = false;
         break;
@@ -343,9 +350,15 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       if (since) {
         params._lastUpdated = since;
       }
-      const searchResult = await this.getClient().searchGroups(params);
+      let groups: GroupResource[];
+      try {
+        const searchResult = await this.getClient().searchGroups(params);
+        groups = searchResult.data || [];
+      } catch (error) {
+        console.error(`Failed to search groups (offset=${offset}):`, error);
+        break;
+      }
 
-      const groups = searchResult.data || [];
       if (groups.length === 0) {
         hasMore = false;
         break;
