@@ -82,9 +82,8 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
 
   async function executeSyncJob(
     jobId: string,
-    resolvedConfigId: string,
+    _resolvedConfigId: string,
     appInstance: Awaited<ReturnType<typeof appInstanceStore.getAppInstance>>,
-    triggeredBy: string,
   ): Promise<void> {
     if (!appInstance || !syncEventStore) return;
 
@@ -435,7 +434,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
       syncJobRegistry.register(jobId, resolvedConfigId, credentials as ExternalSyncCredentials | undefined);
 
       // Fire and forget — do NOT await
-      executeSyncJob(jobId, resolvedConfigId, appInstance, triggeredBy);
+      executeSyncJob(jobId, resolvedConfigId, appInstance);
 
       res.status(202).json({ jobId, status: "pending" });
     }),
@@ -518,7 +517,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
 
       syncJobRegistry.register(newJobId, resolvedConfigId);
 
-      executeSyncJob(newJobId, resolvedConfigId, appInstance, triggeredBy);
+      executeSyncJob(newJobId, resolvedConfigId, appInstance);
 
       res.status(202).json({ jobId: newJobId, status: "pending" });
     }),
