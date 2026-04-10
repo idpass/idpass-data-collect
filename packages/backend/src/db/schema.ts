@@ -157,6 +157,11 @@ export const syncEvents = pgTable("sync_events", {
   errors: jsonb("errors"),
   triggeredBy: varchar("triggered_by", { length: 255 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  jobId: text("job_id").unique(),
+  phase: varchar("phase", { length: 20 }),
+  startedAt: timestamp("started_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }),
+  errorMessage: text("error_message"),
 });
 
 export type SyncEventRow = typeof syncEvents.$inferSelect;
