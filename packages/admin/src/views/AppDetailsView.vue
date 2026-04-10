@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { AxiosError } from 'axios'
 import {
   archiveApp as archiveAppApi,
-  externalSync as externalSyncApi,
   getApp,
   getAppConfigJsonUrl,
   getAppQrCodeUrl,
@@ -15,6 +14,7 @@ import BasicAuthDialog from '@/components/BasicAuthDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSnackBarStore } from '@/stores/snackBar'
 import DataDiagnostics from '@/components/DataDiagnostics.vue'
+import SyncStatusPanel from '@/components/SyncStatusPanel.vue'
 
 interface EntityForm {
   name: string
@@ -91,10 +91,10 @@ const error = ref<string | null>(null)
 const activeTab = ref<'entities' | 'forms' | 'integration' | 'mapping' | 'auth'>('entities')
 const showQrDialog = ref(false)
 const showAuthDialog = ref(false)
-const isSyncing = ref(false)
 const isDeleting = ref(false)
 const qrError = ref(false)
 const entityRecords = ref<Record<string, unknown[]>>({})
+const syncPanelRef = ref<InstanceType<typeof SyncStatusPanel> | null>(null)
 
 const routeId = computed(() => route.params.id as string)
 
@@ -111,18 +111,33 @@ const syncStatus = computed(() => {
       label: 'Local only',
       color: 'grey-darken-2',
       icon: 'mdi-lan-disconnect',
-      description: 'Data remains on device until exported manually.',
     }
   }
 
-  const requiresAuth = app.value?.externalSync?.auth === 'basic'
-
-  return {
-    label: requiresAuth ? 'Sync secured' : 'Sync enabled',
-    color: requiresAuth ? 'warning' : 'success',
-    icon: requiresAuth ? 'mdi-shield-key-outline' : 'mdi-sync',
-    description: app.value?.description || '',
+  if (syncPanelRef.value?.isSyncing) {
+    return {
+      label: 'Syncing...',
+      color: 'info',
+      icon: 'mdi-sync',
+    }
   }
+
+  const last = syncPanelRef.value?.lastEvent
+  if (!last) {
+    return {
+      label: 'Ready',
+      color: 'blue-grey',
+      icon: 'mdi-sync',
+    }
+  }
+
+  const map: Record<string, { label: string; color: string; icon: string }> = {
+    success: { label: 'Last sync OK', color: 'success', icon: 'mdi-check-circle-outline' },
+    partial: { label: 'Sync warnings', color: 'warning', icon: 'mdi-alert-outline' },
+    failed: { label: 'Sync failed', color: 'error', icon: 'mdi-alert-circle-outline' },
+  }
+
+  return map[last.status] || { label: 'Ready', color: 'blue-grey', icon: 'mdi-sync' }
 })
 
 const forms = computed(() => app.value?.entityForms ?? [])
@@ -355,55 +370,9 @@ const fetchApp = async () => {
   }
 }
 
-const handleSync = async () => {
-  if (!app.value || !hasExternalSync.value) {
-    snackBarStore.showSnackbar('No external sync configured for this collection program', 'warning')
-    return
-  }
-
-  if (requiresCredentials.value) {
-    showAuthDialog.value = true
-    return
-  }
-
-  await triggerSync()
-}
-
-const triggerSync = async (credentials?: { username: string; password: string }) => {
-  if (!app.value) {
-    return
-  }
-
-  try {
-    isSyncing.value = true
-    const result = await externalSyncApi(app.value.id, credentials)
-    const pushed = result?.pushed ?? 0
-    const pulled = result?.pulled ?? 0
-    snackBarStore.showSnackbar(
-      `External sync completed: ${pushed} pushed, ${pulled} pulled`,
-      'success',
-    )
-    // Refresh the page data after successful sync
-    await fetchApp()
-  } catch (err) {
-    if (err instanceof AxiosError && err.response?.status === 409) {
-      snackBarStore.showSnackbar('A sync is already in progress. Please wait.', 'warning')
-    } else if (err instanceof AxiosError && err.response?.status === 422) {
-      const failed = err.response.data?.failed ?? 0
-      snackBarStore.showSnackbar(`Sync completed with ${failed} failure(s)`, 'warning')
-      await fetchApp()
-    } else {
-      console.error('Failed to sync collection program', err)
-      snackBarStore.showSnackbar('Failed to trigger external sync', 'red')
-    }
-  } finally {
-    isSyncing.value = false
-  }
-}
-
 const onCredentialsSubmit = async (credentials: { username: string; password: string }) => {
   showAuthDialog.value = false
-  await triggerSync(credentials)
+  syncPanelRef.value?.triggerWithCredentials(credentials)
 }
 
 const openEditor = (step: string = 'general') => {
@@ -503,17 +472,6 @@ watch(
         </div>
         <div class="details-header__actions">
           <v-btn
-            v-if="hasExternalSync"
-            variant="flat"
-            color="primary"
-            prepend-icon="mdi-sync"
-            :loading="isSyncing"
-            :disabled="isSyncing"
-            @click="handleSync"
-          >
-            Trigger Sync
-          </v-btn>
-          <v-btn
             variant="tonal"
             color="primary"
             prepend-icon="mdi-pencil"
@@ -571,6 +529,16 @@ watch(
           </v-menu>
         </div>
       </div>
+
+      <SyncStatusPanel
+        v-if="hasExternalSync"
+        ref="syncPanelRef"
+        :config-id="app.id"
+        :has-external-sync="hasExternalSync"
+        :requires-credentials="requiresCredentials"
+        @sync-completed="fetchApp"
+        @request-credentials="showAuthDialog = true"
+      />
 
       <div class="details-grid">
         <div>
@@ -947,7 +915,9 @@ watch(
                 </div>
                 <div class="overview-card__row">
                   <span class="overview-card__row-label">External sync</span>
-                  <span class="overview-card__row-value">{{ syncStatus.description }}</span>
+                  <span class="overview-card__row-value">
+                    {{ syncPanelRef?.lastSyncRelativeTime || syncStatus.label }}
+                  </span>
                 </div>
               </div>
             </v-card-text>
