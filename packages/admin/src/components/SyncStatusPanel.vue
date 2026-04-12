@@ -167,7 +167,15 @@ function startPolling() {
         }
       }
     } catch (err) {
+      if (err instanceof AxiosError && err.response?.status === 404) {
+        return  // Not yet in DB — will retry on next poll interval
+      }
       console.error('Failed to poll sync job status', err)
+      stopPolling()
+      stopElapsedTimer()
+      isSyncing.value = false
+      activeJobId.value = null
+      currentPhase.value = null
     }
   }, 2000)
 }
