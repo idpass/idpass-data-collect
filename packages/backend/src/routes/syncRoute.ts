@@ -94,10 +94,13 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
       await syncEventStore.markJobStarted(jobId);
 
       let lastProgressWrite = 0;
+      let lastPhase = '';
       const onProgress = async (progress: SyncProgress) => {
         const now = Date.now();
-        if (now - lastProgressWrite < 1000) return;
+        const phaseChanged = progress.phase !== lastPhase;
+        if (!phaseChanged && now - lastProgressWrite < 1000) return;
         lastProgressWrite = now;
+        lastPhase = progress.phase;
         await syncEventStore.updateJobProgress(jobId, {
           phase: progress.phase,
           pushed: progress.pushed,
@@ -113,7 +116,11 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
       );
 
       if (result) {
-        const status = result.success ? "success" : result.failed > 0 ? "partial" : "failed";
+        const status = result.success
+          ? "success"
+          : (result.pushed > 0 || result.pulled > 0)
+            ? "partial"
+            : "failed";
         await syncEventStore.completeJob(jobId, {
           status,
           phase: "completed",
@@ -132,14 +139,20 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
       const message = error instanceof Error ? error.message : String(error);
 
       if (syncEventStore) {
+        // Read last known progress from DB (written by onProgress callbacks)
+        const lastProgress = await syncEventStore.getByJobId(jobId);
+        const hasProgress = (lastProgress?.pushed ?? 0) > 0 || (lastProgress?.pulled ?? 0) > 0;
+
         await syncEventStore.completeJob(jobId, {
-          status: "failed",
+          status: isAbort ? "failed" : hasProgress ? "partial" : "failed",
           phase: isAbort ? "cancelled" : "failed",
-          pushed: 0,
-          pulled: 0,
-          failed: 0,
-          skipped: 0,
-          durationMs: 0,
+          pushed: lastProgress?.pushed ?? 0,
+          pulled: lastProgress?.pulled ?? 0,
+          failed: lastProgress?.failed ?? 0,
+          skipped: lastProgress?.skipped ?? 0,
+          durationMs: lastProgress?.startedAt
+            ? Date.now() - new Date(lastProgress.startedAt).getTime()
+            : 0,
           errors: isAbort ? null : [{ code: "SYNC_ERROR", message }],
           errorMessage: message,
         });
