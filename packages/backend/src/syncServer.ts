@@ -74,13 +74,29 @@ adapterRegistry.register("openspp-v2-adapter", (deps) => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     push: async (_entities: EntityPushPayload[]): Promise<SyncResult> => {
       const start = Date.now();
-      await adapter.pushData();
-      return { success: true, pushed: 0, pulled: 0, failed: 0, skipped: 0, errors: [], duration: Date.now() - start };
+      const result = await adapter.pushData();
+      return {
+        success: result ? result.failed === 0 : true,
+        pushed: result?.pushed ?? 0,
+        pulled: 0,
+        failed: result?.failed ?? 0,
+        skipped: result?.skipped ?? 0,
+        errors: result?.errors ?? [],
+        duration: Date.now() - start,
+      };
     },
     pull: async (): Promise<SyncResult> => {
       const start = Date.now();
-      await adapter.pullData();
-      return { success: true, pushed: 0, pulled: 0, failed: 0, skipped: 0, errors: [], duration: Date.now() - start };
+      const result = await adapter.pullData();
+      return {
+        success: result ? result.failed === 0 : true,
+        pushed: 0,
+        pulled: result?.pulled ?? 0,
+        failed: result?.failed ?? 0,
+        skipped: result?.skipped ?? 0,
+        errors: result?.errors ?? [],
+        duration: Date.now() - start,
+      };
     },
     disconnect: async () => {},
   } satisfies ExternalSyncAdapterV2;
