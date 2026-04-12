@@ -837,10 +837,10 @@ export function getAdapterConfigValue<T extends string | number | boolean>(
 export interface ExternalSyncAdapter {
   /** Optional hook to authenticate with the external system before data transfer */
   authenticate?(credentials?: ExternalSyncCredentials): Promise<boolean>;
-  /** Push local changes to the external system */
-  pushData(credentials?: ExternalSyncCredentials): Promise<void>;
-  /** Pull remote changes from the external system */
-  pullData(credentials?: ExternalSyncCredentials): Promise<void>;
+  /** Push local changes to the external system. May return partial results. */
+  pushData(credentials?: ExternalSyncCredentials): Promise<void | { pushed: number; failed: number; skipped: number; errors: Array<{ entityGuid?: string; code: string; message: string; retryable: boolean }> }>;
+  /** Pull remote changes from the external system. May return partial results. */
+  pullData(credentials?: ExternalSyncCredentials): Promise<void | { pulled: number; failed: number; skipped: number; errors: Array<{ entityGuid?: string; code: string; message: string; retryable: boolean }> }>;
   /**
    * Backwards compatibility helper for adapters that implement a combined sync routine.
    * ExternalSyncManager will fall back to this when push/pull are not available.

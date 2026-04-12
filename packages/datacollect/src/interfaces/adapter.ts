@@ -60,6 +60,26 @@ export interface SyncError {
 }
 
 /**
+ * Partial result returned by pushData() when the adapter tracks per-entity outcomes.
+ */
+export interface PushResult {
+  pushed: number;
+  failed: number;
+  skipped: number;
+  errors: SyncError[];
+}
+
+/**
+ * Partial result returned by pullData() when the adapter tracks per-entity outcomes.
+ */
+export interface PullResult {
+  pulled: number;
+  failed: number;
+  skipped: number;
+  errors: SyncError[];
+}
+
+/**
  * Result of a health check against the external system.
  */
 export interface HealthCheckResult {
