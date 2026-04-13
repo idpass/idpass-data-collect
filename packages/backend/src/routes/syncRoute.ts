@@ -26,7 +26,7 @@ import { z } from "zod";
 import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware, validateTenantAccess } from "../middlewares/authentication";
 import { requireAction } from "../middlewares/rbac";
 import { asyncHandler } from "../middlewares/errorHandlers";
-import { AppInstanceStore } from "../types";
+import { AppInstanceStore, Role } from "../types";
 import { createLogger } from "../utils/logger";
 import { processTransactionalBatch } from "../utils/transactionalEdm";
 import { SyncEventStore } from "../stores/SyncEventStore";
@@ -347,6 +347,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
   router.get(
     "/status",
     authenticateJWT,
+    validateTenantAccess,
     asyncHandler(async (req, res) => {
       const configId = req.query.configId as string;
       if (!configId) {
@@ -388,6 +389,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
   router.get(
     "/events",
     authenticateJWT,
+    validateTenantAccess,
     asyncHandler(async (req, res) => {
       const configId = req.query.configId as string;
       if (!configId) {
@@ -467,6 +469,11 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
         return res.status(404).json({ status: "error", message: "Sync job not found" });
       }
 
+      const user = (req as AuthenticatedRequest).user;
+      if (user.role !== Role.ADMIN && !(user.tenantIds ?? []).includes(job.configId)) {
+        return res.status(403).json({ error: "Forbidden: No access to this tenant" });
+      }
+
       res.json(job);
     }),
   );
@@ -476,6 +483,17 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
     authenticateJWT,
     asyncHandler(async (req, res) => {
       const { jobId } = req.params;
+
+      // Verify tenant access via the job's configId
+      if (syncEventStore) {
+        const job = await syncEventStore.getByJobId(jobId);
+        if (job) {
+          const user = (req as AuthenticatedRequest).user;
+          if (user.role !== Role.ADMIN && !(user.tenantIds ?? []).includes(job.configId)) {
+            return res.status(403).json({ error: "Forbidden: No access to this tenant" });
+          }
+        }
+      }
 
       const cancelled = syncJobRegistry.cancel(jobId);
       if (!cancelled) {

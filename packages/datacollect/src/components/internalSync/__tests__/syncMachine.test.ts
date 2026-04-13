@@ -358,7 +358,7 @@ describe("syncMachine", () => {
 
     // Should only have been called once (no retries on 401)
     expect(mockAxios.post).toHaveBeenCalledTimes(1);
-    expect(rejectedIds.get("auth-fail")?.message).toContain("401");
+    expect(rejectedIds.get("auth-fail")?.message).toContain("Session expired");
     expect(rejectedIds.get("auth-fail")?.message).toContain("log in again");
     actor.stop();
   });

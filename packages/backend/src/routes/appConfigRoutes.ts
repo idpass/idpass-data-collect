@@ -21,9 +21,9 @@ import { randomBytes } from "crypto";
 import path from "path";
 import { Router } from "express";
 import { z } from "zod";
-import { authenticateJWT, createAuthAdminMiddleware } from "../middlewares/authentication";
+import { AuthenticatedRequest, authenticateJWT, createAuthAdminMiddleware } from "../middlewares/authentication";
 import { AppError, asyncHandler } from "../middlewares/errorHandlers";
-import { AppConfig, AppConfigStore, AppInstanceStore, UserStore } from "../types";
+import { AppConfig, AppConfigStore, AppInstanceStore, Role, UserStore } from "../types";
 import multer from "multer";
 import fs from "fs/promises";
 import { generatePublicArtifacts, getPublicArtifactPaths, resolvePublicBaseUrl } from "../utils/publicArtifacts";
@@ -143,7 +143,13 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
       const order = typeof sortOrder === "string" && sortOrder.toLowerCase() === "desc" ? "desc" : "asc";
       const searchTerm = typeof search === "string" ? search.trim().toLowerCase() : "";
 
-      const appConfigs = await appConfigStore.getConfigs(includeArchived === "true");
+      const allConfigs = await appConfigStore.getConfigs(includeArchived === "true");
+
+      // Non-admin users only see programs they are assigned to
+      const user = (req as AuthenticatedRequest).user;
+      const appConfigs = user.role === Role.ADMIN
+        ? allConfigs
+        : allConfigs.filter((c) => (user.tenantIds ?? []).includes(c.id));
 
       const appsWithCounts = await Promise.all(
         appConfigs.map(async (config) => {
@@ -213,6 +219,11 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
     authenticateJWT,
     asyncHandler(async (req, res) => {
       const { id } = req.params;
+      const user = (req as AuthenticatedRequest).user;
+      if (user.role !== Role.ADMIN && !(user.tenantIds ?? []).includes(id)) {
+        res.status(403).json({ error: "You do not have permission to view this program." });
+        return;
+      }
       const appConfig = await appConfigStore.getConfig(id);
       res.json(appConfig);
     }),

@@ -19,7 +19,7 @@
 
 import { useRouter } from 'vue-router'
 import { useAuthManagerStore } from '@/store/authManager'
-import { is401Error, isNetworkError } from '@/utils/networkUtils'
+import { is401Error, is403Error, is429Error, isNetworkError } from '@/utils/networkUtils'
 
 export function useErrorHandler(appId?: string) {
   const router = useRouter()
@@ -195,7 +195,15 @@ export function useErrorHandler(appId?: string) {
     if (is401Error(error)) {
       return backendMessage || 'Session expired. Please log in again.'
     }
-    
+
+    if (is403Error(error)) {
+      return 'You do not have permission to access this program. Please contact your administrator to request access.'
+    }
+
+    if (is429Error(error)) {
+      return 'Too many login attempts. Please wait a few minutes before trying again.'
+    }
+
     if (isNetworkError(error)) {
       // Only show generic network message if no specific backend message
       return backendMessage || 'Network connection failed. Please check your internet connection.'
@@ -212,6 +220,16 @@ export function useErrorHandler(appId?: string) {
     if (is401Error(error)) {
       console.warn('Authentication error detected, logging out')
       await handleAuthError(currentAppId)
+      return { handled: true, message: errorMessage }
+    }
+
+    if (is403Error(error)) {
+      console.warn('Access denied — user not authorized for this program')
+      return { handled: true, message: errorMessage }
+    }
+
+    if (is429Error(error)) {
+      console.warn('Rate limited — too many requests')
       return { handled: true, message: errorMessage }
     }
 

@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { useErrorHandler } from '../useErrorHandler'
 import { useRouter } from 'vue-router'
 import { useAuthManagerStore } from '@/store/authManager'
-import { is401Error, isNetworkError } from '@/utils/networkUtils'
+import { is401Error, is403Error, is429Error, isNetworkError } from '@/utils/networkUtils'
 import type { Router } from 'vue-router'
 
 // Mock dependencies
@@ -311,11 +311,33 @@ describe('useErrorHandler', () => {
       expect(console.warn).toHaveBeenCalledWith('Network error detected')
     })
 
+    it('should handle 403 errors', async () => {
+      const error = { response: { status: 403 } }
+      vi.mocked(is403Error).mockReturnValue(true)
+
+      const result = await errorHandler.handleError(error)
+
+      expect(result.handled).toBe(true)
+      expect(result.message).toBe('You do not have permission to access this program. Please contact your administrator to request access.')
+      expect(console.warn).toHaveBeenCalledWith('Access denied — user not authorized for this program')
+    })
+
+    it('should handle 429 errors', async () => {
+      const error = { response: { status: 429 } }
+      vi.mocked(is429Error).mockReturnValue(true)
+
+      const result = await errorHandler.handleError(error)
+
+      expect(result.handled).toBe(true)
+      expect(result.message).toBe('Too many login attempts. Please wait a few minutes before trying again.')
+      expect(console.warn).toHaveBeenCalledWith('Rate limited — too many requests')
+    })
+
     it('should not handle other errors', async () => {
       const error = { message: 'Some other error' }
-      
+
       const result = await errorHandler.handleError(error)
-      
+
       expect(result.handled).toBe(false)
       expect(result.message).toBe('Some other error')
     })

@@ -176,6 +176,7 @@ const saveUser = async () => {
         email: editedItem.email,
         role: editedItem.role,
         programIds: editedItem.programIds,
+        roleAssignments: editedItem.roleAssignments,
       }
       if (editedItem.password) {
         payload.password = editedItem.password
@@ -189,6 +190,7 @@ const saveUser = async () => {
         password: editedItem.password,
         role: editedItem.role,
         programIds: editedItem.programIds,
+        roleAssignments: editedItem.roleAssignments,
       })
       users.value.push({ ...editedItem })
     }
