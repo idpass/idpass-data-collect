@@ -52,7 +52,12 @@ describeIfPostgres("SyncEventStore", () => {
           duration_ms INTEGER NOT NULL DEFAULT 0,
           errors JSONB,
           triggered_by VARCHAR(255),
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          job_id TEXT UNIQUE,
+          phase VARCHAR(20),
+          started_at TIMESTAMPTZ,
+          updated_at TIMESTAMPTZ,
+          error_message TEXT
         )
       `);
       await client.query(`

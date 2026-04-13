@@ -28,6 +28,7 @@ import {
   FieldMapping,
   createTransformer,
   type TransformerType,
+  type SyncError,
 } from "@idpass/data-collect-core";
 import { EventApplierService } from "@idpass/data-collect-core";
 import { OpenSppV2Client } from "./OpenSppV2Client";
@@ -88,6 +89,8 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   private readonly batchSize: number;
   private readonly batchDelayMs: number;
   private readonly maxRetries: number;
+  private readonly identifierType: string;
+  private readonly groupIdentifierType: string;
 
   constructor(
     private eventStore: EventStore,
@@ -104,6 +107,10 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     this.batchSize = getAdapterConfigValue<number>(config, "batchSize", 50) ?? 50;
     this.batchDelayMs = getAdapterConfigValue<number>(config, "batchDelayMs", 1000) ?? 1000;
     this.maxRetries = getAdapterConfigValue<number>(config, "maxRetries", 2) ?? 2;
+    this.identifierType =
+      getAdapterConfigValue<string>(config, "identifierType") ?? "national_id";
+    this.groupIdentifierType =
+      getAdapterConfigValue<string>(config, "groupIdentifierType") ?? this.identifierType;
   }
 
   /**
@@ -127,7 +134,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
    * Syncs all entities each invocation (matching V1 adapter behavior).
    * Incremental sync via getModifiedEntitiesSince() is a planned optimization.
    */
-  async pushData(_credentials?: ExternalSyncCredentials): Promise<void> {
+  async pushData(_credentials?: ExternalSyncCredentials): Promise<{ pushed: number; failed: number; skipped: number; errors: SyncError[] }> {
     await this.ensureClient();
 
     const entityStore = this.eventApplierService.getEntityStore();
@@ -140,27 +147,54 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       (pair) => pair.modified.type === EntityType.Group,
     );
 
-    // Push individuals first (groups may reference them)
+    let totalPushed = 0;
+    let totalFailed = 0;
+    const allErrors: SyncError[] = [];
+
     if (individualsToSync.length > 0) {
-      await this.pushEntities(individualsToSync, "individual");
+      const result = await this.pushEntities(individualsToSync, "individual");
+      totalPushed += result.pushed;
+      totalFailed += result.failed;
+      allErrors.push(...result.errors.map(e => ({
+        entityGuid: e.guid,
+        code: "PUSH_FAILED",
+        message: e.error,
+        retryable: true,
+      })));
     }
 
-    // Push groups
     if (groupsToSync.length > 0) {
-      await this.pushEntities(groupsToSync, "group");
+      const result = await this.pushEntities(groupsToSync, "group");
+      totalPushed += result.pushed;
+      totalFailed += result.failed;
+      allErrors.push(...result.errors.map(e => ({
+        entityGuid: e.guid,
+        code: "PUSH_FAILED",
+        message: e.error,
+        retryable: true,
+      })));
     }
 
+    return { pushed: totalPushed, failed: totalFailed, skipped: 0, errors: allErrors };
   }
 
   /**
    * Pull entities (Individuals and Groups) from OpenSPP.
    * Supports optional _lastUpdated filter when config.lastSyncTimestamp is set.
    */
-  async pullData(_credentials?: ExternalSyncCredentials): Promise<void> {
+  async pullData(_credentials?: ExternalSyncCredentials): Promise<{ pulled: number; failed: number; skipped: number; errors: SyncError[] }> {
     await this.ensureClient();
     const since = (this.config as { lastSyncTimestamp?: string }).lastSyncTimestamp;
-    await this.pullIndividuals(since);
-    await this.pullGroups(since);
+
+    const indResult = await this.pullIndividuals(since);
+    const grpResult = await this.pullGroups(since);
+
+    return {
+      pulled: indResult.pulled + grpResult.pulled,
+      failed: indResult.failed + grpResult.failed,
+      skipped: indResult.skipped + grpResult.skipped,
+      errors: [...indResult.errors, ...grpResult.errors],
+    };
   }
 
   /**
@@ -176,9 +210,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   private async pushEntities(
     entities: Array<{ modified: { guid: string; type: EntityType; externalId?: string; data: Record<string, unknown> } }>,
     entityType: "individual" | "group",
-  ): Promise<void> {
-    const label = entityType === "individual" ? "individuals" : "groups";
-
+  ): Promise<{ pushed: number; failed: number; errors: Array<{ guid: string; error: string }> }> {
     const failedEntities: Array<{ guid: string; error: string }> = [];
 
     for (let i = 0; i < entities.length; i += this.batchSize) {
@@ -225,16 +257,11 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       }
     }
 
-    if (failedEntities.length > 0) {
-      console.error(
-        `Failed ${label} (${failedEntities.length}):`,
-        failedEntities.map((e) => e.guid).join(", "),
-      );
-      throw new Error(
-        `Sync completed with ${failedEntities.length} failures out of ${entities.length} ${label}. ` +
-          `First failure: ${failedEntities[0]?.error || "Unknown error"}`,
-      );
-    }
+    return {
+      pushed: entities.length - failedEntities.length,
+      failed: failedEntities.length,
+      errors: failedEntities,
+    };
   }
 
   private async pushIndividual(
@@ -266,7 +293,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     externalId?: string,
   ): Promise<void> {
     const resource = this.buildGroupResource(guid, data);
-    const system = this.resolveIdentifierSystem(data);
+    const system = this.resolveIdentifierSystem(data, "group");
 
     if (externalId) {
       const identifier = this.getClient().formatIdentifier(system, guid);
@@ -283,11 +310,15 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
   // ==================== Pull Logic ====================
 
-  private async pullIndividuals(since?: string): Promise<void> {
+  private async pullIndividuals(since?: string): Promise<{ pulled: number; failed: number; skipped: number; errors: SyncError[] }> {
     const entityStore = this.eventApplierService.getEntityStore();
     let offset = 0;
     const pageSize = 100;
     let hasMore = true;
+    let pulled = 0;
+    let failed = 0;
+    let skipped = 0;
+    const errors: SyncError[] = [];
 
     while (hasMore) {
       const params: Record<string, string> = {
@@ -304,6 +335,12 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
         individuals = searchResult.data || [];
       } catch (error) {
         console.error(`Failed to search individuals (offset=${offset}):`, error);
+        failed++;
+        errors.push({
+          code: "SEARCH_FAILED",
+          message: `Failed to search individuals (offset=${offset}): ${error instanceof Error ? error.message : String(error)}`,
+          retryable: true,
+        });
         break;
       }
 
@@ -316,6 +353,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
         const identifier = this.extractIdentifier(individual);
         if (!identifier) {
           console.warn("Individual without matching identifier, skipping");
+          skipped++;
           continue;
         }
 
@@ -326,21 +364,35 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
             existingEntity?.guid,
           );
           await this.eventApplierService.submitForm(formSubmission);
+          pulled++;
         } catch (error) {
           console.error(`Failed to pull individual ${identifier}:`, error);
+          failed++;
+          errors.push({
+            entityGuid: identifier,
+            code: "PULL_FAILED",
+            message: `Failed to pull individual ${identifier}: ${error instanceof Error ? error.message : String(error)}`,
+            retryable: true,
+          });
         }
       }
 
       offset += individuals.length;
       hasMore = individuals.length === pageSize;
     }
+
+    return { pulled, failed, skipped, errors };
   }
 
-  private async pullGroups(since?: string): Promise<void> {
+  private async pullGroups(since?: string): Promise<{ pulled: number; failed: number; skipped: number; errors: SyncError[] }> {
     const entityStore = this.eventApplierService.getEntityStore();
     let offset = 0;
     const pageSize = 100;
     let hasMore = true;
+    let pulled = 0;
+    let failed = 0;
+    let skipped = 0;
+    const errors: SyncError[] = [];
 
     while (hasMore) {
       const params: Record<string, string> = {
@@ -356,6 +408,12 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
         groups = searchResult.data || [];
       } catch (error) {
         console.error(`Failed to search groups (offset=${offset}):`, error);
+        failed++;
+        errors.push({
+          code: "SEARCH_FAILED",
+          message: `Failed to search groups (offset=${offset}): ${error instanceof Error ? error.message : String(error)}`,
+          retryable: true,
+        });
         break;
       }
 
@@ -368,6 +426,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
         const identifier = this.extractGroupIdentifier(group);
         if (!identifier) {
           console.warn("Group without matching identifier, skipping");
+          skipped++;
           continue;
         }
 
@@ -378,14 +437,24 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
             existingEntity?.guid,
           );
           await this.eventApplierService.submitForm(formSubmission);
+          pulled++;
         } catch (error) {
           console.error(`Failed to pull group ${identifier}:`, error);
+          failed++;
+          errors.push({
+            entityGuid: identifier,
+            code: "PULL_FAILED",
+            message: `Failed to pull group ${identifier}: ${error instanceof Error ? error.message : String(error)}`,
+            retryable: true,
+          });
         }
       }
 
       offset += groups.length;
       hasMore = groups.length === pageSize;
     }
+
+    return { pulled, failed, skipped, errors };
   }
 
   // ==================== Resource Builders ====================
@@ -424,8 +493,10 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
    * Resolve the OpenSPP identifier system URI from entity data.
    * Checks for an `identifierType` field in the form data, falling back to `national_id`.
    */
-  private resolveIdentifierSystem(data: Record<string, unknown>): string {
-    const code = (data.identifierType as string) || "national_id";
+  private resolveIdentifierSystem(data: Record<string, unknown>, entityType: "individual" | "group" = "individual"): string {
+    const formCode = data.identifierType as string | undefined;
+    const defaultCode = entityType === "group" ? this.groupIdentifierType : this.identifierType;
+    const code = formCode || defaultCode;
     if (code.startsWith(this.identifierNamespace)) {
       return code;
     }
@@ -537,7 +608,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     guid: string,
     data: Record<string, unknown>,
   ): GroupResource {
-    const system = this.resolveIdentifierSystem(data);
+    const system = this.resolveIdentifierSystem(data, "group");
     const resource: GroupResource = {
       type: "Group",
       identifier: [this.getClient().createIdentifier(system, guid)],

@@ -29,6 +29,21 @@ import MockSyncServerAdapter from "../services/MockSyncServerAdapter";
 import { adapterRegistry } from "./AdapterRegistry";
 import { createLogger } from "../utils/logger";
 
+export interface SyncProgress {
+  phase: 'pushing' | 'pulling';
+  pushed: number;
+  pulled: number;
+  failed: number;
+  skipped: number;
+}
+
+export type SyncProgressCallback = (progress: SyncProgress) => void;
+
+export interface SyncOptions {
+  onProgress?: SyncProgressCallback;
+  signal?: AbortSignal;
+}
+
 /**
  * Error thrown when a sync is requested while another is already in progress.
  */
@@ -407,13 +422,13 @@ export class ExternalSyncManager {
    * });
    * ```
    */
-  async synchronize(credentials?: ExternalSyncCredentials): Promise<SyncResult> {
+  async synchronize(credentials?: ExternalSyncCredentials, options?: SyncOptions): Promise<SyncResult> {
     if (this._isSyncing) {
       throw new SyncAlreadyInProgressError();
     }
     this._isSyncing = true;
     try {
-      return await this.performSync(credentials);
+      return await this.performSync(credentials, options);
     } finally {
       this._isSyncing = false;
     }
@@ -430,7 +445,7 @@ export class ExternalSyncManager {
    * Internal sync implementation.
    * @private
    */
-  private async performSync(credentials?: ExternalSyncCredentials): Promise<SyncResult> {
+  private async performSync(credentials?: ExternalSyncCredentials, options?: SyncOptions): Promise<SyncResult> {
     const startTime = Date.now();
 
     // Gather entities from the entity store to push to the external system
@@ -440,7 +455,16 @@ export class ExternalSyncManager {
     if (this.v2Adapter) {
       log.info("SYNC_STARTED");
 
+      options?.onProgress?.({ phase: 'pushing', pushed: 0, pulled: 0, failed: 0, skipped: 0 });
       const pushResult = await this.v2Adapter.push(entityPayloads);
+
+      if (options?.signal?.aborted) {
+        const error = new Error('Sync cancelled');
+        error.name = 'AbortError';
+        throw error;
+      }
+
+      options?.onProgress?.({ phase: 'pulling', pushed: pushResult.pushed, pulled: 0, failed: pushResult.failed, skipped: pushResult.skipped });
       const pullResult = await this.v2Adapter.pull();
 
       return {
@@ -469,7 +493,16 @@ export class ExternalSyncManager {
 
     const wrapper = new LegacyAdapterWrapper(this.adapter, this.config.type);
 
+    options?.onProgress?.({ phase: 'pushing', pushed: 0, pulled: 0, failed: 0, skipped: 0 });
     const pushResult = await wrapper.push(entityPayloads);
+
+    if (options?.signal?.aborted) {
+      const error = new Error('Sync cancelled');
+      error.name = 'AbortError';
+      throw error;
+    }
+
+    options?.onProgress?.({ phase: 'pulling', pushed: pushResult.pushed, pulled: 0, failed: pushResult.failed, skipped: pushResult.skipped });
     const pullResult = await wrapper.pull();
 
     const combinedResult: SyncResult = {

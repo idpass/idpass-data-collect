@@ -165,7 +165,8 @@ describe("OpenSppV2SyncAdapter", () => {
       eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
 
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
-      await expect(adapter.pushData()).resolves.toBeUndefined();
+      const result = await adapter.pushData();
+      expect(result).toEqual({ pushed: 1, failed: 0, skipped: 0, errors: [] });
 
       expect(mockEntityStore.getAllEntities).toHaveBeenCalled();
       expect(mockV2ClientImplementation.createIndividual).toHaveBeenCalledWith(
@@ -217,7 +218,8 @@ describe("OpenSppV2SyncAdapter", () => {
       eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
 
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
-      await expect(adapter.pushData()).resolves.toBeUndefined();
+      const result = await adapter.pushData();
+      expect(result).toEqual({ pushed: 1, failed: 0, skipped: 0, errors: [] });
 
       expect(mockV2ClientImplementation.patchIndividual).toHaveBeenCalledWith(
         "urn:openspp:vocab:id-type#national_id|individual-1",
@@ -238,7 +240,8 @@ describe("OpenSppV2SyncAdapter", () => {
       eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
 
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
-      await expect(adapter.pushData()).resolves.toBeUndefined();
+      const result = await adapter.pushData();
+      expect(result).toEqual({ pushed: 0, failed: 0, skipped: 0, errors: [] });
 
       expect(mockV2ClientImplementation.createIndividual).not.toHaveBeenCalled();
       expect(mockV2ClientImplementation.patchIndividual).not.toHaveBeenCalled();
@@ -276,7 +279,8 @@ describe("OpenSppV2SyncAdapter", () => {
       eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
 
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
-      await expect(adapter.pushData()).resolves.toBeUndefined();
+      const result = await adapter.pushData();
+      expect(result).toEqual({ pushed: 1, failed: 0, skipped: 0, errors: [] });
 
       expect(mockV2ClientImplementation.createGroup).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -319,7 +323,8 @@ describe("OpenSppV2SyncAdapter", () => {
       eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
 
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
-      await expect(adapter.pushData()).resolves.toBeUndefined();
+      const result = await adapter.pushData();
+      expect(result).toEqual({ pushed: 1, failed: 0, skipped: 0, errors: [] });
 
       expect(mockV2ClientImplementation.patchGroup).toHaveBeenCalledWith(
         "urn:openspp:vocab:id-type#national_id|group-1",

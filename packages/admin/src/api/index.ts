@@ -204,7 +204,7 @@ export const getEntityEvents = async (entityGuid: string, configId: string): Pro
 
 export const externalSync = async (configId: string, credentials?: unknown) => {
   const response = await api().post(EXTERNAL_SYNC_URL, { configId, credentials })
-  return response.data
+  return response.data as { jobId: string; status: string }
 }
 
 export const getSyncStatus = async (configId: string) => {
@@ -215,6 +215,21 @@ export const getSyncStatus = async (configId: string) => {
 export const getSyncEvents = async (configId: string) => {
   const response = await api().get(SYNC_EVENTS_URL, { params: { configId } })
   return response.data
+}
+
+export const getSyncJobStatus = async (jobId: string) => {
+  const response = await api().get(`${EXTERNAL_SYNC_URL}/${jobId}`)
+  return response.data
+}
+
+export const cancelSyncJob = async (jobId: string) => {
+  const response = await api().post(`${EXTERNAL_SYNC_URL}/${jobId}/cancel`)
+  return response.data
+}
+
+export const retrySyncJob = async (jobId: string) => {
+  const response = await api().post(`${EXTERNAL_SYNC_URL}/${jobId}/retry`)
+  return response.data as { jobId: string; status: string }
 }
 
 export const getUsers = async (): Promise<{ id: string; email: string; role: string; programIds?: string[] }[]> => {

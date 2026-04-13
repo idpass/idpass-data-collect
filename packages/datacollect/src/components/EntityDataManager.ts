@@ -36,7 +36,7 @@ import {
 import type { SyncResult } from "../interfaces/adapter";
 import { EventApplierService } from "../services/EventApplierService";
 import { AppError } from "../utils/AppError";
-import { ExternalSyncManager } from "./ExternalSyncManager";
+import { ExternalSyncManager, SyncOptions } from "./ExternalSyncManager";
 import { InternalSyncManager } from "./InternalSyncManager";
 import { AuthManager } from "./AuthManager";
 
@@ -847,9 +847,9 @@ export class EntityDataManager {
    * await manager.syncWithExternalSystem();
    * ```
    */
-  async syncWithExternalSystem(credentials?: ExternalSyncCredentials): Promise<SyncResult | undefined> {
+  async syncWithExternalSystem(credentials?: ExternalSyncCredentials, options?: SyncOptions): Promise<SyncResult | undefined> {
     if (this.externalSyncManager) {
-      return await this.externalSyncManager.synchronize(credentials);
+      return await this.externalSyncManager.synchronize(credentials, options);
     }
     return undefined;
   }

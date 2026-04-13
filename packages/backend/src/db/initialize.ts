@@ -201,6 +201,17 @@ export async function initializeDatabase(postgresUrl: string): Promise<void> {
       ON sync_events (created_at DESC)
     `);
 
+    // ── 7b. sync_events async columns ────────────────────────────────
+    await client.query(`ALTER TABLE sync_events ADD COLUMN IF NOT EXISTS job_id TEXT UNIQUE`);
+    await client.query(`ALTER TABLE sync_events ADD COLUMN IF NOT EXISTS phase VARCHAR(20)`);
+    await client.query(`ALTER TABLE sync_events ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ`);
+    await client.query(`ALTER TABLE sync_events ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ`);
+    await client.query(`ALTER TABLE sync_events ADD COLUMN IF NOT EXISTS error_message TEXT`);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_sync_events_job_id
+      ON sync_events (job_id) WHERE job_id IS NOT NULL
+    `);
+
     log.info("Backend database schema initialized successfully");
   } finally {
     client.release();

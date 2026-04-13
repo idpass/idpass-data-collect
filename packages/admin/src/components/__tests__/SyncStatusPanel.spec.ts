@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createVuetify } from 'vuetify'
 import SyncStatusPanel from '../SyncStatusPanel.vue'
@@ -8,11 +8,15 @@ const vuetify = createVuetify()
 const mockGetSyncStatus = vi.fn()
 const mockGetSyncEvents = vi.fn()
 const mockExternalSync = vi.fn()
+const mockGetSyncJobStatus = vi.fn()
+const mockCancelSyncJob = vi.fn()
 
 vi.mock('@/api', () => ({
   getSyncStatus: (...args: unknown[]) => mockGetSyncStatus(...args),
   getSyncEvents: (...args: unknown[]) => mockGetSyncEvents(...args),
   externalSync: (...args: unknown[]) => mockExternalSync(...args),
+  getSyncJobStatus: (...args: unknown[]) => mockGetSyncJobStatus(...args),
+  cancelSyncJob: (...args: unknown[]) => mockCancelSyncJob(...args),
 }))
 
 function mountPanel(props = {}) {
@@ -32,8 +36,15 @@ function mountPanel(props = {}) {
 describe('SyncStatusPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockGetSyncStatus.mockResolvedValue({ isSyncing: false, lastEvent: null })
+    vi.useFakeTimers()
+    mockGetSyncStatus.mockResolvedValue({ lastEvent: null, activeJob: null })
     mockGetSyncEvents.mockResolvedValue({ events: [] })
+    mockGetSyncJobStatus.mockResolvedValue({ phase: 'pushing', pushed: 0, pulled: 0, failed: 0 })
+    mockCancelSyncJob.mockResolvedValue({ status: 'cancelled' })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 
   it('renders nothing when hasExternalSync is false', async () => {
@@ -78,7 +89,10 @@ describe('SyncStatusPanel', () => {
   })
 
   it('disables trigger button when syncing', async () => {
-    mockGetSyncStatus.mockResolvedValue({ isSyncing: true, lastEvent: null })
+    mockGetSyncStatus.mockResolvedValue({
+      lastEvent: null,
+      activeJob: { jobId: 'active-job', phase: 'pushing', pushed: 0, pulled: 0, failed: 0 },
+    })
     const wrapper = mountPanel()
     await flushPromises()
 
@@ -94,8 +108,12 @@ describe('SyncStatusPanel', () => {
     expect(wrapper.emitted('request-credentials')).toBeTruthy()
   })
 
-  it('calls externalSync and emits sync-completed on success', async () => {
-    mockExternalSync.mockResolvedValue({ status: 'success', pushed: 5, pulled: 2 })
+  it('calls externalSync and starts polling, emits sync-completed when job completes', async () => {
+    mockExternalSync.mockResolvedValue({ jobId: 'test-job', status: 'pending' })
+    mockGetSyncJobStatus.mockResolvedValue({ phase: 'completed', pushed: 5, pulled: 2, failed: 0 })
+    // fetchStatus after completion returns idle state
+    mockGetSyncStatus.mockResolvedValue({ lastEvent: null, activeJob: null })
+
     const wrapper = mountPanel()
     await flushPromises()
 
@@ -103,6 +121,12 @@ describe('SyncStatusPanel', () => {
     await flushPromises()
 
     expect(mockExternalSync).toHaveBeenCalledWith('test-config', undefined)
+
+    // Advance past the polling interval (2000ms)
+    await vi.advanceTimersByTimeAsync(2000)
+    await flushPromises()
+
+    expect(mockGetSyncJobStatus).toHaveBeenCalledWith('test-job')
     expect(wrapper.emitted('sync-completed')).toBeTruthy()
   })
 
