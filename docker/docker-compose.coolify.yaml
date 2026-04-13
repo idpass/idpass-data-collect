@@ -2,6 +2,7 @@ name: idpass-datacollect-staging
 services:
   postgres:
     image: postgres:15
+    hostname: dc-postgres
     restart: always
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-admin}
@@ -28,8 +29,8 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - POSTGRES=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-datacollect}
-      - POSTGRES_TEST=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@postgres:5432/${POSTGRES_DB:-datacollect}_test
+      - POSTGRES=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@dc-postgres:5432/${POSTGRES_DB:-datacollect}
+      - POSTGRES_TEST=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@dc-postgres:5432/${POSTGRES_DB:-datacollect}_test
       - JWT_SECRET=${JWT_SECRET:-staging-secret-change-me}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@datacollect.lan}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
