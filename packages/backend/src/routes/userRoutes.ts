@@ -28,11 +28,18 @@ import { asyncHandler } from "../middlewares/errorHandlers";
 import { Role, UserStore } from "../types";
 import { PASSWORD_RULES } from "../utils/passwordRules";
 
+const RoleAssignmentSchema = z.object({
+  tenantId: z.string(),
+  role: z.string(),
+  areaId: z.string().optional(),
+});
+
 const CreateUserSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: PASSWORD_RULES,
   role: z.nativeEnum(Role),
   tenantIds: z.array(z.string()).optional().default([]),
+  roleAssignments: z.array(RoleAssignmentSchema).optional().default([]),
 });
 
 const UpdateUserSchema = z.object({
@@ -40,6 +47,7 @@ const UpdateUserSchema = z.object({
   password: PASSWORD_RULES.optional(),
   role: z.nativeEnum(Role),
   tenantIds: z.array(z.string()).optional(),
+  roleAssignments: z.array(RoleAssignmentSchema).optional(),
 });
 
 const loginLimiter = rateLimit({
@@ -157,10 +165,10 @@ export function createUserRoutes(userStore: UserStore): Router {
         const messages = parseResult.error.issues.map((i) => i.message);
         return res.status(400).json({ error: messages.join(". "), details: parseResult.error.issues });
       }
-      const { email, password, role, tenantIds } = parseResult.data;
+      const { email, password, role, tenantIds, roleAssignments } = parseResult.data;
       const saltRounds = 10;
       const passwordHash = await bcrypt.hash(password, saltRounds);
-      const newUser = { email, passwordHash, role, tenantIds };
+      const newUser = { email, passwordHash, role, tenantIds, roleAssignments };
       await userStore.saveUser(newUser);
       res.status(201).json({ message: "User created successfully" });
     }),
@@ -182,7 +190,7 @@ export function createUserRoutes(userStore: UserStore): Router {
         const messages = parseResult.error.issues.map((i) => i.message);
         return res.status(400).json({ error: messages.join(". "), details: parseResult.error.issues });
       }
-      const { email, password, role, tenantIds } = parseResult.data;
+      const { email, password, role, tenantIds, roleAssignments } = parseResult.data;
       const user = await userStore.getUserById(numericId);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
@@ -190,8 +198,15 @@ export function createUserRoutes(userStore: UserStore): Router {
       // Only hash the password if it's provided; otherwise keep the existing hash
       const saltRounds = 10;
       const passwordHash = password ? await bcrypt.hash(password, saltRounds) : user.passwordHash;
-      // Preserve existing tenantIds if not provided in the request body
-      const updatedUser = { id: user.id, email, passwordHash, role, tenantIds: tenantIds ?? user.tenantIds };
+      // Preserve existing values if not provided in the request body
+      const updatedUser = {
+        id: user.id,
+        email,
+        passwordHash,
+        role,
+        tenantIds: tenantIds ?? user.tenantIds,
+        roleAssignments: roleAssignments ?? user.roleAssignments ?? [],
+      };
       await userStore.updateUser(updatedUser);
       res.json({ message: "User updated successfully" });
     }),

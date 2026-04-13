@@ -232,18 +232,40 @@ export const retrySyncJob = async (jobId: string) => {
   return response.data as { jobId: string; status: string }
 }
 
-export const getUsers = async (): Promise<{ id: string; email: string; role: string; programIds?: string[] }[]> => {
+export const getUsers = async (): Promise<{
+  id: string
+  email: string
+  role: string
+  programIds?: string[]
+  roleAssignments?: Array<{ programId: string; role: string; areaId?: string }>
+}[]> => {
   const response = await api().get(USERS_URL)
-  return response.data.map((user: { tenantIds?: string[]; [key: string]: unknown }) => {
-    const { tenantIds, ...rest } = user
-    return { ...rest, programIds: tenantIds }
-  })
+  return response.data.map(
+    (user: { tenantIds?: string[]; roleAssignments?: Array<{ tenantId: string; role: string; areaId?: string }>; [key: string]: unknown }) => {
+      const { tenantIds, roleAssignments, ...rest } = user
+      return {
+        ...rest,
+        programIds: tenantIds,
+        roleAssignments: roleAssignments?.map(({ tenantId, ...ra }) => ({ ...ra, programId: tenantId })),
+      }
+    },
+  )
 }
 
-export const createUser = async (user: { email: string; password: string; role: string; programIds?: string[] }) => {
-  // Backend still expects tenantIds
-  const { programIds, ...rest } = user
-  const response = await api().post(USERS_URL, { ...rest, tenantIds: programIds })
+export const createUser = async (user: {
+  email: string
+  password: string
+  role: string
+  programIds?: string[]
+  roleAssignments?: Array<{ programId: string; role: string; areaId?: string }>
+}) => {
+  // Backend expects tenantIds and roleAssignments with tenantId
+  const { programIds, roleAssignments, ...rest } = user
+  const response = await api().post(USERS_URL, {
+    ...rest,
+    tenantIds: programIds,
+    roleAssignments: roleAssignments?.map(({ programId, ...ra }) => ({ ...ra, tenantId: programId })),
+  })
   return response.data
 }
 
@@ -253,10 +275,15 @@ export const updateUser = async (user: {
   password?: string
   role: string
   programIds?: string[]
+  roleAssignments?: Array<{ programId: string; role: string; areaId?: string }>
 }) => {
-  // Backend still expects tenantIds
-  const { programIds, ...rest } = user
-  const response = await api().put(`${USERS_URL}/${user.id}`, { ...rest, tenantIds: programIds })
+  // Backend expects tenantIds and roleAssignments with tenantId
+  const { programIds, roleAssignments, ...rest } = user
+  const response = await api().put(`${USERS_URL}/${user.id}`, {
+    ...rest,
+    tenantIds: programIds,
+    roleAssignments: roleAssignments?.map(({ programId, ...ra }) => ({ ...ra, tenantId: programId })),
+  })
   return response.data
 }
 
