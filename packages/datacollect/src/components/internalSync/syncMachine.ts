@@ -128,10 +128,11 @@ export function createSyncMachine(
 
       uploadChunkWithRetry: fromPromise(
         async ({ input }: { input: { context: SyncContext } }): Promise<FormSubmission[]> => {
-          const { axiosInstance, configId, uploadChunks, uploadChunkIndex } = input.context;
+          const { axiosInstance, configId, uploadChunks, uploadChunkIndex, authStorage, reauthenticate } = input.context;
           const chunk = uploadChunks[uploadChunkIndex];
           const retryCount = 3;
           const delayMs = 1000;
+          let reauthAttempted = false;
           for (let attempt = 1; attempt <= retryCount; attempt++) {
             try {
               await axiosInstance.post("/api/sync/push", { events: chunk, configId });
@@ -139,16 +140,41 @@ export function createSyncMachine(
             } catch (error: unknown) {
               const axiosErr = error as { response?: { status?: number; data?: unknown }; message?: string };
               const status = axiosErr.response?.status;
+
+              // On 403, attempt token refresh once — JWT may have stale tenantIds
+              if (status === 403 && !reauthAttempted && reauthenticate) {
+                reauthAttempted = true;
+                try {
+                  await reauthenticate();
+                  const token = await authStorage.getToken();
+                  if (token) {
+                    const provider = token.provider === "default" ? "Bearer" : token.provider;
+                    axiosInstance.defaults.headers.Authorization = `${provider} ${token.token}`;
+                  }
+                  continue; // retry with refreshed token
+                } catch {
+                  // Re-auth failed, fall through to error
+                }
+              }
+
               // Don't retry auth errors — retrying with the same expired token is pointless
               if (status === 401 || status === 403 || attempt === retryCount) {
                 const body = axiosErr.response?.data;
                 const serverMsg = typeof body === "object" && body !== null && "message" in body
                   ? (body as { message: string }).message
                   : typeof body === "string" ? body : undefined;
-                const parts = [`HTTP ${status || "unknown"}`];
-                if (serverMsg) parts.push(serverMsg);
-                else if (axiosErr.message) parts.push(axiosErr.message);
-                if (status === 401) parts.push("Please log in again");
+                const parts: string[] = [];
+                if (status === 403) {
+                  parts.push("You do not have permission to sync this program");
+                  parts.push("Please contact your administrator to request access");
+                } else if (status === 401) {
+                  parts.push("Session expired");
+                  parts.push("Please log in again");
+                } else {
+                  parts.push(`HTTP ${status || "unknown"}`);
+                  if (serverMsg) parts.push(serverMsg);
+                  else if (axiosErr.message) parts.push(axiosErr.message);
+                }
                 throw new Error(parts.join(" — "));
               }
               await new Promise((resolve) => setTimeout(resolve, delayMs * attempt));
@@ -206,13 +232,32 @@ export function createSyncMachine(
         }: {
           input: { context: SyncContext };
         }): Promise<{ events: FormSubmission[]; nextCursor: string | Date | null }> => {
-          const { axiosInstance, configId, downloadCursor, selectiveSyncOptions } = input.context;
+          const { axiosInstance, configId, downloadCursor, selectiveSyncOptions, authStorage, reauthenticate } = input.context;
           let url = `/api/sync/pull?since=${encodeURIComponent(String(downloadCursor))}&configId=${encodeURIComponent(configId)}`;
           if (selectiveSyncOptions.assignedAreaIds?.length) {
             url += `&areaIds=${encodeURIComponent(selectiveSyncOptions.assignedAreaIds.join(","))}`;
           }
-          const result = await axiosInstance.get(url);
-          return result.data as { events: FormSubmission[]; nextCursor: string | Date | null };
+          try {
+            const result = await axiosInstance.get(url);
+            return result.data as { events: FormSubmission[]; nextCursor: string | Date | null };
+          } catch (error: unknown) {
+            const axiosErr = error as { response?: { status?: number } };
+            if (axiosErr.response?.status === 403 && reauthenticate) {
+              try {
+                await reauthenticate();
+                const token = await authStorage.getToken();
+                if (token) {
+                  const provider = token.provider === "default" ? "Bearer" : token.provider;
+                  axiosInstance.defaults.headers.Authorization = `${provider} ${token.token}`;
+                }
+                const result = await axiosInstance.get(url);
+                return result.data as { events: FormSubmission[]; nextCursor: string | Date | null };
+              } catch {
+                throw new Error("You do not have permission to sync this program — Please contact your administrator to request access");
+              }
+            }
+            throw error;
+          }
         },
       ),
 
