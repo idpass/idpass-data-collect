@@ -43,7 +43,6 @@ services:
         condition: service_healthy
     networks:
       - internal
-      - coolify
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
       interval: 15s
@@ -65,7 +64,6 @@ services:
       - sync-server
     networks:
       - internal
-      - coolify
 
   web-ui:
     build:
@@ -81,7 +79,6 @@ services:
       - sync-server
     networks:
       - internal
-      - coolify
 
 volumes:
   postgres-data:
@@ -89,5 +86,3 @@ volumes:
 networks:
   internal:
     driver: bridge
-  coolify:
-    external: true
