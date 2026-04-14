@@ -1,6 +1,6 @@
 {
   "name": "@idpass/adapter-mock",
-  "version": "2.0.0-beta.1",
+  "version": "2.0.0",
   "description": "Mock sync adapter for ID PASS DataCollect testing",
   "engines": {
     "node": ">=22.0.0"

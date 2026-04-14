@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Second release candidate for v2.0.0. Major additions: async external sync with progress tracking, sync status panel in admin UI, access control hardening, and DPGA compliance documentation.
 
 ### Added
-- **Async external sync** — external sync jobs now run in the background with real-time progress tracking, cancellation support, and job history. Replaces the blocking sync-and-wait model
+- **Async external sync (push)** — external sync push jobs now run in the background with real-time progress tracking, cancellation support, and job history. Pull remains synchronous
 - **Sync status panel** — new admin UI component shows live sync progress, history timeline, error details, and push/pull counts per job
 - **Sync event persistence** — new `sync_events` table records every sync run with duration, counts, and error details for audit and debugging
 - **DPGA submission docs** — added PRIVACY.md, GOVERNANCE.md, DO_NO_HARM.md, ACCESSIBILITY.md, and data export user guide for Digital Public Goods Alliance submission
@@ -91,9 +91,11 @@ Release candidate for v2.0.0. Includes all beta.3 fixes plus documentation overh
 - Scope Playwright browser install to admin package
 - Update workflow passwords and JWT secret to meet strength requirements
 
-## [2.0.0] - 2026-MM-DD
+## [2.0.0] - 2026-04-14
 
-Major release introducing offline-first web and mobile applications with event sourcing, multi-tenant sync, and comprehensive security hardening. See [2.0.0-rc.2](#200-rc2---2026-04-14), [2.0.0-rc.1](#200-rc1---2026-03-30), [2.0.0-beta.1](#200-beta1---2026-03-18), [2.0.0-beta.2](#200-beta2---2026-03-26), and [2.0.0-beta.3](#200-beta3---2026-03-29) for detailed per-change history.
+Major release introducing offline-first web and mobile applications with event sourcing, multi-tenant sync, and comprehensive security hardening across four packages: `datacollect` (core), `backend` (Express sync server), `admin` (Vue.js dashboard), and `web` (self-service/agent portal). 355 commits since v1.0.0.
+
+See pre-release changelogs for per-change detail: [rc.2](#200-rc2---2026-04-14), [rc.1](#200-rc1---2026-03-30), [beta.3](#200-beta3---2026-03-29), [beta.2](#200-beta2---2026-03-26), [beta.1](#200-beta1---2026-03-18).
 
 ### Breaking Changes
 - `EntityPair.initial` is now nullable (entities not yet synced have `null`)
@@ -104,56 +106,104 @@ Major release introducing offline-first web and mobile applications with event s
 - `JWT_SECRET` must be ≥32 characters (server refuses to start otherwise)
 - `CORS_ORIGINS` defaults to deny-all (must be set explicitly)
 - `OpenSppSyncAdapter` removed — replaced by `OpenSppOdooSyncAdapter` (from `@idpass/adapter-openspp`)
+- Frontend code renamed from "tenant" to "program" terminology throughout
 
 ### Added
-- Web App (`packages/web`) for agent data collection and citizen self-service with OTP, National ID, and OIDC authentication
-- Mobile UI redesigned with Vuetify 3 and Material Design 3
-- Hash chain integrity replaces Merkle tree for event store tamper detection
-- XState v5 statecharts for sync orchestration and mobile auth/lock flows
-- Selective sync by area IDs and entity GUIDs
-- Biometric app lock (fingerprint/PIN) with auto-lock on background
-- Secure storage on mobile (iOS Keychain / Android Keystore)
-- Async external sync with background job tracking, progress reporting, and cancellation
-- Duplicate detection with async resolution UI
-- File attachments with MIME type detection from magic bytes
-- Record entity type for activities, services, and home visits
-- Adapter registry with Zod validation and dynamic registration
-- OpenSPP, OpenFn, and Mock adapters extracted to standalone packages
-- Sync status panel with history, error details, and push/pull counts
-- DPGA compliance documentation (Privacy, Governance, Accessibility, Do No Harm)
-- 13 new backend services (Area, Assignment, Attachment, SyncEvent, and more)
-- 41+ Playwright E2E tests across admin, backend, and integration
-- Drizzle ORM schema definitions alongside raw SQL
-- Configurable display name field for entity forms
-- Strong password validation with clear error messages
+- **Web App** (`packages/web`) — Vue 3 portal for field agent data collection and citizen self-service with OTP, National ID, and OIDC authentication
+- **Mobile redesign** — rebuilt with Vuetify 3 and Material Design 3, biometric app lock (fingerprint/PIN) with auto-lock on background, secure storage (iOS Keychain / Android Keystore)
+- **Async external sync (push)** — push jobs run in the background with real-time progress tracking, cancellation support, job history, and sync event persistence (`sync_events` table). Pull remains synchronous
+- **Sync status panel** — admin UI component showing live progress, history timeline, error details, and push/pull counts per job
+- **Hash chain integrity** — incremental hash chain replaces Merkle tree for event store tamper detection
+- **XState v5 statecharts** — sync orchestration, mobile auth, and app lock flows managed by state machines
+- **Selective sync** — filter sync by area IDs and entity GUIDs
+- **Duplicate detection** — async detection with resolution UI in admin
+- **File attachments** — upload/download with MIME type detection from magic bytes
+- **Record entity type** — new entity type for activities, services, and home visits
+- **Adapter registry** — V2 adapter interface with Zod config validation and dynamic registration
+- **Adapter packages** — OpenSPP, OpenFn, and Mock adapters extracted to standalone `@idpass/adapter-*` packages
+- **Configurable display name** — per-form display name field with indicator on mobile entity forms
+- **Strong password validation** — clear error messages for password requirements
+- **13 new backend services** — Area, Assignment, Attachment, SyncEvent, Conflict, Snapshot, Verification, ProjectionRebuild, SelfService, DuplicateDetection, Review, FormClassifier, RBAC
+- **Package publishing** — `.npmrc` with `@idpass` scope, `publishConfig` on all 5 publishable packages, `publish-packages.yml` CI workflow with tag-driven and manual triggers
+- **41+ Playwright E2E tests** across admin, backend, mobile, and cross-service integration
+- **Drizzle ORM** schema definitions alongside raw SQL migrations
 
 ### Security
-- JWT 1-hour expiry with token refresh
-- OIDC: JWKS URI origin validation, issuer pre-validation, audience + nonce checks
-- Tenant isolation middleware on all tenant-scoped routes with program-level access control
-- Self-service token scope enforcement and entity isolation
-- OTP codes hashed with HMAC-SHA256 and constant-time comparison
+- JWT 1-hour expiry with token refresh endpoint
+- OIDC hardening: JWKS URI origin validation, issuer pre-validation (prevents SSRF), audience + nonce checks
+- Tenant isolation middleware on all tenant-scoped routes
+- Program-level access control: non-admin users only see and sync assigned programs (#904, #905)
+- Self-service token scope enforcement and entity isolation (prevents cross-entity enumeration)
+- OTP codes hashed with HMAC-SHA256 and verified with constant-time comparison
 - Rate limiting on OTP, verification, and public endpoints
 - Zod input validation on all self-service endpoints
-- Filename sanitization (null bytes, path traversal, header injection)
+- Filename sanitization on ingestion (null bytes, path traversal, header injection)
+- Concurrent external sync requests rejected with 409 to prevent data races
+- Sync machine retries with refreshed token on 403 before failing (#858)
 - HTTPS-only in production mobile builds
 - Non-root Docker containers
+- Cross-origin resource policy on static artifact files
+
+### Documentation
+- Complete documentation audit: Merkle tree → hash chain, updated adapter class names, added OTP and National ID auth adapters to architecture docs
+- Package READMEs for web, backend, admin, mobile, datacollect, adapter-openspp, adapter-openfn, and adapter-mock
+- DPGA compliance documentation: PRIVACY.md, GOVERNANCE.md, DO_NO_HARM.md, ACCESSIBILITY.md, and data export user guide
+- Mobile docs rewritten for Vuetify 3 / Material Design 3 (removed RxDB and Bootstrap references)
+- Added docs for biometric app lock, record entity type, duplicate detection, and strong password validation
+
+### Website
+- Redesigned theme with ID PASS slate blue (#2C3E50) and orange (#ff6d37) palette
+- Solid hero with orange accent stripe, ID PASS logo and favicon
+- Card-grid layouts for developer and user guide pages
+- Diff syntax highlighting with green/red line backgrounds
+- Mermaid diagrams use `theme: 'base'` with brand colors
+
+### Fixed
+- Hash chain false tamper detection — `syncLevel` excluded from hash computation
+- Mobile white screen instability — sync decoupled from UI lifecycle
+- Sync cursor derived from successful chunks only (prevents advancing past failures)
+- FormSubmission cloned before mutation in EventStore.saveEvent
+- OpenSPP adapter returns partial results on entity failures instead of throwing
+- OpenSPP identifier type now configurable per entity type (was hardcoded to `national_id`)
+- Backend forwards real push/pull counts from V2 adapter wrapper (was returning zeros)
+- Sync progress preserved on failure — catch block no longer overwrites real counts
+- Sync status logic corrected: push-ok/pull-error shows "partial" instead of "failed"
+- Progress writes flush on phase change regardless of throttle interval
+- Polling handles 404 race condition on first sync job poll
+- Display name resolution uses `_displayName` field with fallback chain across all packages
+- Internal `_`-prefixed fields stripped from sync push payloads
+- Mobile: user-friendly messages for 401, 403, and 429 instead of raw HTTP codes (#849)
+- Mobile: loading overlay when adding programs, re-login button for stuck auth, login error surfacing
+- Mobile: `authConfigs` added to RxDB schema so QR-loaded programs show login form
+- Router guard blocking login pages and `window.db` race condition
+- Duplicate event push handled idempotently with ON CONFLICT DO NOTHING
+- Config schema validation and duplicate check reliability
+- FormIO component initialization error in production builds
+- SecureStorage initialization on Android (eager import shim)
+
+### Changed
+- `OpenSppSyncAdapterV2` renamed to `OpenSppOdooSyncAdapter`; legacy `OpenSppSyncAdapter` removed
+- `useBarcodeScan` composable extracted from duplicated scanner logic
+- Review workflow and granular role assignments hidden from admin UI (backend code preserved for post-2.0.0)
+- `requireAction()` RBAC middleware removed from sync routes — access controlled by tenant membership
 
 ### Improved
-- Pino-based structured logging replaces console.log throughout
-- Composite cursor pagination prevents event skipping during sync
-- Transactional sync push (batch commit or rollback atomically)
+- Pino-based structured logging replaces console.log throughout backend and core
+- Composite cursor (`timestamp|eventGuid`) pagination prevents event skipping during sync
+- Transactional sync push — all events in a batch commit or rollback atomically
 - Docker multi-stage builds with nginx for frontend SPAs
-- Node.js 24 support in CI
+- Node.js 24 support across all CI workflows
+- ESM-compatible Vite configs for mobile and web packages
+- PR check script with Podman/Docker auto-detection
 
 ### Deployment Notes
-1. Set `JWT_SECRET` to ≥32 characters (server won't start otherwise)
-2. Set `CORS_ORIGINS` explicitly (defaults to deny-all)
-3. Run DB migrations — new tables: `users`, `areas`, `userAssignments`, `entityOverrides`, `entitySnapshots`, `attachments`, `attachmentData`, `otp_codes`, `submission_reviews`, `review_configs`, `verifications`, `sync_events`
+1. **Required:** Set `JWT_SECRET` to ≥32 characters (server refuses to start otherwise)
+2. **Required:** Set `CORS_ORIGINS` explicitly (defaults to deny-all)
+3. **Run DB migrations** — new tables: `users`, `areas`, `userAssignments`, `entityOverrides`, `entitySnapshots`, `attachments`, `attachmentData`, `otp_codes`, `submission_reviews`, `review_configs`, `verifications`, `sync_events`
 4. Update adapter imports from `@idpass/data-collect-core` to `@idpass/adapter-openspp` / `@idpass/adapter-openfn`
 5. Audit all `entityPair.initial` access for null checks
 6. Replace `OpenSppSyncAdapter` with `OpenSppOdooSyncAdapter`
-7. Coolify deployments: services must join the `coolify` external network; use unique Postgres hostname to avoid DNS collision
+7. Coolify deployments: services must join the `coolify` external network; use unique Postgres hostname (`dc-postgres`) to avoid DNS collision
 
 ## [2.0.0-beta.2] - 2026-03-26
 
