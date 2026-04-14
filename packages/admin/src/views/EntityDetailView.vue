@@ -21,8 +21,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { AxiosError } from 'axios'
-import { getEntities, getEntityEvents, getReviews, getAttachmentDownloadUrl } from '@/api'
-import type { EntityRecord, EventRecord, ReviewRecord } from '@/api'
+import { getEntities, getEntityEvents, getAttachmentDownloadUrl } from '@/api'
+import type { EntityRecord, EventRecord } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useAttachmentsStore } from '@/stores/attachments'
 import { useSnackBarStore } from '@/stores/snackBar'
@@ -39,7 +39,6 @@ const entity = ref<EntityRecord | null>(null)
 const allEntities = ref<EntityRecord[]>([])
 const events = ref<EventRecord[]>([])
 const expandedEventIndices = ref<Set<number>>(new Set())
-const pendingReviews = ref<ReviewRecord[]>([])
 const fileInput = ref<HTMLInputElement | null>(null)
 
 const routeId = computed(() => route.params.id as string)
@@ -137,9 +136,6 @@ const fetchEntityAndEvents = async () => {
   }
 }
 
-const pendingReviewCount = computed(() => pendingReviews.value.length)
-const hasPendingReviews = computed(() => pendingReviewCount.value > 0)
-
 const getFileIcon = (mimeType: string): string => {
   if (mimeType.startsWith('image/')) return 'mdi-file-image'
   if (mimeType === 'application/pdf') return 'mdi-file-pdf-box'
@@ -151,17 +147,6 @@ const formatFileSize = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-const fetchPendingReviews = async () => {
-  try {
-    const response = await getReviews(routeId.value, 'pending')
-    pendingReviews.value = response.reviews.filter(
-      (r: ReviewRecord) => r.entityGuid === entityGuid.value,
-    )
-  } catch {
-    // Reviews are optional; fail silently
-  }
 }
 
 const handleUpload = async (event: Event) => {
@@ -192,7 +177,6 @@ const goBack = () => {
 
 const loadEntity = () => {
   fetchEntityAndEvents()
-  fetchPendingReviews()
   if (entityGuid.value && routeId.value) {
     attachmentsStore.fetchForEntity(entityGuid.value, routeId.value)
   }
@@ -219,12 +203,6 @@ watch(entityGuid, loadEntity)
     </v-alert>
 
     <template v-else-if="entity">
-      <!-- Review Status Banner -->
-      <v-alert v-if="hasPendingReviews" type="warning" variant="tonal" class="mb-4">
-        This entity has {{ pendingReviewCount }} pending review(s).
-        <v-btn variant="text" size="small" to="/reviews">View Reviews</v-btn>
-      </v-alert>
-
       <div class="detail-header">
         <div class="detail-header__text">
           <h1 class="detail-header__title">{{ entity.name || 'Unnamed Entity' }}</h1>
