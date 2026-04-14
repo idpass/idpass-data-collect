@@ -501,11 +501,6 @@ watch(
                 @click="router.push({ name: 'duplicates', params: { id: routeId } })"
               />
               <v-list-item
-                prepend-icon="mdi-clipboard-check-outline"
-                title="Review Config"
-                @click="router.push({ name: 'review-config', params: { id: routeId } })"
-              />
-              <v-list-item
                 prepend-icon="mdi-content-copy"
                 title="Duplicate Config"
                 @click="duplicateConfig"
@@ -841,10 +836,6 @@ watch(
                         <div class="summary-field">
                           <span class="summary-field__label">Status</span>
                           <v-chip size="small" color="success" variant="tonal">Enabled</v-chip>
-                        </div>
-                        <div class="summary-field">
-                          <span class="summary-field__label">Review Required</span>
-                          <span class="summary-field__value">{{ selfServiceConfig.requireReview ? 'Yes' : 'No' }}</span>
                         </div>
                         <div v-if="selfServiceConfig.allowedForms.length" class="summary-field">
                           <span class="summary-field__label">Allowed Forms</span>

@@ -166,12 +166,6 @@ const removeAuthConfig = (index: number) => {
           class="mb-4"
         />
 
-        <v-switch
-          v-model="draftStore.draft.selfService.requireReview"
-          label="Require review for self-service submissions"
-          color="primary"
-          hide-details
-        />
       </template>
     </v-card>
 

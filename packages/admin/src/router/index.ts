@@ -51,21 +51,9 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
-      path: '/reviews',
-      name: 'reviews',
-      component: () => import('../views/ReviewsView.vue'),
-      meta: { requiresAuth: true },
-    },
-    {
       path: '/collection-programs/:id/duplicates',
       name: 'duplicates',
       component: () => import('../views/DuplicatesView.vue'),
-      meta: { requiresAuth: true },
-    },
-    {
-      path: '/collection-programs/:id/review-config',
-      name: 'review-config',
-      component: () => import('../views/ReviewConfigView.vue'),
       meta: { requiresAuth: true },
     },
     {

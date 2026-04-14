@@ -41,14 +41,6 @@ const itemActionsSlot = 'item.actions'
 
 const roles = ['ADMIN', 'USER']
 
-const granularRoles = [
-  { title: 'System Admin', value: 'system-admin' },
-  { title: 'Program Admin', value: 'program-admin' },
-  { title: 'Supervisor', value: 'supervisor' },
-  { title: 'Enumerator', value: 'enumerator' },
-  { title: 'Viewer', value: 'viewer' },
-]
-
 const passwordRules = [
   (v: string) => {
     if (editedIndex.value > -1 && !v) return true // optional when editing
@@ -151,17 +143,6 @@ const closeDialog = () => {
   editedIndex.value = -1
 }
 
-const addRoleAssignment = () => {
-  if (!editedItem.roleAssignments) {
-    editedItem.roleAssignments = []
-  }
-  editedItem.roleAssignments.push({ programId: '', role: 'viewer' })
-}
-
-const removeRoleAssignment = (index: number) => {
-  editedItem.roleAssignments?.splice(index, 1)
-}
-
 const saveUser = async () => {
   if (userForm.value) {
     const { valid } = await userForm.value.validate()
@@ -176,7 +157,6 @@ const saveUser = async () => {
         email: editedItem.email,
         role: editedItem.role,
         programIds: editedItem.programIds,
-        roleAssignments: editedItem.roleAssignments,
       }
       if (editedItem.password) {
         payload.password = editedItem.password
@@ -190,7 +170,6 @@ const saveUser = async () => {
         password: editedItem.password,
         role: editedItem.role,
         programIds: editedItem.programIds,
-        roleAssignments: editedItem.roleAssignments,
       })
       users.value.push({ ...editedItem })
     }
@@ -307,62 +286,6 @@ onMounted(() => {
                   density="comfortable"
                 />
 
-                <!-- Per-program role assignments -->
-                <div>
-                  <div class="d-flex align-center justify-space-between mb-2">
-                    <span class="text-subtitle-2">Role Assignments</span>
-                    <v-btn
-                      size="small"
-                      variant="tonal"
-                      prepend-icon="mdi-plus"
-                      @click="addRoleAssignment"
-                    >
-                      Add
-                    </v-btn>
-                  </div>
-                  <v-card
-                    v-for="(assignment, index) in editedItem.roleAssignments"
-                    :key="index"
-                    variant="outlined"
-                    class="mb-2 pa-3"
-                  >
-                    <v-row dense align="center">
-                      <v-col cols="5">
-                        <v-select
-                          v-model="assignment.programId"
-                          :items="programs"
-                          item-title="name"
-                          item-value="id"
-                          label="Program"
-                          density="compact"
-                          variant="outlined"
-                          hide-details
-                        />
-                      </v-col>
-                      <v-col cols="5">
-                        <v-select
-                          v-model="assignment.role"
-                          :items="granularRoles"
-                          item-title="title"
-                          item-value="value"
-                          label="Role"
-                          density="compact"
-                          variant="outlined"
-                          hide-details
-                        />
-                      </v-col>
-                      <v-col cols="2">
-                        <v-btn
-                          icon="mdi-delete"
-                          variant="text"
-                          color="error"
-                          size="small"
-                          @click="removeRoleAssignment(index)"
-                        />
-                      </v-col>
-                    </v-row>
-                  </v-card>
-                </div>
               </div>
               </v-form>
             </v-card-text>
