@@ -24,7 +24,6 @@ import { ExternalSyncCredentials, SyncProgress } from "@idpass/data-collect-core
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
 import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware, validateTenantAccess } from "../middlewares/authentication";
-import { requireAction } from "../middlewares/rbac";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { AppInstanceStore, Role } from "../types";
 import { createLogger } from "../utils/logger";
@@ -174,7 +173,6 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
     "/pull",
     createDynamicAuthMiddleware(appInstanceStore),
     validateTenantAccess,
-    requireAction("read"),
     asyncHandler(async (req, res) => {
       // get param timestamp
       const { since, configId = "default", areaIds } = req.query;
@@ -249,7 +247,6 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
     "/push",
     createDynamicAuthMiddleware(appInstanceStore),
     validateTenantAccess,
-    requireAction("create"),
     asyncHandler(async (req, res) => {
       const parseResult = SyncPushPayloadSchema.safeParse(req.body);
       if (!parseResult.success) {
