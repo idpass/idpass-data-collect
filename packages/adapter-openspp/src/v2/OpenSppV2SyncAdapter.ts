@@ -345,6 +345,8 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     let failed = 0;
     let skipped = 0;
     const errors: SyncError[] = [];
+    let consecutivePageFailures = 0;
+    const maxConsecutivePageFailures = 3;
 
     while (hasMore) {
       const params: Record<string, string> = {
@@ -359,15 +361,21 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       try {
         const searchResult = await this.getClient().searchIndividuals(params);
         individuals = searchResult.data || [];
+        consecutivePageFailures = 0;
       } catch (error) {
-        console.error(`Failed to search individuals (offset=${offset}):`, error);
+        consecutivePageFailures++;
+        console.error(`Failed to search individuals (offset=${offset}), skipping page (${consecutivePageFailures}/${maxConsecutivePageFailures}):`, error);
         failed++;
         errors.push({
           code: "SEARCH_FAILED",
           message: `Failed to search individuals (offset=${offset}): ${error instanceof Error ? error.message : String(error)}`,
           retryable: true,
         });
-        break;
+        if (consecutivePageFailures >= maxConsecutivePageFailures) {
+          break;
+        }
+        offset += pageSize;
+        continue;
       }
 
       if (individuals.length === 0) {
@@ -417,6 +425,8 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     let hasMore = true;
     let pulled = 0;
     let failed = 0;
+    let consecutivePageFailures = 0;
+    const maxConsecutivePageFailures = 3;
     let skipped = 0;
     const errors: SyncError[] = [];
 
@@ -432,15 +442,21 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       try {
         const searchResult = await this.getClient().searchGroups(params);
         groups = searchResult.data || [];
+        consecutivePageFailures = 0;
       } catch (error) {
-        console.error(`Failed to search groups (offset=${offset}):`, error);
+        consecutivePageFailures++;
+        console.error(`Failed to search groups (offset=${offset}), skipping page (${consecutivePageFailures}/${maxConsecutivePageFailures}):`, error);
         failed++;
         errors.push({
           code: "SEARCH_FAILED",
           message: `Failed to search groups (offset=${offset}): ${error instanceof Error ? error.message : String(error)}`,
           retryable: true,
         });
-        break;
+        if (consecutivePageFailures >= maxConsecutivePageFailures) {
+          break;
+        }
+        offset += pageSize;
+        continue;
       }
 
       if (groups.length === 0) {
