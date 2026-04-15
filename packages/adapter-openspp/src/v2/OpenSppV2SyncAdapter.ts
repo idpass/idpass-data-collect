@@ -764,6 +764,10 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       if (individual.name.given) data.firstName = individual.name.given;
       if (individual.name.family) data.lastName = individual.name.family;
       if (individual.name.middle) data.middleName = individual.name.middle;
+      const displayParts = [individual.name.given, individual.name.family].filter(Boolean);
+      if (displayParts.length > 0) {
+        data.name = displayParts.join(" ");
+      }
     }
 
     if (individual.birthDate) {
