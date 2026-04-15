@@ -655,13 +655,9 @@ export class OpenSppV2Client {
         return new Error(`${context}: Resource not found.`);
       }
 
-      if (status === 409) {
-        return new Error(`${context}: Conflict - resource already exists or version mismatch.`);
-      }
-
-      if (status === 412) {
+      if (status === 409 || status === 412) {
         return new PreconditionFailedError(
-          `${context}: Resource was modified since last read (If-Match failed).`,
+          `${context}: Resource was modified since last read (version conflict).`,
         );
       }
 
