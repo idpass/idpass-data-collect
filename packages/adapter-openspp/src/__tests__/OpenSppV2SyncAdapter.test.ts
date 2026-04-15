@@ -21,6 +21,7 @@ import type { EventStore, ExternalSyncConfig, EntityPair } from "@idpass/data-co
 import { EntityType } from "@idpass/data-collect-core";
 import OpenSppV2SyncAdapter from "../v2/OpenSppV2SyncAdapter";
 import { EventApplierService } from "@idpass/data-collect-core";
+import { PreconditionFailedError } from "../v2/OpenSppV2Client";
 import type { IndividualResource, GroupResource, SearchResult } from "../v2/types";
 
 const mockV2ClientImplementation = {
@@ -57,10 +58,12 @@ const mockV2ClientImplementation = {
 };
 
 jest.mock("../v2/OpenSppV2Client", () => {
+  const actual = jest.requireActual("../v2/OpenSppV2Client");
   return {
     __esModule: true,
     OpenSppV2Client: jest.fn().mockImplementation(() => mockV2ClientImplementation),
     default: jest.fn().mockImplementation(() => mockV2ClientImplementation),
+    PreconditionFailedError: actual.PreconditionFailedError,
   };
 });
 
@@ -221,11 +224,15 @@ describe("OpenSppV2SyncAdapter", () => {
       const result = await adapter.pushData();
       expect(result).toEqual({ pushed: 1, failed: 0, skipped: 0, errors: [] });
 
+      expect(mockV2ClientImplementation.getIndividual).toHaveBeenCalledWith(
+        "urn:openspp:vocab:id-type#national_id|individual-1",
+      );
       expect(mockV2ClientImplementation.patchIndividual).toHaveBeenCalledWith(
         "urn:openspp:vocab:id-type#national_id|individual-1",
         expect.objectContaining({
           name: expect.objectContaining({ family: "Smith" }),
         }),
+        undefined,
       );
       expect(mockV2ClientImplementation.createIndividual).not.toHaveBeenCalled();
     });
@@ -326,9 +333,13 @@ describe("OpenSppV2SyncAdapter", () => {
       const result = await adapter.pushData();
       expect(result).toEqual({ pushed: 1, failed: 0, skipped: 0, errors: [] });
 
+      expect(mockV2ClientImplementation.getGroup).toHaveBeenCalledWith(
+        "urn:openspp:vocab:id-type#national_id|group-1",
+      );
       expect(mockV2ClientImplementation.patchGroup).toHaveBeenCalledWith(
         "urn:openspp:vocab:id-type#national_id|group-1",
         expect.objectContaining({ name: "New Name" }),
+        undefined,
       );
     });
   });
@@ -511,6 +522,265 @@ describe("OpenSppV2SyncAdapter", () => {
             groupType: "household",
           }),
         }),
+      );
+    });
+  });
+
+  describe("pull timestamp preservation", () => {
+    it("uses source meta.lastUpdated for pulled individuals", async () => {
+      const sourceTimestamp = "2024-06-15T10:30:00.000Z";
+      mockV2ClientImplementation.searchIndividuals.mockReset();
+      mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce({
+        data: [{
+          type: "Individual",
+          identifier: [{ system: "urn:openspp:vocab:id-type#national_id", value: "ts-ind-1" }],
+          name: { given: "Alice", family: "Test" },
+          meta: { lastUpdated: sourceTimestamp, versionId: "v1" },
+        }],
+        meta: { total: 1, count: 1, offset: 0 },
+        links: { self: "/api/v2/spp/Individual" },
+      } as SearchResult<IndividualResource>);
+      mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce({
+        data: [], meta: { total: 1, count: 0, offset: 1 }, links: { self: "" },
+      });
+      mockV2ClientImplementation.searchGroups.mockReset();
+      mockV2ClientImplementation.searchGroups.mockResolvedValue({
+        data: [], meta: { total: 0, count: 0, offset: 0 }, links: { self: "" },
+      });
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      await adapter.pullData();
+
+      expect(eventApplierService.submitForm).toHaveBeenCalledWith(
+        expect.objectContaining({ timestamp: sourceTimestamp }),
+      );
+    });
+
+    it("uses source meta.lastUpdated for pulled groups", async () => {
+      const sourceTimestamp = "2024-07-20T14:00:00.000Z";
+      mockV2ClientImplementation.searchIndividuals.mockReset();
+      mockV2ClientImplementation.searchIndividuals.mockResolvedValue({
+        data: [], meta: { total: 0, count: 0, offset: 0 }, links: { self: "" },
+      });
+      mockV2ClientImplementation.searchGroups.mockReset();
+      mockV2ClientImplementation.searchGroups.mockResolvedValueOnce({
+        data: [{
+          type: "Group",
+          identifier: [{ system: "urn:openspp:vocab:id-type#national_id", value: "ts-grp-1" }],
+          name: "Test Group",
+          meta: { lastUpdated: sourceTimestamp, versionId: "v2" },
+        }],
+        meta: { total: 1, count: 1, offset: 0 },
+        links: { self: "/api/v2/spp/Group" },
+      } as SearchResult<GroupResource>);
+      mockV2ClientImplementation.searchGroups.mockResolvedValueOnce({
+        data: [], meta: { total: 1, count: 0, offset: 1 }, links: { self: "" },
+      });
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      await adapter.pullData();
+
+      expect(eventApplierService.submitForm).toHaveBeenCalledWith(
+        expect.objectContaining({ timestamp: sourceTimestamp }),
+      );
+    });
+
+    it("falls back to current time when meta.lastUpdated is absent", async () => {
+      const before = new Date().toISOString();
+      mockV2ClientImplementation.searchIndividuals.mockReset();
+      mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce({
+        data: [{
+          type: "Individual",
+          identifier: [{ system: "urn:openspp:vocab:id-type#national_id", value: "no-meta-1" }],
+          name: { given: "Bob", family: "NoMeta" },
+        }],
+        meta: { total: 1, count: 1, offset: 0 },
+        links: { self: "/api/v2/spp/Individual" },
+      } as SearchResult<IndividualResource>);
+      mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce({
+        data: [], meta: { total: 1, count: 0, offset: 1 }, links: { self: "" },
+      });
+      mockV2ClientImplementation.searchGroups.mockReset();
+      mockV2ClientImplementation.searchGroups.mockResolvedValue({
+        data: [], meta: { total: 0, count: 0, offset: 0 }, links: { self: "" },
+      });
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      await adapter.pullData();
+
+      const call = eventApplierService.submitForm.mock.calls[0][0];
+      const after = new Date().toISOString();
+      expect(call.timestamp >= before).toBe(true);
+      expect(call.timestamp <= after).toBe(true);
+    });
+  });
+
+  describe("push optimistic locking", () => {
+    it("passes versionId to patchIndividual", async () => {
+      const entityPair: EntityPair = {
+        guid: "ind-lock-1",
+        initial: {
+          id: "e1", guid: "ind-lock-1", type: EntityType.Individual, version: 1,
+          externalId: "ind-lock-1",
+          data: { entityName: "individual", firstName: "Jane", externalId: "ind-lock-1" },
+          lastUpdated: "2024-01-01T12:00:00.000Z",
+        },
+        modified: {
+          id: "e1", guid: "ind-lock-1", type: EntityType.Individual, version: 2,
+          externalId: "ind-lock-1",
+          data: { entityName: "individual", firstName: "Janet", externalId: "ind-lock-1" },
+          lastUpdated: "2024-01-02T12:00:00.000Z",
+        },
+      };
+
+      const mockEntityStore = {
+        getAllEntities: jest.fn().mockResolvedValue([entityPair]),
+        getEntity: jest.fn().mockResolvedValue(entityPair),
+        getEntityByExternalId: jest.fn().mockResolvedValue(entityPair),
+        saveEntity: jest.fn(),
+      };
+      eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
+
+      mockV2ClientImplementation.getIndividual.mockResolvedValueOnce({
+        type: "Individual",
+        identifier: [{ system: "urn:openspp:vocab:id-type#national_id", value: "ind-lock-1" }],
+        meta: { versionId: "abc-123" },
+      });
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      await adapter.pushData();
+
+      expect(mockV2ClientImplementation.patchIndividual).toHaveBeenCalledWith(
+        "urn:openspp:vocab:id-type#national_id|ind-lock-1",
+        expect.any(Object),
+        "abc-123",
+      );
+    });
+
+    it("passes versionId to patchGroup", async () => {
+      const groupPair: EntityPair = {
+        guid: "grp-lock-1",
+        initial: {
+          id: "g1", guid: "grp-lock-1", type: EntityType.Group, version: 1,
+          externalId: "grp-lock-1",
+          data: { entityName: "group", name: "Old", externalId: "grp-lock-1" },
+          lastUpdated: "2024-01-01T12:00:00.000Z",
+        },
+        modified: {
+          id: "g1", guid: "grp-lock-1", type: EntityType.Group, version: 2,
+          externalId: "grp-lock-1",
+          data: { entityName: "group", name: "New", externalId: "grp-lock-1" },
+          lastUpdated: "2024-01-02T12:00:00.000Z",
+        },
+      };
+
+      const mockEntityStore = {
+        getAllEntities: jest.fn().mockResolvedValue([groupPair]),
+        getEntity: jest.fn().mockResolvedValue(groupPair),
+        getEntityByExternalId: jest.fn().mockResolvedValue(groupPair),
+        saveEntity: jest.fn(),
+      };
+      eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
+
+      mockV2ClientImplementation.getGroup.mockResolvedValueOnce({
+        type: "Group",
+        identifier: [{ system: "urn:openspp:vocab:id-type#national_id", value: "grp-lock-1" }],
+        meta: { versionId: "def-456" },
+      });
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      await adapter.pushData();
+
+      expect(mockV2ClientImplementation.patchGroup).toHaveBeenCalledWith(
+        "urn:openspp:vocab:id-type#national_id|grp-lock-1",
+        expect.any(Object),
+        "def-456",
+      );
+    });
+
+    it("skips entity on 412 Precondition Failed without retrying", async () => {
+      const entityPair: EntityPair = {
+        guid: "ind-412-1",
+        initial: {
+          id: "e1", guid: "ind-412-1", type: EntityType.Individual, version: 1,
+          externalId: "ind-412-1",
+          data: { entityName: "individual", firstName: "Stale", externalId: "ind-412-1" },
+          lastUpdated: "2024-01-01T12:00:00.000Z",
+        },
+        modified: {
+          id: "e1", guid: "ind-412-1", type: EntityType.Individual, version: 2,
+          externalId: "ind-412-1",
+          data: { entityName: "individual", firstName: "Stale", externalId: "ind-412-1" },
+          lastUpdated: "2024-01-02T12:00:00.000Z",
+        },
+      };
+
+      const mockEntityStore = {
+        getAllEntities: jest.fn().mockResolvedValue([entityPair]),
+        getEntity: jest.fn().mockResolvedValue(entityPair),
+        getEntityByExternalId: jest.fn().mockResolvedValue(entityPair),
+        saveEntity: jest.fn(),
+      };
+      eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
+
+      mockV2ClientImplementation.getIndividual.mockResolvedValueOnce({
+        type: "Individual",
+        identifier: [{ system: "urn:openspp:vocab:id-type#national_id", value: "ind-412-1" }],
+        meta: { versionId: "old-version" },
+      });
+      mockV2ClientImplementation.patchIndividual.mockRejectedValueOnce(
+        new PreconditionFailedError("Resource was modified since last read"),
+      );
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      const result = await adapter.pushData();
+
+      expect(result).toEqual(expect.objectContaining({
+        pushed: 0,
+        failed: 0,
+        skipped: 1,
+      }));
+      expect(mockV2ClientImplementation.patchIndividual).toHaveBeenCalledTimes(1);
+    });
+
+    it("handles null versionId gracefully", async () => {
+      const entityPair: EntityPair = {
+        guid: "ind-nometa-1",
+        initial: {
+          id: "e1", guid: "ind-nometa-1", type: EntityType.Individual, version: 1,
+          externalId: "ind-nometa-1",
+          data: { entityName: "individual", firstName: "Jane", externalId: "ind-nometa-1" },
+          lastUpdated: "2024-01-01T12:00:00.000Z",
+        },
+        modified: {
+          id: "e1", guid: "ind-nometa-1", type: EntityType.Individual, version: 2,
+          externalId: "ind-nometa-1",
+          data: { entityName: "individual", firstName: "Janet", externalId: "ind-nometa-1" },
+          lastUpdated: "2024-01-02T12:00:00.000Z",
+        },
+      };
+
+      const mockEntityStore = {
+        getAllEntities: jest.fn().mockResolvedValue([entityPair]),
+        getEntity: jest.fn().mockResolvedValue(entityPair),
+        getEntityByExternalId: jest.fn().mockResolvedValue(entityPair),
+        saveEntity: jest.fn(),
+      };
+      eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
+
+      mockV2ClientImplementation.getIndividual.mockResolvedValueOnce({
+        type: "Individual",
+        identifier: [{ system: "urn:openspp:vocab:id-type#national_id", value: "ind-nometa-1" }],
+      });
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      const result = await adapter.pushData();
+
+      expect(result).toEqual(expect.objectContaining({ pushed: 1, failed: 0, skipped: 0 }));
+      expect(mockV2ClientImplementation.patchIndividual).toHaveBeenCalledWith(
+        "urn:openspp:vocab:id-type#national_id|ind-nometa-1",
+        expect.any(Object),
+        undefined,
       );
     });
   });

@@ -30,6 +30,17 @@ import type {
 } from "./types";
 
 /**
+ * Thrown when a PATCH request fails with HTTP 412 Precondition Failed,
+ * indicating the resource was modified since the versionId used in If-Match.
+ */
+export class PreconditionFailedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PreconditionFailedError";
+  }
+}
+
+/**
  * OpenSPP V2 API Client
  *
  * Provides methods to interact with the OpenSPP V2 REST API using OAuth2 authentication.
@@ -646,6 +657,12 @@ export class OpenSppV2Client {
 
       if (status === 409) {
         return new Error(`${context}: Conflict - resource already exists or version mismatch.`);
+      }
+
+      if (status === 412) {
+        return new PreconditionFailedError(
+          `${context}: Resource was modified since last read (If-Match failed).`,
+        );
       }
 
       if (status === 422) {

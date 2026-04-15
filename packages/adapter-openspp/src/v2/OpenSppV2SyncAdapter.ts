@@ -31,7 +31,7 @@ import {
   type SyncError,
 } from "@idpass/data-collect-core";
 import { EventApplierService } from "@idpass/data-collect-core";
-import { OpenSppV2Client } from "./OpenSppV2Client";
+import { OpenSppV2Client, PreconditionFailedError } from "./OpenSppV2Client";
 import type {
   IndividualResource,
   GroupResource,
@@ -149,12 +149,14 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
     let totalPushed = 0;
     let totalFailed = 0;
+    let totalSkipped = 0;
     const allErrors: SyncError[] = [];
 
     if (individualsToSync.length > 0) {
       const result = await this.pushEntities(individualsToSync, "individual");
       totalPushed += result.pushed;
       totalFailed += result.failed;
+      totalSkipped += result.skipped;
       allErrors.push(...result.errors.map(e => ({
         entityGuid: e.guid,
         code: "PUSH_FAILED",
@@ -167,6 +169,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       const result = await this.pushEntities(groupsToSync, "group");
       totalPushed += result.pushed;
       totalFailed += result.failed;
+      totalSkipped += result.skipped;
       allErrors.push(...result.errors.map(e => ({
         entityGuid: e.guid,
         code: "PUSH_FAILED",
@@ -175,7 +178,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       })));
     }
 
-    return { pushed: totalPushed, failed: totalFailed, skipped: 0, errors: allErrors };
+    return { pushed: totalPushed, failed: totalFailed, skipped: totalSkipped, errors: allErrors };
   }
 
   /**
@@ -210,8 +213,9 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   private async pushEntities(
     entities: Array<{ modified: { guid: string; type: EntityType; externalId?: string; data: Record<string, unknown> } }>,
     entityType: "individual" | "group",
-  ): Promise<{ pushed: number; failed: number; errors: Array<{ guid: string; error: string }> }> {
+  ): Promise<{ pushed: number; failed: number; skipped: number; errors: Array<{ guid: string; error: string }> }> {
     const failedEntities: Array<{ guid: string; error: string }> = [];
+    let skipped = 0;
 
     for (let i = 0; i < entities.length; i += this.batchSize) {
       const batch = entities.slice(i, i + this.batchSize);
@@ -232,6 +236,11 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
             }
             success = true;
           } catch (error) {
+            if (error instanceof PreconditionFailedError) {
+              skipped++;
+              break;
+            }
+
             attempt++;
             lastError = error instanceof Error ? error : new Error(String(error));
 
@@ -258,8 +267,9 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     }
 
     return {
-      pushed: entities.length - failedEntities.length,
+      pushed: entities.length - failedEntities.length - skipped,
       failed: failedEntities.length,
+      skipped,
       errors: failedEntities,
     };
   }
@@ -274,13 +284,22 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
     if (externalId) {
       const identifier = this.getClient().formatIdentifier(system, guid);
+      // Fetch current versionId for optimistic locking (If-Match).
+      // Falls back to patching without If-Match if GET fails (e.g., 403 scope issue).
+      let versionId: string | undefined;
+      try {
+        const current = await this.getClient().getIndividual(identifier);
+        versionId = current?.meta?.versionId;
+      } catch (err) {
+        console.warn(`Could not fetch individual ${guid} for optimistic locking, proceeding without If-Match:`, err);
+      }
       await this.getClient().patchIndividual(identifier, {
         name: resource.name,
         birthDate: resource.birthDate,
         gender: resource.gender,
         telecom: resource.telecom,
         extension: resource.extension,
-      });
+      }, versionId);
     } else {
       const created = await this.getClient().createIndividual(resource);
       await this.saveExternalIdToEntity(guid, created);
@@ -297,11 +316,18 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
     if (externalId) {
       const identifier = this.getClient().formatIdentifier(system, guid);
+      let versionId: string | undefined;
+      try {
+        const current = await this.getClient().getGroup(identifier);
+        versionId = current?.meta?.versionId;
+      } catch (err) {
+        console.warn(`Could not fetch group ${guid} for optimistic locking, proceeding without If-Match:`, err);
+      }
       await this.getClient().patchGroup(identifier, {
         name: resource.name,
         groupType: resource.groupType,
         extension: resource.extension,
-      });
+      }, versionId);
     } else {
       const created = await this.getClient().createGroup(resource);
       await this.saveExternalIdToEntity(guid, created);
@@ -759,7 +785,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       entityGuid: guid,
       type: existingGuid ? "update-individual" : "create-individual",
       data,
-      timestamp: new Date().toISOString(),
+      timestamp: individual.meta?.lastUpdated ?? new Date().toISOString(),
       userId: SYNC_USER_ID,
       syncLevel: SyncLevel.EXTERNAL,
     };
@@ -800,7 +826,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       entityGuid: guid,
       type: existingGuid ? "update-group" : "create-group",
       data,
-      timestamp: new Date().toISOString(),
+      timestamp: group.meta?.lastUpdated ?? new Date().toISOString(),
       userId: SYNC_USER_ID,
       syncLevel: SyncLevel.EXTERNAL,
     };
