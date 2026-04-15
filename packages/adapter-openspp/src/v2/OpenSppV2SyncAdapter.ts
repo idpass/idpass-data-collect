@@ -130,20 +130,23 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   }
 
   /**
-   * Push local entities (Individuals and Groups) to OpenSPP.
-   * Syncs all entities each invocation (matching V1 adapter behavior).
-   * Incremental sync via getModifiedEntitiesSince() is a planned optimization.
+   * Push locally-modified entities (Individuals and Groups) to OpenSPP.
+   * Only pushes entities modified since the last successful push to avoid
+   * overwriting changes made directly in OpenSPP.
    */
   async pushData(_credentials?: ExternalSyncCredentials): Promise<{ pushed: number; failed: number; skipped: number; errors: SyncError[] }> {
     await this.ensureClient();
 
     const entityStore = this.eventApplierService.getEntityStore();
-    const allEntities = await entityStore.getAllEntities();
+    const lastPush = await this.eventStore.getLastPushExternalSyncTimestamp();
+    const entitiesToSync = lastPush
+      ? await entityStore.getModifiedEntitiesSince(lastPush)
+      : await entityStore.getAllEntities();
 
-    const individualsToSync = allEntities.filter(
+    const individualsToSync = entitiesToSync.filter(
       (pair) => pair.modified.type === EntityType.Individual,
     );
-    const groupsToSync = allEntities.filter(
+    const groupsToSync = entitiesToSync.filter(
       (pair) => pair.modified.type === EntityType.Group,
     );
 
@@ -178,6 +181,10 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       })));
     }
 
+    if (totalFailed === 0) {
+      await this.eventStore.setLastPushExternalSyncTimestamp(new Date().toISOString());
+    }
+
     return { pushed: totalPushed, failed: totalFailed, skipped: totalSkipped, errors: allErrors };
   }
 
@@ -202,10 +209,12 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
   /**
    * Combined sync operation.
+   * Pulls first so remote changes are ingested before local data is pushed,
+   * preventing stale local data from overwriting newer remote edits.
    */
   async sync(credentials?: ExternalSyncCredentials): Promise<void> {
-    await this.pushData(credentials);
     await this.pullData(credentials);
+    await this.pushData(credentials);
   }
 
   // ==================== Push Logic ====================
@@ -384,9 +393,9 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       }
 
       for (const individual of individuals) {
-        const identifier = this.extractIdentifier(individual);
+        const identifier = this.extractIdentifier(individual) ?? this.extractAnyIdentifier(individual);
         if (!identifier) {
-          console.warn("Individual without matching identifier, skipping");
+          console.warn("Individual without any identifier, skipping");
           skipped++;
           continue;
         }
@@ -465,9 +474,9 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       }
 
       for (const group of groups) {
-        const identifier = this.extractGroupIdentifier(group);
+        const identifier = this.extractGroupIdentifier(group) ?? this.extractAnyIdentifier(group);
         if (!identifier) {
-          console.warn("Group without matching identifier, skipping");
+          console.warn("Group without any identifier, skipping");
           skipped++;
           continue;
         }
@@ -737,6 +746,17 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       (id) => this.isOpenSppIdentifier(id.system),
     );
     return matchingId?.value;
+  }
+
+  /**
+   * Fallback identifier extraction for records created directly in OpenSPP
+   * that don't carry a DataCollect-issued identifier.
+   * Uses system|value composite so round-trips are stable.
+   */
+  private extractAnyIdentifier(resource: IndividualResource | GroupResource): string | undefined {
+    const first = resource.identifier?.[0];
+    if (!first) return undefined;
+    return `${first.system}|${first.value}`;
   }
 
   // ==================== Transform to Form Submissions ====================
