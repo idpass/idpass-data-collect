@@ -87,6 +87,7 @@ describe("OpenSppV2SyncAdapter", () => {
 
     const mockEntityStore = {
       getAllEntities: jest.fn().mockResolvedValue([]),
+      getModifiedEntitiesSince: jest.fn().mockResolvedValue([]),
       getEntity: jest.fn().mockResolvedValue(null),
       getEntityByExternalId: jest.fn().mockResolvedValue(null),
       saveEntity: jest.fn(),
@@ -161,6 +162,7 @@ describe("OpenSppV2SyncAdapter", () => {
 
       const mockEntityStore = {
         getAllEntities: jest.fn().mockResolvedValue([entityPair]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([entityPair]),
         getEntity: jest.fn().mockResolvedValue(entityPair),
         getEntityByExternalId: jest.fn().mockResolvedValue(null),
         saveEntity: jest.fn(),
@@ -171,7 +173,7 @@ describe("OpenSppV2SyncAdapter", () => {
       const result = await adapter.pushData();
       expect(result).toEqual({ pushed: 1, failed: 0, skipped: 0, errors: [] });
 
-      expect(mockEntityStore.getAllEntities).toHaveBeenCalled();
+      expect(mockEntityStore.getModifiedEntitiesSince).toHaveBeenCalled();
       expect(mockV2ClientImplementation.createIndividual).toHaveBeenCalledWith(
         expect.objectContaining({
           type: "Individual",
@@ -214,6 +216,7 @@ describe("OpenSppV2SyncAdapter", () => {
 
       const mockEntityStore = {
         getAllEntities: jest.fn().mockResolvedValue([entityPair]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([entityPair]),
         getEntity: jest.fn().mockResolvedValue(entityPair),
         getEntityByExternalId: jest.fn().mockResolvedValue(entityPair),
         saveEntity: jest.fn(),
@@ -240,6 +243,7 @@ describe("OpenSppV2SyncAdapter", () => {
     it("handles empty entity list", async () => {
       const mockEntityStore = {
         getAllEntities: jest.fn().mockResolvedValue([]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([]),
         getEntity: jest.fn().mockResolvedValue(null),
         getEntityByExternalId: jest.fn().mockResolvedValue(null),
         saveEntity: jest.fn(),
@@ -252,6 +256,65 @@ describe("OpenSppV2SyncAdapter", () => {
 
       expect(mockV2ClientImplementation.createIndividual).not.toHaveBeenCalled();
       expect(mockV2ClientImplementation.patchIndividual).not.toHaveBeenCalled();
+    });
+
+    it("only pushes locally-modified entities (delta push)", async () => {
+      const unchangedPair: EntityPair = {
+        guid: "ind-old-1",
+        initial: {
+          id: "e-old", guid: "ind-old-1", type: EntityType.Individual, version: 1,
+          data: { entityName: "individual", firstName: "Unchanged", lastName: "Person" },
+          lastUpdated: "2024-01-01T12:00:00.000Z",
+        },
+        modified: {
+          id: "e-old", guid: "ind-old-1", type: EntityType.Individual, version: 1,
+          data: { entityName: "individual", firstName: "Unchanged", lastName: "Person" },
+          lastUpdated: "2024-01-01T12:00:00.000Z",
+        },
+      };
+
+      const modifiedPair: EntityPair = {
+        guid: "ind-new-1",
+        initial: {
+          id: "e-new", guid: "ind-new-1", type: EntityType.Individual, version: 1,
+          data: { entityName: "individual", firstName: "Modified", lastName: "Person" },
+          lastUpdated: "2024-06-01T12:00:00.000Z",
+        },
+        modified: {
+          id: "e-new", guid: "ind-new-1", type: EntityType.Individual, version: 2,
+          data: { entityName: "individual", firstName: "Modified", lastName: "Person" },
+          lastUpdated: "2024-06-02T12:00:00.000Z",
+        },
+      };
+
+      const lastPushTimestamp = "2024-05-01T00:00:00.000Z";
+      eventStore.getLastPushExternalSyncTimestamp.mockResolvedValue(lastPushTimestamp);
+
+      const mockEntityStore = {
+        getAllEntities: jest.fn().mockResolvedValue([unchangedPair, modifiedPair]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([modifiedPair]),
+        getEntity: jest.fn().mockResolvedValue(modifiedPair),
+        getEntityByExternalId: jest.fn().mockResolvedValue(null),
+        saveEntity: jest.fn(),
+      };
+      eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      const result = await adapter.pushData();
+
+      expect(result).toEqual({ pushed: 1, failed: 0, skipped: 0, errors: [] });
+      expect(mockEntityStore.getModifiedEntitiesSince).toHaveBeenCalledWith(lastPushTimestamp);
+      expect(mockEntityStore.getAllEntities).not.toHaveBeenCalled();
+      expect(mockV2ClientImplementation.createIndividual).toHaveBeenCalledTimes(1);
+      expect(mockV2ClientImplementation.createIndividual).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "Individual",
+          identifier: expect.arrayContaining([
+            expect.objectContaining({ value: "ind-new-1" }),
+          ]),
+        }),
+      );
+      expect(eventStore.setLastPushExternalSyncTimestamp).toHaveBeenCalled();
     });
   });
 
@@ -279,6 +342,7 @@ describe("OpenSppV2SyncAdapter", () => {
 
       const mockEntityStore = {
         getAllEntities: jest.fn().mockResolvedValue([groupPair]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([groupPair]),
         getEntity: jest.fn().mockResolvedValue(groupPair),
         getEntityByExternalId: jest.fn().mockResolvedValue(null),
         saveEntity: jest.fn(),
@@ -323,6 +387,7 @@ describe("OpenSppV2SyncAdapter", () => {
 
       const mockEntityStore = {
         getAllEntities: jest.fn().mockResolvedValue([groupPair]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([groupPair]),
         getEntity: jest.fn().mockResolvedValue(groupPair),
         getEntityByExternalId: jest.fn().mockResolvedValue(groupPair),
         saveEntity: jest.fn(),
@@ -409,6 +474,7 @@ describe("OpenSppV2SyncAdapter", () => {
 
       const mockEntityStore = {
         getAllEntities: jest.fn().mockResolvedValue([]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([]),
         getEntity: jest.fn().mockResolvedValue(existingEntityPair),
         getEntityByExternalId: jest.fn().mockResolvedValue(existingEntityPair),
         saveEntity: jest.fn(),
@@ -464,6 +530,7 @@ describe("OpenSppV2SyncAdapter", () => {
 
       const freshMockEntityStore = {
         getAllEntities: jest.fn().mockResolvedValue([]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([]),
         getEntity: jest.fn().mockResolvedValue(null),
         getEntityByExternalId: jest.fn().mockResolvedValue(null),
         saveEntity: jest.fn(),
@@ -477,6 +544,76 @@ describe("OpenSppV2SyncAdapter", () => {
       await adapter.pullData();
 
       expect(freshEventApplierService.submitForm).not.toHaveBeenCalled();
+    });
+
+    it("pulls individuals with non-matching identifier system", async () => {
+      mockV2ClientImplementation.searchIndividuals.mockReset();
+      mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce({
+        data: [{
+          type: "Individual",
+          identifier: [{ system: "urn:other:system", value: "foreign-id-1" }],
+          name: { given: "Maria", family: "Santos" },
+        }],
+        meta: { total: 1, count: 1, offset: 0 },
+        links: { self: "/api/v2/spp/Individual" },
+      } as SearchResult<IndividualResource>);
+      mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce({
+        data: [],
+        meta: { total: 1, count: 0, offset: 1 },
+        links: { self: "/api/v2/spp/Individual" },
+      });
+      mockV2ClientImplementation.searchGroups.mockReset();
+      mockV2ClientImplementation.searchGroups.mockResolvedValue({
+        data: [],
+        meta: { total: 0, count: 0, offset: 0 },
+        links: { self: "/api/v2/spp/Group" },
+      });
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      const result = await adapter.pullData();
+
+      expect(result.pulled).toBe(1);
+      expect(result.skipped).toBe(0);
+      expect(eventApplierService.submitForm).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "create-individual",
+          data: expect.objectContaining({
+            firstName: "Maria",
+            lastName: "Santos",
+          }),
+        }),
+      );
+    });
+
+    it("pulls individuals with no identifiers at all", async () => {
+      mockV2ClientImplementation.searchIndividuals.mockReset();
+      mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce({
+        data: [{
+          type: "Individual",
+          identifier: [],
+          name: { given: "Ghost", family: "NoId" },
+        }],
+        meta: { total: 1, count: 1, offset: 0 },
+        links: { self: "/api/v2/spp/Individual" },
+      } as SearchResult<IndividualResource>);
+      mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce({
+        data: [],
+        meta: { total: 1, count: 0, offset: 1 },
+        links: { self: "/api/v2/spp/Individual" },
+      });
+      mockV2ClientImplementation.searchGroups.mockReset();
+      mockV2ClientImplementation.searchGroups.mockResolvedValue({
+        data: [],
+        meta: { total: 0, count: 0, offset: 0 },
+        links: { self: "/api/v2/spp/Group" },
+      });
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      const result = await adapter.pullData();
+
+      expect(result.pulled).toBe(0);
+      expect(result.skipped).toBe(1);
+      expect(eventApplierService.submitForm).not.toHaveBeenCalled();
     });
   });
 
@@ -635,6 +772,7 @@ describe("OpenSppV2SyncAdapter", () => {
 
       const mockEntityStore = {
         getAllEntities: jest.fn().mockResolvedValue([entityPair]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([entityPair]),
         getEntity: jest.fn().mockResolvedValue(entityPair),
         getEntityByExternalId: jest.fn().mockResolvedValue(entityPair),
         saveEntity: jest.fn(),
@@ -676,6 +814,7 @@ describe("OpenSppV2SyncAdapter", () => {
 
       const mockEntityStore = {
         getAllEntities: jest.fn().mockResolvedValue([groupPair]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([groupPair]),
         getEntity: jest.fn().mockResolvedValue(groupPair),
         getEntityByExternalId: jest.fn().mockResolvedValue(groupPair),
         saveEntity: jest.fn(),
@@ -717,6 +856,7 @@ describe("OpenSppV2SyncAdapter", () => {
 
       const mockEntityStore = {
         getAllEntities: jest.fn().mockResolvedValue([entityPair]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([entityPair]),
         getEntity: jest.fn().mockResolvedValue(entityPair),
         getEntityByExternalId: jest.fn().mockResolvedValue(entityPair),
         saveEntity: jest.fn(),
@@ -762,6 +902,7 @@ describe("OpenSppV2SyncAdapter", () => {
 
       const mockEntityStore = {
         getAllEntities: jest.fn().mockResolvedValue([entityPair]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([entityPair]),
         getEntity: jest.fn().mockResolvedValue(entityPair),
         getEntityByExternalId: jest.fn().mockResolvedValue(entityPair),
         saveEntity: jest.fn(),
