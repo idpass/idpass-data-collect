@@ -19,7 +19,7 @@ Two interface generations are provided:
 This package is published to GitHub Packages:
 
 ```bash
-npm install @idpass/adapter-mock --registry=https://npm.pkg.github.com
+pnpm add @idpass/adapter-mock --registry=https://npm.pkg.github.com
 ```
 
 ## Usage

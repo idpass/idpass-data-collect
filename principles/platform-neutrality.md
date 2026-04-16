@@ -30,7 +30,7 @@ After adding a new dependency to `datacollect`, verify it doesn't pull in Node-o
 
 ```bash
 cd packages/datacollect
-npm run build   # fails if browser bundle can't be built
+pnpm build   # fails if browser bundle can't be built
 ```
 
 The build uses a bundler configured to target both environments — a failing build means you've introduced a platform-specific dependency.

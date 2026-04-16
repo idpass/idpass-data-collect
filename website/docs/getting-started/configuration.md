@@ -50,7 +50,7 @@ Before starting, ensure you have:
 cd packages/backend
 
 # Start the backend service
-npm start
+pnpm start
 ```
 
 The backend service should be running on the configured port (typically `http://localhost:3000` or similar).
@@ -62,7 +62,7 @@ The backend service should be running on the configured port (typically `http://
 cd packages/admin
 
 # Start the admin interface
-npm start
+pnpm start
 ```
 
 The admin interface should be accessible at `http://localhost:5173` or your configured URL.
