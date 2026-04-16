@@ -40,6 +40,13 @@ export class PreconditionFailedError extends Error {
   }
 }
 
+export class ConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ConflictError";
+  }
+}
+
 /**
  * OpenSPP V2 API Client
  *
@@ -656,7 +663,13 @@ export class OpenSppV2Client {
         return new Error(`${context}: Resource not found.`);
       }
 
-      if (status === 409 || status === 412) {
+      if (status === 409) {
+        return new ConflictError(
+          `${context}: Resource conflict — concurrent modification (409).`,
+        );
+      }
+
+      if (status === 412) {
         return new PreconditionFailedError(
           `${context}: Resource was modified since last read (version conflict).`,
         );

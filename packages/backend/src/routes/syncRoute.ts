@@ -193,15 +193,16 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
         warnings.push("Unresolved potential duplicates exist. Please review them on the admin page.");
       }
 
+      const hasAreaFilter = areaIds && typeof areaIds === "string" && areaIds.length > 0;
       // Use larger pages when area filtering to reduce empty-page round-trips
-      const pageSize = (areaIds && typeof areaIds === "string" && areaIds.length > 0) ? 100 : 10;
+      const pageSize = hasAreaFilter ? 100 : 10;
       const result = await edm.getEventsSincePagination(sinceValue, pageSize);
 
       // Apply server-side area filtering when areaIds are provided.
       // This enables selective sync: clients only receive events for entities
       // in their assigned geographic areas.
-      if (areaIds && typeof areaIds === "string" && areaIds.length > 0) {
-        const areaIdList = areaIds.split(",").filter(Boolean);
+      if (hasAreaFilter) {
+        const areaIdList = (areaIds as string).split(",").filter(Boolean);
         if (areaIdList.length > 0) {
           // Query entity store per area ID to build the allowed set without
           // loading every entity into memory.
@@ -223,6 +224,18 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
           result.events = result.events.filter(
             (event) => allowedEntityGuids.has(event.entityGuid),
           );
+
+          // Recompute nextCursor from the last *delivered* event so the client
+          // doesn't skip events it never received. If all events were filtered
+          // out but the raw page was full, use the original cursor to let the
+          // client fetch the next page.
+          if (result.events.length > 0) {
+            const lastDelivered = result.events[result.events.length - 1];
+            result.nextCursor = `${lastDelivered.timestamp}|${lastDelivered.guid}`;
+          } else if (result.nextCursor) {
+            // All events filtered — keep nextCursor so client advances through
+            // pages that don't match its area until it reaches the end.
+          }
         }
       }
 

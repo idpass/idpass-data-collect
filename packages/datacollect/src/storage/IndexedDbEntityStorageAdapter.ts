@@ -322,19 +322,20 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
       throw new Error("IndexedDB is not initialized");
     }
 
+    const guid = entity.initial?.guid || entity.modified.guid;
     const transaction = this.db.transaction([this.storeName], "readwrite");
     const objectStore = transaction.objectStore(this.storeName);
-    try {
-      const guid = entity.initial?.guid || entity.modified.guid;
-      await objectStore.put({
+
+    return new Promise<void>((resolve, reject) => {
+      objectStore.put({
         id: guid,
         guid,
         initial: entity.initial,
         modified: entity.modified,
       });
-    } catch (error) {
-      log.error({ err: error }, "Error saving entity");
-    }
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
   }
 
   /**
@@ -534,14 +535,18 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
 
     const transaction = this.db.transaction([this.storeName], "readwrite");
     const objectStore = transaction.objectStore(this.storeName);
-    const request = objectStore.get(id);
 
-    request.onsuccess = () => {
-      if (request.result) {
-        request.result.modified.lastUpdated = new Date().toISOString();
-        objectStore.put(request.result);
-      }
-    };
+    return new Promise<void>((resolve, reject) => {
+      const request = objectStore.get(id);
+      request.onsuccess = () => {
+        if (request.result) {
+          request.result.modified.lastUpdated = new Date().toISOString();
+          objectStore.put(request.result);
+        }
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
   }
 
   /**
