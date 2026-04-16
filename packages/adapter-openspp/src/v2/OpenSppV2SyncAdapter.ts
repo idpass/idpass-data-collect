@@ -192,10 +192,12 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       })));
     }
 
-    // Always advance the push watermark — failed entities will still appear in
-    // getModifiedEntitiesSince on the next cycle because their lastUpdated won't
-    // have been reset by a successful push.
-    await this.eventStore.setLastPushExternalSyncTimestamp(new Date().toISOString());
+    // Only advance the push watermark when all entities were pushed successfully.
+    // Failed entities have lastUpdated from before this cycle — advancing the
+    // watermark past them would permanently exclude them from future push attempts.
+    if (totalFailed === 0) {
+      await this.eventStore.setLastPushExternalSyncTimestamp(new Date().toISOString());
+    }
 
     return { pushed: totalPushed, failed: totalFailed, skipped: totalSkipped, errors: allErrors };
   }
