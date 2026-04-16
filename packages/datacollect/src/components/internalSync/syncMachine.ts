@@ -192,8 +192,11 @@ export function createSyncMachine(
             successfulEvents.map((event) => ({ ...event, syncLevel: SyncLevel.REMOTE })),
           );
           if (successfulEvents.length > 0) {
-            const lastEventTimestamp = successfulEvents[successfulEvents.length - 1].timestamp;
-            await eventStore.setLastLocalSyncTimestamp(lastEventTimestamp);
+            const maxTimestamp = successfulEvents.reduce(
+              (max, e) => (e.timestamp > max ? e.timestamp : max),
+              successfulEvents[0].timestamp,
+            );
+            await eventStore.setLastLocalSyncTimestamp(maxTimestamp);
           }
         },
       ),

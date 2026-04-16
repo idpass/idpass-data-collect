@@ -32,7 +32,7 @@ import {
   createLogger,
 } from "@idpass/data-collect-core";
 import { EventApplierService } from "@idpass/data-collect-core";
-import { OpenSppV2Client, PreconditionFailedError } from "./OpenSppV2Client";
+import { OpenSppV2Client, PreconditionFailedError, ConflictError } from "./OpenSppV2Client";
 import type {
   IndividualResource,
   GroupResource,
@@ -256,7 +256,8 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
             if (attempt <= this.maxRetries) {
               const delayMs = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
-              log.warn({ entityType, guid: entity.guid, attempt, maxRetries: this.maxRetries, delayMs }, "Retrying push");
+              const reason = error instanceof ConflictError ? "Conflict (409)" : "Error";
+              log.warn({ entityType, guid: entity.guid, attempt, maxRetries: this.maxRetries, delayMs }, `${reason}, retrying push`);
               await this.delay(delayMs);
             } else {
               failedEntities.push({ guid: entity.guid, error: lastError.message });
@@ -288,7 +289,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     const system = this.resolveIdentifierSystem(data);
 
     if (externalId) {
-      const identifier = this.getClient().formatIdentifier(system, guid);
+      const identifier = this.getClient().formatIdentifier(system, externalId);
       // Fetch current versionId for optimistic locking (If-Match).
       // Falls back to patching without If-Match if GET fails (e.g., 403 scope issue).
       let versionId: string | undefined;
@@ -320,7 +321,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     const system = this.resolveIdentifierSystem(data, "group");
 
     if (externalId) {
-      const identifier = this.getClient().formatIdentifier(system, guid);
+      const identifier = this.getClient().formatIdentifier(system, externalId);
       let versionId: string | undefined;
       try {
         const current = await this.getClient().getGroup(identifier);
@@ -907,10 +908,9 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
           ...entityPair.modified.data,
           externalId: identifier,
         },
-        lastUpdated: new Date().toISOString(),
       };
 
-      await this.eventApplierService.getEntityStore().saveEntity(entityPair.modified, updatedEntity);
+      await this.eventApplierService.getEntityStore().saveEntity(entityPair.initial, updatedEntity);
     } catch (error) {
       log.error({ entityGuid, err: error }, "Error saving external ID to entity");
     }
