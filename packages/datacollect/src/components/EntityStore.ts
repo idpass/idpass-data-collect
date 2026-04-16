@@ -273,8 +273,7 @@ export class EntityStoreImpl implements EntityStore {
    * ```
    */
   async getModifiedEntitiesSince(timestamp: string): Promise<EntityPair[]> {
-    const allEntities = await this.entityStorageAdapter.getAllEntities();
-    return allEntities.filter(({ modified }) => modified.lastUpdated > timestamp);
+    return this.entityStorageAdapter.getModifiedEntitiesSince(timestamp);
   }
 
   /**

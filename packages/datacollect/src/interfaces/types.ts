@@ -546,6 +546,8 @@ export interface EntityStorageAdapter {
   searchEntities(criteria: SearchCriteria): Promise<EntityPair[]>;
   /** Get all entities from storage */
   getAllEntities(): Promise<EntityPair[]>;
+  /** Get entities modified since a timestamp (for sync) */
+  getModifiedEntitiesSince(timestamp: string): Promise<EntityPair[]>;
   /** Delete an entity by ID */
   deleteEntity(id: string): Promise<void>;
   /** Save potential duplicate entity pairs for review */

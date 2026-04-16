@@ -85,9 +85,9 @@ adapterRegistry.register("openspp-v2-adapter", (deps) => {
         duration: Date.now() - start,
       };
     },
-    pull: async (): Promise<SyncResult> => {
+    pull: async (since?: string): Promise<SyncResult> => {
       const start = Date.now();
-      const result = await adapter.pullData();
+      const result = await adapter.pullData(undefined, since);
       return {
         success: result ? result.failed === 0 : true,
         pushed: 0,

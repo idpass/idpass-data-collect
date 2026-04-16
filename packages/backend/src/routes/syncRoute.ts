@@ -176,6 +176,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
     asyncHandler(async (req, res) => {
       // get param timestamp
       const { since, configId = "default", areaIds } = req.query;
+      const sinceValue = (since as string) || new Date(0).toISOString();
 
       // check if duplicates exist
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
@@ -183,16 +184,18 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
         return res.status(404).json({ status: "error", message: "App instance not found" });
       }
       const edm = appInstance.edm;
+
+      // Duplicates are advisory — they must not block sync. Include a warning
+      // so the admin UI can surface it, but always deliver events.
       const duplicates = await edm.getPotentialDuplicates();
+      const warnings: string[] = [];
       if (duplicates.length > 0) {
-        return res.json({
-          events: [],
-          nextCursor: null,
-          error: "Duplicates exist! Please resolve them on admin page.",
-        });
+        warnings.push("Unresolved potential duplicates exist. Please review them on the admin page.");
       }
 
-      const result = await edm.getEventsSincePagination(since as string, 10);
+      // Use larger pages when area filtering to reduce empty-page round-trips
+      const pageSize = (areaIds && typeof areaIds === "string" && areaIds.length > 0) ? 100 : 10;
+      const result = await edm.getEventsSincePagination(sinceValue, pageSize);
 
       // Apply server-side area filtering when areaIds are provided.
       // This enables selective sync: clients only receive events for entities
@@ -223,7 +226,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
         }
       }
 
-      res.json(result);
+      res.json(warnings.length > 0 ? { ...result, warnings } : result);
     }),
   );
 

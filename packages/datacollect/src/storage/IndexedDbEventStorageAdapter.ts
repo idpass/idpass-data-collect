@@ -288,7 +288,7 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
 
       const transaction = this.db.transaction(["events"], "readwrite");
       const store = transaction.objectStore("events");
-      const index = store.index("entityGuId");
+      const index = store.index("entityGuid");
       const request = index.openCursor(IDBKeyRange.only(id));
 
       request.onerror = () => reject(new Error("Failed to retrieve events"));
@@ -324,7 +324,7 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
 
       const transaction = this.db.transaction(["auditLog"], "readwrite");
       const store = transaction.objectStore("auditLog");
-      const index = store.index("entityGuId");
+      const index = store.index("entityGuid");
       const request = index.openCursor(IDBKeyRange.only(entityGuId));
 
       request.onerror = () => reject(new Error("Failed to retrieve events"));

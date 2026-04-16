@@ -270,6 +270,7 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
           PRIMARY KEY (entity_guid, duplicate_guid, tenant_id)
         )
       `);
+      await client.query(`CREATE INDEX IF NOT EXISTS idx_entities_external_id ON entities ((modified->>'externalId'), tenant_id)`);
     });
   }
 
@@ -450,7 +451,7 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
     // or equal to the existing version stored in the modified JSONB.
     // Uses this.db.execute() to respect the Drizzle transaction context when
     // setDrizzleInstance(tx) has been called (e.g., transactional batch processing).
-    await this.db.execute(
+    const result = await this.db.execute(
       sql`INSERT INTO entities (id, guid, initial, modified, last_updated, tenant_id)
          VALUES (${guid}, ${guid}, ${initialJson}::jsonb, ${modifiedJson}::jsonb, ${lastUpdated}, ${this.tenantId})
          ON CONFLICT (guid, tenant_id) DO UPDATE SET
@@ -459,6 +460,12 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
            last_updated = ${lastUpdated}
          WHERE COALESCE((entities.modified->>'version')::int, 0) <= ${newVersion}`,
     );
+
+    // The version guard (WHERE version <= newVersion) silently drops stale writes.
+    // Log a warning so operators can detect this during debugging.
+    if (result && typeof result === 'object' && 'rowCount' in result && (result as { rowCount: number }).rowCount === 0) {
+      log.warn({ guid, newVersion }, "saveEntity: write dropped by version guard (stored version is newer)");
+    }
   }
 
   /**
@@ -623,7 +630,7 @@ export class PostgresEntityStorageAdapter implements EntityStorageAdapter {
         .set({
           modified: sql`jsonb_set(${entities.modified}, '{data,externalId}', to_jsonb(${externalId}::text), true)`,
         })
-        .where(eq(entities.guid, guid));
+        .where(and(eq(entities.guid, guid), eq(entities.tenantId, this.tenantId)));
     } catch (error) {
       log.error({ err: error }, "Error setting externalId");
     }

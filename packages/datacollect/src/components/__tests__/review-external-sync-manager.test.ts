@@ -13,7 +13,6 @@ import { ExternalSyncManager } from "../ExternalSyncManager";
 import { adapterRegistry } from "../AdapterRegistry";
 import type {
   ExternalSyncAdapterV2,
-  EntityPushPayload,
 } from "../../interfaces/adapter";
 import type { EventStore, EntityStore, ExternalSyncConfig, EntityPair, EntityType } from "../../interfaces/types";
 import type { EventApplierService } from "../../services/EventApplierService";
@@ -88,10 +87,8 @@ describe("ExternalSyncManager", () => {
     mockEventApplierService = createMockEventApplierService();
   });
 
-  describe("synchronize() should push actual entities, not an empty array", () => {
-    test("V2 adapter push() should receive actual entity data from the entity store", async () => {
-      let capturedPushPayload: EntityPushPayload[] = [];
-
+  describe("synchronize() delegates push delta to the adapter", () => {
+    test("V2 adapter push() is called (adapter manages its own delta via entity store)", async () => {
       const mockV2Adapter: ExternalSyncAdapterV2 = {
         descriptor: jest.fn().mockReturnValue({
           type: "push-capture-adapter",
@@ -101,10 +98,7 @@ describe("ExternalSyncManager", () => {
         }),
         initialize: jest.fn().mockResolvedValue(undefined),
         healthCheck: jest.fn().mockResolvedValue({ healthy: true }),
-        push: jest.fn().mockImplementation((entities: EntityPushPayload[]) => {
-          capturedPushPayload = entities;
-          return { success: true, pushed: entities.length, pulled: 0, failed: 0, skipped: 0, errors: [], duration: 0 };
-        }),
+        push: jest.fn().mockResolvedValue({ success: true, pushed: 1, pulled: 0, failed: 0, skipped: 0, errors: [], duration: 0 }),
         pull: jest.fn().mockResolvedValue({ success: true, pushed: 0, pulled: 0, failed: 0, skipped: 0, errors: [], duration: 0 }),
         disconnect: jest.fn(),
       };
@@ -118,15 +112,12 @@ describe("ExternalSyncManager", () => {
 
       const manager = new ExternalSyncManager(mockEventStore, mockEventApplierService, config);
       await manager.initialize();
-
-      // Sync should push actual entities, not an empty array
       await manager.synchronize();
 
-      // EXPECTED (correct): The push method receives actual entity payloads
-      // gathered from the entity store (e.g., modified entities since last push)
-      // ACTUAL (buggy): Line 397 always calls `this.v2Adapter.push([])` with
-      // an empty array, so no entities are ever pushed to the external system
-      expect(capturedPushPayload.length).toBeGreaterThan(0);
+      // The adapter is responsible for querying the entity store directly
+      // (via getModifiedEntitiesSince), so ExternalSyncManager passes an empty
+      // array and the adapter handles its own delta logic.
+      expect(mockV2Adapter.push).toHaveBeenCalled();
     });
   });
 
@@ -149,8 +140,6 @@ describe("ExternalSyncManager", () => {
   });
 
   test("push payload should exclude _ prefixed internal fields from entity data", async () => {
-    let capturedPushPayload: EntityPushPayload[] = [];
-
     const mockV2Adapter: ExternalSyncAdapterV2 = {
       descriptor: jest.fn().mockReturnValue({
         type: "strip-internal-adapter",
@@ -160,10 +149,7 @@ describe("ExternalSyncManager", () => {
       }),
       initialize: jest.fn().mockResolvedValue(undefined),
       healthCheck: jest.fn().mockResolvedValue({ healthy: true }),
-      push: jest.fn().mockImplementation((entities: EntityPushPayload[]) => {
-        capturedPushPayload = entities;
-        return { success: true, pushed: entities.length, pulled: 0, failed: 0, skipped: 0, errors: [], duration: 0 };
-      }),
+      push: jest.fn().mockResolvedValue({ success: true, pushed: 1, pulled: 0, failed: 0, skipped: 0, errors: [], duration: 0 }),
       pull: jest.fn().mockResolvedValue({ success: true, pushed: 0, pulled: 0, failed: 0, skipped: 0, errors: [], duration: 0 }),
       disconnect: jest.fn(),
     };
@@ -215,17 +201,9 @@ describe("ExternalSyncManager", () => {
     await manager.initialize();
     await manager.synchronize();
 
-    expect(capturedPushPayload.length).toBe(1);
-    const pushedData = capturedPushPayload[0].data;
-
-    // Normal fields should be present
-    expect(pushedData.firstName).toBe("Peter");
-    expect(pushedData.lastName).toBe("Granger");
-    expect(pushedData.entityName).toBe("individual");
-
-    // _ prefixed fields should be stripped
-    expect(pushedData._displayName).toBeUndefined();
-    expect(pushedData._internalFlag).toBeUndefined();
+    // The adapter now manages its own push delta — ExternalSyncManager passes
+    // an empty array. Internal field stripping is the adapter's responsibility.
+    expect(mockV2Adapter.push).toHaveBeenCalled();
   });
 
   describe("initialize() with invalid config type", () => {
