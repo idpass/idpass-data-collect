@@ -69,6 +69,11 @@ function createInMemoryEntityStore() {
       const mod = modified as EntityPair["modified"];
       entities.set(mod.guid, { guid: mod.guid, initial: initial as EntityPair["initial"], modified: mod });
     }),
+    getModifiedEntitiesSince: jest.fn(async (timestamp: string) => {
+      return Array.from(entities.values()).filter(
+        (pair) => !pair.modified.lastUpdated || pair.modified.lastUpdated >= timestamp,
+      );
+    }),
     _entities: entities,
   };
 }
