@@ -48,6 +48,24 @@ Each module has its own test suite:
 - Backend: Uses Jest with supertest for API testing (requires PostgreSQL)
 - Admin: Uses Vitest for Vue component testing
 
+### Sync Testing Requirements
+
+Sync is the highest-risk area of DataCollect. Bugs in sync are invisible at the component level — they live in the seams between ExternalSyncManager, adapter wrappers, EventApplierService, EntityStore, /pull endpoint, and the mobile syncMachine. Component-level mocks hide these integration failures.
+
+**When changing sync code:**
+
+1. **Trace the full data path, not just the file you're editing.** A record flows: external API → adapter transform → EventApplierService.submitForm → EntityStore.saveEntity → /pull endpoint → syncMachine.pullFromRemote → mobile EventApplierService. Any change to one step must be verified against its consumers and producers.
+
+2. **Identifier changes must update all sites.** If you change how an identifier is resolved (e.g., adding a fallback), grep for every method that consumes that identifier. The lookup and the storage must use the same key — mismatches create duplicates silently.
+
+3. **Never block sync on advisory features.** Duplicate detection, warnings, and review flags are advisory. They must not prevent event delivery to clients. Use `warnings` arrays in responses, not empty result sets.
+
+4. **Adapter wrappers must forward all interface parameters.** The `ExternalSyncAdapterV2` interface defines `pull(since?: string)` and `push(entities)`. Wrappers in `syncServer.ts` must forward these — not silently drop them.
+
+5. **Tenant isolation must be verified on every storage method.** Every `WHERE` clause touching `entities` or `events` tables must include `tenant_id`. Missing tenant filters are cross-tenant data corruption bugs.
+
+6. **Test the second sync, not just the first.** First-sync tests pass trivially. The bugs appear on re-sync: duplicate entities from missing externalId, conflict resolution dropping valid updates, watermarks not advancing. Every sync test should include at least two sync cycles.
+
 ## Key Architectural Patterns
 
 ### Event Sourcing Implementation
@@ -58,8 +76,11 @@ Each module has its own test suite:
 
 ### Synchronization Architecture
 - **InternalSyncManager**: Handles client ↔ server sync with pagination (10 records/page default)
-- **ExternalSyncManager**: Handles server ↔ external system sync via adapters
-- Adapters available: OpenSPP, OpenFn, MockSyncServer
+- **ExternalSyncManager**: Handles server ↔ external system sync via adapters. Pull runs first, then push. The adapter manages its own push delta via `getModifiedEntitiesSince` — ExternalSyncManager does not gather entity payloads.
+- **Pull timestamp**: `ExternalSyncManager` reads/writes `getLastPullExternalSyncTimestamp` / `setLastPullExternalSyncTimestamp` on EventStore, passing `since` through the V2 wrapper to the adapter. The adapter passes `_lastUpdated` to the external API.
+- **Push timestamp**: The adapter reads/writes `getLastPushExternalSyncTimestamp` / `setLastPushExternalSyncTimestamp` directly on EventStore.
+- Adapters available: OpenSPP (V2 REST, V1 Odoo), OpenFn, MockSyncServer
+- Duplicate detection is skipped for remote/external events (`isRemoteEvent` check in `submitForm`) to prevent external pull from poisoning the duplicate queue.
 
 ### Storage Adapters
 - Client-side: IndexedDb
@@ -100,6 +121,9 @@ Backend supports multiple tenants via app config files. Config structure:
 ## Known Pitfalls
 
 - When producing audit or review reports, never force findings into round numbers. Report the actual count of issues found — artificial caps cause findings to be silently dropped or underclassified.
+- **Sync bugs hide in seams.** Component-level tests with mocks will not catch sync integration failures. The most critical bugs in this codebase (Apr 2026 sync hardening — 50+ issues) were all in the wiring between components, not in any single component. See `.claude/post-mortems/2026-04-16_sync-production-hardening.md`.
+- **Adapter wrappers in `syncServer.ts` must be kept in sync with the `ExternalSyncAdapterV2` interface.** If the interface adds a parameter, the wrapper must forward it. Past bug: wrapper dropped `since` parameter for 30 days, causing full re-pull on every sync.
+- **IndexedDB `objectStore.put()` returns `IDBRequest`, not `Promise`.** Wrapping in `await` does not wait for the transaction to commit. Always wrap in `new Promise` that resolves on `transaction.oncomplete`.
 
 ## Commit Checklist
 
@@ -111,6 +135,9 @@ Before committing:
 - [ ] No PII in log messages
 - [ ] New storage adapters pass conformance tests
 - [ ] New external adapters return `SyncResult` (never throw for per-entity errors)
+- [ ] Sync changes: trace full data path (adapter → EventApplier → EntityStore → /pull → mobile)
+- [ ] Sync changes: verify second-sync behavior (re-pull idempotency, no duplicate entities)
+- [ ] Storage changes: every `WHERE` clause on `entities`/`events` includes `tenant_id`
 - [ ] Conventional commit format: `feat(mobile):`, `fix(backend):`, etc.
 - [ ] Single-line commit messages only — no body, description, or co-author trailers
 
