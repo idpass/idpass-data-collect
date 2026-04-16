@@ -58,7 +58,7 @@ pnpm test:backend
 pnpm test:datacollect
 
 # Single file
-cd packages/datacollect && npm test -- src/components/__tests__/EventStore.test.ts
+cd packages/datacollect && pnpm test -- src/components/__tests__/EventStore.test.ts
 
 # With coverage
 pnpm --filter @idpass/data-collect-mobile test:coverage

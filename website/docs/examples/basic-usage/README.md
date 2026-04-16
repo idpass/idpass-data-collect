@@ -6,12 +6,12 @@ This example demonstrates basic usage of ID PASS DataCollect for managing househ
 
 1. Install dependencies:
 ```bash
-npm install
+pnpm install
 ```
 
 2. Run the example:
 ```bash
-npm start
+pnpm start
 ```
 
 ## What This Example Shows

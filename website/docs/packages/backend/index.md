@@ -72,7 +72,7 @@ Isolated environments for different organizations:
 
 ```bash
 cd backend
-npm install
+pnpm install
 ```
 
 ### Environment Setup
@@ -112,14 +112,14 @@ The same rules apply when creating or updating users via the `POST /api/users` a
 ### Development
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 ### Production
 
 ```bash
-npm run build
-npm start
+pnpm build
+pnpm start
 ```
 
 ## Configuration

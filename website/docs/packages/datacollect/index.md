@@ -134,8 +134,8 @@ const visitsForHousehold = await entityStore.searchEntities([
 
 ```bash
 cd ./packages/datacollect
-npm install
-npm run build
+pnpm install
+pnpm build
 ```
 
 ### Basic Usage

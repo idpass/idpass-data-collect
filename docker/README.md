@@ -254,8 +254,8 @@ This will start:
 ### Running tests in containers
 ```bash
 # Run sync server tests
-docker compose exec sync-server npm test
+docker compose exec sync-server pnpm test
 
 # Run admin UI tests
-docker compose exec admin-ui npm run test:unit
+docker compose exec admin-ui pnpm test:unit
 ```

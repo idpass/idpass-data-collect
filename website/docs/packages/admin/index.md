@@ -73,7 +73,7 @@ Analytics and reporting dashboard:
 
 ```bash
 cd admin
-npm install
+pnpm install
 ```
 
 ### Development Setup
@@ -87,7 +87,7 @@ VITE_API_URL=http://localhost:3000
 ### Development
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 The admin interface will be available at `http://localhost:5173`
@@ -95,8 +95,8 @@ The admin interface will be available at `http://localhost:5173`
 ### Production Build
 
 ```bash
-npm run build
-npm run preview  # Preview production build
+pnpm build
+pnpm preview  # Preview production build
 ```
 
 ## User Interface
@@ -306,17 +306,17 @@ Customize the interface appearance:
 
 ### Unit Tests
 ```bash
-npm run test:unit
+pnpm test:unit
 ```
 
 ### Component Testing
 ```bash
-npm run test:component
+pnpm test:component
 ```
 
 ### End-to-End Tests
 ```bash
-npm run test:e2e
+pnpm test:e2e
 ```
 
 ## Deployment
@@ -337,13 +337,13 @@ COPY nginx.conf /etc/nginx/nginx.conf
 ### Environment-Specific Builds
 ```bash
 # Development
-npm run build:dev
+pnpm build:dev
 
 # Staging
-npm run build:staging
+pnpm build:staging
 
 # Production
-npm run build:prod
+pnpm build:prod
 ```
 
 ## Browser Support

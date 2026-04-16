@@ -17,7 +17,7 @@
 This package is published to GitHub Packages:
 
 ```bash
-npm install @idpass/adapter-openspp --registry=https://npm.pkg.github.com
+pnpm add @idpass/adapter-openspp --registry=https://npm.pkg.github.com
 ```
 
 ## Usage

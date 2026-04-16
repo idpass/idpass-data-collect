@@ -34,20 +34,20 @@ cd idpass-data-collect
 #### 2. Install DataCollect Core Library
 ```bash
 cd packages/datacollect
-npm install
-npm run build
+pnpm install
+pnpm build
 ```
 
 **Verify installation:**
 ```bash
-npm test
+pnpm test
 # Should pass all tests with fake-indexeddb
 ```
 
 #### 3. Set Up Backend (Optional)
 ```bash
 cd packages/backend
-npm install
+pnpm install
 
 # Create environment file from the docker directory
 cp ../../docker/.env.example .env
@@ -75,14 +75,14 @@ docker run --name postgres-datacollect \
 
 **Start backend:**
 ```bash
-npm run dev
+pnpm dev
 # Server starts on http://localhost:3000
 ```
 
 #### 4. Set Up Admin Interface (Optional)
 ```bash
 cd packages/admin
-npm install
+pnpm install
 
 # Create environment file
 cp .env.example .env
@@ -95,19 +95,19 @@ VITE_API_URL=http://localhost:3000
 
 **Start admin interface:**
 ```bash
-npm run dev
+pnpm dev
 # Interface available at http://localhost:5173
 ```
 
 #### 5. Set Up Mobile App (Optional)
 ```bash
 cd packages/mobile
-npm install
+pnpm install
 ```
 
 **Start Mobile app (in dev mode):**
 ```bash
-npm run dev
+pnpm dev
 # Available at http://localhost:8081
 ```
 
@@ -145,13 +145,13 @@ docker compose -f docker-compose.dev.yaml up -d
 - **Mobile App** on port 8081
 - **PgAdmin** on port 5050
 
-### Method 3: npm Package Installation
+### Method 3: Package Installation
 
 For integrating DataCollect into existing applications.
 
 #### 1. Install Package
 ```bash
-npm install idpass-data-collect
+pnpm add idpass-data-collect
 ```
 
 #### 2. Basic Usage
@@ -317,8 +317,8 @@ import 'fake-indexeddb/auto';
 **Problem**: TypeScript compilation errors
 **Solutions**:
 1. Ensure Node.js version 18+: `node --version`
-2. Clear node_modules and reinstall: `rm -rf node_modules && npm install`
-3. Check for peer dependency conflicts: `npm ls`
+2. Clear node_modules and reinstall: `rm -rf node_modules && pnpm install`
+3. Check for peer dependency conflicts: `pnpm ls`
 
 ## Production Considerations
 

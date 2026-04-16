@@ -19,34 +19,34 @@ sidebar_position: 1
    cd idpass-data-collect
    ```
 
-2. **Build the DataCollect library**
+2. **Install all dependencies**
    ```bash
-   cd packages/datacollect
-   npm install
-   npm run build
+   pnpm install
    ```
 
-3. **Set up the backend** (optional, for sync functionality)
+3. **Build the DataCollect library**
+   ```bash
+   pnpm --filter @idpass/data-collect-core build
+   ```
+
+4. **Set up the backend** (optional, for sync functionality)
    ```bash
    cd packages/backend
-   npm install
    cp .env.example .env
    # Edit .env with your database settings
-   npm run dev
+   pnpm dev
    ```
 
-4. **Try the admin interface** (optional)
+5. **Try the admin interface** (optional)
    ```bash
    cd packages/admin
-   npm install
-   npm run dev
+   pnpm dev
    ```
 
-5. **Try the mobile app** (optional)
+6. **Try the mobile app** (optional)
    ```bash
    cd packages/mobile
-   npm install
-   npm run dev
+   pnpm dev
    ```
 
 ### Your First Application
@@ -55,12 +55,12 @@ Create a simple client application:
 
 ```typescript
 import {
-  [EntityDataManager](../../glossary#entitydatamanager),
+  EntityDataManager,
   IndexedDbEntityStorageAdapter,
   IndexedDbEventStorageAdapter,
   IndexedDbAuthStorageAdapter,
-  [EventStoreImpl](../../glossary#eventstore),
-  [EntityStoreImpl](../../glossary#entitystore),
+  EventStoreImpl,
+  EntityStoreImpl,
   EventApplierService,
   InternalSyncManager,
   ExternalSyncManager,

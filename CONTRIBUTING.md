@@ -45,29 +45,11 @@ cd idpass-data-collect
 2. Install dependencies for all modules:
 
 ```bash
-# Install root dependencies
-npm install
+# Install all dependencies (pnpm workspaces)
+pnpm install
 
 # Build datacollect library first (required by backend)
-cd packages/datacollect
-npm install
-npm run build
-cd ../..
-
-# Install backend dependencies
-cd packages/backend
-npm install
-cd ../..
-
-# Install admin dependencies
-cd packages/admin
-npm install
-cd ../..
-
-# Install mobile dependencies (optional)
-cd packages/mobile
-npm install
-cd ../..
+pnpm --filter @idpass/data-collect-core build
 ```
 
 3. Set up environment variables:
@@ -90,16 +72,13 @@ createdb datacollect_test
 
 ```bash
 # Terminal 1 - Backend
-cd packages/backend
-npm run dev
+pnpm --filter @idpass/data-collect-backend dev
 
 # Terminal 2 - Admin
-cd packages/admin
-npm run dev
+pnpm --filter @idpass/data-collect-admin dev
 
 # Terminal 3 - Mobile (optional)
-cd packages/mobile
-npm run dev
+pnpm --filter @idpass/data-collect-mobile dev
 ```
 
 ## How to Contribute
@@ -170,8 +149,8 @@ npm run dev
 
 ### Code Style
 
-- Run `npm run format` before committing
-- Follow ESLint rules (run `npm run lint`)
+- Run `pnpm format` before committing
+- Follow ESLint rules (run `pnpm lint`)
 - Use meaningful variable and function names
 - Keep functions small and focused
 
@@ -195,18 +174,18 @@ import { internal } from "@/internal-module";
 
 ```bash
 # Run all tests
-npm test
+pnpm test
 
 # Run tests for specific module
-cd packages/datacollect && npm test
-cd packages/backend && npm test
-cd packages/admin && npm run test:unit
+pnpm --filter @idpass/data-collect-core test
+pnpm --filter @idpass/data-collect-backend test
+pnpm --filter @idpass/data-collect-admin test:unit
 
 # Run specific test file
-npm test -- EntityDataManager.test.ts
+pnpm test -- EntityDataManager.test.ts
 
 # Run tests in watch mode
-npm test -- --watch
+pnpm test -- --watch
 ```
 
 ### Writing Tests
