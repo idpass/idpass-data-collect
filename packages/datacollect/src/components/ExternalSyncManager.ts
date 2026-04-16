@@ -458,7 +458,7 @@ export class ExternalSyncManager {
       const since = await this.eventStore.getLastPullExternalSyncTimestamp();
       const pullResult = await this.v2Adapter.pull(since || undefined);
 
-      if (pullResult.pulled > 0 || pullResult.failed === 0) {
+      if (pullResult.pulled > 0 || (since && pullResult.failed === 0)) {
         await this.eventStore.setLastPullExternalSyncTimestamp(new Date().toISOString());
       }
 

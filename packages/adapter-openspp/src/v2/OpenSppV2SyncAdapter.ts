@@ -359,7 +359,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
         _offset: String(offset),
       };
       if (since) {
-        params._lastUpdated = since;
+        params._lastUpdated = `ge${since.split("T")[0]}`;
       }
 
       let individuals: IndividualResource[];
@@ -442,7 +442,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
         _offset: String(offset),
       };
       if (since) {
-        params._lastUpdated = since;
+        params._lastUpdated = `ge${since.split("T")[0]}`;
       }
       let groups: GroupResource[];
       try {
