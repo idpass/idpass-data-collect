@@ -199,11 +199,11 @@ describeIfPostgres("Sync Server", () => {
         .get(`/api/sync/pull?since=${since}&configId=${mockConfig.id}`)
         .set("Authorization", `Bearer ${adminToken}`);
 
-      expect(response2.body).toEqual({
-        events: [],
-        nextCursor: null,
-        error: "Duplicates exist! Please resolve them on admin page.",
-      });
+      // Duplicates are advisory — events are still delivered with a warning
+      expect(response2.body.events.length).toBeGreaterThan(0);
+      expect(response2.body.warnings).toEqual([
+        "Unresolved potential duplicates exist. Please review them on the admin page.",
+      ]);
     });
   });
 

@@ -239,7 +239,11 @@ export function createSyncMachine(
           }
           try {
             const result = await axiosInstance.get(url);
-            return result.data as { events: FormSubmission[]; nextCursor: string | Date | null };
+            const data = result.data as { events: FormSubmission[]; nextCursor: string | Date | null; error?: string };
+            if (data.error && (!data.events || data.events.length === 0)) {
+              throw new Error(data.error);
+            }
+            return data;
           } catch (error: unknown) {
             const axiosErr = error as { response?: { status?: number } };
             if (axiosErr.response?.status === 403 && reauthenticate) {
@@ -251,7 +255,11 @@ export function createSyncMachine(
                   axiosInstance.defaults.headers.Authorization = `${provider} ${token.token}`;
                 }
                 const result = await axiosInstance.get(url);
-                return result.data as { events: FormSubmission[]; nextCursor: string | Date | null };
+                const data = result.data as { events: FormSubmission[]; nextCursor: string | Date | null; error?: string };
+                if (data.error && (!data.events || data.events.length === 0)) {
+                  throw new Error(data.error);
+                }
+                return data;
               } catch {
                 throw new Error("You do not have permission to sync this program — Please contact your administrator to request access");
               }

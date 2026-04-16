@@ -222,7 +222,7 @@ export class SyncEventStore {
 
   async markJobStarted(jobId: string): Promise<void> {
     await this.pool.query(
-      `UPDATE sync_events SET phase = 'pushing', started_at = NOW(), updated_at = NOW() WHERE job_id = $1`,
+      `UPDATE sync_events SET phase = 'pulling', started_at = NOW(), updated_at = NOW() WHERE job_id = $1`,
       [jobId],
     );
   }

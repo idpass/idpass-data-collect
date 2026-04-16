@@ -77,6 +77,9 @@ export class DuplicateDetectionService {
    * @param eventGuid GUID of the event that created or updated the entity.
    */
   enqueue(entityGuid: string, eventGuid: string): void {
+    if (this.queue.length >= 1000) {
+      return; // Skip to prevent unbounded growth during large syncs
+    }
     this.queue.push({ entityGuid, eventGuid });
     this.scheduleProcessing();
   }
@@ -244,6 +247,9 @@ export class DuplicateDetectionService {
       }
 
       Object.entries(obj as Record<string, unknown>).forEach(([key, value]) => {
+        if (key === "entityName") {
+          return; // System constant shared by all entities; pollutes duplicate matching
+        }
         const fieldPath = prefix ? `${prefix}.${key}` : key;
 
         if (value !== null && value !== undefined && value !== "") {

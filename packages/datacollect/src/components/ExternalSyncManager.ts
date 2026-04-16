@@ -455,7 +455,12 @@ export class ExternalSyncManager {
       // Pull first so remote changes are ingested before local data is pushed,
       // preventing stale local data from overwriting newer remote edits.
       options?.onProgress?.({ phase: 'pulling', pushed: 0, pulled: 0, failed: 0, skipped: 0 });
-      const pullResult = await this.v2Adapter.pull();
+      const since = await this.eventStore.getLastPullExternalSyncTimestamp();
+      const pullResult = await this.v2Adapter.pull(since || undefined);
+
+      if (pullResult.pulled > 0 || pullResult.failed === 0) {
+        await this.eventStore.setLastPullExternalSyncTimestamp(new Date().toISOString());
+      }
 
       if (options?.signal?.aborted) {
         const error = new Error('Sync cancelled');
@@ -463,9 +468,9 @@ export class ExternalSyncManager {
         throw error;
       }
 
-      const entityPayloads = await this.gatherEntityPayloads();
+      // The adapter manages its own push delta via getModifiedEntitiesSince
       options?.onProgress?.({ phase: 'pushing', pushed: 0, pulled: pullResult.pulled, failed: pullResult.failed, skipped: pullResult.skipped });
-      const pushResult = await this.v2Adapter.push(entityPayloads);
+      const pushResult = await this.v2Adapter.push([]);
 
       return {
         success: pushResult.success && pullResult.success,

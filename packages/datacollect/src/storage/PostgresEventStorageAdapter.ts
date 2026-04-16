@@ -363,7 +363,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
    * @throws {Error} If the database update fails.
    */
   async updateEventSyncLevel(id: string, syncLevel: SyncLevel): Promise<void> {
-    await this.db.update(events).set({ syncLevel }).where(eq(events.guid, id));
+    await this.db.update(events).set({ syncLevel }).where(and(eq(events.guid, id), eq(events.tenantId, this.tenantId)));
   }
 
   /**

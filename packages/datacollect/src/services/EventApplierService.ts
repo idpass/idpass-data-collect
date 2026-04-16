@@ -349,7 +349,7 @@ export class EventApplierService {
 
       // Enqueue the entity for asynchronous duplicate detection so the write
       // path is never blocked by the O(n) entity scan.
-      if (updatedEntity?.guid) {
+      if (updatedEntity?.guid && !this.isRemoteEvent(formData)) {
         this.duplicateDetectionService.enqueue(updatedEntity.guid, eventGuid);
       }
 
@@ -702,16 +702,18 @@ export class EventApplierService {
     //   })}`,
     // );
     validateFormSubmission(formData);
-    const group: GroupDoc = existingGroup || {
-      id: formData.entityGuid,
-      guid: formData.entityGuid,
-      type: EntityType.Group,
-      name: formData.data._displayName || formData.data.name || "Unnamed Group",
-      version: 0,
-      data: formData.data,
-      lastUpdated: new Date().toISOString(),
-      memberIds: [],
-    };
+    const group: GroupDoc = existingGroup
+      ? cloneDeep(existingGroup)
+      : {
+          id: formData.entityGuid,
+          guid: formData.entityGuid,
+          type: EntityType.Group,
+          name: formData.data._displayName || formData.data.name || "Unnamed Group",
+          version: 0,
+          data: formData.data,
+          lastUpdated: new Date().toISOString(),
+          memberIds: [],
+        };
 
     group.name = formData.data._displayName || formData.data.name || group.name;
     group.data.name = group.name || "Unnamed Group";

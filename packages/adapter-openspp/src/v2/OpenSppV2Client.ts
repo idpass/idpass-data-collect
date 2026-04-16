@@ -70,6 +70,7 @@ export class OpenSppV2Client {
     this.config = config;
     this.httpClient = axios.create({
       baseURL: config.baseUrl,
+      timeout: 30000,
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
