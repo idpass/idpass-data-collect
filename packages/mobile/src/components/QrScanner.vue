@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { Barcode, BarcodeScanner } from '@capacitor-mlkit/barcode-scanning'
-import { Camera } from '@capacitor/camera'
 import { useDatabase } from '@/database'
 import { v4 as uuidv4 } from 'uuid'
 import { Clipboard } from '@capacitor/clipboard'
@@ -35,7 +34,7 @@ const scanSingleBarcode = async (): Promise<Barcode> => {
 }
 
 const requestPermissions = async (): Promise<boolean> => {
-  const { camera } = await Camera.requestPermissions()
+  const { camera } = await BarcodeScanner.requestPermissions()
   return camera === 'granted' || camera === 'limited'
 }
 
@@ -80,7 +79,7 @@ const scan = async () => {
 }
 
 onMounted(async () => {
-  Camera.checkPermissions().then(({ camera }) => {
+  BarcodeScanner.checkPermissions().then(({ camera }) => {
     isGrantedPermissions.value = camera === 'granted' || camera === 'limited'
   })
 

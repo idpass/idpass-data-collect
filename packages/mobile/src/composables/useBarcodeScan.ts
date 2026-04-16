@@ -19,7 +19,6 @@
 
 import { ref, onUnmounted } from 'vue'
 import { BarcodeScanner, type Barcode } from '@capacitor-mlkit/barcode-scanning'
-import { Camera } from '@capacitor/camera'
 import { App as CapacitorApp } from '@capacitor/app'
 import { PlatformService } from '@/platform'
 
@@ -35,7 +34,7 @@ export function useBarcodeScan() {
 
   const requestPermissions = async (): Promise<boolean> => {
     if (!PlatformService.isNative) return true
-    const { camera } = await Camera.requestPermissions()
+    const { camera } = await BarcodeScanner.requestPermissions()
     return camera === 'granted' || camera === 'limited'
   }
 
