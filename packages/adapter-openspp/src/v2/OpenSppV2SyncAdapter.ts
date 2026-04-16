@@ -733,14 +733,14 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   // ==================== Identifier Extraction ====================
 
   private extractIdentifier(individual: IndividualResource): string | undefined {
-    const matchingId = individual.identifier.find(
+    const matchingId = individual.identifier?.find(
       (id) => this.isOpenSppIdentifier(id.system),
     );
     return matchingId?.value;
   }
 
   private extractGroupIdentifier(group: GroupResource): string | undefined {
-    const matchingId = group.identifier.find(
+    const matchingId = group.identifier?.find(
       (id) => this.isOpenSppIdentifier(id.system),
     );
     return matchingId?.value;
