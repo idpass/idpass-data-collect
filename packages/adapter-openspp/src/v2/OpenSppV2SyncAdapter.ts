@@ -139,9 +139,20 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
     const entityStore = this.eventApplierService.getEntityStore();
     const lastPush = await this.eventStore.getLastPushExternalSyncTimestamp();
-    const entitiesToSync = lastPush
+    const allModified = lastPush
       ? await entityStore.getModifiedEntitiesSince(lastPush)
       : await entityStore.getAllEntities();
+
+    // Exclude entities that were only updated by external pull (no local edits).
+    // After pull, the baseline is reset (initial.version === modified.version).
+    // Without this filter, pulled entities would be pushed back, overwriting
+    // any changes made directly in OpenSPP between pull and push.
+    const entitiesToSync = allModified.filter((pair) => {
+      if (pair.modified.externalId && pair.initial && pair.initial.version === pair.modified.version) {
+        return false;
+      }
+      return true;
+    });
 
     const individualsToSync = entitiesToSync.filter(
       (pair) => pair.modified.type === EntityType.Individual,
