@@ -130,10 +130,18 @@ onMounted(async () => {
         (formName && (entityName.includes(formName) || formName.includes(entityName)))
       )
 
+      // Fallback: match externally-pulled entities by entity type against the
+      // form's entityType. Pulled entities have entityName "individual"/"group"
+      // which won't match form names like "individual info" or "household".
+      const matchesEntityType = !matchesEntityName && entityName &&
+        entityForm.value?.entityType &&
+        (entityName === entityForm.value.entityType ||
+         entity.modified.type === entityForm.value.entityType)
+
       const matchesParent = !entity.modified.data.parentGuid ||
         entity.modified.data.parentGuid === props.parentGuid
 
-      return (matchesEntityName || (!entityName && matchesParent)) && matchesParent
+      return (matchesEntityName || matchesEntityType || (!entityName && matchesParent)) && matchesParent
     })
 
     const entityEventsMap = new Map<string, typeof allEvents[0]>()
