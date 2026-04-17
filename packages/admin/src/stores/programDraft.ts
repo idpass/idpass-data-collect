@@ -385,13 +385,17 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
     }
 
     draft.value.entityForms.forEach((form) => {
-      const formErrors: { name?: string; title?: string; formio?: string } = {}
+      const formErrors: { name?: string; title?: string; formio?: string; entityType?: string } = {}
       if (!form.name.trim()) {
         formErrors.name = 'Name is required'
         valid = false
       }
       if (!form.title.trim()) {
         formErrors.title = 'Title is required'
+        valid = false
+      }
+      if (!form.entityType) {
+        formErrors.entityType = 'Entity type is required'
         valid = false
       }
       if (!form.formio) {
@@ -614,10 +618,9 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
         description: draft.value.description,
         version: draft.value.version,
         entityForms: draft.value.entityForms.map((form) => {
-          const { entityType, nameField, ...rest } = form
+          const { nameField, ...rest } = form
           const withId = { id: form.name, ...rest }
-          const withType = entityType ? { ...withId, entityType } : withId
-          return nameField ? { ...withType, nameField } : withType
+          return nameField ? { ...withId, nameField } : withId
         }),
         externalSync: draft.value.externalSync,
         authConfigs: draft.value.authConfigs,

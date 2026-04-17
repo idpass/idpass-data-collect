@@ -240,16 +240,15 @@ const onSpecFileSelection = async (value: File[] | File | null) => {
               <v-select
                 v-model="form.entityType"
                 :items="[
-                  { title: '(Auto - infer from topology)', value: '' },
-                  { title: 'Group', value: 'group' },
+                  { title: 'Group / Household', value: 'group' },
                   { title: 'Individual', value: 'individual' },
-                  { title: 'Record', value: 'record' },
+                  { title: 'Record (activity linked to an entity)', value: 'record' },
                 ]"
                 item-title="title"
                 item-value="value"
-                label="Entity Type (Optional)"
-                placeholder="Auto"
-                hint="Override the entity type. Use 'Individual' for standalone individuals without a parent group."
+                label="Entity Type"
+                :rules="[(v: string) => !!v || 'Entity type is required']"
+                hint="Determines how this form's data is stored and synced. Cannot be changed after creation."
                 persistent-hint
                 variant="outlined"
                 density="compact"

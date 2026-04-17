@@ -41,7 +41,7 @@ const AppConfigSchema = z.object({
     name: z.string(),
     title: z.string(),
     dependsOn: z.string().nullish(),
-    entityType: z.enum(["group", "individual", "record"]).nullish(),
+    entityType: z.enum(["group", "individual", "record"]).optional(),
     nameField: z.string().nullish(),
     formio: z.record(z.string(), z.unknown()),
   })).nullish(),
