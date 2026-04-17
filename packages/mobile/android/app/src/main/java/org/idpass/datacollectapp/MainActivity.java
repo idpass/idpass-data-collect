@@ -3,6 +3,7 @@ package org.idpass.datacollectapp;
 import android.os.Bundle;
 import android.view.WindowManager;
 import com.getcapacitor.BridgeActivity;
+import org.idpass.datacollectapp.BuildConfig;
 
 public class MainActivity extends BridgeActivity {
     @Override
