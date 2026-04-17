@@ -10,11 +10,13 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(BiometricCapturePlugin.class);
         super.onCreate(savedInstanceState);
         // Prevent screenshots, screen recording, and the task-switcher snapshot
-        // from capturing app content. This is the Android-level complement to
-        // the CSS blur applied in JS (which fires too late for the OS snapshot).
-        getWindow().setFlags(
-            WindowManager.LayoutParams.FLAG_SECURE,
-            WindowManager.LayoutParams.FLAG_SECURE
-        );
+        // from capturing app content. Only in release builds so QA can use
+        // screen mirroring tools (e.g., Vysor) during testing.
+        if (!BuildConfig.DEBUG) {
+            getWindow().setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE
+            );
+        }
     }
 }
