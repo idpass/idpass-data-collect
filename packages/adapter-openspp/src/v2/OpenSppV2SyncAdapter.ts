@@ -111,7 +111,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     this.batchDelayMs = getAdapterConfigValue<number>(config, "batchDelayMs", 1000) ?? 1000;
     this.maxRetries = getAdapterConfigValue<number>(config, "maxRetries", 2) ?? 2;
     this.identifierType =
-      getAdapterConfigValue<string>(config, "identifierType") ?? "national_id";
+      getAdapterConfigValue<string>(config, "identifierType") ?? "system_id";
     this.groupIdentifierType =
       getAdapterConfigValue<string>(config, "groupIdentifierType") ?? this.identifierType;
   }

@@ -179,7 +179,7 @@ describe("OpenSppV2SyncAdapter", () => {
           type: "Individual",
           identifier: expect.arrayContaining([
             expect.objectContaining({
-              system: "urn:openspp:vocab:id-type#national_id",
+              system: "urn:openspp:vocab:id-type#system_id",
               value: "individual-1",
             }),
           ]),
@@ -228,10 +228,10 @@ describe("OpenSppV2SyncAdapter", () => {
       expect(result).toEqual({ pushed: 1, failed: 0, skipped: 0, errors: [] });
 
       expect(mockV2ClientImplementation.getIndividual).toHaveBeenCalledWith(
-        "urn:openspp:vocab:id-type#national_id|individual-1",
+        "urn:openspp:vocab:id-type#system_id|individual-1",
       );
       expect(mockV2ClientImplementation.patchIndividual).toHaveBeenCalledWith(
-        "urn:openspp:vocab:id-type#national_id|individual-1",
+        "urn:openspp:vocab:id-type#system_id|individual-1",
         expect.objectContaining({
           name: expect.objectContaining({ family: "Smith" }),
         }),
@@ -399,10 +399,10 @@ describe("OpenSppV2SyncAdapter", () => {
       expect(result).toEqual({ pushed: 1, failed: 0, skipped: 0, errors: [] });
 
       expect(mockV2ClientImplementation.getGroup).toHaveBeenCalledWith(
-        "urn:openspp:vocab:id-type#national_id|group-1",
+        "urn:openspp:vocab:id-type#system_id|group-1",
       );
       expect(mockV2ClientImplementation.patchGroup).toHaveBeenCalledWith(
-        "urn:openspp:vocab:id-type#national_id|group-1",
+        "urn:openspp:vocab:id-type#system_id|group-1",
         expect.objectContaining({ name: "New Name" }),
         undefined,
       );
@@ -789,7 +789,7 @@ describe("OpenSppV2SyncAdapter", () => {
       await adapter.pushData();
 
       expect(mockV2ClientImplementation.patchIndividual).toHaveBeenCalledWith(
-        "urn:openspp:vocab:id-type#national_id|ind-lock-1",
+        "urn:openspp:vocab:id-type#system_id|ind-lock-1",
         expect.any(Object),
         "abc-123",
       );
@@ -831,7 +831,7 @@ describe("OpenSppV2SyncAdapter", () => {
       await adapter.pushData();
 
       expect(mockV2ClientImplementation.patchGroup).toHaveBeenCalledWith(
-        "urn:openspp:vocab:id-type#national_id|grp-lock-1",
+        "urn:openspp:vocab:id-type#system_id|grp-lock-1",
         expect.any(Object),
         "def-456",
       );
@@ -919,7 +919,7 @@ describe("OpenSppV2SyncAdapter", () => {
 
       expect(result).toEqual(expect.objectContaining({ pushed: 1, failed: 0, skipped: 0 }));
       expect(mockV2ClientImplementation.patchIndividual).toHaveBeenCalledWith(
-        "urn:openspp:vocab:id-type#national_id|ind-nometa-1",
+        "urn:openspp:vocab:id-type#system_id|ind-nometa-1",
         expect.any(Object),
         undefined,
       );
