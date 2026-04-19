@@ -37,70 +37,39 @@ const GENDER_FROM_CODE: Record<string, string> = {
 };
 
 /**
- * Resolve which identifier to use as the stable external identifier for a
- * Person. Prefers a non-`system_id` identifier matching the configured scheme,
- * falling back to any `system_id` on the same scheme.
- *
- * Returns the raw `identifier_value` (no system prefix) so it round-trips
- * cleanly through DC's `externalId` field.
- */
-export function resolvePersonExternalId(
-  person: Person,
-  identifierScheme: string,
-  identifierType: string,
-): string | undefined {
-  const identifiers = person.identifiers ?? [];
-
-  // 1) Prefer a non-`system_id` identifier on the configured scheme
-  const primary = identifiers.find(
-    (id) =>
-      id.identifier_scheme_id === identifierScheme &&
-      id.identifier_type !== "system_id" &&
-      id.identifier_type !== identifierType &&
-      !!id.identifier_value,
-  );
-  if (primary) return primary.identifier_value;
-
-  // 2) Fall back to configured identifierType on the scheme
-  const configured = identifiers.find(
-    (id) =>
-      id.identifier_scheme_id === identifierScheme &&
-      id.identifier_type === identifierType &&
-      !!id.identifier_value,
-  );
-  if (configured) return configured.identifier_value;
-
-  // 3) Fall back to any system_id
-  const systemId = identifiers.find(
-    (id) => id.identifier_type === "system_id" && !!id.identifier_value,
-  );
-  if (systemId) return systemId.identifier_value;
-
-  // 4) Last resort — any identifier at all
-  const any = identifiers.find((id) => !!id.identifier_value);
-  return any?.identifier_value;
-}
-
-/**
  * Transform a mock-registry `Person` into a DC `FormSubmission`.
  *
+ * The external identifier for round-trip purposes is always the server-issued
+ * `person.uuid`. Using the server UUID — not any business identifier from
+ * `identifiers[]` — guarantees that the key we store (`externalId = uuid`) on
+ * create and the key we look up on re-pull are identical, preventing the
+ * duplicate-entity class of bugs that arise when resolver priority diverges
+ * from storage.
+ *
+ * Business identifiers from the server are preserved on `data.identifiers`
+ * (minus `system_id` bookkeeping rows) so downstream consumers can still see
+ * them — they just are not used for identity reconciliation.
+ *
  * @param person The API person payload.
- * @param identifierScheme The configured identifier scheme URI.
- * @param identifierType The configured default identifier type.
+ * @param _identifierScheme Kept for signature compatibility; no longer used
+ *   for externalId resolution.
+ * @param _identifierType Kept for signature compatibility; no longer used
+ *   for externalId resolution.
  * @param existingEntityGuid If a DC entity already exists for this external
  *   identifier, pass its guid so the submission becomes an `update-individual`
  *   referencing the same DC entity.
  */
 export function personToFormSubmission(
   person: Person,
-  identifierScheme: string,
-  identifierType: string,
+  _identifierScheme: string,
+  _identifierType: string,
   existingEntityGuid?: string,
 ): FormSubmission | null {
-  const externalId = resolvePersonExternalId(person, identifierScheme, identifierType);
-  if (!externalId) {
+  if (!person.uuid) {
     return null;
   }
+
+  const externalId = person.uuid;
 
   const data: Record<string, unknown> = {
     entityName: "individual",

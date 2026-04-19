@@ -757,7 +757,7 @@ export interface FieldMapping {
 }
 
 export type ExternalSyncConfig = {
-  /** Type of external system (e.g., 'openspp-v2-adapter', 'mock-sync-server') */
+  /** Type of external system (e.g., 'openspp-v2-adapter', 'mock') */
   type: string;
   /** Authentication method (e.g., 'basic', 'oauth2') */
   auth?: string;

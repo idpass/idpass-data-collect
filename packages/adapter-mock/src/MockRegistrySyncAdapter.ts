@@ -41,14 +41,8 @@ import {
   PreconditionFailedError,
   RetryableError,
 } from "./MockRegistryClient";
-import {
-  personToFormSubmission,
-  resolvePersonExternalId,
-} from "./pullTransformers/personToFormSubmission";
-import {
-  groupToFormSubmission,
-  resolveGroupExternalId,
-} from "./pullTransformers/groupToFormSubmission";
+import { personToFormSubmission } from "./pullTransformers/personToFormSubmission";
+import { groupToFormSubmission } from "./pullTransformers/groupToFormSubmission";
 import {
   individualToPersonCreate,
   individualToPersonUpdate,
@@ -241,16 +235,9 @@ export class MockRegistrySyncAdapter implements ExternalSyncAdapterV2 {
         }
 
         try {
-          const externalId = resolvePersonExternalId(
-            person,
-            config.identifierScheme,
-            config.identifierType,
-          );
-          if (!externalId) {
-            log.warn({ uuid: person.uuid }, "Person has no resolvable identifier, skipping");
-            skipped++;
-            continue;
-          }
+          // The server-issued UUID is the stable external identifier used for
+          // round-trip reconciliation. See personToFormSubmission for why.
+          const externalId = person.uuid;
 
           const existing = await entityStore.getEntityByExternalId(externalId);
           const formSubmission = personToFormSubmission(
@@ -324,16 +311,9 @@ export class MockRegistrySyncAdapter implements ExternalSyncAdapterV2 {
         }
 
         try {
-          const externalId = resolveGroupExternalId(
-            group,
-            config.identifierScheme,
-            config.identifierType,
-          );
-          if (!externalId) {
-            log.warn({ uuid: group.uuid }, "Group has no resolvable identifier, skipping");
-            skipped++;
-            continue;
-          }
+          // The server-issued UUID is the stable external identifier used for
+          // round-trip reconciliation. See groupToFormSubmission for why.
+          const externalId = group.uuid;
 
           const existing = await entityStore.getEntityByExternalId(externalId);
           const formSubmission = groupToFormSubmission(
@@ -490,6 +470,15 @@ export class MockRegistrySyncAdapter implements ExternalSyncAdapterV2 {
           log.warn({ externalId, guid: entity.guid }, "Push skipped: If-Match precondition failed");
           return "skipped";
         }
+        if (error instanceof ConflictError) {
+          // 409 on PATCH: some other immutable conflict (e.g., duplicate
+          // identifier constraint). Retrying won't fix it.
+          log.warn(
+            { guid: entity.guid },
+            "Person push skipped: remote reported 409 Conflict on update",
+          );
+          return "skipped";
+        }
         throw error;
       }
     }
@@ -508,7 +497,22 @@ export class MockRegistrySyncAdapter implements ExternalSyncAdapterV2 {
       config.identifierScheme,
       config.identifierType,
     );
-    const created = await client.createPerson(payload);
+    let created;
+    try {
+      created = await client.createPerson(payload);
+    } catch (error) {
+      if (error instanceof ConflictError) {
+        // 409 on create: the identifier already exists remotely. Retrying
+        // won't fix it — log (no PII: guid only) and treat as skipped so the
+        // watermark can still advance past other cleanly-pushed entities.
+        log.warn(
+          { guid: entity.guid },
+          "Person push skipped: remote reported 409 Conflict on create",
+        );
+        return "skipped";
+      }
+      throw error;
+    }
 
     if (created?.uuid) {
       await this.saveExternalIdToEntity(entity.guid, created.uuid);
@@ -549,6 +553,13 @@ export class MockRegistrySyncAdapter implements ExternalSyncAdapterV2 {
           log.warn({ externalId, guid: entity.guid }, "Group push skipped: If-Match precondition failed");
           return "skipped";
         }
+        if (error instanceof ConflictError) {
+          log.warn(
+            { guid: entity.guid },
+            "Group push skipped: remote reported 409 Conflict on update",
+          );
+          return "skipped";
+        }
         throw error;
       }
     }
@@ -567,7 +578,19 @@ export class MockRegistrySyncAdapter implements ExternalSyncAdapterV2 {
       config.identifierScheme,
       config.identifierType,
     );
-    const created = await client.createGroup(payload);
+    let created;
+    try {
+      created = await client.createGroup(payload);
+    } catch (error) {
+      if (error instanceof ConflictError) {
+        log.warn(
+          { guid: entity.guid },
+          "Group push skipped: remote reported 409 Conflict on create",
+        );
+        return "skipped";
+      }
+      throw error;
+    }
 
     if (created?.uuid) {
       await this.saveExternalIdToEntity(entity.guid, created.uuid);
@@ -578,33 +601,59 @@ export class MockRegistrySyncAdapter implements ExternalSyncAdapterV2 {
   /**
    * Store the remote UUID on the DC entity so subsequent pushes use PATCH
    * instead of creating duplicate records.
+   *
+   * Throws on persistence failure. The outer `pushEntity` catch will count
+   * the entity as `failed`, which prevents watermark advancement — this is
+   * correct behavior: if the remote record exists but DC lost the externalId
+   * pointer, the next push would create a duplicate on the remote side.
+   * Silencing this error guarantees a duplicate.
    */
   private async saveExternalIdToEntity(
     entityGuid: string,
     externalId: string,
   ): Promise<void> {
+    const entityStore = this.eventApplierService.getEntityStore();
+
+    let pair;
     try {
-      const entityStore = this.eventApplierService.getEntityStore();
-      const pair = await entityStore.getEntity(entityGuid);
-      if (!pair) {
-        log.warn({ entityGuid }, "Cannot save external ID: entity not found");
-        return;
-      }
+      pair = await entityStore.getEntity(entityGuid);
+    } catch (error) {
+      log.error(
+        { entityGuid, err: error instanceof Error ? error.message : String(error) },
+        "Failed to read entity while persisting external ID",
+      );
+      throw new Error(
+        `Failed to persist externalId for entity ${entityGuid}: cannot read entity`,
+      );
+    }
 
-      const updated: EntityDoc = {
-        ...pair.modified,
+    if (!pair) {
+      log.warn({ entityGuid }, "Cannot save external ID: entity not found");
+      throw new Error(
+        `Failed to persist externalId for entity ${entityGuid}: entity not found`,
+      );
+    }
+
+    const updated: EntityDoc = {
+      ...pair.modified,
+      externalId,
+      data: {
+        ...pair.modified.data,
         externalId,
-        data: {
-          ...pair.modified.data,
-          externalId,
-        },
-      };
+      },
+    };
 
+    try {
       await entityStore.saveEntity(pair.initial, updated);
     } catch (error) {
       log.error(
         { entityGuid, err: error instanceof Error ? error.message : String(error) },
         "Failed to save external ID to entity",
+      );
+      throw new Error(
+        `Failed to persist externalId for entity ${entityGuid}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
       );
     }
   }

@@ -23,44 +23,11 @@ import type { Group, Identifier } from "../types";
 import { MOCK_SYNC_USER_ID } from "./personToFormSubmission";
 
 /**
- * Resolve the external identifier for a Group, using the same priority
- * rules as `resolvePersonExternalId`.
- */
-export function resolveGroupExternalId(
-  group: Group,
-  identifierScheme: string,
-  identifierType: string,
-): string | undefined {
-  const identifiers = group.identifiers ?? [];
-
-  const primary = identifiers.find(
-    (id) =>
-      id.identifier_scheme_id === identifierScheme &&
-      id.identifier_type !== "system_id" &&
-      id.identifier_type !== identifierType &&
-      !!id.identifier_value,
-  );
-  if (primary) return primary.identifier_value;
-
-  const configured = identifiers.find(
-    (id) =>
-      id.identifier_scheme_id === identifierScheme &&
-      id.identifier_type === identifierType &&
-      !!id.identifier_value,
-  );
-  if (configured) return configured.identifier_value;
-
-  const systemId = identifiers.find(
-    (id) => id.identifier_type === "system_id" && !!id.identifier_value,
-  );
-  if (systemId) return systemId.identifier_value;
-
-  const any = identifiers.find((id) => !!id.identifier_value);
-  return any?.identifier_value;
-}
-
-/**
  * Transform a mock-registry `Group` into a DC `FormSubmission`.
+ *
+ * The external identifier is always `group.uuid` (server-issued). See the
+ * matching comment on `personToFormSubmission` for why we anchor on the server
+ * UUID rather than any business identifier.
  *
  * Memberships are preserved on the form data payload so downstream consumers
  * can reconcile them. Applying membership as separate events is left to the
@@ -69,14 +36,15 @@ export function resolveGroupExternalId(
  */
 export function groupToFormSubmission(
   group: Group,
-  identifierScheme: string,
-  identifierType: string,
+  _identifierScheme: string,
+  _identifierType: string,
   existingEntityGuid?: string,
 ): FormSubmission | null {
-  const externalId = resolveGroupExternalId(group, identifierScheme, identifierType);
-  if (!externalId) {
+  if (!group.uuid) {
     return null;
   }
+
+  const externalId = group.uuid;
 
   const data: Record<string, unknown> = {
     entityName: "group",

@@ -34,6 +34,7 @@ import { EntityType } from "@idpass/data-collect-core";
 import { EventApplierService } from "@idpass/data-collect-core";
 import { MockRegistrySyncAdapter } from "../MockRegistrySyncAdapter";
 import {
+  ConflictError,
   MockRegistryClient,
   NotFoundError,
   PreconditionFailedError,
@@ -287,13 +288,16 @@ describe("MockRegistrySyncAdapter", () => {
             lastName: "Lovelace",
             dateOfBirth: "1815-12-10",
             gender: "female",
-            externalId: "NID-001",
+            // externalId is the server-issued uuid (not any business identifier
+            // from identifiers[]). This anchors round-trip reconciliation on a
+            // stable key — see personToFormSubmission for rationale.
+            externalId: "uuid-1",
           }),
         }),
       );
     });
 
-    it("prefers non-system_id identifier over system_id", async () => {
+    it("uses person.uuid as externalId regardless of identifiers[]", async () => {
       const { eventApplierService, submitForm } = createEventApplierServiceMock();
       const adapter = new MockRegistrySyncAdapter(createEventStoreMock(), eventApplierService);
       await adapter.initialize(VALID_CONFIG);
@@ -325,10 +329,10 @@ describe("MockRegistrySyncAdapter", () => {
       });
 
       await adapter.pull();
-      expect(submitForm.mock.calls[0][0].data.externalId).toBe("P-12345");
+      expect(submitForm.mock.calls[0][0].data.externalId).toBe("uuid-1");
     });
 
-    it("falls back to system_id when no real identifier exists", async () => {
+    it("uses person.uuid as externalId even when only system_id is present", async () => {
       const { eventApplierService, submitForm } = createEventApplierServiceMock();
       const adapter = new MockRegistrySyncAdapter(createEventStoreMock(), eventApplierService);
       await adapter.initialize(VALID_CONFIG);
@@ -355,7 +359,7 @@ describe("MockRegistrySyncAdapter", () => {
       });
 
       await adapter.pull();
-      expect(submitForm.mock.calls[0][0].data.externalId).toBe("sys-1");
+      expect(submitForm.mock.calls[0][0].data.externalId).toBe("uuid-1");
     });
 
     it("paginates across multiple pages", async () => {
@@ -433,21 +437,24 @@ describe("MockRegistrySyncAdapter", () => {
       );
     });
 
-    it("routes to update-individual when entity exists locally", async () => {
+    it("routes to update-individual when entity exists locally (matched by person.uuid)", async () => {
       const { eventApplierService, submitForm, entityStore } =
         createEventApplierServiceMock();
-      entityStore.getEntityByExternalId = jest.fn().mockResolvedValue({
-        guid: "local-guid-1",
-        modified: {
-          id: "1",
+      entityStore.getEntityByExternalId = jest.fn().mockImplementation(async (key: string) => {
+        if (key !== "uuid-1") return null;
+        return {
           guid: "local-guid-1",
-          type: EntityType.Individual,
-          version: 1,
-          data: {},
-          lastUpdated: "2024-01-01T00:00:00Z",
-          externalId: "NID-001",
-        },
-        initial: null,
+          modified: {
+            id: "1",
+            guid: "local-guid-1",
+            type: EntityType.Individual,
+            version: 1,
+            data: {},
+            lastUpdated: "2024-01-01T00:00:00Z",
+            externalId: "uuid-1",
+          },
+          initial: null,
+        };
       });
 
       const adapter = new MockRegistrySyncAdapter(createEventStoreMock(), eventApplierService);
@@ -477,6 +484,7 @@ describe("MockRegistrySyncAdapter", () => {
       });
 
       await adapter.pull();
+      expect(entityStore.getEntityByExternalId).toHaveBeenCalledWith("uuid-1");
       expect(submitForm).toHaveBeenCalledWith(
         expect.objectContaining({
           type: "update-individual",
@@ -485,7 +493,7 @@ describe("MockRegistrySyncAdapter", () => {
       );
     });
 
-    it("skips persons with no identifier", async () => {
+    it("skips persons with no uuid", async () => {
       const { eventApplierService, submitForm } = createEventApplierServiceMock();
       const adapter = new MockRegistrySyncAdapter(createEventStoreMock(), eventApplierService);
       await adapter.initialize(VALID_CONFIG);
@@ -493,11 +501,11 @@ describe("MockRegistrySyncAdapter", () => {
       clientMock.listPersons.mockResolvedValueOnce({
         items: [
           {
-            uuid: "uuid-1",
+            // uuid missing — must be skipped by the adapter's early guard
             created_at: "2024-01-01T00:00:00Z",
             updated_at: "2024-01-01T00:00:00Z",
             identifiers: [],
-          },
+          } as unknown as Person,
         ],
         total: 1,
         limit: 100,
@@ -523,6 +531,80 @@ describe("MockRegistrySyncAdapter", () => {
       const result = await adapter.pull();
       expect(result.success).toBe(false);
       expect(result.errors.some((e) => e.code === "PULL_PERSONS_FAILED")).toBe(true);
+    });
+
+    it("regression (C1): re-pull of a pushed entity does not create a duplicate", async () => {
+      // Scenario: DC pushed an entity, server persisted it with uuid "remote-1",
+      // adapter saved externalId = "remote-1" on the local entity. On the next
+      // pull, the server returns that same record — by uuid. The lookup key
+      // (server uuid) must match the storage key (server uuid) so we route to
+      // update-individual on the existing local entity instead of creating a
+      // second one.
+      const { eventApplierService, submitForm, entityStore } =
+        createEventApplierServiceMock();
+
+      const lookupSpy = jest.fn().mockImplementation(async (key: string) => {
+        if (key !== "remote-1") return null;
+        return {
+          guid: "local-guid-1",
+          modified: {
+            id: "1",
+            guid: "local-guid-1",
+            type: EntityType.Individual,
+            version: 2,
+            data: { firstName: "Ada" },
+            lastUpdated: "2024-01-02T00:00:00Z",
+            externalId: "remote-1",
+          },
+          initial: null,
+        };
+      });
+      entityStore.getEntityByExternalId = lookupSpy;
+
+      const adapter = new MockRegistrySyncAdapter(createEventStoreMock(), eventApplierService);
+      await adapter.initialize(VALID_CONFIG);
+
+      clientMock.listPersons.mockResolvedValueOnce({
+        items: [
+          {
+            uuid: "remote-1",
+            given_name: "Ada",
+            family_name: "Lovelace",
+            created_at: "2024-01-01T00:00:00Z",
+            updated_at: "2024-01-02T00:00:00Z",
+            identifiers: [
+              {
+                identifier_type: "national_id_number",
+                identifier_value: "NID-001",
+                identifier_scheme_id: "urn:mock:vocab:id-type",
+              },
+              {
+                identifier_type: "system_id",
+                identifier_value: "local-guid-1",
+                identifier_scheme_id: "urn:mock:vocab:id-type",
+              },
+            ],
+          },
+        ],
+        total: 1,
+        limit: 100,
+        offset: 0,
+        next_offset: null,
+      });
+
+      const result = await adapter.pull();
+      expect(result.success).toBe(true);
+      expect(result.pulled).toBe(1);
+      expect(lookupSpy).toHaveBeenCalledWith("remote-1");
+      expect(submitForm).toHaveBeenCalledTimes(1);
+      // Must route to update on existing entity, not create a duplicate
+      expect(submitForm).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "update-individual",
+          entityGuid: "local-guid-1",
+          data: expect.objectContaining({ externalId: "remote-1" }),
+        }),
+      );
     });
   });
 
@@ -799,6 +881,121 @@ describe("MockRegistrySyncAdapter", () => {
       expect(result.failed).toBe(1);
       expect(result.errors[0].retryable).toBe(true);
       expect(result.errors[0].entityGuid).toBe("dc-guid-1");
+    });
+
+    it("regression (M1): saveExternalIdToEntity failure is counted as failed, not swallowed", async () => {
+      // After a successful POST, persistence of the externalId on the local
+      // entity must not be silently swallowed — losing the pointer guarantees
+      // a duplicate on the next push. The failure must surface as `failed` so
+      // the watermark does NOT advance and the push will be retried.
+      const eventStore = createEventStoreMock();
+      const pair = makeIndividualPair();
+      const saveEntity = jest.fn().mockRejectedValue(new Error("disk full"));
+      const { eventApplierService } = createEventApplierServiceMock({
+        getAllEntities: jest.fn().mockResolvedValue([pair]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([pair]),
+        getEntity: jest.fn().mockResolvedValue(pair),
+        saveEntity,
+      });
+
+      const adapter = new MockRegistrySyncAdapter(eventStore, eventApplierService);
+      await adapter.initialize(VALID_CONFIG);
+
+      clientMock.createPerson.mockResolvedValueOnce({
+        uuid: "remote-uuid-1",
+        created_at: "x",
+        updated_at: "x",
+      } as Person);
+
+      const result = await adapter.push([]);
+      expect(result.pushed).toBe(0);
+      expect(result.failed).toBe(1);
+      expect(result.errors[0].entityGuid).toBe("dc-guid-1");
+      expect(result.errors[0].message).toMatch(/Failed to persist externalId/);
+      // Watermark must NOT advance — retry must be possible
+      expect(eventStore.setLastPushExternalSyncTimestamp).not.toHaveBeenCalled();
+    });
+
+    it("regression (M1): saveExternalIdToEntity counted as failed when entity missing", async () => {
+      const eventStore = createEventStoreMock();
+      const pair = makeIndividualPair();
+      const { eventApplierService } = createEventApplierServiceMock({
+        getAllEntities: jest.fn().mockResolvedValue([pair]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([pair]),
+        getEntity: jest.fn().mockResolvedValue(null),
+      });
+
+      const adapter = new MockRegistrySyncAdapter(eventStore, eventApplierService);
+      await adapter.initialize(VALID_CONFIG);
+
+      clientMock.createPerson.mockResolvedValueOnce({
+        uuid: "remote-uuid-1",
+        created_at: "x",
+        updated_at: "x",
+      } as Person);
+
+      const result = await adapter.push([]);
+      expect(result.failed).toBe(1);
+      expect(result.errors[0].message).toMatch(/entity not found/);
+      expect(eventStore.setLastPushExternalSyncTimestamp).not.toHaveBeenCalled();
+    });
+
+    it("regression (M5): 409 Conflict on create is mapped to skipped (not failed)", async () => {
+      // 409 on create means the identifier already exists remotely. Retrying
+      // won't fix it, but failing the whole sync would permanently block the
+      // watermark and all subsequent pushes. Map to skipped instead.
+      const eventStore = createEventStoreMock();
+      const pair = makeIndividualPair();
+      const { eventApplierService } = createEventApplierServiceMock({
+        getAllEntities: jest.fn().mockResolvedValue([pair]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([pair]),
+        getEntity: jest.fn().mockResolvedValue(pair),
+      });
+
+      const adapter = new MockRegistrySyncAdapter(eventStore, eventApplierService);
+      await adapter.initialize(VALID_CONFIG);
+
+      clientMock.createPerson.mockRejectedValueOnce(
+        new ConflictError("identifier already exists", 409),
+      );
+
+      const result = await adapter.push([]);
+      expect(result.pushed).toBe(0);
+      expect(result.skipped).toBe(1);
+      expect(result.failed).toBe(0);
+      // With zero failures, watermark must advance so the blocker entity is
+      // skipped permanently and does not break future syncs.
+      expect(eventStore.setLastPushExternalSyncTimestamp).toHaveBeenCalledTimes(1);
+    });
+
+    it("regression (M5): 409 Conflict on update is mapped to skipped", async () => {
+      const pair = makeIndividualPair({
+        version: 2,
+        externalId: "remote-uuid-1",
+      });
+      pair.initial = { ...pair.modified, version: 1 };
+
+      const { eventApplierService } = createEventApplierServiceMock({
+        getAllEntities: jest.fn().mockResolvedValue([pair]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([pair]),
+      });
+
+      const adapter = new MockRegistrySyncAdapter(createEventStoreMock(), eventApplierService);
+      await adapter.initialize(VALID_CONFIG);
+
+      clientMock.getPerson.mockResolvedValueOnce({
+        uuid: "remote-uuid-1",
+        created_at: "2024-01-01",
+        updated_at: "2024-06-01T12:00:00Z",
+      } as Person);
+      clientMock.updatePerson.mockRejectedValueOnce(
+        new ConflictError("constraint violated", 409),
+      );
+
+      const result = await adapter.push([]);
+      expect(result.pushed).toBe(0);
+      expect(result.skipped).toBe(1);
+      expect(result.failed).toBe(0);
     });
 
     it("second sync (re-pull) is idempotent: pulled entities are not re-pushed", async () => {

@@ -104,6 +104,20 @@ export class RetryableError extends Error {
 }
 
 /**
+ * Decode a base64url-encoded string to a UTF-8 string using only APIs
+ * available in both browsers and Node 16+ (`globalThis.atob`, `TextDecoder`).
+ * `Buffer` is Node-only and breaks the datacollect package when this adapter
+ * is consumed from a browser/mobile context.
+ */
+function base64UrlDecode(input: string): string {
+  const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+  const binary = globalThis.atob(padded);
+  const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
+/**
  * Decode the `exp` claim from a JWT without verifying the signature.
  * Returns `null` if the token is malformed.
  */
@@ -111,11 +125,7 @@ function decodeJwtExp(token: string): number | null {
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   try {
-    const payload = parts[1];
-    // base64url → base64
-    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
-    const json = Buffer.from(padded, "base64").toString("utf-8");
+    const json = base64UrlDecode(parts[1]);
     const parsed = JSON.parse(json) as { exp?: number };
     return typeof parsed.exp === "number" ? parsed.exp : null;
   } catch {
