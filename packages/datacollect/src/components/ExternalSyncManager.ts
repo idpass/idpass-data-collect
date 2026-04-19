@@ -25,8 +25,12 @@ import type {
   EntityPushPayload,
 } from "../interfaces/adapter";
 import { EventApplierService } from "../services/EventApplierService";
-import MockSyncServerAdapter from "../services/MockSyncServerAdapter";
 import { adapterRegistry } from "./AdapterRegistry";
+import {
+  LegacyAdapterConstructor,
+  LegacyAdapterWrapper,
+  legacyAdapterRegistry,
+} from "./legacyAdapterSupport";
 import { createLogger } from "../utils/logger";
 
 export interface SyncProgress {
@@ -57,136 +61,6 @@ export class SyncAlreadyInProgressError extends Error {
 const log = createLogger("ExternalSyncManager");
 
 /**
- * Constructor type for ExternalSyncAdapter implementations.
- */
-type AdapterConstructor = new (
-  eventStore: EventStore,
-  eventApplierService: EventApplierService,
-  config: ExternalSyncConfig,
-) => ExternalSyncAdapter;
-
-/**
- * Legacy (V1) adapter registry. Maps adapter type strings to constructor classes.
- *
- * Built-in adapters (mock-sync-server) are pre-registered here. External adapters
- * (OpenSPP, OpenFn) can be added at application startup via
- * ExternalSyncManager.registerAdapter().
- */
-const legacyAdapterRegistry: Record<string, AdapterConstructor> = {
-  "mock-sync-server": MockSyncServerAdapter as unknown as AdapterConstructor,
-};
-
-/**
- * Creates an empty SyncResult with the given duration.
- */
-function emptySyncResult(duration: number): SyncResult {
-  return {
-    success: true,
-    pushed: 0,
-    pulled: 0,
-    failed: 0,
-    skipped: 0,
-    errors: [],
-    duration,
-  };
-}
-
-/**
- * Wraps a legacy ExternalSyncAdapter (V1) in the ExternalSyncAdapterV2 interface.
- *
- * This enables the ExternalSyncManager to work uniformly with both old and new
- * adapters while the codebase transitions to the V2 interface.
- *
- * **Limitation:** The wrapper always returns `pushed: 0, pulled: 0` in its
- * SyncResult because the legacy V1 adapter interface (`pushData`/`pullData`)
- * does not provide entity counts. This means monitoring dashboards and admin
- * UI will show zero counts for any adapter still using the V1 interface.
- */
-class LegacyAdapterWrapper implements ExternalSyncAdapterV2 {
-  constructor(
-    private legacyAdapter: ExternalSyncAdapter,
-    private adapterType: string,
-  ) {}
-
-  descriptor() {
-    return {
-      type: this.adapterType,
-      version: "1.0.0",
-      capabilities: ["push" as const, "pull" as const],
-      configSchema: {} as never, // Legacy adapters do not have a Zod schema
-    };
-  }
-
-  async initialize(_config: Record<string, unknown>): Promise<void> {
-    // Legacy adapters are initialized via their constructor; nothing to do here
-  }
-
-  async healthCheck(): Promise<HealthCheckResult> {
-    // Legacy adapters do not support health checks; assume healthy if initialized
-    return { healthy: true, message: "Legacy adapter (health check not supported)" };
-  }
-
-  /**
-   * Push entities via the legacy adapter.
-   * Note: pushed/pulled counts are always 0 because the V1 adapter interface
-   * does not provide per-entity counts. Monitoring/admin UI will show zero
-   * counts for V1 adapters — this is a known limitation of the legacy wrapper.
-   */
-  async push(_entities: EntityPushPayload[]): Promise<SyncResult> {
-    const startTime = Date.now();
-    try {
-      if (typeof this.legacyAdapter.pushData === "function") {
-        await this.legacyAdapter.pushData();
-      }
-      return emptySyncResult(Date.now() - startTime);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return {
-        success: false,
-        pushed: 0,
-        pulled: 0,
-        failed: 1,
-        skipped: 0,
-        errors: [{ code: "PUSH_FAILED", message, retryable: true }],
-        duration: Date.now() - startTime,
-      };
-    }
-  }
-
-  async pull(_since?: string): Promise<SyncResult> {
-    const startTime = Date.now();
-    try {
-      if (typeof this.legacyAdapter.pullData === "function") {
-        await this.legacyAdapter.pullData();
-      }
-      return emptySyncResult(Date.now() - startTime);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return {
-        success: false,
-        pushed: 0,
-        pulled: 0,
-        failed: 1,
-        skipped: 0,
-        errors: [{ code: "PULL_FAILED", message, retryable: true }],
-        duration: Date.now() - startTime,
-      };
-    }
-  }
-
-  async disconnect(): Promise<void> {
-    // Legacy adapters do not have a disconnect method
-  }
-
-  /**
-   * Exposes the wrapped legacy adapter for authentication.
-   */
-  getLegacyAdapter(): ExternalSyncAdapter {
-    return this.legacyAdapter;
-  }
-}
-
-/**
  * Manages synchronization with external third-party systems using pluggable adapters.
  *
  * This class provides a unified interface for syncing DataCollect data with various
@@ -211,12 +85,15 @@ class LegacyAdapterWrapper implements ExternalSyncAdapterV2 {
  * - Configuration determines which adapter to instantiate and how to configure it.
  *
  * @example
- * Basic usage with mock adapter:
+ * Basic usage with a V2 adapter (mock registry server):
  * ```typescript
  * const config: ExternalSyncConfig = {
- *   type: 'mock-sync-server',
- *   url: 'http://mock.example.com',
- *   timeout: 30000
+ *   type: 'mock',
+ *   url: 'http://localhost:9999',
+ *   adapterConfig: {
+ *     clientId: 'mock-client',
+ *     clientSecret: 'mock-secret',
+ *   },
  * };
  *
  * const externalSync = new ExternalSyncManager(
@@ -226,36 +103,8 @@ class LegacyAdapterWrapper implements ExternalSyncAdapterV2 {
  * );
  *
  * await externalSync.initialize();
- * await externalSync.synchronize();
- * ```
- *
- * @example
- * With authentication credentials:
- * ```typescript
- * const credentials: ExternalSyncCredentials = {
- *   username: 'sync_user',
- *   password: 'secure_password'
- * };
- *
- * await externalSync.synchronize(credentials);
- * ```
- *
- * @example
- * Custom adapter registration:
- * ```typescript
- * // In adaptersMapping (requires code modification):
- * const adaptersMapping = {
- *   "mock-sync-server": MockSyncServerAdapter,
- *   "openspp": OpenSppSyncAdapter,
- *   "custom-api": CustomApiSyncAdapter
- * };
- *
- * // Then use with config:
- * const opensppConfig: ExternalSyncConfig = {
- *   type: 'openspp',
- *   url: 'http://openspp.example.com',
- *   database: 'openspp_db'
- * };
+ * const result = await externalSync.synchronize();
+ * console.log(`Pulled ${result.pulled}, pushed ${result.pushed}`);
  * ```
  */
 export class ExternalSyncManager {
@@ -310,7 +159,7 @@ export class ExternalSyncManager {
    * ExternalSyncManager.registerAdapter('openfn-adapter', OpenFnSyncAdapter);
    * ```
    */
-  static registerAdapter(type: string, adapterClass: AdapterConstructor): void {
+  static registerAdapter(type: string, adapterClass: LegacyAdapterConstructor): void {
     legacyAdapterRegistry[type] = adapterClass;
   }
 
