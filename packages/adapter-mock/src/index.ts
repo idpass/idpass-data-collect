@@ -17,8 +17,34 @@
  * under the License.
  */
 
-// Legacy V1 adapter (ExternalSyncAdapter interface)
-export { default as MockSyncAdapter } from "./MockSyncAdapter";
-
-// V2 adapter (ExternalSyncAdapterV2 interface)
-export { MockSyncAdapterV2 } from "./MockSyncAdapterV2";
+export { MockRegistrySyncAdapter } from "./MockRegistrySyncAdapter";
+export {
+  MockRegistryClient,
+  AuthError,
+  ConflictError,
+  NonRetryableError,
+  NotFoundError,
+  PreconditionFailedError,
+  RetryableError,
+} from "./MockRegistryClient";
+export {
+  mockConfigSchema,
+  DEFAULT_CLIENT_ID,
+  DEFAULT_IDENTIFIER_SCHEME,
+  DEFAULT_IDENTIFIER_TYPE,
+  type MockConfig,
+} from "./config";
+export type {
+  Group,
+  GroupCreate,
+  GroupUpdate,
+  Identifier,
+  IdentityDocument,
+  Membership,
+  MockRegistryClientConfig,
+  OAuth2TokenResponse,
+  PaginatedResponse,
+  Person,
+  PersonCreate,
+  PersonUpdate,
+} from "./types";

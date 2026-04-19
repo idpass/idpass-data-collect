@@ -32,7 +32,7 @@ const connectionStatus = ref<'idle' | 'success' | 'error'>('idle')
 const connectionError = ref<string | null>(null)
 
 const syncTypeOptions = [
-  ...(import.meta.env.DEV ? [{ title: 'Mock Sync Server', value: 'mock-sync-server' }] : []),
+  ...(import.meta.env.DEV ? [{ title: 'Mock Registry Server', value: 'mock' }] : []),
   { title: 'OpenSPP V1', value: 'openspp-v1-adapter' },
   { title: 'OpenSPP v2', value: 'openspp-v2-adapter' },
   { title: 'OpenFn', value: 'openfn-adapter' },
@@ -96,8 +96,8 @@ const getAdapterDescription = computed(() => {
       return 'Connect to OpenSPP using the JSON-RPC/Odoo API.'
     case 'openfn-adapter':
       return 'Connect to OpenFn for workflow-based data integration.'
-    case 'mock-sync-server':
-      return 'Mock adapter for testing and development purposes.'
+    case 'mock':
+      return 'Reference V2 HTTP adapter for the mock registry server (examples/mock-server) — uses OAuth2 client credentials and a PublicSchema-aligned REST API.'
     default:
       return null
   }

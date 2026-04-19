@@ -1,7 +1,7 @@
 {
   "name": "@idpass/adapter-mock",
   "version": "2.0.0",
-  "description": "Mock sync adapter for ID PASS DataCollect testing",
+  "description": "Reference V2 HTTP sync adapter for the mock registry server",
   "engines": {
     "node": ">=22.0.0"
   },
@@ -19,14 +19,12 @@
   "dependencies": {
     "@idpass/data-collect-core": "workspace:*",
     "axios": "^1.13.5",
-    "lodash": "^4.17.23",
     "uuid": "^10.0.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@types/jest": "^29.5.14",
-    "@types/lodash": "^4.17.23",
     "@types/node": "^20.19.33",
     "@types/uuid": "^10.0.0",
     "eslint": "^9.27.0",

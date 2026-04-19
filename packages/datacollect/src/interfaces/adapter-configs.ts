@@ -218,14 +218,52 @@ export const OpenFnAdapterConfig: AdapterConfigSchema = {
 };
 
 /**
- * Mock Sync Server Adapter Configuration
- * Used for testing and development purposes.
+ * Mock Registry Server Adapter Configuration.
+ *
+ * Reference V2 HTTP adapter pointed at the Python mock registry server
+ * (`examples/mock-server`). Uses OAuth2 client credentials plus a REST API
+ * modeled on PublicSchema field names. See the adapter-mock package for
+ * implementation details.
  */
-export const MockSyncServerAdapterConfig: AdapterConfigSchema = {
-  adapterType: "mock-sync-server",
-  displayName: "Mock Sync Server",
-  description: "Mock adapter for testing and development",
-  fields: [],
+export const MockRegistryAdapterConfig: AdapterConfigSchema = {
+  adapterType: "mock",
+  displayName: "Mock Registry Server",
+  description:
+    "Reference V2 HTTP adapter for the mock registry server (examples/mock-server)",
+  fields: [
+    {
+      name: "clientId",
+      label: "OAuth2 Client ID",
+      type: "text",
+      required: true,
+      default: "mock-client",
+      helpText: "OAuth2 client ID configured on the mock registry server",
+    },
+    {
+      name: "clientSecret",
+      label: "OAuth2 Client Secret",
+      type: "password",
+      required: true,
+      helpText: "OAuth2 client secret configured on the mock registry server",
+    },
+    {
+      name: "identifierScheme",
+      label: "Identifier Scheme URI",
+      type: "text",
+      required: false,
+      default: "urn:mock:vocab:id-type",
+      helpText: "Identifier scheme URI used for DC-issued identifiers",
+    },
+    {
+      name: "identifierType",
+      label: "Default identifier type",
+      type: "text",
+      required: false,
+      default: "system_id",
+      helpText:
+        "Identifier type used for DC entities that have no real-world identifier",
+    },
+  ],
 };
 
 /**
@@ -237,7 +275,7 @@ export const ADAPTER_CONFIGS: Record<string, AdapterConfigSchema> = {
   "openspp-adapter": OpenSppV1AdapterConfig, // Alias for backwards compatibility
   "openspp-v2-adapter": OpenSppV2AdapterConfig,
   "openfn-adapter": OpenFnAdapterConfig,
-  "mock-sync-server": MockSyncServerAdapterConfig,
+  mock: MockRegistryAdapterConfig,
 };
 
 /**
@@ -256,9 +294,9 @@ export function getAdapterConfig(adapterType: string): AdapterConfigSchema | und
 export function getAdapterOptions(): { value: string; title: string; description?: string }[] {
   return [
     {
-      value: "mock-sync-server",
-      title: MockSyncServerAdapterConfig.displayName,
-      description: MockSyncServerAdapterConfig.description,
+      value: "mock",
+      title: MockRegistryAdapterConfig.displayName,
+      description: MockRegistryAdapterConfig.description,
     },
     {
       value: "openspp-v1-adapter",

@@ -28,6 +28,7 @@
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
+    "@idpass/adapter-mock": "workspace:*",
     "@idpass/adapter-openspp": "workspace:*",
     "@idpass/adapter-openfn": "workspace:*",
     "@idpass/data-collect-core": "workspace:*",
