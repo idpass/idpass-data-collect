@@ -153,10 +153,15 @@ def create_app(settings: Settings | None = None) -> Litestar:
 
     # Session middleware — cookie-based, server-side store (in-memory is fine
     # for a single-process dev server; sessions reset on restart).
+    # `samesite="strict"` + `httponly` mitigate session hijack and CSRF on
+    # UI state-changing requests. Set `secure=True` outside of localhost.
     session_config = ServerSideSessionConfig(
         key="mock_session",
         max_age=60 * 60 * 8,  # 8h
         store="sessions",
+        httponly=True,
+        samesite="strict",
+        secure=settings.session_cookie_secure,
     )
 
     openapi_config = OpenAPIConfig(
@@ -170,7 +175,12 @@ def create_app(settings: Settings | None = None) -> Litestar:
         path="/schema",
     )
 
-    cors_config = CORSConfig(allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+    cors_config = CORSConfig(
+        allow_origins=settings.cors_allowed_origins,
+        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "If-Match"],
+        allow_credentials=False,
+    )
 
     app = Litestar(
         route_handlers=[

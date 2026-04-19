@@ -10,8 +10,8 @@
   {% if already %}<p>You are already signed in. <a href="/">Continue</a></p>
   {% else %}
   <form method="post" action="/ui/login">
-    <label>Username <input name="username" value="admin" required></label>
-    <label>Password <input name="password" type="password" value="admin" required></label>
+    <label>Username <input name="username" autocomplete="username" required></label>
+    <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
     <button type="submit">Sign in</button>
   </form>
   <p class="meta">Default credentials: <code>admin</code> / <code>admin</code> (override via env vars).</p>

@@ -98,7 +98,7 @@ async function initializeDataManager() {
     eventStore,
     eventApplierService,
     {
-      type: 'mock-sync-server',
+      type: 'mock',
       url: 'http://localhost:4000',
       auth: '',
       extraFields: {}

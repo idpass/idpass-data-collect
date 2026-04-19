@@ -45,6 +45,13 @@ class Settings(BaseSettings):
     jwt_issuer: str = Field(default="mock-registry")
 
     session_secret: str = Field(default=_DEFAULT_SESSION_SECRET_SENTINEL)
+    session_cookie_secure: bool = Field(
+        default=False,
+        description=(
+            "Set to true when serving over HTTPS. Keeps the session cookie from "
+            "leaking over plain HTTP; defaults to false so local dev works."
+        ),
+    )
     ui_username: str = Field(default="admin")
     ui_password: str = Field(default="admin")
 
@@ -52,6 +59,21 @@ class Settings(BaseSettings):
     identifier_scheme_name: str = Field(default="Mock ID Type")
 
     log_level: str = Field(default="INFO")
+
+    cors_allowed_origins: list[str] = Field(
+        default_factory=lambda: [
+            "http://localhost",
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://localhost:9999",
+            "http://127.0.0.1:9999",
+        ],
+        description=(
+            "Origins allowed to make browser requests. Comma-separated list via "
+            "MOCK_CORS_ALLOWED_ORIGINS env var. Defaults to common localhost ports. "
+            "Set to ['*'] to disable CORS restrictions (not recommended)."
+        ),
+    )
 
     @property
     def db_url(self) -> str:

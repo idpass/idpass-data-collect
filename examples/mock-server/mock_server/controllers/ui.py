@@ -80,6 +80,8 @@ class LoginController(Controller):
                 template_name="login.html",
                 context={"error": "Invalid username or password"},
             )
+        # Regenerate session to mitigate session fixation
+        request.clear_session()
         request.set_session({"authenticated": True, "username": username})
         return Redirect(path="/", status_code=303)
 

@@ -1,5 +1,15 @@
 # Mock Registry Server
 
+> ⚠️ **Do not expose this server to the public internet.** It ships with
+> deliberately weak defaults (`admin`/`admin` UI credentials,
+> `mock-client`/`mock-secret` OAuth2 credentials, ephemeral JWT/session
+> secrets) that are only safe on `localhost` or trusted dev networks. There is
+> no rate limiting, no brute-force protection, and no revocation list. This is
+> a **reference implementation for adapter development**, not a production
+> service. Always change every default credential and set
+> `MOCK_JWT_SECRET` + `MOCK_SESSION_SECRET` + `MOCK_SESSION_COOKIE_SECURE=true`
+> before any non-localhost deployment.
+
 A lightweight, PublicSchema-aligned registry used as a reference implementation
 for DataCollect external sync adapter development.
 

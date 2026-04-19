@@ -46,10 +46,15 @@ class Identifier(Base):
         cascade="all, delete-orphan",
     )
 
+    # Uniqueness scoped by (scheme, type, value) so different identifier types
+    # may legitimately share a value (e.g., national_id "12345" and voter_id
+    # "12345" belong to different people). Two registrants must still not
+    # share the same identifier of the same type on the same scheme.
     __table_args__ = (
         UniqueConstraint(
             "identifier_scheme_id",
+            "identifier_type",
             "identifier_value",
-            name="uq_identifier_scheme_value",
+            name="uq_identifier_scheme_type_value",
         ),
     )

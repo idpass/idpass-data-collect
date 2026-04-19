@@ -228,7 +228,7 @@ Integration with OpenFn workflow automation:
 - Custom workflow triggers
 - Multi-system orchestration
 
-#### Mock Sync Server
+#### Mock Registry Server
 Development and testing adapter:
 - Simulates external system behavior
 - Configurable response patterns

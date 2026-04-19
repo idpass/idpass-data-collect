@@ -307,7 +307,13 @@ export class ExternalSyncManager {
       const since = await this.eventStore.getLastPullExternalSyncTimestamp();
       const pullResult = await this.v2Adapter.pull(since || undefined);
 
-      if (pullResult.pulled > 0 || (since && pullResult.failed === 0 && pullResult.skipped === 0)) {
+      // Advance the pull watermark whenever no records failed. Skipped records
+      // are, by definition, not retryable (malformed response, missing required
+      // fields, etc.) — advancing over them prevents a livelock where every
+      // subsequent sync re-fetches the same batch and skips the same record
+      // forever. On a fresh first sync that pulled nothing, keep the watermark
+      // at the epoch so the second sync will do a full sweep.
+      if (pullResult.failed === 0 && (pullResult.pulled > 0 || since)) {
         await this.eventStore.setLastPullExternalSyncTimestamp(new Date().toISOString());
       }
 

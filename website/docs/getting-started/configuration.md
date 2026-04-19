@@ -120,7 +120,7 @@ The admin interface should be accessible at `http://localhost:5173` or your conf
     }
   ],
   "externalSync": {
-    "type": "mock-sync-server",
+    "type": "mock",
     "url": "http://localhost:4000",
     "auth": "",
     "extraFields": {}

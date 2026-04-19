@@ -182,7 +182,7 @@ const externalSyncManager = new ExternalSyncManager(
   eventStore,
   eventApplierService,
   {
-    type: 'mock-sync-server',
+    type: 'mock',
     url: 'http://localhost:4000',
     auth: '',
     extraFields: {}
