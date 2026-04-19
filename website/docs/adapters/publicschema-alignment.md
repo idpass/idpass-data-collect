@@ -47,7 +47,7 @@ DataCollect's `IdentifierRecord` represents the **Identifier** concept. Identity
 
 When an external registry needs to address a record via its REST API but the record has no real-world identifier yet (no national ID, no passport), the registry can auto-assign a **system_id** — a stable UUID that serves as the record's identifier of last resort.
 
-In the [mock registry server](../examples/mock-server) and the [OpenSPP V2 adapter](./openspp-v2-adapter):
+In the [mock registry server](https://github.com/idpass/idpass-datacollect/tree/main/examples/mock-server) and the [OpenSPP V2 adapter](./openspp-v2-adapter):
 
 - Every new Person and Group gets a `system_id` identifier auto-assigned on creation
 - The `system_id` uses a registry-specific scheme URI (e.g., `urn:mock:vocab:id-type` or `urn:openspp:vocab:id-type`)
@@ -75,4 +75,4 @@ Field naming follows PublicSchema convention (snake_case): `given_name`, `family
 - [PublicSchema Identifier concept](https://publicschema.org/Identifier/)
 - [PublicSchema IdentityDocument concept](https://publicschema.org/IdentityDocument/)
 - [PublicSchema identifier-type vocabulary](https://publicschema.org/vocab/identifier-type/) — 20 defined types
-- [Mock registry server](../examples/mock-server) — reference implementation
+- [Mock registry server](https://github.com/idpass/idpass-datacollect/tree/main/examples/mock-server) — reference implementation

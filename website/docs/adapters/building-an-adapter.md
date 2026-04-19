@@ -7,7 +7,7 @@ description: Step-by-step guide to writing a DataCollect V2 external sync adapte
 
 # Building an External Sync Adapter
 
-This guide walks through building a V2 external sync adapter for ID PASS DataCollect. We use the [mock registry server](../examples/mock-server) as the target registry and [`@idpass/adapter-mock`](https://github.com/idpass/idpass-datacollect/tree/main/packages/adapter-mock) as the reference implementation.
+This guide walks through building a V2 external sync adapter for ID PASS DataCollect. We use the [mock registry server](https://github.com/idpass/idpass-datacollect/tree/main/examples/mock-server) as the target registry and [`@idpass/adapter-mock`](https://github.com/idpass/idpass-datacollect/tree/main/packages/adapter-mock) as the reference implementation.
 
 ## What an adapter does
 
@@ -21,7 +21,7 @@ The V2 adapter interface (`ExternalSyncAdapterV2`) is the canonical contract. It
 ## Prerequisites
 
 - TypeScript 5+, Node.js 22+
-- A running mock registry server — see [examples/mock-server](../examples/mock-server) quickstart
+- A running mock registry server — see [examples/mock-server](https://github.com/idpass/idpass-datacollect/tree/main/examples/mock-server) quickstart
 - DataCollect monorepo checked out
 
 ## The reference stack
@@ -308,5 +308,5 @@ Before declaring your adapter done:
 - [Adapter Registry](./adapter-registry) — how V2 adapters are registered and resolved
 - [PublicSchema Alignment](./publicschema-alignment) — entity model and the `system_id` convention
 - [OpenSPP V2 Adapter](./openspp-v2-adapter) — production-grade V2 adapter for OpenSPP
-- [Mock Registry Server README](../examples/mock-server)
+- [Mock Registry Server README](https://github.com/idpass/idpass-datacollect/tree/main/examples/mock-server)
 - [`packages/adapter-mock` source](https://github.com/idpass/idpass-datacollect/tree/main/packages/adapter-mock)
