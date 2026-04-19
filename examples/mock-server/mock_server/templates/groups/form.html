@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — Mock Registry{% endblock %}
+{% block content %}
+<h2>{{ title }}</h2>
+<form method="post" action="{{ action }}">
+  <label>Name
+    <input name="name" value="{{ group.name if group else '' }}" required>
+  </label>
+  <label>Group type
+    <input name="group_type" value="{{ group.group_type if group else 'household' }}" required>
+  </label>
+  <button type="submit">Save</button>
+  <a href="{% if group %}/ui/groups/{{ group.uuid }}{% else %}/ui/groups{% endif %}" role="button" class="secondary">Cancel</a>
+</form>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Persons — Mock Registry{% endblock %}
+{% block content %}
+<header class="topbar">
+  <h2>Persons <small class="meta">({{ total }})</small></h2>
+  <a href="/ui/persons/new" role="button">New Person</a>
+</header>
+
+<input type="search" name="q" placeholder="Search by name…"
+       hx-get="/ui/persons/search" hx-trigger="keyup changed delay:300ms, search"
+       hx-target="#persons-rows" hx-swap="innerHTML">
+
+<table class="compact">
+  <thead>
+    <tr>
+      <th>Given name</th><th>Family name</th><th>DoB</th><th>Updated</th><th></th>
+    </tr>
+  </thead>
+  <tbody id="persons-rows">
+    {% include "persons/_rows.html" %}
+  </tbody>
+</table>
+{% endblock %}

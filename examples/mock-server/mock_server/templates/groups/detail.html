@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}{{ group.name }} — Mock Registry{% endblock %}
+{% block content %}
+<nav class="meta"><a href="/ui/groups">&laquo; Groups</a></nav>
+<hgroup>
+  <h2>{{ group.name }}</h2>
+  <p class="meta">UUID {{ group.uuid }} — {{ group.group_type }} — updated {{ group.updated_at.strftime("%Y-%m-%d %H:%M:%S") }}</p>
+</hgroup>
+
+<article>
+  <header><strong>Details</strong> <a href="/ui/groups/{{ group.uuid }}/edit" role="button" class="secondary outline">Edit</a></header>
+  <dl>
+    <dt>Type</dt><dd>{{ group.group_type }}</dd>
+    <dt>Created at</dt><dd>{{ group.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</dd>
+  </dl>
+</article>
+
+<article>
+  <header><strong>Identifiers</strong></header>
+  {% if visible_identifiers %}
+  <table class="compact">
+    <thead><tr><th>Type</th><th>Value</th><th>Scheme</th></tr></thead>
+    <tbody>
+      {% for i in visible_identifiers %}
+      <tr>
+        <td><span class="chip">{{ i.identifier_type }}</span></td>
+        <td><code>{{ i.identifier_value }}</code></td>
+        <td class="meta">{{ i.identifier_scheme_name or i.identifier_scheme_id }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="meta">No public identifiers for this group.</p>
+  {% endif %}
+</article>
+
+<article>
+  <header><strong>Members</strong></header>
+  {% if group.memberships %}
+  <table class="compact">
+    <thead><tr><th>Name</th><th>Role</th><th>Joined</th><th></th></tr></thead>
+    <tbody>
+      {% for m in group.memberships %}
+      {% set p = person_lookup.get(m.person_uuid) %}
+      <tr>
+        <td>{% if p %}<a href="/ui/persons/{{ p.uuid }}">{{ p.given_name or '' }} {{ p.family_name or '' }}</a>{% else %}{{ m.person_uuid }}{% endif %}</td>
+        <td>{{ m.role or "member" }}</td>
+        <td>{{ m.joined_at.strftime("%Y-%m-%d") }}</td>
+        <td>
+          <form method="post" action="/ui/groups/{{ group.uuid }}/members/{{ m.person_uuid }}/remove" class="inline-form">
+            <button type="submit" class="secondary outline" style="padding: 0.25rem 0.5rem;">Remove</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="meta">No members.</p>
+  {% endif %}
+
+  <details>
+    <summary>Add member</summary>
+    {% if candidates %}
+    <form method="post" action="/ui/groups/{{ group.uuid }}/members/add">
+      <label>Person
+        <select name="person_uuid" required>
+          {% for p in candidates %}
+          <option value="{{ p.uuid }}">{{ p.given_name or "" }} {{ p.family_name or "" }} ({{ p.uuid[:8] }})</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Role
+        <select name="role">
+          <option value="member">member</option>
+          <option value="head">head</option>
+        </select>
+      </label>
+      <button type="submit">Add</button>
+    </form>
+    {% else %}
+    <p class="meta">No other persons available.</p>
+    {% endif %}
+  </details>
+</article>
+{% endblock %}

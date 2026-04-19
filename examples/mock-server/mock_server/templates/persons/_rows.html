@@ -1,0 +1,11 @@
+{% for p in persons %}
+<tr>
+  <td>{{ p.given_name or "" }}</td>
+  <td>{{ p.family_name or "" }}</td>
+  <td>{{ p.date_of_birth or "" }}</td>
+  <td class="meta">{{ p.updated_at.strftime("%Y-%m-%d %H:%M") }}</td>
+  <td><a href="/ui/persons/{{ p.uuid }}">View</a></td>
+</tr>
+{% else %}
+<tr><td colspan="5" class="meta">No persons found.</td></tr>
+{% endfor %}

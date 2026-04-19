@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Login — Mock Registry{% endblock %}
+{% block content %}
+<article style="max-width: 420px; margin: 4rem auto;">
+  <hgroup>
+    <h2>Mock Registry</h2>
+    <p>Sign in to manage persons and groups</p>
+  </hgroup>
+  {% if error %}<p style="color: var(--pico-color-red-500);">{{ error }}</p>{% endif %}
+  {% if already %}<p>You are already signed in. <a href="/">Continue</a></p>
+  {% else %}
+  <form method="post" action="/ui/login">
+    <label>Username <input name="username" value="admin" required></label>
+    <label>Password <input name="password" type="password" value="admin" required></label>
+    <button type="submit">Sign in</button>
+  </form>
+  <p class="meta">Default credentials: <code>admin</code> / <code>admin</code> (override via env vars).</p>
+  {% endif %}
+</article>
+{% endblock %}

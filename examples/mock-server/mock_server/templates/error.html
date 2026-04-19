@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Error — Mock Registry{% endblock %}
+{% block content %}
+<hgroup>
+  <h2>Something went wrong</h2>
+  <p class="meta">{{ status_code }} — {{ code }}</p>
+</hgroup>
+<p>{{ message }}</p>
+<a href="/" role="button" class="secondary">Back to home</a>
+{% endblock %}

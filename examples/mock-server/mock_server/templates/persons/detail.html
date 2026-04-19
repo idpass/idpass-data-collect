@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ person.given_name or '' }} {{ person.family_name or '' }} — Mock Registry{% endblock %}
+{% block content %}
+<nav class="meta"><a href="/ui/persons">&laquo; Persons</a></nav>
+<hgroup>
+  <h2>{{ person.given_name or "(no given name)" }} {{ person.family_name or "" }}</h2>
+  <p class="meta">UUID {{ person.uuid }} — updated {{ person.updated_at.strftime("%Y-%m-%d %H:%M:%S") }}</p>
+</hgroup>
+
+<article>
+  <header><strong>Details</strong> <a href="/ui/persons/{{ person.uuid }}/edit" role="button" class="secondary outline">Edit</a></header>
+  <dl>
+    <dt>Date of birth</dt><dd>{{ person.date_of_birth or "—" }}</dd>
+    <dt>Gender (ISO 5218)</dt><dd>{{ person.gender or "—" }}</dd>
+    <dt>Created at</dt><dd>{{ person.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</dd>
+  </dl>
+</article>
+
+<article>
+  <header>
+    <strong>Identifiers</strong>
+    <a href="/ui/persons/{{ person.uuid }}/identifiers/new" role="button" class="secondary outline">Add identifier</a>
+  </header>
+  {% if visible_identifiers %}
+  <table class="compact">
+    <thead><tr><th>Type</th><th>Value</th><th>Scheme</th></tr></thead>
+    <tbody>
+      {% for i in visible_identifiers %}
+      <tr>
+        <td><span class="chip">{{ i.identifier_type }}</span></td>
+        <td><code>{{ i.identifier_value }}</code></td>
+        <td class="meta">{{ i.identifier_scheme_name or i.identifier_scheme_id }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="meta">No public identifiers. (A <code>system_id</code> is assigned internally and visible via the API.)</p>
+  {% endif %}
+</article>
+
+<article>
+  <header><strong>Identity documents</strong></header>
+  {% if person.identity_documents %}
+  <table class="compact">
+    <thead><tr><th>Type</th><th>Authority</th><th>Issued</th><th>Expires</th><th>Identifier</th></tr></thead>
+    <tbody>
+      {% for d in person.identity_documents %}
+      <tr>
+        <td>{{ d.document_type }}</td>
+        <td>{{ d.issuing_authority or "—" }}</td>
+        <td>{{ d.issue_date or "—" }}</td>
+        <td>{{ d.expiry_date or "—" }}</td>
+        <td><code>{{ d.identifier.identifier_value }}</code></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="meta">No identity documents.</p>
+  {% endif %}
+</article>
+
+<article>
+  <header><strong>Memberships</strong></header>
+  {% if person.memberships %}
+  <ul>
+    {% for m in person.memberships %}
+    <li><a href="/ui/groups/{{ m.group_uuid }}">{{ m.group.name }}</a> — {{ m.role or "member" }} (joined {{ m.joined_at.strftime("%Y-%m-%d") }})</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="meta">This person is not a member of any group.</p>
+  {% endif %}
+</article>
+{% endblock %}

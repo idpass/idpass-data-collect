@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Mock Registry{% endblock %}
+{% block content %}
+<hgroup>
+  <h1>Mock Registry</h1>
+  <p>A PublicSchema-aligned reference registry for DataCollect adapter development.</p>
+</hgroup>
+
+<div class="grid">
+  <article>
+    <header><strong>Persons</strong></header>
+    <p>{{ person_count }} record(s)</p>
+    <footer><a href="/ui/persons" role="button">Manage persons</a></footer>
+  </article>
+  <article>
+    <header><strong>Groups</strong></header>
+    <p>{{ group_count }} record(s)</p>
+    <footer><a href="/ui/groups" role="button">Manage groups</a></footer>
+  </article>
+</div>
+
+<h3>API</h3>
+<ul>
+  <li>OAuth2 token endpoint: <code>POST /oauth/token</code> (grant_type=client_credentials)</li>
+  <li>OpenAPI schema: <a href="/schema">/schema</a></li>
+  <li>Swagger UI: <a href="/docs" target="_blank">/docs</a></li>
+  <li>Health: <a href="/health">/health</a></li>
+</ul>
+{% endblock %}

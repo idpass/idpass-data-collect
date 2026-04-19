@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Groups — Mock Registry{% endblock %}
+{% block content %}
+<header class="topbar">
+  <h2>Groups <small class="meta">({{ total }})</small></h2>
+  <a href="/ui/groups/new" role="button">New Group</a>
+</header>
+
+<input type="search" name="q" placeholder="Search by name…"
+       hx-get="/ui/groups/search" hx-trigger="keyup changed delay:300ms, search"
+       hx-target="#groups-rows" hx-swap="innerHTML">
+
+<table class="compact">
+  <thead>
+    <tr><th>Name</th><th>Type</th><th>Members</th><th>Updated</th><th></th></tr>
+  </thead>
+  <tbody id="groups-rows">
+    {% include "groups/_rows.html" %}
+  </tbody>
+</table>
+{% endblock %}

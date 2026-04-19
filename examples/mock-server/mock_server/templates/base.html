@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Mock Registry{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <script src="https://unpkg.com/htmx.org@2.0.2"></script>
+  <style>
+    :root { --pico-spacing: 1rem; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 0; }
+    .topbar nav ul { display: flex; gap: 1rem; list-style: none; margin: 0; padding: 0; }
+    .topbar nav a { text-decoration: none; }
+    .meta { color: var(--pico-muted-color); font-size: 0.85rem; }
+    .inline-form { display: inline-flex; gap: 0.5rem; align-items: center; }
+    .chip { display: inline-block; background: var(--pico-muted-border-color); padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.8rem; }
+    table.compact td, table.compact th { padding: 0.3rem 0.5rem; }
+  </style>
+</head>
+<body>
+  <main class="container">
+    {% set session = request.session if request is defined else {} %}
+    {% if session and session.get("authenticated") %}
+    <header class="topbar">
+      <nav>
+        <ul>
+          <li><strong><a href="/">Mock Registry</a></strong></li>
+          <li><a href="/ui/persons">Persons</a></li>
+          <li><a href="/ui/groups">Groups</a></li>
+          <li><a href="/docs" target="_blank">API docs</a></li>
+        </ul>
+      </nav>
+      <nav>
+        <ul>
+          <li class="meta">{{ session.get("username") }}</li>
+          <li><a href="/ui/logout">Logout</a></li>
+        </ul>
+      </nav>
+    </header>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

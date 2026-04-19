@@ -1,0 +1,11 @@
+{% for g in groups %}
+<tr>
+  <td>{{ g.name }}</td>
+  <td><span class="chip">{{ g.group_type }}</span></td>
+  <td>{{ g.memberships | length }}</td>
+  <td class="meta">{{ g.updated_at.strftime("%Y-%m-%d %H:%M") }}</td>
+  <td><a href="/ui/groups/{{ g.uuid }}">View</a></td>
+</tr>
+{% else %}
+<tr><td colspan="5" class="meta">No groups found.</td></tr>
+{% endfor %}

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Add identifier — {{ person.given_name }} {{ person.family_name }}{% endblock %}
+{% block content %}
+<nav class="meta"><a href="/ui/persons/{{ person.uuid }}">&laquo; Back</a></nav>
+<h2>Add identifier</h2>
+<form method="post" action="/ui/persons/{{ person.uuid }}/identifiers/new">
+  <label>Type (e.g. <code>national_id_number</code>, <code>passport_number</code>)
+    <input name="identifier_type" required>
+  </label>
+  <label>Value
+    <input name="identifier_value" required>
+  </label>
+  <label>Scheme ID (optional, defaults to server config)
+    <input name="identifier_scheme_id">
+  </label>
+  <label>Scheme name (optional)
+    <input name="identifier_scheme_name">
+  </label>
+  <small>Note: <code>system_id</code> is reserved and cannot be set manually.</small>
+  <br><br>
+  <button type="submit">Add</button>
+  <a href="/ui/persons/{{ person.uuid }}" role="button" class="secondary">Cancel</a>
+</form>
+{% endblock %}
