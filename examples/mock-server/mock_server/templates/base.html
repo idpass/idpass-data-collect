@@ -458,6 +458,93 @@
     }
     .form-actions { display: flex; gap: 0.5rem; margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid var(--rule-soft); }
 
+    /* Fieldsets (checkbox groups) ------------------------------------- */
+    fieldset.field {
+      border: 1px solid var(--rule);
+      border-radius: var(--radius);
+      padding: 1rem 1.1rem 1.1rem;
+      margin: 0 0 1.1rem;
+      background: var(--paper);
+    }
+    fieldset.field legend {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      padding: 0 0.4rem;
+      margin-left: -0.4rem;
+    }
+    fieldset.field legend .hint {
+      text-transform: none;
+      letter-spacing: 0;
+      color: var(--muted-soft);
+      font-family: var(--sans);
+      font-size: 0.78rem;
+      margin-left: 0.4rem;
+    }
+    .scope-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.55rem 0.75rem;
+      margin: 0.25rem -0.25rem 0;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background-color 100ms ease;
+    }
+    .scope-option:hover { background: var(--surface-alt); }
+    .scope-option input[type="checkbox"] {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      margin-top: 0.1rem;
+      flex-shrink: 0;
+      border: 1.5px solid var(--rule);
+      border-radius: 4px;
+      background: var(--surface);
+      cursor: pointer;
+      transition: border-color 120ms ease, background-color 120ms ease;
+      position: relative;
+    }
+    .scope-option input[type="checkbox"]:hover { border-color: var(--muted); }
+    .scope-option input[type="checkbox"]:checked {
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    .scope-option input[type="checkbox"]:checked::after {
+      content: "";
+      position: absolute;
+      left: 4px;
+      top: 1px;
+      width: 5px;
+      height: 9px;
+      border: solid var(--paper);
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+    }
+    .scope-option input[type="checkbox"]:focus {
+      outline: none;
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+    .scope-label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+      font-size: 0.92rem;
+      color: var(--ink);
+    }
+    .scope-label strong {
+      font-family: var(--mono);
+      font-weight: 500;
+      letter-spacing: 0.02em;
+    }
+    .scope-label .hint {
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
     /* Empty states ----------------------------------------------------- */
     .empty-state {
       text-align: center;

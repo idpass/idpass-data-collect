@@ -30,10 +30,19 @@
     <input id="client_id" name="client_id" value="{{ form.client_id if form else '' }}" placeholder="mc_AbCdEf12">
   </div>
 
-  <div class="field">
-    <label for="scopes">Scopes <span class="hint">optional · comma-separated</span></label>
-    <input id="scopes" name="scopes" value="{{ form.scopes if form else '' }}" placeholder="read, write">
-  </div>
+  <fieldset class="field scopes-field">
+    <legend>Scopes <span class="hint">optional · what this client may do</span></legend>
+    <label class="scope-option">
+      <input type="checkbox" name="scope_read" value="true"
+             {% if form and form.get('scope_read') %}checked{% endif %}>
+      <span class="scope-label"><strong>read</strong><span class="hint">browse and pull registry data</span></span>
+    </label>
+    <label class="scope-option">
+      <input type="checkbox" name="scope_write" value="true"
+             {% if form and form.get('scope_write') %}checked{% endif %}>
+      <span class="scope-label"><strong>write</strong><span class="hint">create, update, and delete records</span></span>
+    </label>
+  </fieldset>
 
   <div class="field">
     <label for="description">Description <span class="hint">optional · notes about intended use</span></label>

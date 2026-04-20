@@ -408,11 +408,19 @@ def _pop_pending_secret(request: Request, client_uuid: str) -> str | None:
     return pending.get("secret")
 
 
-def _parse_scopes(raw: str | None) -> list[str]:
-    """Parse a comma-separated scopes field into a clean list."""
-    if not raw:
-        return []
-    return [s.strip() for s in raw.split(",") if s.strip()]
+def _scopes_from_checkboxes(data: dict[str, Any]) -> list[str]:
+    """Collect scopes from individual ``scope_<name>`` checkbox fields.
+
+    Unchecked checkboxes are absent from URL-encoded form bodies, so a key's
+    presence (with any truthy value) means the box was ticked. This avoids
+    multi-value form parsing quirks in Litestar's ``URL_ENCODED`` body binding.
+    """
+    scopes: list[str] = []
+    if data.get("scope_read"):
+        scopes.append("read")
+    if data.get("scope_write"):
+        scopes.append("write")
+    return scopes
 
 
 class ApiClientsUIController(Controller):
@@ -471,7 +479,7 @@ class ApiClientsUIController(Controller):
                 name=(data.get("name") or "").strip() or None,
                 client_id=(data.get("client_id") or "").strip() or None,
                 description=(data.get("description") or "").strip() or None,
-                scopes=_parse_scopes(data.get("scopes")),
+                scopes=_scopes_from_checkboxes(data),
             )
         except AppError as exc:
             return Template(
