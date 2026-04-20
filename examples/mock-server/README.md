@@ -32,8 +32,8 @@ uv run python -m mock_server seed   # load 2 households + 5 individuals
 uv run python -m mock_server        # start on http://localhost:9999
 ```
 
-The `uv.lock` file is not committed by default — `uv sync` resolves and writes
-it on first run. Commit it if you want reproducible CI.
+`uv.lock` is committed for reproducible CI/Docker builds. If you bump a
+dependency in `pyproject.toml`, regenerate the lockfile with `uv lock`.
 
 Open:
 
