@@ -139,7 +139,11 @@ def create_app(settings: Settings | None = None) -> Litestar:
         connection_string=settings.db_url,
         session_dependency_key="db_session",
         create_all=True,
-        before_send_handler="autocommit",
+        # `autocommit_include_redirects` commits on 2xx AND 3xx responses. The
+        # default `autocommit` rolls back 3xx — which breaks our UI form
+        # handlers that create a record then return a 303 Redirect, leaving
+        # the record uncommitted and the redirect target returning NOT_FOUND.
+        before_send_handler="autocommit_include_redirects",
     )
     sqlalchemy_plugin = SQLAlchemyPlugin(config=sqlalchemy_config)
 
