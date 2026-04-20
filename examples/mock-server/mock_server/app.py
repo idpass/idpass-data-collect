@@ -29,7 +29,7 @@ from mock_server.auth.guards import SessionAuthRedirect
 from mock_server.config import Settings, get_settings
 from mock_server.controllers.auth import AuthController
 from mock_server.controllers.groups import GroupController
-from mock_server.controllers.health import HealthController
+from mock_server.controllers.health import DocsRedirectController, HealthController
 from mock_server.controllers.persons import PersonController
 from mock_server.controllers.ui import (
     GroupsUIController,
@@ -189,6 +189,7 @@ def create_app(settings: Settings | None = None) -> Litestar:
     app = Litestar(
         route_handlers=[
             HealthController,
+            DocsRedirectController,
             AuthController,
             PersonController,
             GroupController,

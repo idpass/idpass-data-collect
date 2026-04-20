@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from litestar import Controller, get
+from litestar.response import Redirect
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,3 +28,19 @@ class HealthController(Controller):
             logger.exception("health check DB probe failed")
             db_status = "error"
         return {"status": "ok", "db": db_status}
+
+
+class DocsRedirectController(Controller):
+    """Common alias: ``/docs`` → ``/schema``.
+
+    Litestar serves Swagger UI at the OpenAPI root (``/schema``); adapter
+    authors expect the FastAPI-style ``/docs`` URL.
+    """
+
+    path = "/docs"
+    tags = ["meta"]
+    include_in_schema = False
+
+    @get("/")
+    async def docs_alias(self) -> Redirect:
+        return Redirect(path="/schema", status_code=307)
