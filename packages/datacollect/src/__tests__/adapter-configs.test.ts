@@ -24,7 +24,7 @@ import {
   OpenSppV1AdapterConfig,
   OpenSppV2AdapterConfig,
   OpenFnAdapterConfig,
-  MockSyncServerAdapterConfig,
+  MockRegistryAdapterConfig,
 } from "../interfaces/adapter-configs";
 
 describe("adapter-configs", () => {
@@ -34,7 +34,7 @@ describe("adapter-configs", () => {
       expect(ADAPTER_CONFIGS).toHaveProperty("openspp-adapter"); // alias
       expect(ADAPTER_CONFIGS).toHaveProperty("openspp-v2-adapter");
       expect(ADAPTER_CONFIGS).toHaveProperty("openfn-adapter");
-      expect(ADAPTER_CONFIGS).toHaveProperty("mock-sync-server");
+      expect(ADAPTER_CONFIGS).toHaveProperty("mock");
     });
 
     it("openspp-adapter is an alias for openspp-v1-adapter", () => {
@@ -66,7 +66,7 @@ describe("adapter-configs", () => {
       const options = getAdapterOptions();
       const values = options.map((o) => o.value);
 
-      expect(values).toContain("mock-sync-server");
+      expect(values).toContain("mock");
       expect(values).toContain("openspp-v1-adapter");
       expect(values).toContain("openspp-v2-adapter");
       expect(values).toContain("openfn-adapter");
@@ -160,13 +160,35 @@ describe("adapter-configs", () => {
     });
   });
 
-  describe("MockSyncServerAdapterConfig", () => {
+  describe("MockRegistryAdapterConfig", () => {
     it("has correct adapter type", () => {
-      expect(MockSyncServerAdapterConfig.adapterType).toBe("mock-sync-server");
+      expect(MockRegistryAdapterConfig.adapterType).toBe("mock");
     });
 
-    it("has no fields", () => {
-      expect(MockSyncServerAdapterConfig.fields).toHaveLength(0);
+    it("has OAuth2 fields", () => {
+      const fieldNames = MockRegistryAdapterConfig.fields.map((f) => f.name);
+      expect(fieldNames).toContain("clientId");
+      expect(fieldNames).toContain("clientSecret");
+    });
+
+    it("marks clientSecret as password type", () => {
+      const secretField = MockRegistryAdapterConfig.fields.find((f) => f.name === "clientSecret");
+      expect(secretField?.type).toBe("password");
+      expect(secretField?.required).toBe(true);
+    });
+
+    it("has optional identifierScheme with default", () => {
+      const schemeField = MockRegistryAdapterConfig.fields.find((f) => f.name === "identifierScheme");
+      expect(schemeField).toBeDefined();
+      expect(schemeField?.required).toBe(false);
+      expect(schemeField?.default).toBe("urn:mock:vocab:id-type");
+    });
+
+    it("has optional identifierType with default", () => {
+      const typeField = MockRegistryAdapterConfig.fields.find((f) => f.name === "identifierType");
+      expect(typeField).toBeDefined();
+      expect(typeField?.required).toBe(false);
+      expect(typeField?.default).toBe("system_id");
     });
   });
 });

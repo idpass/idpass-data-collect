@@ -7,7 +7,8 @@
       "@idpass/data-collect-core": ["../datacollect/src/index.ts"],
       "@idpass/data-collect-core/*": ["../datacollect/src/*"],
       "@idpass/adapter-openspp": ["../adapter-openspp/src/index.ts"],
-      "@idpass/adapter-openfn": ["../adapter-openfn/src/index.ts"]
+      "@idpass/adapter-openfn": ["../adapter-openfn/src/index.ts"],
+      "@idpass/adapter-mock": ["../adapter-mock/src/index.ts"]
     }
   }
 }

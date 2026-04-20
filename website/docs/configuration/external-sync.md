@@ -52,7 +52,7 @@ Here's a complete example of an external sync configuration with detailed field 
 #### `type` (Required)
 - **Purpose**: Specifies which adapter to use for synchronization
 - **Values**: 
-  - `"mock-sync-server"` - For testing and development
+  - `"mock"` - For testing and development
   - `"openfn-adapter"` - For OpenFn workflow integration
   - Custom adapter types as defined in your system
 - **Example**: `"openfn-adapter"`
@@ -85,7 +85,7 @@ Here's a complete example of an external sync configuration with detailed field 
   - `maxRetries`: Maximum retry attempts for failed entities (default: 2)
   - `fieldMappings`: JSON array of field mappings with transformers (see Field Mapping section)
 
-  **For Mock Sync Server:**
+  **For Mock Registry Server:**
   - `batchSize`: Number of events to process per batch
   - `retryAttempts`: Number of retry attempts for failed requests
   - `delayBetweenBatches`: Delay in milliseconds between batch processing
@@ -98,10 +98,10 @@ Here's a complete example of an external sync configuration with detailed field 
 
 ### Configuration Examples by Adapter Type
 
-#### Mock Sync Server Configuration
+#### Mock Registry Server Configuration
 ```json
 {
-  "type": "mock-sync-server",
+  "type": "mock",
   "url": "http://localhost:3000/mock-sync",
   "extraFields": [
     { "name": "batchSize", "value": "25" },
@@ -146,14 +146,14 @@ Here's a complete example of an external sync configuration with detailed field 
 The External Sync system uses the **Strategy pattern** to handle different external system integrations:
 
 - **Context**: `ExternalSyncManager` acts as the context that manages the synchronization strategy
-- **Strategy**: Each adapter (e.g., `MockSyncServerAdapter`, `OpenFnSyncAdapter`) implements the `ExternalSyncAdapter` interface
+- **Strategy**: Each adapter (e.g., `MockRegistrySyncAdapter`, `OpenFnSyncAdapter`) implements the `ExternalSyncAdapter` interface
 - **Registry**: The `adaptersMapping` object serves as a registry of available strategies
 
 ### Key Components
 
 ```typescript
 const adaptersMapping = {
-  "mock-sync-server": MockSyncServerAdapter,
+  "mock": MockRegistrySyncAdapter,
   "openfn-adapter": OpenFnSyncAdapter,
 };
 ```
@@ -179,9 +179,9 @@ The Admin interface provides a user-friendly way to configure external sync sett
 
 ## Available Adapters
 
-### 1. Mock Sync Server Adapter
+### 1. Mock Registry Server Adapter
 
-**Type**: `mock-sync-server`
+**Type**: `mock`
 
 A testing adapter that simulates external system synchronization:
 
@@ -193,7 +193,7 @@ A testing adapter that simulates external system synchronization:
 **Configuration**:
 ```json
 {
-  "type": "mock-sync-server",
+  "type": "mock",
   "url": "http://localhost:3000/mock-sync",
   "extraFields": []
 }
@@ -263,7 +263,7 @@ import { EventApplierService } from './services/EventApplierService';
 
 // Configuration
 const config: ExternalSyncConfig = {
-  type: 'mock-sync-server',
+  type: 'mock',
   url: 'http://localhost:3000/sync',
   extraFields: []
 };
@@ -468,7 +468,7 @@ class CustomSyncAdapter implements ExternalSyncAdapter {
 2. **Register in Adapters Mapping**:
 ```typescript
 const adaptersMapping = {
-  "mock-sync-server": MockSyncServerAdapter,
+  "mock": MockRegistrySyncAdapter,
   "openfn-adapter": OpenFnSyncAdapter,
   "openspp-adapter": OpenSppOdooSyncAdapter,
   "custom-adapter": CustomSyncAdapter, // Add new adapter
@@ -480,7 +480,7 @@ const adaptersMapping = {
 <v-select
   v-model="form.externalSync.type"
   :items="[
-    { title: 'Mock Sync Server', value: 'mock-sync-server' },
+    { title: 'Mock Registry Server', value: 'mock' },
     { title: 'OpenFn', value: 'openfn-adapter' },
     { title: 'OpenSPP', value: 'openspp-adapter' },
     { title: 'Custom System', value: 'custom-adapter' }, // Add new option
@@ -527,7 +527,7 @@ interface CustomSyncConfig extends ExternalSyncConfig {
 
 - **ConfigCreateView.vue**: Admin UI for configuring external sync
 - **FieldMappingDialog.vue**: Visual interface for field mapping configuration
-- **MockSyncServerAdapter**: Testing adapter for development
+- **MockRegistrySyncAdapter**: Testing adapter for development
 - **OpenFnSyncAdapter**: OpenFn platform integration
 - **OpenSppOdooSyncAdapter**: OpenSPP platform integration with field mapping
 - **EventStore**: Event storage and timestamp management

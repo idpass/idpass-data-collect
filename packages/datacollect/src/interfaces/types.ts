@@ -581,7 +581,7 @@ export type DrizzleQueryExecutor = {
  * Sync adapter interface for external system synchronization.
  *
  * Provides integration with external systems for bi-directional data sync.
- * Implementations include OpenSppSyncAdapter and MockSyncServerAdapter.
+ * Implementations include OpenSppSyncAdapter and MockRegistrySyncAdapter.
  */
 export interface SyncAdapter {
   /** Push events to external system */
@@ -757,7 +757,7 @@ export interface FieldMapping {
 }
 
 export type ExternalSyncConfig = {
-  /** Type of external system (e.g., 'openspp-v2-adapter', 'mock-sync-server') */
+  /** Type of external system (e.g., 'openspp-v2-adapter', 'mock') */
   type: string;
   /** Authentication method (e.g., 'basic', 'oauth2') */
   auth?: string;
@@ -835,6 +835,11 @@ export function getAdapterConfigValue<T extends string | number | boolean>(
  * External sync adapter interface for third-party system integration.
  *
  * Implementations handle the specifics of syncing with different external systems.
+ *
+ * @deprecated Use {@link ExternalSyncAdapterV2} for new adapters. V1 is kept
+ * for backwards compatibility with adapter-openspp (Odoo V1) and adapter-openfn.
+ * New adapters should implement V2 which provides structured SyncResult,
+ * config schema validation, and health checks.
  */
 export interface ExternalSyncAdapter {
   /** Optional hook to authenticate with the external system before data transfer */
@@ -852,6 +857,10 @@ export interface ExternalSyncAdapter {
 
 /**
  * Credentials for authenticating with external systems.
+ *
+ * @deprecated Used by the deprecated V1 {@link ExternalSyncAdapter} interface.
+ * V2 adapters receive authentication details via their Zod-validated config
+ * object, not as a separate credentials parameter.
  */
 export interface ExternalSyncCredentials {
   /** Username for basic authentication */

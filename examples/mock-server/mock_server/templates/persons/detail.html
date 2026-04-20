@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% set display_name = ((person.given_name or '') ~ ' ' ~ (person.family_name or '')) | trim %}
+{% block title %}{{ display_name or "Person" }} — Mock Registry{% endblock %}
+{% block content %}
+<nav class="crumbs">
+  <a href="/">Home</a> <span class="sep">/</span>
+  <a href="/ui/persons">Persons</a> <span class="sep">/</span>
+  <span>{{ display_name or person.uuid[:8] }}</span>
+</nav>
+
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Person · {{ person.gender_label if person.gender_label is defined else (
+       'Female' if person.gender == '2' else
+       'Male' if person.gender == '1' else
+       'Not applicable' if person.gender == '9' else
+       'Not known' if person.gender == '0' else
+       'Gender unspecified') }}</p>
+    <h2>{{ display_name if display_name else '(unnamed person)' }}</h2>
+    <p class="uuid"><strong>UUID</strong> {{ person.uuid }}</p>
+  </div>
+  <div class="actions">
+    <a href="/ui/persons/{{ person.uuid }}/edit" class="btn ghost">Edit</a>
+  </div>
+</div>
+
+<div class="split">
+  <div class="stack">
+    <section class="card">
+      <div class="card-head">
+        <h3>Details</h3>
+        <span class="meta">last updated {{ person.updated_at.strftime("%Y-%m-%d %H:%M UTC") }}</span>
+      </div>
+      <dl class="meta-grid">
+        <dt>Given name</dt><dd>{{ person.given_name or '<span class="muted">—</span>' | safe }}</dd>
+        <dt>Family name</dt><dd>{{ person.family_name or '<span class="muted">—</span>' | safe }}</dd>
+        <dt>Date of birth</dt><dd>{{ person.date_of_birth or '<span class="muted">—</span>' | safe }}</dd>
+        <dt>Gender</dt>
+        <dd>
+          {% if person.gender %}
+            <span class="chip">{{ person.gender }} · {{ 'Male' if person.gender == '1' else 'Female' if person.gender == '2' else 'Not known' if person.gender == '0' else 'Not applicable' if person.gender == '9' else 'Other' }}</span>
+            <span class="muted" style="margin-left:0.5rem;font-size:0.8rem;">ISO 5218</span>
+          {% else %}<span class="muted">—</span>{% endif %}
+        </dd>
+        <dt>Created</dt><dd class="mono">{{ person.created_at.strftime("%Y-%m-%d %H:%M:%S UTC") }}</dd>
+      </dl>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h3>Identifiers</h3>
+        <a href="/ui/persons/{{ person.uuid }}/identifiers/new" class="btn ghost tiny">Add identifier</a>
+      </div>
+      {% if visible_identifiers %}
+      <div class="table-wrap" style="box-shadow:none;border-color:var(--rule-soft);">
+        <table class="data">
+          <thead>
+            <tr><th>Type</th><th>Value</th><th>Scheme</th></tr>
+          </thead>
+          <tbody>
+            {% for i in visible_identifiers %}
+            <tr>
+              <td><span class="chip">{{ i.identifier_type }}</span></td>
+              <td><code>{{ i.identifier_value }}</code></td>
+              <td><span class="uuid">{{ i.identifier_scheme_name or i.identifier_scheme_id }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <span class="icon">ø</span>
+        <p>No public identifiers attached.</p>
+        <p class="hint">A <code>system_id</code> is assigned automatically and remains visible to the API.</p>
+      </div>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3>Identity documents</h3></div>
+      {% if person.identity_documents %}
+      <div class="table-wrap" style="box-shadow:none;border-color:var(--rule-soft);">
+        <table class="data">
+          <thead>
+            <tr><th>Type</th><th>Authority</th><th>Issued</th><th>Expires</th><th>Carries</th></tr>
+          </thead>
+          <tbody>
+            {% for d in person.identity_documents %}
+            <tr>
+              <td><span class="chip">{{ d.document_type }}</span></td>
+              <td>{{ d.issuing_authority or '—' }}</td>
+              <td>{{ d.issue_date or '—' }}</td>
+              <td>{{ d.expiry_date or '—' }}</td>
+              <td><code>{{ d.identifier.identifier_value }}</code></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <span class="icon">ø</span>
+        <p>No identity documents attached.</p>
+      </div>
+      {% endif %}
+    </section>
+  </div>
+
+  <aside class="stack">
+    <section class="card">
+      <div class="card-head"><h3>Memberships</h3></div>
+      {% if person.memberships %}
+      <ul style="list-style:none;padding:0;margin:0;">
+        {% for m in person.memberships %}
+        <li style="padding:0.75rem 0;border-bottom:1px solid var(--rule-soft);">
+          <a href="/ui/groups/{{ m.group_uuid }}" style="color:var(--ink);text-decoration:none;font-weight:500;">{{ m.group.name }}</a>
+          <div class="uuid" style="margin-top:0.2rem;">
+            <span class="chip {{ 'accent' if m.role == 'head' else '' }}">{{ m.role or 'member' }}</span>
+            <span style="margin-left:0.5rem;">since {{ m.joined_at.strftime("%Y-%m-%d") }}</span>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      <style>section.card ul li:last-child { border-bottom: none !important; }</style>
+      {% else %}
+      <div class="empty-state" style="padding:1.5rem 1rem;">
+        <p style="margin:0;">Not a member of any group.</p>
+      </div>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3>API</h3></div>
+      <p class="uuid" style="margin:0 0 0.75rem;">Fetch this record:</p>
+      <code style="display:block;padding:0.6rem;background:var(--surface-alt);overflow-x:auto;">GET /v1/persons/{{ person.uuid }}</code>
+    </section>
+  </aside>
+</div>
+{% endblock %}

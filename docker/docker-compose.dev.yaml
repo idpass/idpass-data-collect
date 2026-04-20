@@ -171,8 +171,35 @@ services:
     networks:
       - datacollect-network-dev
 
+  # Mock Registry Server (optional — opt in with `--profile mock`)
+  # PublicSchema-aligned reference registry used by @idpass/adapter-mock for
+  # testing DataCollect external sync without requiring OpenSPP.
+  mock-registry:
+    build:
+      context: ../examples/mock-server
+      dockerfile: Dockerfile
+    environment:
+      - MOCK_PORT=9999
+      - MOCK_DB_PATH=/data/mock_registry.db
+      - MOCK_OAUTH_CLIENT_ID=${MOCK_OAUTH_CLIENT_ID:-mock-client}
+      - MOCK_OAUTH_CLIENT_SECRET=${MOCK_OAUTH_CLIENT_SECRET:-mock-secret}
+      - MOCK_JWT_SECRET=${MOCK_JWT_SECRET:-dev-only-change-me-change-me-change-me}
+      - MOCK_SESSION_SECRET=${MOCK_SESSION_SECRET:-dev-session-only-change-me-change}
+      - MOCK_UI_USERNAME=${MOCK_UI_USERNAME:-admin}
+      - MOCK_UI_PASSWORD=${MOCK_UI_PASSWORD:-admin}
+    volumes:
+      - mock-registry-data:/data
+    ports:
+      - "${MOCK_SERVER_PORT:-9999}:9999"
+    restart: unless-stopped
+    networks:
+      - datacollect-network-dev
+    profiles:
+      - mock
+
 volumes:
   postgres-data-dev:
+  mock-registry-data:
 
 networks:
   datacollect-network-dev:

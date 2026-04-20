@@ -420,6 +420,14 @@ const developerSidebarItems = [
           },
           {
             type: "doc",
+            id: "adapters/building-an-adapter",
+          },
+          {
+            type: "doc",
+            id: "adapters/publicschema-alignment",
+          },
+          {
+            type: "doc",
             id: "adapters/openspp-adapter",
           },
           {

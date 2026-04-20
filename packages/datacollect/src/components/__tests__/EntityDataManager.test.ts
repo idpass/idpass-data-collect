@@ -175,7 +175,7 @@ describe("EntityDataManager", () => {
       authStorage,
     );
     externalSyncManager = new ExternalSyncManager(eventStore, eventApplierService, {
-      type: "mock-sync-server",
+      type: "mock",
       url: externalUrl,
       extraFields: [],
     });

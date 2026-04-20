@@ -84,8 +84,49 @@ services:
       - internal
       - coolify
 
+  # PublicSchema-aligned reference registry. Used as the external sync target
+  # for @idpass/adapter-mock so staging can exercise the DC external sync
+  # contract end-to-end without a real OpenSPP instance.
+  mock-registry:
+    build:
+      context: ../examples/mock-server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - MOCK_HOST=0.0.0.0
+      - MOCK_PORT=9999
+      - MOCK_DB_PATH=/data/mock_registry.db
+      - MOCK_OAUTH_CLIENT_ID=${MOCK_OAUTH_CLIENT_ID:-mock-client}
+      - MOCK_OAUTH_CLIENT_SECRET=${MOCK_OAUTH_CLIENT_SECRET:-mock-secret}
+      - MOCK_JWT_SECRET=${MOCK_JWT_SECRET:-staging-mock-jwt-change-me}
+      - MOCK_SESSION_SECRET=${MOCK_SESSION_SECRET:-staging-mock-session-change-me}
+      - MOCK_UI_USERNAME=${MOCK_UI_USERNAME:-admin}
+      - MOCK_UI_PASSWORD=${MOCK_UI_PASSWORD:-admin}
+      - MOCK_SESSION_COOKIE_SECURE=${MOCK_SESSION_COOKIE_SECURE:-true}
+      - MOCK_CORS_ALLOWED_ORIGINS=${MOCK_CORS_ALLOWED_ORIGINS:-*}
+    ports:
+      - "${MOCK_SERVER_PORT:-9999}:9999"
+    volumes:
+      - mock-registry-data:/data
+    networks:
+      - internal
+      - coolify
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:9999/health', timeout=2).read(); sys.exit(0)",
+        ]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
 volumes:
   postgres-data:
+  mock-registry-data:
 
 networks:
   internal:

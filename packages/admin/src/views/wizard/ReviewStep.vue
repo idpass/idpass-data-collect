@@ -39,7 +39,7 @@ const allValid = computed(() => {
 
 const syncTypeLabel = computed(() => {
   const typeMap: Record<string, string> = {
-    'mock-sync-server': 'Mock Sync Server',
+    'mock': 'Mock Registry Server',
     'openspp-v1-adapter': 'OpenSPP V1',
     'openspp-v2-adapter': 'OpenSPP V2',
     'openfn-adapter': 'OpenFn',

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Sign in — Mock Registry{% endblock %}
+{% block content %}
+<div style="max-width: 420px; margin: 4rem auto 2rem;">
+  <p class="eyebrow">Mock Registry · operator access</p>
+  <h2 style="margin-bottom: 0.5rem;">Sign in.</h2>
+  <p class="lede" style="margin-bottom: 1.75rem;">This console is for manual testing. Programmatic access should use <code>/oauth/token</code>.</p>
+
+  {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
+
+  {% if already %}
+  <div class="card">
+    <p style="margin: 0 0 1rem;">You are already signed in.</p>
+    <a href="/" class="btn primary">Continue</a>
+  </div>
+  {% else %}
+  <form class="form" method="post" action="/ui/login">
+    <div class="field">
+      <label for="username">Username <span class="req">*</span></label>
+      <input id="username" name="username" autocomplete="username" autofocus required>
+    </div>
+    <div class="field">
+      <label for="password">Password <span class="req">*</span></label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn primary">Sign in</button>
+    </div>
+    <p class="hint" style="margin-top: 1rem; margin-bottom: 0;">Defaults are <code>admin</code> / <code>admin</code>. Override with <code>MOCK_UI_USERNAME</code> / <code>MOCK_UI_PASSWORD</code>.</p>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

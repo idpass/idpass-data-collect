@@ -161,7 +161,7 @@ const internalSyncManager = new InternalSyncManager(
 
 // External sync manager for external system integration
 const externalSyncManager = new ExternalSyncManager(eventStore, eventApplierService, {
-  type: "mock-sync-server", // or your external system type
+  type: "mock", // or your external system type
   url: externalUrl,
   extraFields: [],
 });

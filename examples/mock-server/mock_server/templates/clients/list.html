@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}API clients — Mock Registry{% endblock %}
+{% block content %}
+<nav class="crumbs">
+  <a href="/">Home</a> <span class="sep">/</span> <span>API clients</span>
+</nav>
+
+<div class="page-head">
+  <div>
+    <p class="eyebrow">{{ total }} {{ "record" if total == 1 else "records" }}</p>
+    <h2>API clients</h2>
+    <p class="lede">OAuth2 client credentials authorised to call <code>/v1/*</code>. Each client issues its own JWT at <code>/oauth/token</code>. Secrets are bcrypt-hashed on the server and shown only once at creation.</p>
+  </div>
+  <div class="actions">
+    <a href="/ui/clients/new" class="btn primary">New client</a>
+  </div>
+</div>
+
+<div class="search-bar">
+  <input type="search" name="q" placeholder="Search by name or client_id…"
+         autocomplete="off"
+         hx-get="/ui/clients/search"
+         hx-trigger="keyup changed delay:250ms, search"
+         hx-target="#clients-rows"
+         hx-swap="innerHTML">
+</div>
+
+<div class="table-wrap">
+  <table class="data">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>client_id</th>
+        <th>Created</th>
+        <th>Last used</th>
+        <th>Status</th>
+        <th class="row-actions"></th>
+      </tr>
+    </thead>
+    <tbody id="clients-rows">
+      {% include "clients/_rows.html" %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

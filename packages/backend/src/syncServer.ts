@@ -50,6 +50,7 @@ import { initializeDatabase } from "./db/initialize";
 import { adapterRegistry, type ExternalSyncAdapterV2, type EntityPushPayload, type SyncResult, type HealthCheckResult } from "@idpass/data-collect-core";
 import { OpenSppOdooSyncAdapter, OpenSppV2SyncAdapter } from "@idpass/adapter-openspp";
 import { OpenFnSyncAdapterV2 } from "@idpass/adapter-openfn";
+import { MockRegistrySyncAdapter } from "@idpass/adapter-mock";
 
 const log = createLogger("syncServer");
 
@@ -103,6 +104,10 @@ adapterRegistry.register("openspp-v2-adapter", (deps) => {
 });
 adapterRegistry.register("openfn-adapter", (deps) =>
   new OpenFnSyncAdapterV2(deps!.eventStore, deps!.eventApplierService),
+);
+// mock: Python mock registry server (examples/mock-server) — reference V2 adapter
+adapterRegistry.register("mock", (deps) =>
+  new MockRegistrySyncAdapter(deps!.eventStore, deps!.eventApplierService),
 );
 
 export async function run(config: SyncServerConfig): Promise<SyncServerInstance> {
