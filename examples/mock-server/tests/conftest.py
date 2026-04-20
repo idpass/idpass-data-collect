@@ -64,13 +64,23 @@ def settings():
 
 @pytest_asyncio.fixture
 async def app(settings):
-    """Build a Litestar app bound to the per-test DB."""
+    """Build a Litestar app bound to the per-test DB.
+
+    Litestar's ``on_startup`` hooks do not fire under httpx's ASGITransport,
+    so we manually reproduce what :func:`_ensure_tables` does: create tables
+    and seed the env-default OAuth2 client. This keeps test-auth happy
+    without depending on lifespan events.
+    """
     # Fresh schema per test.
     try:
         await db_module.drop_all()
     except Exception:
         pass
     await db_module.create_all()
+
+    from mock_server.seed import seed_default_api_client
+
+    await seed_default_api_client()
     _app = create_app(settings)
     yield _app
 

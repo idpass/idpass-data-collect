@@ -106,6 +106,68 @@ Default credentials (all overridable via env vars — see `.env.example`):
 | OAuth2 client | `mock-client`        | `mock-secret`  |
 | UI session    | `admin`              | `admin`        |
 
+> `MOCK_OAUTH_CLIENT_ID` / `MOCK_OAUTH_CLIENT_SECRET` are used **only** to
+> seed a default client row on first startup. The auth source of truth is
+> the `api_client` SQLite table (bcrypt-hashed secrets). Once a client is
+> seeded, rotating its secret via the UI persists — a restart will not
+> reset it. See [Managing API clients](#managing-api-clients) below.
+
+## Managing API clients
+
+Multiple OAuth2 clients are supported. Each has its own `client_id`, a
+bcrypt-hashed secret, and independent lifecycle (rotate / revoke / delete).
+
+### Via the UI
+
+Sign in at <http://localhost:9999/ui/login> and open **Clients** in the top
+nav (`/ui/clients`). The flow is:
+
+1. **Create** — optional name, optional `client_id` (auto-generated as
+   `mc_<8 chars>` if omitted), optional comma-separated scopes.
+2. **Copy the secret** — shown **exactly once** on a highlighted card with a
+   copy-to-clipboard button. After you leave the page it cannot be recovered.
+3. **Rotate** — issues a new secret; the old secret stops working immediately.
+4. **Revoke** — soft-delete. Existing JWTs remain valid until they expire,
+   but no new tokens can be issued.
+5. **Delete** — hard-delete. Irreversible.
+
+### Via the REST API
+
+All endpoints require a valid Bearer token (any existing client can manage
+other clients — this is a mock, not an RBAC demo).
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:9999/oauth/token \
+  -d grant_type=client_credentials \
+  -d client_id=mock-client \
+  -d client_secret=mock-secret | jq -r .access_token)
+
+# List
+curl -H "Authorization: Bearer $TOKEN" http://localhost:9999/v1/api-clients
+
+# Create — returns { ..., "client_secret": "<one-time plaintext>" }
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"name":"CI adapter","scopes":["read","write"]}' \
+     http://localhost:9999/v1/api-clients
+
+# Rotate (returns a fresh client_secret once)
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+     http://localhost:9999/v1/api-clients/<uuid>/rotate
+
+# Revoke (soft-delete)
+curl -X POST -H "Authorization: Bearer $TOKEN" \
+     http://localhost:9999/v1/api-clients/<uuid>/revoke
+
+# Hard-delete
+curl -X DELETE -H "Authorization: Bearer $TOKEN" \
+     http://localhost:9999/v1/api-clients/<uuid>
+```
+
+List/GET responses never include the secret or its hash. `POST` (create)
+and `POST /rotate` are the only endpoints that return the plaintext, and
+only once.
+
 ## Endpoints summary
 
 See `/docs` for the full OpenAPI description. Headline routes:
@@ -128,6 +190,13 @@ PATCH  /v1/groups/{uuid}                (honours If-Match)
 DELETE /v1/groups/{uuid}
 POST   /v1/groups/{uuid}/members
 DELETE /v1/groups/{uuid}/members/{person_uuid}
+
+GET    /v1/api-clients?active_only=&limit=&offset=
+GET    /v1/api-clients/{uuid}
+POST   /v1/api-clients                  (returns one-time plaintext secret)
+POST   /v1/api-clients/{uuid}/rotate    (returns one-time plaintext secret)
+POST   /v1/api-clients/{uuid}/revoke
+DELETE /v1/api-clients/{uuid}
 
 GET    /health           (no auth)
 GET    /schema           (OpenAPI)

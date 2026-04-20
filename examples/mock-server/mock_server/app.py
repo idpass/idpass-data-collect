@@ -28,11 +28,13 @@ from litestar.template.config import TemplateConfig
 
 from mock_server.auth.guards import SessionAuthRedirect
 from mock_server.config import Settings, get_settings
+from mock_server.controllers.api_clients import ApiClientController
 from mock_server.controllers.auth import AuthController
 from mock_server.controllers.groups import GroupController
 from mock_server.controllers.health import DocsRedirectController, HealthController
 from mock_server.controllers.persons import PersonController
 from mock_server.controllers.ui import (
+    ApiClientsUIController,
     GroupsUIController,
     LandingController,
     LoginController,
@@ -151,8 +153,11 @@ def create_app(settings: Settings | None = None) -> Litestar:
     async def _ensure_tables(_app: Litestar) -> None:
         """Belt-and-braces: create tables on first start so seed works out of the box."""
         from mock_server.db import create_all
+        from mock_server.seed import seed_default_api_client
 
         await create_all()
+        # Bootstrap the env-default OAuth2 client if no matching row exists.
+        await seed_default_api_client()
 
     template_config = TemplateConfig(directory=_TEMPLATE_DIR, engine=JinjaTemplateEngine)
 
@@ -217,10 +222,12 @@ def create_app(settings: Settings | None = None) -> Litestar:
             AuthController,
             PersonController,
             GroupController,
+            ApiClientController,
             LandingController,
             LoginController,
             PersonsUIController,
             GroupsUIController,
+            ApiClientsUIController,
         ],
         plugins=[sqlalchemy_plugin],
         template_config=template_config,

@@ -17,6 +17,7 @@ from sqlalchemy import select
 from mock_server.config import get_settings
 from mock_server.db import create_all, drop_all, get_sessionmaker
 from mock_server.models import Person
+from mock_server.models.api_client import ApiClient
 from mock_server.schemas.group import CreateGroup
 from mock_server.schemas.identity_document import CreateIdentityDocument
 from mock_server.schemas.person import CreatePerson
@@ -33,12 +34,55 @@ async def is_seeded() -> bool:
         return result.first() is not None
 
 
+async def seed_default_api_client() -> None:
+    """Ensure an ``api_client`` row exists for the env-default credentials.
+
+    Idempotent: if a client with ``client_id == settings.oauth_client_id``
+    already exists, no-op. This preserves rotated secrets across restarts —
+    we never overwrite an existing row with the env-configured secret.
+    """
+    settings = get_settings()
+    sm = get_sessionmaker()
+    async with sm() as session:
+        existing = await session.execute(
+            select(ApiClient).where(ApiClient.client_id == settings.oauth_client_id)
+        )
+        if existing.scalar_one_or_none() is not None:
+            return
+
+        # Create via the service so the secret is hashed, then overwrite the
+        # hash with one derived from the configured plaintext. Doing it in
+        # two steps keeps all hashing in one place (ApiClientService.create).
+        from passlib.hash import bcrypt  # local import: keep module light if seed unused
+
+        client = ApiClient(
+            client_id=settings.oauth_client_id,
+            client_secret_hash=bcrypt.hash(settings.oauth_client_secret),
+            name="Default client (from MOCK_OAUTH_* env)",
+            description=(
+                "Seeded on first startup from MOCK_OAUTH_CLIENT_ID / "
+                "MOCK_OAUTH_CLIENT_SECRET. Rotate or delete via the UI — the env "
+                "vars are no longer consulted for authentication."
+            ),
+            scopes=[],
+        )
+        session.add(client)
+        await session.commit()
+        logger.info(
+            "seeded default api_client from env: client_id=%s", settings.oauth_client_id
+        )
+
+
 async def seed(*, reset: bool = False) -> None:
     """Create fixture data. If ``reset``, drops and recreates tables first."""
     if reset:
         logger.info("seed --reset: dropping all tables")
         await drop_all()
     await create_all()
+
+    # Always ensure the default OAuth2 client exists so `seed` alone is
+    # sufficient to bring up a working auth story. Idempotent.
+    await seed_default_api_client()
 
     if not reset and await is_seeded():
         logger.info("database already contains data — skipping seed (use --reset to force)")

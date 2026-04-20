@@ -14,6 +14,11 @@ dependencies = [
     "pydantic>=2.9.0",
     "pydantic-settings>=2.5.0",
     "python-jose[cryptography]>=3.4.0",
+    "passlib[bcrypt]>=1.7.4",
+    # passlib 1.7.x fails at import with bcrypt 5.x (detect_wrap_bug rejects
+    # its own internal test hash). Pin until passlib ships a compatible
+    # release or we migrate to argon2.
+    "bcrypt<5.0",
     "jinja2>=3.1.4",
     "python-multipart>=0.0.12",
     "itsdangerous>=2.2.0",

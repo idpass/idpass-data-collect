@@ -1,5 +1,10 @@
 """Pydantic DTOs (PublicSchema-aligned) for request and response bodies."""
 
+from mock_server.schemas.api_client import (
+    ApiClientResponse,
+    ApiClientWithSecret,
+    CreateApiClient,
+)
 from mock_server.schemas.common import ErrorBody, ErrorResponse, PaginatedResponse
 from mock_server.schemas.group import (
     CreateGroup,
@@ -16,6 +21,9 @@ from mock_server.schemas.identity_document import (
 from mock_server.schemas.person import CreatePerson, PersonOut, UpdatePerson
 
 __all__ = [
+    "ApiClientResponse",
+    "ApiClientWithSecret",
+    "CreateApiClient",
     "CreateGroup",
     "CreateIdentifier",
     "CreateIdentityDocument",

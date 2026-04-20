@@ -24,7 +24,7 @@ from mock_server.models.identifier import SYSTEM_ID_TYPE
 from mock_server.schemas.group import CreateGroup, MemberAdd, UpdateGroup
 from mock_server.schemas.identifier import CreateIdentifier
 from mock_server.schemas.person import CreatePerson, UpdatePerson
-from mock_server.services import GroupService, PersonService
+from mock_server.services import ApiClientService, GroupService, PersonService
 
 logger = logging.getLogger(__name__)
 
@@ -379,7 +379,164 @@ class GroupsUIController(Controller):
         return Redirect(path=f"/ui/groups/{uuid}", status_code=303)
 
 
+# ---------------------------------------------------------------------------
+# API Client management UI
+# ---------------------------------------------------------------------------
+
+
+# Session key used to briefly hold a one-time plaintext secret across a
+# POST→303 redirect. The detail view clears it after the first render.
+_PENDING_SECRET_KEY = "pending_client_secret"
+
+
+def _stash_pending_secret(request: Request, client_uuid: str, secret: str) -> None:
+    """Briefly persist a plaintext secret on the session for the detail page."""
+    session = getattr(request, "session", None) or {}
+    session[_PENDING_SECRET_KEY] = {"uuid": client_uuid, "secret": secret}
+    request.set_session(session)
+
+
+def _pop_pending_secret(request: Request, client_uuid: str) -> str | None:
+    """Read and clear the pending secret if it matches ``client_uuid``."""
+    session = getattr(request, "session", None) or {}
+    pending = session.get(_PENDING_SECRET_KEY)
+    if not pending or pending.get("uuid") != client_uuid:
+        return None
+    # Best-effort clear; session middleware rewrites on response.
+    session.pop(_PENDING_SECRET_KEY, None)
+    request.set_session(session)
+    return pending.get("secret")
+
+
+def _parse_scopes(raw: str | None) -> list[str]:
+    """Parse a comma-separated scopes field into a clean list."""
+    if not raw:
+        return []
+    return [s.strip() for s in raw.split(",") if s.strip()]
+
+
+class ApiClientsUIController(Controller):
+    """UI routes for managing OAuth2 API clients."""
+
+    path = "/ui/clients"
+    tags = ["ui"]
+    guards = [ui_session_guard]
+
+    @get("/")
+    async def list_view(self, db_session: AsyncSession) -> Template:
+        """List view — all clients (including revoked)."""
+        svc = ApiClientService(db_session)
+        rows, total = await svc.list(active_only=False, limit=200)
+        return Template(
+            template_name="clients/list.html",
+            context={"clients": rows, "total": total, "q": ""},
+        )
+
+    @get("/search")
+    async def search(self, db_session: AsyncSession, q: str | None = None) -> Template:
+        """htmx partial — filter by name or client_id substring."""
+        svc = ApiClientService(db_session)
+        rows, _ = await svc.list(active_only=False, limit=200)
+        needle = (q or "").strip().lower()
+        if needle:
+            rows = [
+                c
+                for c in rows
+                if needle in (c.name or "").lower() or needle in c.client_id.lower()
+            ]
+        return Template(
+            template_name="clients/_rows.html",
+            context={"clients": rows},
+        )
+
+    @get("/new")
+    async def new_form(self) -> Template:
+        """Render blank create form."""
+        return Template(
+            template_name="clients/form.html",
+            context={"action": "/ui/clients/new", "title": "New API client", "error": None},
+        )
+
+    @post("/new")
+    async def new_submit(
+        self,
+        request: Request,
+        db_session: AsyncSession,
+        data: Annotated[dict[str, Any], Body(media_type=RequestEncodingType.URL_ENCODED)],
+    ) -> Redirect | Template:
+        """Process new-client form. Stashes secret on session for the detail page."""
+        svc = ApiClientService(db_session)
+        try:
+            client, secret = await svc.create(
+                name=(data.get("name") or "").strip() or None,
+                client_id=(data.get("client_id") or "").strip() or None,
+                description=(data.get("description") or "").strip() or None,
+                scopes=_parse_scopes(data.get("scopes")),
+            )
+        except AppError as exc:
+            return Template(
+                template_name="clients/form.html",
+                context={
+                    "action": "/ui/clients/new",
+                    "title": "New API client",
+                    "error": exc.message,
+                    "form": data,
+                },
+            )
+        _stash_pending_secret(request, client.uuid, secret)
+        return Redirect(path=f"/ui/clients/{client.uuid}?new=1", status_code=303)
+
+    @get("/{uuid:str}")
+    async def detail(
+        self,
+        uuid: str,
+        request: Request,
+        db_session: AsyncSession,
+        new: int | None = None,
+        rotated: int | None = None,
+    ) -> Template:
+        """Detail page. Shows a one-time secret banner when ``?new=1`` or ``?rotated=1``."""
+        svc = ApiClientService(db_session)
+        client = await svc.get(uuid)
+        show_secret = None
+        banner = None
+        if new or rotated:
+            show_secret = _pop_pending_secret(request, uuid)
+            banner = "created" if new else "rotated"
+        return Template(
+            template_name="clients/detail.html",
+            context={
+                "client": client,
+                "show_secret": show_secret,
+                "banner": banner,
+            },
+        )
+
+    @post("/{uuid:str}/rotate")
+    async def rotate(self, uuid: str, request: Request, db_session: AsyncSession) -> Redirect:
+        """Rotate the client secret and redirect with ``?rotated=1``."""
+        svc = ApiClientService(db_session)
+        client, secret = await svc.rotate_secret(uuid)
+        _stash_pending_secret(request, client.uuid, secret)
+        return Redirect(path=f"/ui/clients/{uuid}?rotated=1", status_code=303)
+
+    @post("/{uuid:str}/revoke")
+    async def revoke(self, uuid: str, db_session: AsyncSession) -> Redirect:
+        """Revoke the client and return to the detail page."""
+        svc = ApiClientService(db_session)
+        await svc.revoke(uuid)
+        return Redirect(path=f"/ui/clients/{uuid}", status_code=303)
+
+    @post("/{uuid:str}/delete")
+    async def delete(self, uuid: str, db_session: AsyncSession) -> Redirect:
+        """Hard-delete the client and return to the list."""
+        svc = ApiClientService(db_session)
+        await svc.delete(uuid)
+        return Redirect(path="/ui/clients", status_code=303)
+
+
 __all__ = [
+    "ApiClientsUIController",
     "GroupsUIController",
     "LandingController",
     "LoginController",
