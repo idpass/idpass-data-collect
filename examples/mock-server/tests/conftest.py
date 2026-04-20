@@ -16,7 +16,8 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
+from litestar.testing import AsyncTestClient
 
 from mock_server import config as config_module
 from mock_server import db as db_module
@@ -66,10 +67,10 @@ def settings():
 async def app(settings):
     """Build a Litestar app bound to the per-test DB.
 
-    Litestar's ``on_startup`` hooks do not fire under httpx's ASGITransport,
-    so we manually reproduce what :func:`_ensure_tables` does: create tables
-    and seed the env-default OAuth2 client. This keeps test-auth happy
-    without depending on lifespan events.
+    We use :class:`litestar.testing.AsyncTestClient` in the ``client`` fixture
+    because httpx's ``ASGITransport`` does not execute the app's ``on_startup``
+    hooks — advanced-alchemy registers its session maker there. The test
+    client runs lifespan properly.
     """
     # Fresh schema per test.
     try:
@@ -87,9 +88,8 @@ async def app(settings):
 
 @pytest_asyncio.fixture
 async def client(app) -> AsyncIterator[AsyncClient]:
-    """Return an httpx AsyncClient bound to the ASGI app."""
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
+    """Return an AsyncTestClient that runs Litestar's lifespan hooks."""
+    async with AsyncTestClient(app=app) as c:
         yield c
 
 

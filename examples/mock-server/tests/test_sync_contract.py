@@ -14,6 +14,7 @@ Walks through the adapter contract exactly as a real adapter would:
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from urllib.parse import quote
 
 from httpx import AsyncClient
 
@@ -23,8 +24,9 @@ async def _paginate(client: AsyncClient, headers: dict[str, str], base: str) -> 
     items: list[dict] = []
     offset = 0
     limit = 2
+    sep = "&" if "?" in base else "?"
     while True:
-        resp = await client.get(f"{base}?limit={limit}&offset={offset}", headers=headers)
+        resp = await client.get(f"{base}{sep}limit={limit}&offset={offset}", headers=headers)
         assert resp.status_code == 200, resp.text
         body = resp.json()
         items.extend(body["items"])
@@ -51,7 +53,7 @@ async def test_full_sync_contract(
 
     # 2. Compute watermark from the last updated record.
     watermark = max(p["updated_at"] for p in persons)
-    delta = await _paginate(client, auth_headers, f"/v1/persons?updated_since={watermark}")
+    delta = await _paginate(client, auth_headers, f"/v1/persons?updated_since={quote(watermark)}")
     assert delta == []
 
     # 3. Simulate out-of-band data entry: create a new person.
@@ -64,7 +66,7 @@ async def test_full_sync_contract(
     ).json()
 
     # 4. Delta pull picks up the new record only.
-    delta2 = await _paginate(client, auth_headers, f"/v1/persons?updated_since={watermark}")
+    delta2 = await _paginate(client, auth_headers, f"/v1/persons?updated_since={quote(watermark)}")
     assert len(delta2) == 1
     assert delta2[0]["uuid"] == new_person["uuid"]
 
@@ -101,8 +103,8 @@ async def test_second_sync_is_stable(
 
     # Use a watermark far in the past — should return everything.
     far_past = (datetime.now(UTC) - timedelta(days=365)).isoformat()
-    twice_a = await _paginate(client, auth_headers, f"/v1/persons?updated_since={far_past}")
-    twice_b = await _paginate(client, auth_headers, f"/v1/persons?updated_since={far_past}")
+    twice_a = await _paginate(client, auth_headers, f"/v1/persons?updated_since={quote(far_past)}")
+    twice_b = await _paginate(client, auth_headers, f"/v1/persons?updated_since={quote(far_past)}")
     # Same set, identical ordering by (updated_at, uuid).
     assert [p["uuid"] for p in twice_a] == [p["uuid"] for p in twice_b]
     assert len(twice_a) == len(all_persons)
