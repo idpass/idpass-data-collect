@@ -1,29 +1,52 @@
 {% extends "base.html" %}
 {% block title %}{{ title }} — Mock Registry{% endblock %}
 {% block content %}
-<h2>{{ title }}</h2>
-<form method="post" action="{{ action }}">
-  <label>Given name
-    <input name="given_name" value="{{ person.given_name if person and person.given_name else '' }}">
-  </label>
-  <label>Family name
-    <input name="family_name" value="{{ person.family_name if person and person.family_name else '' }}">
-  </label>
-  <label>Date of birth
-    <input name="date_of_birth" type="date"
+<nav class="crumbs">
+  <a href="/">Home</a> <span class="sep">/</span>
+  <a href="/ui/persons">Persons</a> <span class="sep">/</span>
+  <span>{{ title }}</span>
+</nav>
+
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Person</p>
+    <h2>{{ title }}.</h2>
+    <p class="lede">All fields are optional. The registry auto-assigns a <code>system_id</code> on save so every record is addressable via the API.</p>
+  </div>
+</div>
+
+<form class="form" method="post" action="{{ action }}">
+  <div class="field">
+    <label for="given_name">Given name <span class="hint">first / personal name</span></label>
+    <input id="given_name" name="given_name" value="{{ person.given_name if person and person.given_name else '' }}" autofocus>
+  </div>
+
+  <div class="field">
+    <label for="family_name">Family name <span class="hint">surname</span></label>
+    <input id="family_name" name="family_name" value="{{ person.family_name if person and person.family_name else '' }}">
+  </div>
+
+  <div class="field">
+    <label for="date_of_birth">Date of birth</label>
+    <input id="date_of_birth" name="date_of_birth" type="date"
            value="{{ person.date_of_birth.isoformat() if person and person.date_of_birth else '' }}">
-  </label>
-  <label>Gender (ISO 5218)
-    <select name="gender">
+  </div>
+
+  <div class="field">
+    <label for="gender">Gender <span class="hint">ISO 5218</span></label>
+    <select id="gender" name="gender">
       {% set g = person.gender if person else '' %}
-      <option value=""         {% if g == '' %}selected{% endif %}>(unspecified)</option>
-      <option value="0"        {% if g == '0' %}selected{% endif %}>0 — Not known</option>
-      <option value="1"        {% if g == '1' %}selected{% endif %}>1 — Male</option>
-      <option value="2"        {% if g == '2' %}selected{% endif %}>2 — Female</option>
-      <option value="9"        {% if g == '9' %}selected{% endif %}>9 — Not applicable</option>
+      <option value=""  {% if g == '' %}selected{% endif %}>Unspecified</option>
+      <option value="0" {% if g == '0' %}selected{% endif %}>0 · Not known</option>
+      <option value="1" {% if g == '1' %}selected{% endif %}>1 · Male</option>
+      <option value="2" {% if g == '2' %}selected{% endif %}>2 · Female</option>
+      <option value="9" {% if g == '9' %}selected{% endif %}>9 · Not applicable</option>
     </select>
-  </label>
-  <button type="submit">Save</button>
-  <a href="{% if person %}/ui/persons/{{ person.uuid }}{% else %}/ui/persons{% endif %}" role="button" class="secondary">Cancel</a>
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn primary">{{ 'Save changes' if person else 'Create person' }}</button>
+    <a href="{% if person %}/ui/persons/{{ person.uuid }}{% else %}/ui/persons{% endif %}" class="btn ghost">Cancel</a>
+  </div>
 </form>
 {% endblock %}

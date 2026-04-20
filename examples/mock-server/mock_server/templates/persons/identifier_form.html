@@ -1,24 +1,45 @@
 {% extends "base.html" %}
-{% block title %}Add identifier — {{ person.given_name }} {{ person.family_name }}{% endblock %}
+{% set display_name = ((person.given_name or '') ~ ' ' ~ (person.family_name or '')) | trim %}
+{% block title %}Add identifier — {{ display_name or 'Person' }}{% endblock %}
 {% block content %}
-<nav class="meta"><a href="/ui/persons/{{ person.uuid }}">&laquo; Back</a></nav>
-<h2>Add identifier</h2>
-<form method="post" action="/ui/persons/{{ person.uuid }}/identifiers/new">
-  <label>Type (e.g. <code>national_id_number</code>, <code>passport_number</code>)
-    <input name="identifier_type" required>
-  </label>
-  <label>Value
-    <input name="identifier_value" required>
-  </label>
-  <label>Scheme ID (optional, defaults to server config)
-    <input name="identifier_scheme_id">
-  </label>
-  <label>Scheme name (optional)
-    <input name="identifier_scheme_name">
-  </label>
-  <small>Note: <code>system_id</code> is reserved and cannot be set manually.</small>
-  <br><br>
-  <button type="submit">Add</button>
-  <a href="/ui/persons/{{ person.uuid }}" role="button" class="secondary">Cancel</a>
+<nav class="crumbs">
+  <a href="/">Home</a> <span class="sep">/</span>
+  <a href="/ui/persons">Persons</a> <span class="sep">/</span>
+  <a href="/ui/persons/{{ person.uuid }}">{{ display_name or person.uuid[:8] }}</a> <span class="sep">/</span>
+  <span>Add identifier</span>
+</nav>
+
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Identifier · coded value</p>
+    <h2>Add an identifier.</h2>
+    <p class="lede">An identifier is a coded value attached to this person within a scheme — national ID number, passport number, a program code. It is not the document itself.</p>
+  </div>
+</div>
+
+<form class="form" method="post" action="/ui/persons/{{ person.uuid }}/identifiers/new">
+  <div class="field">
+    <label for="identifier_type">Type <span class="req">*</span> <span class="hint">e.g. national_id_number, passport_number</span></label>
+    <input id="identifier_type" name="identifier_type" required autofocus>
+  </div>
+  <div class="field">
+    <label for="identifier_value">Value <span class="req">*</span></label>
+    <input id="identifier_value" name="identifier_value" required>
+  </div>
+  <div class="field">
+    <label for="identifier_scheme_id">Scheme ID <span class="hint">URN — defaults to server config</span></label>
+    <input id="identifier_scheme_id" name="identifier_scheme_id" placeholder="urn:mock:vocab:id-type">
+  </div>
+  <div class="field">
+    <label for="identifier_scheme_name">Scheme name <span class="hint">human-readable label</span></label>
+    <input id="identifier_scheme_name" name="identifier_scheme_name">
+  </div>
+
+  <div class="alert info"><code>system_id</code> is reserved for server-assigned identifiers and cannot be set manually.</div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn primary">Add identifier</button>
+    <a href="/ui/persons/{{ person.uuid }}" class="btn ghost">Cancel</a>
+  </div>
 </form>
 {% endblock %}

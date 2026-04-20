@@ -1,87 +1,136 @@
 {% extends "base.html" %}
 {% block title %}{{ group.name }} — Mock Registry{% endblock %}
 {% block content %}
-<nav class="meta"><a href="/ui/groups">&laquo; Groups</a></nav>
-<hgroup>
-  <h2>{{ group.name }}</h2>
-  <p class="meta">UUID {{ group.uuid }} — {{ group.group_type }} — updated {{ group.updated_at.strftime("%Y-%m-%d %H:%M:%S") }}</p>
-</hgroup>
+<nav class="crumbs">
+  <a href="/">Home</a> <span class="sep">/</span>
+  <a href="/ui/groups">Groups</a> <span class="sep">/</span>
+  <span>{{ group.name }}</span>
+</nav>
 
-<article>
-  <header><strong>Details</strong> <a href="/ui/groups/{{ group.uuid }}/edit" role="button" class="secondary outline">Edit</a></header>
-  <dl>
-    <dt>Type</dt><dd>{{ group.group_type }}</dd>
-    <dt>Created at</dt><dd>{{ group.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</dd>
-  </dl>
-</article>
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Group · {{ group.group_type }} · {{ group.memberships | length }} {{ "member" if group.memberships | length == 1 else "members" }}</p>
+    <h2>{{ group.name }}</h2>
+    <p class="uuid"><strong>UUID</strong> {{ group.uuid }}</p>
+  </div>
+  <div class="actions">
+    <a href="/ui/groups/{{ group.uuid }}/edit" class="btn ghost">Edit</a>
+  </div>
+</div>
 
-<article>
-  <header><strong>Identifiers</strong></header>
-  {% if visible_identifiers %}
-  <table class="compact">
-    <thead><tr><th>Type</th><th>Value</th><th>Scheme</th></tr></thead>
-    <tbody>
-      {% for i in visible_identifiers %}
-      <tr>
-        <td><span class="chip">{{ i.identifier_type }}</span></td>
-        <td><code>{{ i.identifier_value }}</code></td>
-        <td class="meta">{{ i.identifier_scheme_name or i.identifier_scheme_id }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <p class="meta">No public identifiers for this group.</p>
-  {% endif %}
-</article>
+<div class="split">
+  <div class="stack">
+    <section class="card">
+      <div class="card-head">
+        <h3>Details</h3>
+        <span class="meta">last updated {{ group.updated_at.strftime("%Y-%m-%d %H:%M UTC") }}</span>
+      </div>
+      <dl class="meta-grid">
+        <dt>Name</dt><dd>{{ group.name }}</dd>
+        <dt>Type</dt><dd><span class="chip">{{ group.group_type }}</span></dd>
+        <dt>Created</dt><dd class="mono">{{ group.created_at.strftime("%Y-%m-%d %H:%M:%S UTC") }}</dd>
+      </dl>
+    </section>
 
-<article>
-  <header><strong>Members</strong></header>
-  {% if group.memberships %}
-  <table class="compact">
-    <thead><tr><th>Name</th><th>Role</th><th>Joined</th><th></th></tr></thead>
-    <tbody>
-      {% for m in group.memberships %}
-      {% set p = person_lookup.get(m.person_uuid) %}
-      <tr>
-        <td>{% if p %}<a href="/ui/persons/{{ p.uuid }}">{{ p.given_name or '' }} {{ p.family_name or '' }}</a>{% else %}{{ m.person_uuid }}{% endif %}</td>
-        <td>{{ m.role or "member" }}</td>
-        <td>{{ m.joined_at.strftime("%Y-%m-%d") }}</td>
-        <td>
-          <form method="post" action="/ui/groups/{{ group.uuid }}/members/{{ m.person_uuid }}/remove" class="inline-form">
-            <button type="submit" class="secondary outline" style="padding: 0.25rem 0.5rem;">Remove</button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <p class="meta">No members.</p>
-  {% endif %}
+    <section class="card">
+      <div class="card-head">
+        <h3>Members</h3>
+        <span class="meta">{{ group.memberships | length }} total</span>
+      </div>
+      {% if group.memberships %}
+      <div class="table-wrap" style="box-shadow:none;border-color:var(--rule-soft);">
+        <table class="data">
+          <thead>
+            <tr><th>Person</th><th>Role</th><th>Joined</th><th class="row-actions"></th></tr>
+          </thead>
+          <tbody>
+            {% for m in group.memberships %}
+            {% set p = person_lookup.get(m.person_uuid) %}
+            <tr>
+              <td class="name-col">
+                {% if p %}
+                <a href="/ui/persons/{{ p.uuid }}">
+                  {%- set pname = ((p.given_name or '') ~ ' ' ~ (p.family_name or '')) | trim -%}
+                  {{ pname if pname else '(no name)' }}
+                </a>
+                {% else %}
+                <code>{{ m.person_uuid[:8] }}</code>
+                {% endif %}
+              </td>
+              <td><span class="chip {{ 'accent' if m.role == 'head' else '' }}">{{ m.role or 'member' }}</span></td>
+              <td><span class="uuid">{{ m.joined_at.strftime("%Y-%m-%d") }}</span></td>
+              <td class="row-actions">
+                <form method="post" action="/ui/groups/{{ group.uuid }}/members/{{ m.person_uuid }}/remove" style="display:inline;">
+                  <button type="submit" class="btn danger tiny">Remove</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <span class="icon">ø</span>
+        <p>No members yet.</p>
+        <p class="hint">Add a person below to start building this group.</p>
+      </div>
+      {% endif %}
 
-  <details>
-    <summary>Add member</summary>
-    {% if candidates %}
-    <form method="post" action="/ui/groups/{{ group.uuid }}/members/add">
-      <label>Person
-        <select name="person_uuid" required>
-          {% for p in candidates %}
-          <option value="{{ p.uuid }}">{{ p.given_name or "" }} {{ p.family_name or "" }} ({{ p.uuid[:8] }})</option>
-          {% endfor %}
-        </select>
-      </label>
-      <label>Role
-        <select name="role">
-          <option value="member">member</option>
-          <option value="head">head</option>
-        </select>
-      </label>
-      <button type="submit">Add</button>
-    </form>
-    {% else %}
-    <p class="meta">No other persons available.</p>
-    {% endif %}
-  </details>
-</article>
+      <details class="disclosure">
+        <summary>Add member</summary>
+        {% if candidates %}
+        <form method="post" action="/ui/groups/{{ group.uuid }}/members/add">
+          <div class="field" style="min-width: 260px; flex: 2;">
+            <label for="person_uuid">Person</label>
+            <select id="person_uuid" name="person_uuid" required>
+              {% for p in candidates %}
+              <option value="{{ p.uuid }}">{% set pname = ((p.given_name or '') ~ ' ' ~ (p.family_name or '')) | trim %}{{ pname if pname else '(unnamed)' }} · {{ p.uuid[:8] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field" style="min-width: 140px;">
+            <label for="role">Role</label>
+            <select id="role" name="role">
+              <option value="member">member</option>
+              <option value="head">head</option>
+            </select>
+          </div>
+          <button type="submit" class="btn primary">Add</button>
+        </form>
+        {% else %}
+        <p class="hint" style="margin:0;">No other persons available. <a href="/ui/persons/new">Create one</a>.</p>
+        {% endif %}
+      </details>
+    </section>
+  </div>
+
+  <aside class="stack">
+    <section class="card">
+      <div class="card-head"><h3>Identifiers</h3></div>
+      {% if visible_identifiers %}
+      <ul style="list-style:none;padding:0;margin:0;">
+        {% for i in visible_identifiers %}
+        <li style="padding:0.65rem 0;border-bottom:1px solid var(--rule-soft);">
+          <div><span class="chip">{{ i.identifier_type }}</span></div>
+          <div style="margin-top:0.35rem;"><code>{{ i.identifier_value }}</code></div>
+          <div class="uuid" style="margin-top:0.2rem;">{{ i.identifier_scheme_name or i.identifier_scheme_id }}</div>
+        </li>
+        {% endfor %}
+      </ul>
+      <style>aside.stack section.card ul li:last-child { border-bottom: none !important; }</style>
+      {% else %}
+      <div class="empty-state" style="padding:1.5rem 1rem;">
+        <p style="margin:0;">No public identifiers.</p>
+      </div>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3>API</h3></div>
+      <p class="uuid" style="margin:0 0 0.75rem;">Fetch this record:</p>
+      <code style="display:block;padding:0.6rem;background:var(--surface-alt);overflow-x:auto;">GET /v1/groups/{{ group.uuid }}</code>
+    </section>
+  </aside>
+</div>
 {% endblock %}

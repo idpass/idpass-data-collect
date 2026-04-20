@@ -1,21 +1,45 @@
 {% extends "base.html" %}
 {% block title %}Groups — Mock Registry{% endblock %}
 {% block content %}
-<header class="topbar">
-  <h2>Groups <small class="meta">({{ total }})</small></h2>
-  <a href="/ui/groups/new" role="button">New Group</a>
-</header>
+<nav class="crumbs">
+  <a href="/">Home</a> <span class="sep">/</span> <span>Groups</span>
+</nav>
 
-<input type="search" name="q" placeholder="Search by name…"
-       hx-get="/ui/groups/search" hx-trigger="keyup changed delay:300ms, search"
-       hx-target="#groups-rows" hx-swap="innerHTML">
+<div class="page-head">
+  <div>
+    <p class="eyebrow">{{ total }} {{ "record" if total == 1 else "records" }}</p>
+    <h2>Groups</h2>
+    <p class="lede">Households, families, and other collections of persons. Every group carries its own identifiers and a list of member persons with roles.</p>
+  </div>
+  <div class="actions">
+    <a href="/ui/groups/new" class="btn primary">New group</a>
+  </div>
+</div>
 
-<table class="compact">
-  <thead>
-    <tr><th>Name</th><th>Type</th><th>Members</th><th>Updated</th><th></th></tr>
-  </thead>
-  <tbody id="groups-rows">
-    {% include "groups/_rows.html" %}
-  </tbody>
-</table>
+<div class="search-bar">
+  <input type="search" name="q" placeholder="Search by name…"
+         autocomplete="off"
+         hx-get="/ui/groups/search"
+         hx-trigger="keyup changed delay:250ms, search"
+         hx-target="#groups-rows"
+         hx-swap="innerHTML">
+</div>
+
+<div class="table-wrap">
+  <table class="data">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Members</th>
+        <th>Identifier</th>
+        <th>Updated</th>
+        <th class="row-actions"></th>
+      </tr>
+    </thead>
+    <tbody id="groups-rows">
+      {% include "groups/_rows.html" %}
+    </tbody>
+  </table>
+</div>
 {% endblock %}

@@ -1,15 +1,33 @@
 {% extends "base.html" %}
 {% block title %}{{ title }} — Mock Registry{% endblock %}
 {% block content %}
-<h2>{{ title }}</h2>
-<form method="post" action="{{ action }}">
-  <label>Name
-    <input name="name" value="{{ group.name if group else '' }}" required>
-  </label>
-  <label>Group type
-    <input name="group_type" value="{{ group.group_type if group else 'household' }}" required>
-  </label>
-  <button type="submit">Save</button>
-  <a href="{% if group %}/ui/groups/{{ group.uuid }}{% else %}/ui/groups{% endif %}" role="button" class="secondary">Cancel</a>
+<nav class="crumbs">
+  <a href="/">Home</a> <span class="sep">/</span>
+  <a href="/ui/groups">Groups</a> <span class="sep">/</span>
+  <span>{{ title }}</span>
+</nav>
+
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Group</p>
+    <h2>{{ title }}.</h2>
+    <p class="lede">Groups collect persons into a shared context — households, families, case files. Add members after creation.</p>
+  </div>
+</div>
+
+<form class="form" method="post" action="{{ action }}">
+  <div class="field">
+    <label for="name">Name <span class="req">*</span></label>
+    <input id="name" name="name" value="{{ group.name if group else '' }}" required autofocus>
+  </div>
+  <div class="field">
+    <label for="group_type">Type <span class="hint">household · family · case</span></label>
+    <input id="group_type" name="group_type" value="{{ group.group_type if group else 'household' }}" required>
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn primary">{{ 'Save changes' if group else 'Create group' }}</button>
+    <a href="{% if group %}/ui/groups/{{ group.uuid }}{% else %}/ui/groups{% endif %}" class="btn ghost">Cancel</a>
+  </div>
 </form>
 {% endblock %}
