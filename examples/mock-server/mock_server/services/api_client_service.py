@@ -122,9 +122,7 @@ class ApiClientService:
             await self.session.flush()
         except IntegrityError as exc:
             await self.session.rollback()
-            raise ConflictError(
-                f"client_id '{effective_client_id}' is already in use."
-            ) from exc
+            raise ConflictError(f"client_id '{effective_client_id}' is already in use.") from exc
         await self.session.refresh(client)
         logger.info("api_client created: uuid=%s client_id=%s", client.uuid, client.client_id)
         return client, plaintext

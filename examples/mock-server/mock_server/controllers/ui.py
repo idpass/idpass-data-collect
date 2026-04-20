@@ -367,9 +367,7 @@ class GroupsUIController(Controller):
         return Redirect(path=f"/ui/groups/{uuid}", status_code=303)
 
     @post("/{uuid:str}/members/{person_uuid:str}/remove")
-    async def remove_member(
-        self, uuid: str, person_uuid: str, db_session: AsyncSession
-    ) -> Redirect:
+    async def remove_member(self, uuid: str, person_uuid: str, db_session: AsyncSession) -> Redirect:
         """Remove a person from the group."""
         svc = GroupService(db_session)
         try:
@@ -447,11 +445,7 @@ class ApiClientsUIController(Controller):
         rows, _ = await svc.list(active_only=False, limit=200)
         needle = (q or "").strip().lower()
         if needle:
-            rows = [
-                c
-                for c in rows
-                if needle in (c.name or "").lower() or needle in c.client_id.lower()
-            ]
+            rows = [c for c in rows if needle in (c.name or "").lower() or needle in c.client_id.lower()]
         return Template(
             template_name="clients/_rows.html",
             context={"clients": rows},

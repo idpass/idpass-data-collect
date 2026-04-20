@@ -69,19 +69,13 @@ async def test_pagination_and_updated_since(client: AsyncClient, auth_headers: d
 
     # updated_since: after creating a new person, only it should appear.
     first_updated_at = page1["items"][0]["updated_at"]
-    after = (
-        await client.get(
-            f"/v1/persons?updated_since={first_updated_at}", headers=auth_headers
-        )
-    ).json()
+    after = (await client.get(f"/v1/persons?updated_since={first_updated_at}", headers=auth_headers)).json()
     assert after["total"] <= 5
 
 
 async def test_if_match_mismatch_412(client: AsyncClient, auth_headers: dict[str, str]) -> None:
     """Stale If-Match → 412 PRECONDITION_FAILED."""
-    created = (
-        await client.post("/v1/persons", json={"given_name": "Stale"}, headers=auth_headers)
-    ).json()
+    created = (await client.post("/v1/persons", json={"given_name": "Stale"}, headers=auth_headers)).json()
     uuid = created["uuid"]
     bad_if_match = "1999-01-01T00:00:00+00:00"
     r = await client.patch(
@@ -95,9 +89,7 @@ async def test_if_match_mismatch_412(client: AsyncClient, auth_headers: dict[str
 
 async def test_if_match_hit_passes(client: AsyncClient, auth_headers: dict[str, str]) -> None:
     """Matching If-Match header allows the update."""
-    created = (
-        await client.post("/v1/persons", json={"given_name": "Fresh"}, headers=auth_headers)
-    ).json()
+    created = (await client.post("/v1/persons", json={"given_name": "Fresh"}, headers=auth_headers)).json()
     r = await client.patch(
         f"/v1/persons/{created['uuid']}",
         json={"given_name": "Fresher"},
@@ -109,9 +101,7 @@ async def test_if_match_hit_passes(client: AsyncClient, auth_headers: dict[str, 
 
 async def test_add_non_system_identifier(client: AsyncClient, auth_headers: dict[str, str]) -> None:
     """Non-system identifiers can be added freely."""
-    created = (
-        await client.post("/v1/persons", json={"given_name": "Grace"}, headers=auth_headers)
-    ).json()
+    created = (await client.post("/v1/persons", json={"given_name": "Grace"}, headers=auth_headers)).json()
     r = await client.post(
         f"/v1/persons/{created['uuid']}/identifiers",
         json={"identifier_type": "national_id_number", "identifier_value": "NID-XYZ"},
@@ -125,9 +115,7 @@ async def test_add_non_system_identifier(client: AsyncClient, auth_headers: dict
 
 async def test_cannot_add_system_id(client: AsyncClient, auth_headers: dict[str, str]) -> None:
     """Adding a system_id identifier manually → 403 FORBIDDEN."""
-    created = (
-        await client.post("/v1/persons", json={"given_name": "X"}, headers=auth_headers)
-    ).json()
+    created = (await client.post("/v1/persons", json={"given_name": "X"}, headers=auth_headers)).json()
     r = await client.post(
         f"/v1/persons/{created['uuid']}/identifiers",
         json={"identifier_type": "system_id", "identifier_value": "hand-rolled"},
@@ -139,9 +127,7 @@ async def test_cannot_add_system_id(client: AsyncClient, auth_headers: dict[str,
 
 async def test_add_identity_document(client: AsyncClient, auth_headers: dict[str, str]) -> None:
     """POST /identity-documents attaches the doc and backing identifier."""
-    person = (
-        await client.post("/v1/persons", json={"given_name": "Doc"}, headers=auth_headers)
-    ).json()
+    person = (await client.post("/v1/persons", json={"given_name": "Doc"}, headers=auth_headers)).json()
     r = await client.post(
         f"/v1/persons/{person['uuid']}/identity-documents",
         json={

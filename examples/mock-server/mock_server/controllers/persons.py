@@ -50,9 +50,7 @@ class PersonController(Controller):
     ) -> PaginatedResponse[PersonOut]:
         """Paged list of persons (sorted by ``updated_at`` ascending)."""
         svc = PersonService(db_session)
-        rows, total = await svc.list(
-            updated_since=updated_since, limit=limit, offset=offset, search=search
-        )
+        rows, total = await svc.list(updated_since=updated_since, limit=limit, offset=offset, search=search)
         next_offset = offset + limit if offset + limit < total else None
         return PaginatedResponse[PersonOut](
             items=[_to_out(r) for r in rows],
@@ -95,9 +93,7 @@ class PersonController(Controller):
     # ----- sub-resources -----------------------------------------------------
 
     @post("/{uuid:str}/identifiers", status_code=HTTP_201_CREATED)
-    async def add_identifier(
-        self, uuid: str, data: CreateIdentifier, db_session: AsyncSession
-    ) -> IdentifierOut:
+    async def add_identifier(self, uuid: str, data: CreateIdentifier, db_session: AsyncSession) -> IdentifierOut:
         """Attach a non-``system_id`` identifier to a Person."""
         svc = PersonService(db_session)
         # Ensure person exists (raises NotFoundError if not).

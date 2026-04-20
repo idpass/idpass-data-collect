@@ -25,22 +25,14 @@ class IdentityDocument(Base):
     __tablename__ = "identity_document"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    person_uuid: Mapped[str] = mapped_column(
-        String(36), ForeignKey("person.uuid", ondelete="CASCADE"), nullable=False
-    )
+    person_uuid: Mapped[str] = mapped_column(String(36), ForeignKey("person.uuid", ondelete="CASCADE"), nullable=False)
     document_type: Mapped[str] = mapped_column(String(64), nullable=False)
     issuing_authority: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    issuing_jurisdiction: Mapped[str | None] = mapped_column(
-        String(8), nullable=True, doc="ISO 3166 country code."
-    )
+    issuing_jurisdiction: Mapped[str | None] = mapped_column(String(8), nullable=True, doc="ISO 3166 country code.")
     issue_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
-    identifier_id: Mapped[int] = mapped_column(
-        ForeignKey("identifier.id", ondelete="CASCADE"), nullable=False
-    )
+    identifier_id: Mapped[int] = mapped_column(ForeignKey("identifier.id", ondelete="CASCADE"), nullable=False)
 
     person: Mapped[Person] = relationship(back_populates="identity_documents")
-    identifier: Mapped[Identifier] = relationship(
-        back_populates="identity_documents", lazy="joined"
-    )
+    identifier: Mapped[Identifier] = relationship(back_populates="identity_documents", lazy="joined")

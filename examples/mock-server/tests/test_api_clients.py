@@ -8,7 +8,6 @@ from httpx import AsyncClient
 
 from mock_server import db as db_module
 
-
 # ---------------------------------------------------------------------------
 # REST: creation, rotation, revocation, deletion
 # ---------------------------------------------------------------------------
@@ -34,9 +33,7 @@ async def _create_client(
     return resp.json()
 
 
-async def test_create_returns_plaintext_secret_once(
-    client: AsyncClient, auth_headers: dict[str, str]
-) -> None:
+async def test_create_returns_plaintext_secret_once(client: AsyncClient, auth_headers: dict[str, str]) -> None:
     """POST returns plaintext secret, GET never does."""
     body = await _create_client(client, auth_headers, name="Adapter A")
     assert body["client_secret"]  # plaintext, one-time
@@ -56,9 +53,7 @@ async def test_create_returns_plaintext_secret_once(
     assert got["client_id"] == body["client_id"]
 
 
-async def test_new_client_can_obtain_token(
-    client: AsyncClient, auth_headers: dict[str, str]
-) -> None:
+async def test_new_client_can_obtain_token(client: AsyncClient, auth_headers: dict[str, str]) -> None:
     """The secret returned from POST actually works against /oauth/token."""
     body = await _create_client(client, auth_headers, name="Adapter B")
     resp = await client.post(
@@ -74,9 +69,7 @@ async def test_new_client_can_obtain_token(
     assert isinstance(token, str)
 
 
-async def test_rotate_invalidates_old_secret(
-    client: AsyncClient, auth_headers: dict[str, str]
-) -> None:
+async def test_rotate_invalidates_old_secret(client: AsyncClient, auth_headers: dict[str, str]) -> None:
     """After rotate, the old secret fails and the new one works."""
     created = await _create_client(client, auth_headers)
     old_secret = created["client_secret"]
@@ -108,9 +101,7 @@ async def test_rotate_invalidates_old_secret(
     assert r_new.status_code == 200, r_new.text
 
 
-async def test_revoke_blocks_new_token_issuance(
-    client: AsyncClient, auth_headers: dict[str, str]
-) -> None:
+async def test_revoke_blocks_new_token_issuance(client: AsyncClient, auth_headers: dict[str, str]) -> None:
     """Revoked clients cannot obtain new tokens."""
     created = await _create_client(client, auth_headers)
     uuid = created["uuid"]
@@ -132,9 +123,7 @@ async def test_revoke_blocks_new_token_issuance(
     assert r.status_code == 401
 
 
-async def test_hard_delete_removes_client(
-    client: AsyncClient, auth_headers: dict[str, str]
-) -> None:
+async def test_hard_delete_removes_client(client: AsyncClient, auth_headers: dict[str, str]) -> None:
     """DELETE /v1/api-clients/{uuid} is a hard-delete."""
     created = await _create_client(client, auth_headers)
     uuid = created["uuid"]
@@ -146,9 +135,7 @@ async def test_hard_delete_removes_client(
     assert got.status_code == 404
 
 
-async def test_list_pagination_and_filter(
-    client: AsyncClient, auth_headers: dict[str, str]
-) -> None:
+async def test_list_pagination_and_filter(client: AsyncClient, auth_headers: dict[str, str]) -> None:
     """List returns the default-seeded client plus newly created ones; active_only filters."""
     await _create_client(client, auth_headers, name="Keep me")
     second = await _create_client(client, auth_headers, name="To revoke")
@@ -170,9 +157,7 @@ async def test_list_pagination_and_filter(
 # ---------------------------------------------------------------------------
 
 
-async def test_seed_bootstraps_env_client(
-    client: AsyncClient, auth_headers: dict[str, str]
-) -> None:
+async def test_seed_bootstraps_env_client(client: AsyncClient, auth_headers: dict[str, str]) -> None:
     """The env-default client (test-client/test-secret) is seeded automatically."""
     # The conftest `app` fixture calls seed_default_api_client() after create_all,
     # so we should be able to authenticate with test-client/test-secret immediately.

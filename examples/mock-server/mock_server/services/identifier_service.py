@@ -26,9 +26,7 @@ class IdentifierService:
 
     # ----- creation helpers used by PersonService/GroupService ---------------
 
-    async def auto_assign_system_id(
-        self, *, person: Person | None = None, group: Group | None = None
-    ) -> Identifier:
+    async def auto_assign_system_id(self, *, person: Person | None = None, group: Group | None = None) -> Identifier:
         """Auto-insert a ``system_id`` Identifier on Person/Group creation.
 
         The value is a fresh UUID; the scheme comes from settings. Callers
@@ -67,9 +65,7 @@ class IdentifierService:
     ) -> Identifier:
         """Attach a new non-system_id identifier to a Person."""
         if identifier_type == SYSTEM_ID_TYPE:
-            raise ForbiddenError(
-                f"Identifier type '{SYSTEM_ID_TYPE}' is reserved and assigned by the server."
-            )
+            raise ForbiddenError(f"Identifier type '{SYSTEM_ID_TYPE}' is reserved and assigned by the server.")
         person = await self.session.get(Person, person_uuid)
         if person is None:
             raise NotFoundError(f"Person {person_uuid} not found")
@@ -112,9 +108,7 @@ class IdentifierService:
     ) -> Identifier:
         """Return a Person's matching identifier or create one."""
         if identifier_type == SYSTEM_ID_TYPE:
-            raise ForbiddenError(
-                f"Identifier type '{SYSTEM_ID_TYPE}' is reserved and assigned by the server."
-            )
+            raise ForbiddenError(f"Identifier type '{SYSTEM_ID_TYPE}' is reserved and assigned by the server.")
         scheme = identifier_scheme_id or self.settings.identifier_scheme
         stmt = select(Identifier).where(
             Identifier.person_uuid == person_uuid,

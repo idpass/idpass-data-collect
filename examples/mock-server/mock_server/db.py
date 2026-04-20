@@ -61,9 +61,7 @@ def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
     """Return the lazily initialised async session factory."""
     global _sessionmaker
     if _sessionmaker is None:
-        _sessionmaker = async_sessionmaker(
-            bind=get_engine(), expire_on_commit=False, class_=AsyncSession
-        )
+        _sessionmaker = async_sessionmaker(bind=get_engine(), expire_on_commit=False, class_=AsyncSession)
     return _sessionmaker
 
 

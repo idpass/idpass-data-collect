@@ -78,9 +78,7 @@ class AuthController(Controller):
         """
         settings = get_settings()
         if data.grant_type != "client_credentials":
-            raise ValidationError(
-                f"Unsupported grant_type '{data.grant_type}'. Expected 'client_credentials'."
-            )
+            raise ValidationError(f"Unsupported grant_type '{data.grant_type}'. Expected 'client_credentials'.")
 
         client_id = data.client_id
         client_secret = data.client_secret

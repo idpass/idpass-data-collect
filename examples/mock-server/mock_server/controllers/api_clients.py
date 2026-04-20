@@ -80,9 +80,7 @@ class ApiClientController(Controller):
         return _to_response(client)
 
     @post("/", status_code=HTTP_201_CREATED)
-    async def create_client(
-        self, data: CreateApiClient, db_session: AsyncSession
-    ) -> ApiClientWithSecret:
+    async def create_client(self, data: CreateApiClient, db_session: AsyncSession) -> ApiClientWithSecret:
         """Create a new client and return the one-time plaintext secret.
 
         The secret in the response is the **only** opportunity to capture it.

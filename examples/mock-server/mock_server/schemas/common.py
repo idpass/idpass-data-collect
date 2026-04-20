@@ -1,15 +1,9 @@
 """Shared schema types: pagination envelope and error body."""
 
-from __future__ import annotations
-
-from typing import Generic, TypeVar
-
 from pydantic import BaseModel, ConfigDict, Field
 
-T = TypeVar("T")
 
-
-class PaginatedResponse(BaseModel, Generic[T]):
+class PaginatedResponse[T](BaseModel):
     """Generic page envelope used by all list endpoints."""
 
     model_config = ConfigDict(from_attributes=True)

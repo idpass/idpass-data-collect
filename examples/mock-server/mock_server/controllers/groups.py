@@ -44,9 +44,7 @@ class GroupController(Controller):
     ) -> PaginatedResponse[GroupOut]:
         """Paged list of groups (sorted by ``updated_at`` ascending)."""
         svc = GroupService(db_session)
-        rows, total = await svc.list(
-            updated_since=updated_since, limit=limit, offset=offset, search=search
-        )
+        rows, total = await svc.list(updated_since=updated_since, limit=limit, offset=offset, search=search)
         next_offset = offset + limit if offset + limit < total else None
         return PaginatedResponse[GroupOut](
             items=[_to_out(r) for r in rows],
@@ -69,9 +67,7 @@ class GroupController(Controller):
         return _to_out(await svc.create(data))
 
     @patch("/{uuid:str}")
-    async def update_group(
-        self, uuid: str, data: UpdateGroup, request: Request, db_session: AsyncSession
-    ) -> GroupOut:
+    async def update_group(self, uuid: str, data: UpdateGroup, request: Request, db_session: AsyncSession) -> GroupOut:
         """Patch a Group. Honours the optional ``If-Match`` header."""
         if_match = request.headers.get("if-match")
         svc = GroupService(db_session)
@@ -86,18 +82,14 @@ class GroupController(Controller):
     # ----- membership --------------------------------------------------------
 
     @post("/{uuid:str}/members", status_code=HTTP_201_CREATED)
-    async def add_member(
-        self, uuid: str, data: MemberAdd, db_session: AsyncSession
-    ) -> GroupOut:
+    async def add_member(self, uuid: str, data: MemberAdd, db_session: AsyncSession) -> GroupOut:
         """Add a Person to the Group."""
         svc = GroupService(db_session)
         await svc.add_member(uuid, data.person_uuid, role=data.role)
         return _to_out(await svc.get(uuid))
 
     @delete("/{uuid:str}/members/{person_uuid:str}", status_code=HTTP_204_NO_CONTENT)
-    async def remove_member(
-        self, uuid: str, person_uuid: str, db_session: AsyncSession
-    ) -> None:
+    async def remove_member(self, uuid: str, person_uuid: str, db_session: AsyncSession) -> None:
         """Remove a Person from the Group."""
         svc = GroupService(db_session)
         await svc.remove_member(uuid, person_uuid)

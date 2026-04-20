@@ -36,9 +36,7 @@ async def _paginate(client: AsyncClient, headers: dict[str, str], base: str) -> 
     return items
 
 
-async def test_full_sync_contract(
-    client: AsyncClient, auth_headers: dict[str, str], seeded: None
-) -> None:
+async def test_full_sync_contract(client: AsyncClient, auth_headers: dict[str, str], seeded: None) -> None:
     """Full two-pass sync contract check against the seeded fixture."""
     # 1. Initial pull — pagination walks the full set.
     persons = await _paginate(client, auth_headers, "/v1/persons")
@@ -94,9 +92,7 @@ async def test_health_no_auth(client: AsyncClient) -> None:
     assert resp.json()["status"] == "ok"
 
 
-async def test_second_sync_is_stable(
-    client: AsyncClient, auth_headers: dict[str, str], seeded: None
-) -> None:
+async def test_second_sync_is_stable(client: AsyncClient, auth_headers: dict[str, str], seeded: None) -> None:
     """Running the sync twice with the same watermark is idempotent."""
     all_persons = await _paginate(client, auth_headers, "/v1/persons")
     assert all_persons

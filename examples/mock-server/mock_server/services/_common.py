@@ -38,13 +38,9 @@ def check_if_match(header_value: str | None, current_updated_at: datetime) -> No
     try:
         provided = datetime.fromisoformat(header_value.replace("Z", "+00:00"))
     except ValueError as exc:
-        raise PreconditionFailedError(
-            f"If-Match header is not a valid ISO 8601 datetime: {header_value!r}"
-        ) from exc
+        raise PreconditionFailedError(f"If-Match header is not a valid ISO 8601 datetime: {header_value!r}") from exc
     provided_utc = _as_utc(provided)
     current_utc = _as_utc(current_updated_at)
     # ~1ms tolerance to survive trivial DB round-trip formatting differences.
     if abs((provided_utc - current_utc).total_seconds()) > 0.001:
-        raise PreconditionFailedError(
-            "If-Match precondition failed: resource has been modified since it was read."
-        )
+        raise PreconditionFailedError("If-Match precondition failed: resource has been modified since it was read.")

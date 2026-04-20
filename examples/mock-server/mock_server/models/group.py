@@ -56,12 +56,8 @@ class GroupMembership(Base):
     __tablename__ = "group_membership"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    group_uuid: Mapped[str] = mapped_column(
-        String(36), ForeignKey("group.uuid", ondelete="CASCADE"), nullable=False
-    )
-    person_uuid: Mapped[str] = mapped_column(
-        String(36), ForeignKey("person.uuid", ondelete="CASCADE"), nullable=False
-    )
+    group_uuid: Mapped[str] = mapped_column(String(36), ForeignKey("group.uuid", ondelete="CASCADE"), nullable=False)
+    person_uuid: Mapped[str] = mapped_column(String(36), ForeignKey("person.uuid", ondelete="CASCADE"), nullable=False)
     role: Mapped[str | None] = mapped_column(String(64), nullable=True, doc="e.g. 'head', 'member'.")
     joined_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     ended_at: Mapped[datetime | None] = mapped_column(nullable=True)
@@ -69,6 +65,4 @@ class GroupMembership(Base):
     group: Mapped[Group] = relationship(back_populates="memberships", lazy="joined")
     person: Mapped[Person] = relationship(back_populates="memberships", lazy="joined")
 
-    __table_args__ = (
-        UniqueConstraint("group_uuid", "person_uuid", name="uq_group_membership_group_person"),
-    )
+    __table_args__ = (UniqueConstraint("group_uuid", "person_uuid", name="uq_group_membership_group_person"),)

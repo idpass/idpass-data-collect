@@ -103,9 +103,7 @@ class Settings(BaseSettings):
     def effective_session_secret(self) -> str:
         """Return the session cookie signing secret, generating if none configured."""
         if self.session_secret == _DEFAULT_SESSION_SECRET_SENTINEL:
-            logger.warning(
-                "MOCK_SESSION_SECRET not set — generating an ephemeral session secret."
-            )
+            logger.warning("MOCK_SESSION_SECRET not set — generating an ephemeral session secret.")
             self.session_secret = secrets.token_urlsafe(48)
         return self.session_secret
 

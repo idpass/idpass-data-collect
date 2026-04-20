@@ -32,7 +32,7 @@ async def jwt_auth_guard(connection: ASGIConnection, _handler: BaseRouteHandler)
     connection.scope["client_id"] = claims.sub  # type: ignore[typeddict-unknown-key]
 
 
-class SessionAuthRedirect(Exception):
+class SessionAuthRedirectError(Exception):
     """Raised when a UI request has no session; app redirects to /ui/login."""
 
 
@@ -41,11 +41,11 @@ async def ui_session_guard(connection: ASGIConnection, _handler: BaseRouteHandle
 
     Implemented by raising a typed exception handled in app.py: Litestar
     Guards can't return responses directly, but we register an exception
-    handler that maps :class:`SessionAuthRedirect` to a 303 redirect.
+    handler that maps :class:`SessionAuthRedirectError` to a 303 redirect.
     """
     session = getattr(connection, "session", None) or {}
     if not session.get("authenticated"):
-        raise SessionAuthRedirect()
+        raise SessionAuthRedirectError()
 
 
 def build_login_redirect() -> Redirect:

@@ -44,9 +44,7 @@ async def seed_default_api_client() -> None:
     settings = get_settings()
     sm = get_sessionmaker()
     async with sm() as session:
-        existing = await session.execute(
-            select(ApiClient).where(ApiClient.client_id == settings.oauth_client_id)
-        )
+        existing = await session.execute(select(ApiClient).where(ApiClient.client_id == settings.oauth_client_id))
         if existing.scalar_one_or_none() is not None:
             return
 
@@ -68,9 +66,7 @@ async def seed_default_api_client() -> None:
         )
         session.add(client)
         await session.commit()
-        logger.info(
-            "seeded default api_client from env: client_id=%s", settings.oauth_client_id
-        )
+        logger.info("seeded default api_client from env: client_id=%s", settings.oauth_client_id)
 
 
 async def seed(*, reset: bool = False) -> None:
@@ -166,6 +162,4 @@ async def seed(*, reset: bool = False) -> None:
 
         await session.commit()
 
-    logger.info(
-        "seed complete: 2 groups, 5 persons (3 with real identifiers, 2 system_id-only), 1 passport document"
-    )
+    logger.info("seed complete: 2 groups, 5 persons (3 with real identifiers, 2 system_id-only), 1 passport document")

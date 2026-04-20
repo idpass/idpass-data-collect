@@ -94,16 +94,12 @@ class GroupService:
         person = await self.session.get(Person, person_uuid)
         if person is None:
             raise NotFoundError(f"Person {person_uuid} not found")
-        membership = GroupMembership(
-            group_uuid=group.uuid, person_uuid=person.uuid, role=role
-        )
+        membership = GroupMembership(group_uuid=group.uuid, person_uuid=person.uuid, role=role)
         self.session.add(membership)
         try:
             await self.session.flush()
         except IntegrityError as exc:
-            raise ConflictError(
-                f"Person {person_uuid} is already a member of group {group_uuid}."
-            ) from exc
+            raise ConflictError(f"Person {person_uuid} is already a member of group {group_uuid}.") from exc
         # Bump group.updated_at so sync notices the membership change.
         group.updated_at = utc_now()
         await self.session.flush()
@@ -117,9 +113,7 @@ class GroupService:
         )
         row = (await self.session.execute(stmt)).scalar_one_or_none()
         if row is None:
-            raise NotFoundError(
-                f"Membership not found: group={group_uuid} person={person_uuid}"
-            )
+            raise NotFoundError(f"Membership not found: group={group_uuid} person={person_uuid}")
         group = await self.get(group_uuid)
         await self.session.delete(row)
         await self.session.flush()

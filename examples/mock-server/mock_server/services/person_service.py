@@ -58,12 +58,10 @@ class PersonService:
         if search:
             needle = f"%{search.lower()}%"
             stmt = stmt.where(
-                (func.lower(Person.given_name).like(needle))
-                | (func.lower(Person.family_name).like(needle))
+                (func.lower(Person.given_name).like(needle)) | (func.lower(Person.family_name).like(needle))
             )
             count_stmt = count_stmt.where(
-                (func.lower(Person.given_name).like(needle))
-                | (func.lower(Person.family_name).like(needle))
+                (func.lower(Person.given_name).like(needle)) | (func.lower(Person.family_name).like(needle))
             )
 
         stmt = stmt.order_by(Person.updated_at.asc(), Person.uuid.asc()).limit(limit).offset(offset)
@@ -106,9 +104,7 @@ class PersonService:
 
     # ----- identity-document sub-resource -----------------------------------
 
-    async def add_identity_document(
-        self, person_uuid: str, payload: CreateIdentityDocument
-    ) -> IdentityDocument:
+    async def add_identity_document(self, person_uuid: str, payload: CreateIdentityDocument) -> IdentityDocument:
         """Attach an IdentityDocument, auto-creating the embedded Identifier if needed."""
         await self.get(person_uuid)  # existence check
         ident = await self.identifiers.find_or_create_identifier_for_person(

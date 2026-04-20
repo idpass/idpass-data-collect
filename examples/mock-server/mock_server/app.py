@@ -26,7 +26,7 @@ from litestar.response import Redirect, Template
 from litestar.stores.memory import MemoryStore
 from litestar.template.config import TemplateConfig
 
-from mock_server.auth.guards import SessionAuthRedirect
+from mock_server.auth.guards import SessionAuthRedirectError
 from mock_server.config import Settings, get_settings
 from mock_server.controllers.api_clients import ApiClientController
 from mock_server.controllers.auth import AuthController
@@ -107,7 +107,7 @@ def _validation_handler(request: Request, exc: ValidationException) -> Response:
     return Response(content=payload, status_code=422, media_type=MediaType.JSON)
 
 
-def _session_redirect_handler(request: Request, exc: SessionAuthRedirect) -> Redirect:
+def _session_redirect_handler(request: Request, exc: SessionAuthRedirectError) -> Redirect:
     """Guard → redirect to /ui/login for unauthenticated UI requests."""
     return Redirect(path="/ui/login", status_code=303)
 
@@ -240,7 +240,7 @@ def create_app(settings: Settings | None = None) -> Litestar:
             NotFoundException: _not_found_handler,
             ValidationException: _validation_handler,
             HTTPException: _http_exception_handler,
-            SessionAuthRedirect: _session_redirect_handler,
+            SessionAuthRedirectError: _session_redirect_handler,
             Exception: _unhandled_handler,
         },
         on_startup=[_ensure_tables],
