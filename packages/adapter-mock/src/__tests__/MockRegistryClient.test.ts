@@ -144,10 +144,15 @@ describe("MockRegistryClient", () => {
 
       const token = await client.getToken();
       expect(token).toBe(makeJwt(exp));
-      expect(instance.post).toHaveBeenCalledWith("/oauth/token", {
-        grant_type: "client_credentials",
-        client_id: "c",
-        client_secret: "s",
+      // RFC 6749: token endpoint is form-encoded, not JSON.
+      const [url, body, options] = instance.post.mock.calls[0];
+      expect(url).toBe("/oauth/token");
+      expect(body).toBeInstanceOf(URLSearchParams);
+      expect((body as URLSearchParams).get("grant_type")).toBe("client_credentials");
+      expect((body as URLSearchParams).get("client_id")).toBe("c");
+      expect((body as URLSearchParams).get("client_secret")).toBe("s");
+      expect(options).toMatchObject({
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
       });
     });
 

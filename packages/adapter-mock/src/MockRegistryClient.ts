@@ -186,14 +186,19 @@ export class MockRegistryClient {
       return this.accessToken;
     }
 
-    const body = {
+    // RFC 6749 §4.4.2 — the token endpoint expects
+    // `application/x-www-form-urlencoded`, not JSON. Mock registry (Litestar)
+    // enforces this and returns 422 on a JSON body.
+    const body = new URLSearchParams({
       grant_type: "client_credentials",
       client_id: this.clientId,
       client_secret: this.clientSecret,
-    };
+    });
 
     try {
-      const response = await this.http.post<OAuth2TokenResponse>("/oauth/token", body);
+      const response = await this.http.post<OAuth2TokenResponse>("/oauth/token", body, {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      });
       const { access_token, expires_in } = response.data;
 
       if (!access_token) {
