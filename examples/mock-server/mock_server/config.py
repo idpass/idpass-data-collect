@@ -6,12 +6,14 @@ server can be started with zero configuration.
 
 from __future__ import annotations
 
+import json
 import logging
 import secrets
 from functools import lru_cache
+from typing import Annotated
 
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +62,7 @@ class Settings(BaseSettings):
 
     log_level: str = Field(default="INFO")
 
-    cors_allowed_origins: list[str] = Field(
+    cors_allowed_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: [
             "http://localhost",
             "http://localhost:3000",
@@ -69,11 +71,26 @@ class Settings(BaseSettings):
             "http://127.0.0.1:9999",
         ],
         description=(
-            "Origins allowed to make browser requests. Comma-separated list via "
-            "MOCK_CORS_ALLOWED_ORIGINS env var. Defaults to common localhost ports. "
-            "Set to ['*'] to disable CORS restrictions (not recommended)."
+            "Origins allowed to make browser requests. Accepts comma-separated list "
+            "(e.g. 'https://a.example,https://b.example'), single origin, '*' to allow "
+            "all, or a JSON array. Set via MOCK_CORS_ALLOWED_ORIGINS."
         ),
     )
+
+    @field_validator("cors_allowed_origins", mode="before")
+    @classmethod
+    def _parse_cors_origins(cls, v: object) -> object:
+        # Accept comma-separated string, JSON array, or already-parsed list. The
+        # NoDecode annotation above disables pydantic-settings' default JSON
+        # decode, so we handle both shapes here ourselves.
+        if not isinstance(v, str):
+            return v
+        s = v.strip()
+        if not s:
+            return []
+        if s.startswith("[") and s.endswith("]"):
+            return json.loads(s)
+        return [origin.strip() for origin in s.split(",") if origin.strip()]
 
     @property
     def db_url(self) -> str:
