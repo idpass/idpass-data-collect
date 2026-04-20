@@ -21,6 +21,7 @@ from litestar.exceptions import HTTPException, NotFoundException, ValidationExce
 from litestar.middleware.session.server_side import ServerSideSessionConfig
 from litestar.openapi import OpenAPIConfig
 from litestar.openapi.plugins import ScalarRenderPlugin, SwaggerRenderPlugin
+from litestar.openapi.spec import Components, OAuthFlow, OAuthFlows, SecurityScheme
 from litestar.response import Redirect, Template
 from litestar.stores.memory import MemoryStore
 from litestar.template.config import TemplateConfig
@@ -173,10 +174,33 @@ def create_app(settings: Settings | None = None) -> Litestar:
         version="1.0.0",
         description=(
             "PublicSchema-aligned mock registry used as a reference for DataCollect "
-            "external sync adapter development. See README for the full adapter contract."
+            "external sync adapter development. All /v1/** endpoints require an OAuth2 "
+            "Bearer token. Click **Authorize** below, enter client credentials "
+            "(defaults: `mock-client` / `mock-secret`), then call any protected endpoint."
         ),
         render_plugins=[SwaggerRenderPlugin(path="/docs"), ScalarRenderPlugin(path="/scalar")],
         path="/schema",
+        components=Components(
+            security_schemes={
+                "oauth2": SecurityScheme(
+                    type="oauth2",
+                    description="Client credentials grant against /oauth/token.",
+                    flows=OAuthFlows(
+                        client_credentials=OAuthFlow(
+                            token_url="/oauth/token",
+                            scopes={},
+                        ),
+                    ),
+                ),
+                "bearer": SecurityScheme(
+                    type="http",
+                    scheme="bearer",
+                    bearer_format="JWT",
+                    description="Paste a raw JWT from /oauth/token.",
+                ),
+            },
+        ),
+        security=[{"oauth2": []}, {"bearer": []}],
     )
 
     cors_config = CORSConfig(
