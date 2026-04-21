@@ -96,3 +96,43 @@ describe("individualToPersonUpdate", () => {
     expect(patch.attributes).toEqual({ preferred_language: "en" });
   });
 });
+
+import { groupToGroupCreate, groupToGroupUpdate } from "../pushTransformers/groupToGroup";
+
+function groupEntity(data: Record<string, unknown>): EntityDoc {
+  return {
+    id: "g1",
+    guid: "guid-g1",
+    externalId: "",
+    type: "group",
+    version: 1,
+    data,
+    lastUpdated: new Date().toISOString(),
+  } as unknown as EntityDoc;
+}
+
+describe("groupToGroupCreate", () => {
+  it("forwards non-core fields via attributes", () => {
+    const payload = groupToGroupCreate(
+      groupEntity({
+        name: "Lovelace Household",
+        group_type: "household",
+        geo_area_id: "area-42",
+      }),
+      SCHEME,
+      TYPE,
+    );
+    expect(payload.name).toBe("Lovelace Household");
+    expect(payload.group_type).toBe("household");
+    expect(payload.attributes).toEqual({ geo_area_id: "area-42" });
+  });
+});
+
+describe("groupToGroupUpdate", () => {
+  it("omits untouched fields and forwards the rest as attributes", () => {
+    const patch = groupToGroupUpdate(groupEntity({ name: "Turing", geo_area_id: "area-7" }));
+    expect(patch.name).toBe("Turing");
+    expect(patch.group_type).toBeUndefined();
+    expect(patch.attributes).toEqual({ geo_area_id: "area-7" });
+  });
+});

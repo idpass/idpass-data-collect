@@ -20,20 +20,37 @@
 import type { EntityDoc } from "@idpass/data-collect-core";
 import type { GroupCreate, GroupUpdate, Identifier } from "../types";
 
-/** Mock server accepts any string for group_type but these are the canonical values. */
 const DEFAULT_GROUP_TYPE = "household";
 
-/**
- * Transform a DC group entity into the payload shape for `POST /v1/groups`.
- */
-export function groupToGroupCreate(
-  entity: EntityDoc,
-  identifierScheme: string,
-  identifierType: string,
-): GroupCreate {
-  const data = entity.data ?? {};
+const CORE_GROUP_FIELDS = new Set(["name", "group_type"]);
 
-  const identifiers: Identifier[] = [
+const INTERNAL_FIELDS = new Set([
+  "entityName",
+  "_displayName",
+  "externalId",
+  "identifiers",
+  "memberships",
+  "memberIds",
+  "attributes",
+]);
+
+function collectAttributes(data: Record<string, unknown>): Record<string, unknown> | undefined {
+  const attrs: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (CORE_GROUP_FIELDS.has(key) || INTERNAL_FIELDS.has(key)) continue;
+    if (key.startsWith("_")) continue;
+    if (key === "groupName" || key === "group_name" || key === "groupType") continue;
+    attrs[key] = value;
+  }
+  if (data.attributes && typeof data.attributes === "object" && !Array.isArray(data.attributes)) {
+    Object.assign(attrs, data.attributes as Record<string, unknown>);
+  }
+  return Object.keys(attrs).length ? attrs : undefined;
+}
+
+function buildIdentifiers(entity: EntityDoc, identifierScheme: string, identifierType: string): Identifier[] {
+  const data = entity.data ?? {};
+  const out: Identifier[] = [
     {
       identifier_type: identifierType,
       identifier_value: entity.guid,
@@ -41,53 +58,51 @@ export function groupToGroupCreate(
       identifier_scheme_name: "Mock ID Type",
     },
   ];
-
-  const userIdentifiers = Array.isArray(data.identifiers)
-    ? (data.identifiers as Identifier[])
-    : [];
-  for (const id of userIdentifiers) {
+  const user = Array.isArray(data.identifiers) ? (data.identifiers as Identifier[]) : [];
+  for (const id of user) {
     if (!id || !id.identifier_type || !id.identifier_value) continue;
     if (id.identifier_type === identifierType) continue;
-    identifiers.push({
+    out.push({
       identifier_type: id.identifier_type,
       identifier_value: id.identifier_value,
       identifier_scheme_id: id.identifier_scheme_id ?? identifierScheme,
       identifier_scheme_name: id.identifier_scheme_name,
     });
   }
+  return out;
+}
 
-  const name =
-    (data.name as string | undefined) ??
-    (data.groupName as string | undefined) ??
-    (data.group_name as string | undefined) ??
-    (entity.name as string | undefined) ??
-    "";
-
+export function groupToGroupCreate(
+  entity: EntityDoc,
+  identifierScheme: string,
+  identifierType: string,
+): GroupCreate {
+  const data = entity.data ?? {};
+  const name = (data.name as string | undefined)
+    ?? (data.groupName as string | undefined)
+    ?? (data.group_name as string | undefined)
+    ?? (entity.name as string | undefined)
+    ?? "";
+  const group_type = (data.group_type as string | undefined)
+    ?? (data.groupType as string | undefined)
+    ?? DEFAULT_GROUP_TYPE;
+  const attributes = collectAttributes(data);
   return {
     name,
-    group_type: (data.groupType as string | undefined) ??
-      (data.group_type as string | undefined) ??
-      DEFAULT_GROUP_TYPE,
-    identifiers,
+    group_type,
+    identifiers: buildIdentifiers(entity, identifierScheme, identifierType),
+    ...(attributes ? { attributes } : {}),
   };
 }
 
-/**
- * Transform a DC group entity into the payload shape for `PATCH /v1/groups/{uuid}`.
- */
 export function groupToGroupUpdate(entity: EntityDoc): GroupUpdate {
   const data = entity.data ?? {};
   const patch: GroupUpdate = {};
-
   const newName = data.name ?? data.groupName ?? data.group_name;
-  if (newName !== undefined) {
-    patch.name = String(newName);
-  }
-
-  const newType = data.groupType ?? data.group_type;
-  if (newType !== undefined) {
-    patch.group_type = String(newType);
-  }
-
+  if (newName !== undefined) patch.name = String(newName);
+  const newType = data.group_type ?? data.groupType;
+  if (newType !== undefined) patch.group_type = String(newType);
+  const attributes = collectAttributes(data);
+  if (attributes) patch.attributes = attributes;
   return patch;
 }
