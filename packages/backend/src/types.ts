@@ -80,6 +80,12 @@ export interface EntityForm {
   entityType?: "group" | "individual" | "record";
   nameField?: string;
   formio: object;
+  generatedFrom?: {
+    source: "publicschema";
+    publicSchemaVersion: string;
+    concept: "Person" | "Group" | "Identifier";
+    generatedAt: string;
+  };
 }
 
 export interface EntityDataItem {
