@@ -565,10 +565,18 @@ html[data-theme='dark'] .mermaid-container {
 }
 /* ── Content links ────────────────────────────────────────────────────
    Body copy links use the brand orange with a persistent underline so
-   affordance is obvious at a glance (not only on hover). Scoped to the
-   markdown content region — nav, sidebar, and footer links keep their
-   theme-native styling. */
-.markdown a:not(.button):not(.card):not(.menu__link):not(.pagination-nav__link):not(.navbar__link) {
+   affordance is obvious at a glance (not only on hover).
+
+   Scoped positively to body-copy contexts only: paragraphs, list items,
+   table cells, definition terms, and blockquotes. This keeps cards,
+   hero buttons, tab strips, standalone card-wrapping anchors, navbar,
+   sidebar, footer, breadcrumbs, TOC, and edit-this-page unaffected —
+   they own their own link styling. */
+.markdown p a,
+.markdown li a,
+.markdown td a,
+.markdown dd a,
+.markdown blockquote a {
   color: var(--ifm-color-brand);
   text-decoration: underline;
   text-decoration-thickness: 1.5px;
@@ -578,23 +586,67 @@ html[data-theme='dark'] .mermaid-container {
   transition: color 120ms ease, text-decoration-thickness 120ms ease;
 }
 
-.markdown a:not(.button):not(.card):not(.menu__link):not(.pagination-nav__link):not(.navbar__link):hover {
+.markdown p a:hover,
+.markdown li a:hover,
+.markdown td a:hover,
+.markdown dd a:hover,
+.markdown blockquote a:hover {
   color: var(--ifm-color-brand-dark);
   text-decoration-thickness: 2.5px;
 }
 
-.markdown a:not(.button):not(.card):not(.menu__link):not(.pagination-nav__link):not(.navbar__link):focus-visible {
+.markdown p a:focus-visible,
+.markdown li a:focus-visible,
+.markdown td a:focus-visible,
+.markdown dd a:focus-visible,
+.markdown blockquote a:focus-visible {
   outline: 2px solid var(--ifm-color-brand);
   outline-offset: 2px;
   border-radius: 2px;
 }
 
-[data-theme='dark'] .markdown a:not(.button):not(.card):not(.menu__link):not(.pagination-nav__link):not(.navbar__link) {
+[data-theme='dark'] .markdown p a,
+[data-theme='dark'] .markdown li a,
+[data-theme='dark'] .markdown td a,
+[data-theme='dark'] .markdown dd a,
+[data-theme='dark'] .markdown blockquote a {
   color: var(--ifm-color-brand-light);
 }
 
-[data-theme='dark'] .markdown a:not(.button):not(.card):not(.menu__link):not(.pagination-nav__link):not(.navbar__link):hover {
+[data-theme='dark'] .markdown p a:hover,
+[data-theme='dark'] .markdown li a:hover,
+[data-theme='dark'] .markdown td a:hover,
+[data-theme='dark'] .markdown dd a:hover,
+[data-theme='dark'] .markdown blockquote a:hover {
   color: var(--ifm-color-brand);
+}
+
+/* Admonitions (note/tip/warning/danger) own their own link palette.
+   Keep the underline affordance but inherit the admonition's text color
+   so the link doesn't clash with the admonition's background. */
+.markdown .theme-admonition p a,
+.markdown .theme-admonition li a,
+.markdown .alert p a,
+.markdown .alert li a {
+  color: inherit;
+  font-weight: 600;
+}
+
+.markdown .theme-admonition p a:hover,
+.markdown .theme-admonition li a:hover,
+.markdown .alert p a:hover,
+.markdown .alert li a:hover {
+  color: inherit;
+}
+
+/* Guide cards and card wrappers own their hover/active treatment — any
+   <a> that wraps a card ends up as a sibling of body-copy selectors and
+   must not inherit underlines. Belt-and-braces override. */
+.markdown a.guide-card,
+.markdown a.card,
+.markdown .guide-card a,
+.markdown .card a:not(.button) {
+  text-decoration: none;
 }
 
 /* Headings that are also links (auto-anchors) should not pick up link
