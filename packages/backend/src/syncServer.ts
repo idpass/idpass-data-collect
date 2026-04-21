@@ -21,39 +21,142 @@ import bcrypt from "bcrypt";
 import bodyParser from "body-parser";
 import cors from "cors";
 import express from "express";
+import helmet from "helmet";
+import pinoHttp from "pino-http";
+import crypto from "crypto";
 import path from "path";
 import fs from "fs/promises";
-import swaggerUi from "swagger-ui-express";
 import YAML from "yamljs";
+import { Pool } from "pg";
 import { errorHandler, notFoundHandler, setupUncaughtHandlers } from "./middlewares/errorHandlers";
 import { createAppConfigRoutes } from "./routes/appConfigRoutes";
 import { createEntitiesRouter } from "./routes/entitiesRoute";
+import { createOpenSppFieldRoutes } from "./routes/opensppFieldRoutes";
 import { createPotentialDuplicatesRoute } from "./routes/potentialDuplicatesRoute";
 import { createSyncRouter } from "./routes/syncRoute";
 import { createUserRoutes } from "./routes/userRoutes";
+import { createSelfServiceRouter } from "./routes/selfServiceRoutes";
+import { createReviewRoutes, clearReviewState } from "./routes/reviewRoutes";
+import { createAttachmentRoutes } from "./routes/attachmentRoutes";
 import { AppConfigStoreImpl } from "./stores/AppConfigStore";
 import { AppInstanceStoreImpl } from "./stores/AppInstanceStore";
 import { UserStoreImpl } from "./stores/UserStore";
+import { OtpStoreImpl } from "./stores/OtpStore";
+import { ReviewStoreImpl } from "./stores/ReviewStore";
 import { Role, SyncServerConfig, SyncServerInstance } from "./types";
 import { generatePublicArtifacts, resolvePublicBaseUrl } from "./utils/publicArtifacts";
+import { logger, createLogger } from "./utils/logger";
+import { initializeDatabase } from "./db/initialize";
+import { adapterRegistry, type ExternalSyncAdapterV2, type EntityPushPayload, type SyncResult, type HealthCheckResult } from "@idpass/data-collect-core";
+import { OpenSppOdooSyncAdapter, OpenSppV2SyncAdapter } from "@idpass/adapter-openspp";
+import { OpenFnSyncAdapterV2 } from "@idpass/adapter-openfn";
+import { MockRegistrySyncAdapter } from "@idpass/adapter-mock";
+
+const log = createLogger("syncServer");
+
+// Register external sync adapters with the V2 adapter registry
+// openspp-v1-adapter: Odoo JSON-RPC (database/username/password)
+adapterRegistry.register("openspp-v1-adapter", (deps) =>
+  new OpenSppOdooSyncAdapter(deps!.eventStore, deps!.eventApplierService, deps!.syncConfig),
+);
+// openspp-v2-adapter: REST API with OAuth2 (clientId/clientSecret)
+adapterRegistry.register("openspp-v2-adapter", (deps) => {
+  const adapter = new OpenSppV2SyncAdapter(deps!.eventStore, deps!.eventApplierService, deps!.syncConfig);
+  // Wrap the V1-interface adapter in the V2 adapter interface
+  return {
+    descriptor: () => ({
+      type: "openspp-v2",
+      version: "2.0.0",
+      capabilities: ["push" as const, "pull" as const],
+      configSchema: {} as never,
+    }),
+    initialize: async () => { await adapter.authenticate(); },
+    healthCheck: async (): Promise<HealthCheckResult> => ({ healthy: true, message: "OpenSPP V2 REST adapter" }),
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    push: async (_entities: EntityPushPayload[]): Promise<SyncResult> => {
+      const start = Date.now();
+      const result = await adapter.pushData();
+      return {
+        success: result ? result.failed === 0 : true,
+        pushed: result?.pushed ?? 0,
+        pulled: 0,
+        failed: result?.failed ?? 0,
+        skipped: result?.skipped ?? 0,
+        errors: result?.errors ?? [],
+        duration: Date.now() - start,
+      };
+    },
+    pull: async (since?: string): Promise<SyncResult> => {
+      const start = Date.now();
+      const result = await adapter.pullData(undefined, since);
+      return {
+        success: result ? result.failed === 0 : true,
+        pushed: 0,
+        pulled: result?.pulled ?? 0,
+        failed: result?.failed ?? 0,
+        skipped: result?.skipped ?? 0,
+        errors: result?.errors ?? [],
+        duration: Date.now() - start,
+      };
+    },
+    disconnect: async () => {},
+  } satisfies ExternalSyncAdapterV2;
+});
+adapterRegistry.register("openfn-adapter", (deps) =>
+  new OpenFnSyncAdapterV2(deps!.eventStore, deps!.eventApplierService),
+);
+// mock: Python mock registry server (examples/mock-server) — reference V2 adapter
+adapterRegistry.register("mock", (deps) =>
+  new MockRegistrySyncAdapter(deps!.eventStore, deps!.eventApplierService),
+);
 
 export async function run(config: SyncServerConfig): Promise<SyncServerInstance> {
+  // Consolidated schema initialization: creates all backend tables and indexes
+  // in dependency order before individual stores verify their schemas.
+  await initializeDatabase(config.postgresUrl);
+
   const userStore = new UserStoreImpl(config.postgresUrl);
   await userStore.initialize();
   const appConfigStore = new AppConfigStoreImpl(config.postgresUrl);
   await appConfigStore.initialize();
   const appInstanceStore = new AppInstanceStoreImpl(appConfigStore, config.postgresUrl);
   await appInstanceStore.initialize();
+  const otpStore = new OtpStoreImpl(config.postgresUrl);
+  await otpStore.initialize();
+  const reviewStore = new ReviewStoreImpl(config.postgresUrl);
+  await reviewStore.initialize();
 
   const app = express();
 
   setupUncaughtHandlers();
-  app.use(cors());
-  app.use(bodyParser.json());
+  app.set("trust proxy", 1);
+  app.use(helmet());
+  const corsOrigins = process.env.CORS_ORIGINS;
+  const corsOptions: cors.CorsOptions = { origin: false };
+  if (corsOrigins === "*") {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("CORS_ORIGINS=* is not allowed in production. Specify explicit origins instead.");
+    }
+    log.warn("CORS_ORIGINS=* allows any origin with credentials — do not use in production");
+    corsOptions.origin = true;
+    corsOptions.credentials = true;
+  } else if (corsOrigins) {
+    corsOptions.origin = corsOrigins.split(",").map(o => o.trim());
+    corsOptions.credentials = true;
+  }
+  app.use(cors(corsOptions));
+  app.use(pinoHttp({
+    logger,
+    genReqId: () => crypto.randomUUID(),
+  }));
+  app.use(bodyParser.json({ limit: "1mb" }));
   app.use(
     express.static(path.join(__dirname, "public"), {
-      setHeaders: (res, path) => {
-        if (path.endsWith(".json")) {
+      setHeaders: (res, filePath) => {
+        if (filePath.includes("/artifacts/")) {
+          res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+        }
+        if (filePath.endsWith(".json")) {
           res.setHeader("Content-Type", "application/json");
           res.setHeader("Content-Disposition", "attachment");
         }
@@ -61,32 +164,40 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
     }),
   );
 
-  // API Documentation
-  try {
-    const swaggerDocument = YAML.load(path.join(__dirname, "../openapi.yaml"));
-    app.use(
-      "/api-docs",
-      swaggerUi.serve,
-      swaggerUi.setup(swaggerDocument, {
-        explorer: true,
-        customCss: ".swagger-ui .topbar { display: none }",
-        customSiteTitle: "IDPass DataCollect Backend API",
-        swaggerOptions: {
-          docExpansion: "tag",
-          filter: true,
-          showRequestDuration: true,
-        },
-      }),
-    );
-  } catch (error) {
-    console.warn("OpenAPI documentation not available:", error);
-  }
+  // API Documentation endpoint (serves OpenAPI spec as JSON)
+  app.get("/api-docs/openapi.json", (req, res) => {
+    try {
+      const openApiSpec = YAML.load(path.join(__dirname, "../openapi.yaml"));
+      res.json(openApiSpec);
+    } catch (error) {
+      log.warn({ err: error }, "OpenAPI specification not available");
+      res.status(500).json({ error: "OpenAPI specification not available" });
+    }
+  });
 
-  app.use("/api/apps", createAppConfigRoutes(appConfigStore, appInstanceStore));
+  // Shared pool for health checks to verify database connectivity
+  const healthCheckPool = new Pool({ connectionString: config.postgresUrl, max: 2 });
+
+  app.get("/health", async (_req, res) => {
+    const timestamp = new Date().toISOString();
+    try {
+      await healthCheckPool.query("SELECT 1");
+      res.json({ status: "ok", database: "connected", timestamp });
+    } catch (error) {
+      log.warn({ err: error }, "Health check: database connectivity failed");
+      res.status(503).json({ status: "degraded", database: "disconnected", timestamp });
+    }
+  });
+
+  app.use("/api/apps", createAppConfigRoutes(appConfigStore, appInstanceStore, userStore));
   app.use("/api/entities", createEntitiesRouter(appInstanceStore));
-  app.use("/api/sync", createSyncRouter(appInstanceStore));
+  app.use("/api/sync", createSyncRouter(appInstanceStore, config.postgresUrl));
   app.use("/api/users", createUserRoutes(userStore));
+  app.use("/api/openspp-fields", createOpenSppFieldRoutes());
   app.use("/api/potential-duplicates", createPotentialDuplicatesRoute(appInstanceStore));
+  app.use("/api/auth", createSelfServiceRouter(otpStore, appInstanceStore, reviewStore));
+  app.use("/api/reviews", createReviewRoutes(appInstanceStore, reviewStore, userStore));
+  app.use("/api/attachments", createAttachmentRoutes(appInstanceStore, config.postgresUrl));
 
   app.get("/artifacts/:artifactId.json", async (req, res, next) => {
     try {
@@ -96,6 +207,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
       const { jsonPath } = await generatePublicArtifacts(baseUrl, appConfig);
       res.setHeader("Content-Type", "application/json");
       res.setHeader("Content-Disposition", "attachment");
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
       return res.sendFile(jsonPath);
     } catch (error) {
       if (error instanceof Error && error.message.includes("artifact id")) {
@@ -112,12 +224,30 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
       const appConfig = await appConfigStore.getConfigByArtifactId(artifactId);
       const baseUrl = resolvePublicBaseUrl(req);
       const { qrPath } = await generatePublicArtifacts(baseUrl, appConfig);
+      
+      // Verify the QR code file was created successfully
+      try {
+        await fs.access(qrPath);
+      } catch (accessError) {
+        log.error({ err: accessError, qrPath }, "QR code file not found after generation");
+        res.status(500).send("Failed to generate QR code");
+        return;
+      }
+      
       res.type("png");
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
       return res.sendFile(qrPath);
     } catch (error) {
-      if (error instanceof Error && error.message.includes("artifact id")) {
-        res.status(404).send("Config not found");
-        return;
+      if (error instanceof Error) {
+        if (error.message.includes("artifact id") || error.message.includes("not found")) {
+          res.status(404).send("Config not found");
+          return;
+        }
+        if (error.message.includes("artifactId is required")) {
+          res.status(400).send("Invalid configuration: missing artifact ID");
+          return;
+        }
+        log.error({ err: error }, "Error generating QR code");
       }
       next(error);
     }
@@ -139,9 +269,9 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
 
   app.use(notFoundHandler);
   app.use(errorHandler);
-  const httpServer = app.listen(config.port, () => {
-    console.log(`Sync server is running on port ${config.port}`);
-    console.log(`API documentation available at http://localhost:${config.port}/api-docs`);
+  const httpServer = app.listen(config.port, "0.0.0.0", () => {
+    log.info({ port: config.port }, "Sync server is running");
+    log.info({ url: `http://localhost:${config.port}/api-docs` }, "API documentation available");
   });
 
   // Create an initial admin user if there is no existing admin
@@ -153,9 +283,10 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
       email: config.adminEmail,
       passwordHash: hashedPassword,
       role: Role.ADMIN,
+      tenantIds: [] as string[],
     };
     await userStore.saveUser(initialAdmin);
-    console.log("Initial admin user " + initialAdmin.email + " created");
+    log.info({ email: initialAdmin.email }, "Initial admin user created");
   }
 
   // Add a cron job to run every 30 minutes
@@ -172,6 +303,9 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
     await userStore.clearStore();
     await appConfigStore.clearStore();
     await appInstanceStore.clearStore();
+    await otpStore.clearStore();
+    clearReviewState();
+    await reviewStore.clearStore();
 
     //delete all json and png files in public folder
     const publicFolder = path.join(__dirname, "public");
@@ -194,6 +328,9 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
     await userStore.closeConnection();
     await appConfigStore.closeConnection();
     await appInstanceStore.closeConnection();
+    await otpStore.closeConnection();
+    await reviewStore.closeConnection();
+    await healthCheckPool.end();
     await new Promise<void>((resolve) => {
       httpServer.close(() => resolve());
     });

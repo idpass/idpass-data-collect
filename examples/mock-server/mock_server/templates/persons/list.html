@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Persons — Mock Registry{% endblock %}
+{% block content %}
+<nav class="crumbs">
+  <a href="/">Home</a> <span class="sep">/</span> <span>Persons</span>
+</nav>
+
+<div class="page-head">
+  <div>
+    <p class="eyebrow">{{ total }} {{ "record" if total == 1 else "records" }}</p>
+    <h2>Persons</h2>
+    <p class="lede">Natural persons tracked by the registry. Every record carries a stable <code>system_id</code> plus any real-world identifiers your operators attach.</p>
+  </div>
+  <div class="actions">
+    <a href="/ui/persons/new" class="btn primary">New person</a>
+  </div>
+</div>
+
+<div class="search-bar">
+  <input type="search" name="q" placeholder="Search by name…"
+         autocomplete="off"
+         hx-get="/ui/persons/search"
+         hx-trigger="keyup changed delay:250ms, search"
+         hx-target="#persons-rows"
+         hx-swap="innerHTML">
+</div>
+
+<div class="table-wrap">
+  <table class="data">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Date of birth</th>
+        <th>Identifier</th>
+        <th>Updated</th>
+        <th class="row-actions"></th>
+      </tr>
+    </thead>
+    <tbody id="persons-rows">
+      {% include "persons/_rows.html" %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

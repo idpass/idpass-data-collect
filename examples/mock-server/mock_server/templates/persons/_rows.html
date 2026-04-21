@@ -1,0 +1,18 @@
+{% for p in persons %}
+<tr>
+  <td class="name-col">
+    <a href="/ui/persons/{{ p.uuid }}">
+      {%- set name = ((p.given_name or '') ~ ' ' ~ (p.family_name or '')) | trim -%}
+      {{ name if name else '(no name)' }}
+    </a>
+  </td>
+  <td>{{ p.date_of_birth or '—' }}</td>
+  <td><code>{{ p.uuid[:8] }}</code></td>
+  <td><span class="uuid">{{ p.updated_at.strftime("%Y-%m-%d %H:%M") }}</span></td>
+  <td class="row-actions">
+    <a href="/ui/persons/{{ p.uuid }}" class="btn ghost tiny">View</a>
+  </td>
+</tr>
+{% else %}
+<tr><td colspan="5" class="empty">No persons match that filter yet. <a href="/ui/persons/new">Create one</a>.</td></tr>
+{% endfor %}

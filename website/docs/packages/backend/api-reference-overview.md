@@ -8,7 +8,7 @@ sidebar_position: 1
 
 The ID PASS DataCollect Backend provides a comprehensive REST API automatically documented from the OpenAPI 3.0 specification.
 
-## 🔄 **Auto-Generated Documentation**
+## **Auto-Generated Documentation**
 
 The API documentation below is **automatically generated** from the backend's `openapi.yaml` specification file. This ensures:
 
@@ -17,7 +17,7 @@ The API documentation below is **automatically generated** from the backend's `o
 - **Interactive**: Test endpoints directly from the documentation
 - **Complete**: All endpoints, schemas, and examples included
 
-## 📚 **API Documentation Structure**
+## **API Documentation Structure**
 
 The generated documentation is organized by **API tags**:
 
@@ -26,16 +26,17 @@ The generated documentation is organized by **API tags**:
 - **Synchronization** - Data sync between clients and server
 - **App Configuration** - Multi-tenant configuration management
 - **Data Management** - Entity management and duplicate resolution
+- **OpenSPP Fields** - Field metadata parsing and fetching for OpenSPP integration
 
-## 🌐 **Interactive Testing**
+## **OpenAPI Specification**
 
-For live API testing with Swagger UI, start the backend server and visit:
+The complete OpenAPI specification is available at:
+- **JSON Endpoint**: `http://localhost:3000/api-docs/openapi.json` (when server is running)
+- **Source File**: [`packages/backend/openapi.yaml`](https://github.com/idpass/idpass-data-collect/blob/main/packages/backend/openapi.yaml)
 
-```
-http://localhost:3000/api-docs
-```
+You can import this specification into tools like Postman, Insomnia, or any OpenAPI-compatible client for interactive testing.
 
-## 🔧 **Authentication**
+## **Authentication**
 
 Most endpoints require JWT authentication. Include the token in requests:
 
@@ -50,9 +51,3 @@ curl -X POST http://localhost:3000/api/users/login \
   -H "Content-Type: application/json" \
   -d '{"email": "admin@hdm.example", "password": "your-password"}'
 ```
-
-## 📖 **OpenAPI Specification**
-
-The complete specification is available at:
-- **Source File**: [`packages/backend/openapi.yaml`](https://github.com/idpass/idpass-data-collect/blob/main/packages/backend/openapi.yaml)
-- **Interactive Docs**: `

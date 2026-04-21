@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}{{ client.name or client.client_id }} — Mock Registry{% endblock %}
+{% block content %}
+<nav class="crumbs">
+  <a href="/">Home</a> <span class="sep">/</span>
+  <a href="/ui/clients">Clients</a> <span class="sep">/</span>
+  <span>{{ client.name or client.client_id }}</span>
+</nav>
+
+<div class="page-head">
+  <div>
+    <p class="eyebrow">API client · {% if client.revoked_at %}Revoked{% else %}Active{% endif %}</p>
+    <h2>{{ client.name or '(unnamed client)' }}</h2>
+    <p class="uuid"><strong>client_id</strong> <code>{{ client.client_id }}</code></p>
+  </div>
+  <div class="actions">
+    {% if not client.revoked_at %}
+    <form method="post" action="/ui/clients/{{ client.uuid }}/rotate" style="display:inline;">
+      <button type="submit" class="btn ghost">Rotate secret</button>
+    </form>
+    <form method="post" action="/ui/clients/{{ client.uuid }}/revoke" style="display:inline;"
+          onsubmit="return confirm('Revoke this client? All existing tokens will continue to work until they expire, but no new tokens can be issued.');">
+      <button type="submit" class="btn danger">Revoke</button>
+    </form>
+    {% endif %}
+    <form method="post" action="/ui/clients/{{ client.uuid }}/delete" style="display:inline;"
+          onsubmit="return confirm('Hard-delete this client? This cannot be undone.');">
+      <button type="submit" class="btn danger">Delete</button>
+    </form>
+  </div>
+</div>
+
+{% if show_secret %}
+<section class="card" style="border-color:var(--accent);background:#faecd3;">
+  <div class="card-head">
+    <h3>{% if banner == 'rotated' %}Secret rotated.{% else %}Client created.{% endif %} Copy the secret now.</h3>
+    <span class="meta" style="color:var(--accent-ink);">Shown once · never shown again</span>
+  </div>
+  <p style="margin-top:0;color:var(--accent-ink);">
+    The server stores only a bcrypt hash. If you lose this value you will need to rotate again.
+  </p>
+  <div style="display:flex;gap:0.5rem;align-items:stretch;">
+    <code id="client-secret-value"
+          style="flex:1;padding:0.7rem 0.9rem;background:var(--surface);border:1px solid var(--rule);border-radius:var(--radius);overflow-x:auto;white-space:nowrap;font-size:0.88rem;">{{ show_secret }}</code>
+    <button type="button" class="btn primary" onclick="copyClientSecret()" id="copy-btn">Copy</button>
+  </div>
+  <details class="disclosure" style="margin-top:1rem;">
+    <summary>Use it now</summary>
+    <pre style="margin:0;font-family:var(--mono);font-size:0.8rem;overflow-x:auto;background:var(--surface-alt);padding:0.75rem;border-radius:var(--radius);">curl -X POST http://localhost:9999/oauth/token \
+  -d grant_type=client_credentials \
+  -d client_id={{ client.client_id }} \
+  -d client_secret={{ show_secret }}</pre>
+  </details>
+</section>
+<script>
+  function copyClientSecret() {
+    var el = document.getElementById('client-secret-value');
+    var txt = el ? el.innerText : '';
+    if (!txt) return;
+    var btn = document.getElementById('copy-btn');
+    var done = function () {
+      if (!btn) return;
+      var orig = btn.innerText;
+      btn.innerText = 'Copied';
+      setTimeout(function () { btn.innerText = orig; }, 1500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(done, done);
+    } else {
+      // Fallback for older browsers.
+      var r = document.createRange();
+      r.selectNode(el);
+      var sel = window.getSelection();
+      sel.removeAllRanges(); sel.addRange(r);
+      try { document.execCommand('copy'); } catch (e) {}
+      sel.removeAllRanges();
+      done();
+    }
+  }
+</script>
+{% endif %}
+
+{% if client.revoked_at %}
+<div class="alert error">
+  Revoked {{ client.revoked_at.strftime("%Y-%m-%d %H:%M UTC") }}. This client can no longer obtain new tokens.
+</div>
+{% endif %}
+
+<div class="split">
+  <div class="stack">
+    <section class="card">
+      <div class="card-head">
+        <h3>Details</h3>
+        <span class="meta">created {{ client.created_at.strftime("%Y-%m-%d %H:%M UTC") }}</span>
+      </div>
+      <dl class="meta-grid">
+        <dt>UUID</dt><dd class="mono">{{ client.uuid }}</dd>
+        <dt>Name</dt><dd>{{ client.name or '<span class="muted">—</span>' | safe }}</dd>
+        <dt>client_id</dt><dd class="mono"><code>{{ client.client_id }}</code></dd>
+        <dt>Scopes</dt>
+        <dd>
+          {% if client.scopes %}
+            {% for s in client.scopes %}<span class="chip">{{ s }}</span>{% endfor %}
+          {% else %}<span class="muted">—</span>{% endif %}
+        </dd>
+        <dt>Created</dt><dd class="mono">{{ client.created_at.strftime("%Y-%m-%d %H:%M:%S UTC") }}</dd>
+        <dt>Last used</dt>
+        <dd class="mono">
+          {% if client.last_used_at %}
+            {{ client.last_used_at.strftime("%Y-%m-%d %H:%M:%S UTC") }}
+          {% else %}
+            <span class="muted">never</span>
+          {% endif %}
+        </dd>
+        {% if client.description %}
+        <dt>Description</dt><dd>{{ client.description }}</dd>
+        {% endif %}
+      </dl>
+    </section>
+  </div>
+
+  <aside class="stack">
+    <section class="card">
+      <div class="card-head"><h3>API</h3></div>
+      <p class="uuid" style="margin:0 0 0.75rem;">Issue a token:</p>
+      <code style="display:block;padding:0.6rem;background:var(--surface-alt);overflow-x:auto;white-space:pre-wrap;word-break:break-all;">POST /oauth/token
+  grant_type=client_credentials
+  client_id={{ client.client_id }}
+  client_secret=&lt;shown once on create/rotate&gt;</code>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h3>Lifecycle</h3></div>
+      <ul style="padding-left:1.1rem;margin:0;color:var(--ink-soft);font-size:0.9rem;line-height:1.7;">
+        <li><strong>Rotate</strong> — issues a new secret. Old secret stops working immediately.</li>
+        <li><strong>Revoke</strong> — no new tokens. Existing JWTs remain valid until they expire.</li>
+        <li><strong>Delete</strong> — hard-delete. Irreversible.</li>
+      </ul>
+    </section>
+  </aside>
+</div>
+{% endblock %}

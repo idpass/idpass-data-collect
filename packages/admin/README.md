@@ -1,45 +1,137 @@
-# admin
+# ID PASS DataCollect Admin UI
 
-This template should help get you started developing with Vue 3 in Vite.
+Web-based admin interface for managing ID PASS DataCollect application configurations, users, and monitoring data synchronization.
 
-## Recommended IDE Setup
+## Purpose
 
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+The Admin UI provides a comprehensive interface for:
+- Managing application configurations (apps)
+- Configuring entity forms using Form.io builder
+- Setting up external sync adapters (OpenSPP, OpenFn)
+- Configuring field mappings for OpenSPP synchronization
+- Managing user accounts and permissions
+- Monitoring entity counts and sync status
 
-## Type Support for `.vue` Imports in TS
+## Prerequisites
 
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
+- Node.js 22.x or higher
+- pnpm 10.x
+- Backend server running (see `packages/backend`)
 
-## Customize configuration
+## Setup
 
-See [Vite Configuration Reference](https://vite.dev/config/).
+This package is part of the ID PASS DataCollect monorepo. Install dependencies from the workspace root:
 
-## Project Setup
-
-```sh
-npm install
+```bash
+# From workspace root
+pnpm install
 ```
 
-### Compile and Hot-Reload for Development
+## Development
 
-```sh
-npm run dev
+Start the development server:
+
+```bash
+# From workspace root
+pnpm dev:admin
+
+# Or from this directory
+pnpm dev
 ```
 
-### Type-Check, Compile and Minify for Production
+The admin UI will be available at `http://localhost:5173` (or the next available port).
 
-```sh
-npm run build
+## Building for Production
+
+```bash
+# From workspace root
+pnpm build:admin
+
+# Or from this directory
+pnpm build
 ```
 
-### Run Unit Tests with [Vitest](https://vitest.dev/)
+The built files will be in the `dist/` directory.
 
-```sh
-npm run test:unit
+## Features
+
+### App Configuration Management
+- Create, edit, and delete application configurations
+- Upload JSON configuration files
+- Visual form builder using Form.io
+- Configure entity form dependencies
+
+### External Sync Configuration
+- Configure OpenSPP adapter with field mappings
+- Import OpenSPP field metadata (JSON upload, paste, or API fetch)
+- Map form fields to OpenSPP fields with transformers
+- Configure batch processing settings
+
+### Submission Review Workflow
+- Review submitted form data through a pending/approved/rejected pipeline
+- Approve or reject individual submissions with optional reviewer comments
+- Audit trail of all review decisions
+
+### Duplicate Detection and Resolution
+- Automatic flagging of potential duplicate entities
+- Side-by-side comparison UI for reviewing suspected duplicates
+- Merge or dismiss duplicate candidates
+
+### User Management
+- Create and manage user accounts
+- Assign roles (admin, user)
+- Strong password validation enforced on account creation and updates
+- View user list and details
+
+### Data Monitoring
+- View entity counts per configuration
+- Monitor sync status
+- Access QR codes for mobile app configuration
+
+## Testing
+
+Run unit tests:
+
+```bash
+pnpm test:unit
 ```
 
-### Lint with [ESLint](https://eslint.org/)
+## Linting
 
-```sh
-npm run lint
+Lint and fix code:
+
+```bash
+pnpm lint
 ```
+
+## Type Checking
+
+Check TypeScript types:
+
+```bash
+pnpm type-check
+```
+
+## Technology Stack
+
+- Vue 3 with Composition API
+- Vuetify 3 for UI components
+- Form.io for form building
+- Pinia for state management
+- Vue Router for navigation
+- Axios for API communication
+- TypeScript for type safety
+
+## Environment Variables
+
+Create a `.env` file in the workspace root:
+
+```env
+VITE_API_URL=http://localhost:3000
+```
+
+## Related Documentation
+
+- [Admin UI Dashboard Guide](../../website/docs/user-guide/admin-ui-dashboard.md)
+- [OpenSPP Adapter Documentation](../../website/docs/adapters/openspp-adapter.md)
+- [Backend API Documentation](../../website/docs/packages/backend/index.md)

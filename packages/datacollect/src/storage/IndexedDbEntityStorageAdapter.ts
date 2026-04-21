@@ -18,6 +18,9 @@
  */
 
 import { EntityPair, EntityStorageAdapter, SearchCriteria } from "../interfaces/types";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("IndexedDbEntityStorageAdapter");
 
 /**
  * IndexedDB implementation of the EntityStorageAdapter for browser-based entity persistence.
@@ -146,7 +149,7 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
       const request = window.indexedDB.open(this.dbName, 1);
 
       request.onerror = (event) => {
-        console.error("Error opening IndexedDB:", event);
+        log.error({ event }, "Error opening IndexedDB");
         reject(event);
       };
 
@@ -319,19 +322,20 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
       throw new Error("IndexedDB is not initialized");
     }
 
+    const guid = entity.initial?.guid || entity.modified.guid;
     const transaction = this.db.transaction([this.storeName], "readwrite");
     const objectStore = transaction.objectStore(this.storeName);
-    try {
-      const guid = entity.initial.guid || entity.modified.guid;
-      await objectStore.put({
+
+    return new Promise<void>((resolve, reject) => {
+      objectStore.put({
         id: guid,
         guid,
         initial: entity.initial,
         modified: entity.modified,
       });
-    } catch (error) {
-      console.log("Error saving entity:", String(error));
-    }
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
   }
 
   /**
@@ -531,14 +535,18 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
 
     const transaction = this.db.transaction([this.storeName], "readwrite");
     const objectStore = transaction.objectStore(this.storeName);
-    const request = objectStore.get(id);
 
-    request.onsuccess = () => {
-      if (request.result) {
-        request.result.modified.lastUpdated = new Date().toISOString();
-        objectStore.put(request.result);
-      }
-    };
+    return new Promise<void>((resolve, reject) => {
+      const request = objectStore.get(id);
+      request.onsuccess = () => {
+        if (request.result) {
+          request.result.modified.lastUpdated = new Date().toISOString();
+          objectStore.put(request.result);
+        }
+      };
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error);
+    });
   }
 
   /**
@@ -620,7 +628,7 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
         await objectStore.put(duplicate);
       }
     } catch (error) {
-      console.error("Error saving potential duplicates:", error);
+      log.error({ err: error }, "Error saving potential duplicates");
     }
   }
 
@@ -701,7 +709,7 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
         await duplicatesObjectStore.delete([entityGuid, duplicateGuid]);
       }
     } catch (error) {
-      console.error("Error resolving potential duplicates:", error);
+      log.error({ err: error }, "Error resolving potential duplicates");
     }
   }
 
@@ -733,7 +741,7 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
       const entitiesObjectStore = entitiesTransaction.objectStore(this.storeName);
       await entitiesObjectStore.clear();
     } catch (error) {
-      console.error("Error clearing entities object store:", error);
+      log.error({ err: error }, "Error clearing entities object store");
     }
 
     try {
@@ -741,7 +749,7 @@ export class IndexedDbEntityStorageAdapter implements EntityStorageAdapter {
       const duplicatesObjectStore = duplicatesTransaction.objectStore("potentialDuplicates");
       await duplicatesObjectStore.clear();
     } catch (error) {
-      console.error("Error clearing potential duplicates object store:", error);
+      log.error({ err: error }, "Error clearing potential duplicates object store");
     }
   }
 }

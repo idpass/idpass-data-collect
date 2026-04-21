@@ -32,7 +32,7 @@ describe("EventStore", () => {
     syncLevel: SyncLevel.LOCAL,
   };
 
-  test("saveEvent should add event and update Merkle tree", async () => {
+  test("saveEvent should add event and update hash chain", async () => {
     await eventStore.saveEvent(mockEvent);
     const events = await eventStore.getAllEvents();
     expect(events).toEqual([
@@ -47,7 +47,7 @@ describe("EventStore", () => {
         id: 1,
       },
     ]);
-    expect(eventStore.getMerkleRoot()).toBeTruthy();
+    expect(eventStore.getLatestHash()).toBeTruthy();
   });
 
   test("getEvents should return events for a specific entity", async () => {
@@ -69,9 +69,30 @@ describe("EventStore", () => {
     ]);
   });
 
-  // test("verifyEvent should correctly verify an event", async () => {
-  //   await eventStore.saveEvent(mockEvent);
-  //   const proof = eventStore.getProof(mockEvent);
-  //   expect(eventStore.verifyEvent(mockEvent, proof)).toBe(true);
-  // });
+  test("hash chain remains valid after syncLevel changes", async () => {
+    // This is the exact scenario that caused false tamper detection:
+    // 1. Save event with LOCAL syncLevel
+    // 2. Sync updates syncLevel to REMOTE via updateSyncLevelFromEvents
+    // 3. App restart → rebuildHashChain reads events with REMOTE
+    // 4. Hash must still match the persisted anchor
+    await eventStore.saveEvent(mockEvent);
+    const hashAfterSave = eventStore.getLatestHash();
+    expect(hashAfterSave).toBeTruthy();
+
+    // Simulate what sync does: update syncLevel from LOCAL to REMOTE
+    await eventStore.updateSyncLevelFromEvents([
+      { ...mockEvent, syncLevel: SyncLevel.REMOTE },
+    ]);
+
+    // Simulate app restart: fresh EventStore reading from same IndexedDB
+    const adapter2 = new IndexedDbEventStorageAdapter();
+    const store2 = new EventStoreImpl(adapter2);
+
+    // This must NOT throw — syncLevel change should not break hash chain
+    await expect(store2.initialize()).resolves.not.toThrow();
+    expect(store2.getLatestHash()).toBe(hashAfterSave);
+
+    const isValid = await store2.verifyHashChain();
+    expect(isValid).toBe(true);
+  });
 });

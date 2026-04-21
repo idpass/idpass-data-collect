@@ -18,7 +18,8 @@
  */
 
 import { Router } from "express";
-import { authenticateJWT } from "../middlewares/authentication";
+import { GroupDoc } from "@idpass/data-collect-core";
+import { authenticateJWT, validateTenantAccess } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { AppInstanceStore } from "../types";
 
@@ -28,10 +29,14 @@ export function createEntitiesRouter(appInstanceStore: AppInstanceStore): Router
   router.get(
     "/count",
     authenticateJWT,
+    validateTenantAccess,
     asyncHandler(async (req, res) => {
       const { configId = "default" } = req.query;
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
-      const entities = await appInstance?.edm.getAllEntities();
+      if (!appInstance) {
+        return res.status(404).json({ error: "Tenant not found", configId });
+      }
+      const entities = await appInstance.edm.getAllEntities();
       res.json({ count: entities?.length || 0 });
     }),
   );
@@ -39,23 +44,23 @@ export function createEntitiesRouter(appInstanceStore: AppInstanceStore): Router
   router.get(
     "/count-by-form",
     authenticateJWT,
+    validateTenantAccess,
     asyncHandler(async (req, res) => {
       const { configId = "default" } = req.query;
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
       if (!appInstance) {
-        return res.json({});
+        return res.status(404).json({ error: "Tenant not found", configId });
       }
       const entities = await appInstance.edm.getAllEntities();
-      
+
       // Group entities by entityName from their data
+      // Entities without entityName are grouped under "Unknown" to ensure all entities are counted
       const counts: Record<string, number> = {};
       entities?.forEach((pair) => {
-        const entityName = pair.modified.data?.entityName;
-        if (entityName) {
-          counts[entityName] = (counts[entityName] || 0) + 1;
-        }
+        const entityName = pair.modified.data?.entityName || "Unknown";
+        counts[entityName] = (counts[entityName] || 0) + 1;
       });
-      
+
       res.json(counts);
     }),
   );
@@ -63,55 +68,179 @@ export function createEntitiesRouter(appInstanceStore: AppInstanceStore): Router
   router.get(
     "/",
     authenticateJWT,
+    validateTenantAccess,
     asyncHandler(async (req, res) => {
       const { configId = "default", limit = "100" } = req.query;
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
       if (!appInstance) {
-        return res.json([]);
+        return res.status(404).json({ error: "Tenant not found", configId });
       }
       const entities = await appInstance.edm.getAllEntities();
-      
+
       // Sort by lastUpdated descending (most recent first) and limit results
       const limitNum = Math.min(parseInt(limit as string, 10) || 100, 1000);
-      const entityList = entities
-        ?.map((pair) => ({
+      const entityList =
+        entities
+          ?.map((pair) => ({
+            guid: pair.modified.guid,
+            id: pair.modified.id,
+            name: pair.modified.data?._displayName || pair.modified.data?.name || pair.modified.name,
+            entityName: pair.modified.data?.entityName,
+            type: pair.modified.type,
+            data: pair.modified.data,
+            memberIds: pair.modified.type === "group" ? ((pair.modified as GroupDoc).memberIds ?? []) : undefined,
+            lastUpdated: pair.modified.lastUpdated,
+          }))
+          .sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime())
+          .slice(0, limitNum) || [];
+
+      res.json(entityList);
+    }),
+  );
+
+  router.post(
+    "/search",
+    authenticateJWT,
+    validateTenantAccess,
+    asyncHandler(async (req, res) => {
+      const { configId = "default", criteria = [], limit = 50 } = req.body;
+      const appInstance = await appInstanceStore.getAppInstance(configId as string);
+      if (!appInstance) {
+        return res.status(404).json({ error: "Tenant not found", configId });
+      }
+
+      // Validate criteria: max 10 items
+      if (!Array.isArray(criteria) || criteria.length > 10) {
+        return res.status(400).json({ error: "Invalid criteria: must be an array with at most 10 items" });
+      }
+
+      // Validate string values in criteria: max 200 chars
+      for (const criterion of criteria) {
+        for (const value of Object.values(criterion)) {
+          if (typeof value === "string" && value.length > 200) {
+            return res.status(400).json({ error: "Invalid criteria: string values must be at most 200 characters" });
+          }
+          if (typeof value === "object" && value !== null) {
+            for (const inner of Object.values(value as Record<string, unknown>)) {
+              if (typeof inner === "string" && inner.length > 200) {
+                return res
+                  .status(400)
+                  .json({ error: "Invalid criteria: string values must be at most 200 characters" });
+              }
+            }
+          }
+        }
+      }
+
+      const limitNum = Math.min(Math.max(parseInt(String(limit), 10) || 50, 1), 500);
+      const results = await appInstance.edm.searchEntities(criteria);
+
+      const entityList = results
+        .map((pair) => ({
           guid: pair.modified.guid,
           id: pair.modified.id,
-          name: pair.modified.data?.name || pair.modified.name,
+          name: pair.modified.data?._displayName || pair.modified.data?.name || pair.modified.name,
+          entityName: pair.modified.data?.entityName,
+          type: pair.modified.type,
+          data: pair.modified.data,
+          memberIds: pair.modified.type === "group" ? ((pair.modified as GroupDoc).memberIds ?? []) : undefined,
+          lastUpdated: pair.modified.lastUpdated,
+        }))
+        .slice(0, limitNum);
+
+      res.json(entityList);
+    }),
+  );
+
+  router.get(
+    "/:guid/members",
+    authenticateJWT,
+    validateTenantAccess,
+    asyncHandler(async (req, res) => {
+      const { configId = "default" } = req.query;
+      const { guid } = req.params;
+      const appInstance = await appInstanceStore.getAppInstance(configId as string);
+      if (!appInstance) {
+        return res.status(404).json({ error: "Tenant not found", configId });
+      }
+
+      try {
+        const members = await appInstance.edm.getMembers(guid);
+        const memberList = members.map((pair) => ({
+          guid: pair.modified.guid,
+          id: pair.modified.id,
+          name: pair.modified.data?._displayName || pair.modified.data?.name || pair.modified.name,
           entityName: pair.modified.data?.entityName,
           type: pair.modified.type,
           data: pair.modified.data,
           lastUpdated: pair.modified.lastUpdated,
-        }))
-        .sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime())
-        .slice(0, limitNum) || [];
-      
-      res.json(entityList);
+        }));
+        res.json(memberList);
+      } catch (error: unknown) {
+        const errorCode = (error as { code?: string })?.code;
+        if (errorCode === "INVALID_GROUP") {
+          return res.status(404).json({ error: "Entity not found or is not a group", guid });
+        }
+        throw error;
+      }
+    }),
+  );
+
+  router.get(
+    "/:guid",
+    authenticateJWT,
+    validateTenantAccess,
+    asyncHandler(async (req, res) => {
+      const { configId = "default" } = req.query;
+      const { guid } = req.params;
+
+      const appInstance = await appInstanceStore.getAppInstance(configId as string);
+      if (!appInstance) {
+        return res.status(404).json({ error: "Tenant not found", configId });
+      }
+
+      try {
+        const entityPair = await appInstance.edm.getEntity(guid);
+        const entity = entityPair.modified;
+        res.json({
+          guid: entity.guid,
+          id: entity.id,
+          name: entity.data?._displayName || entity.data?.name || entity.name,
+          entityName: entity.data?.entityName,
+          type: entity.type,
+          data: entity.data,
+          memberIds: entity.type === "group" ? ((entity as GroupDoc).memberIds ?? []) : undefined,
+          lastUpdated: entity.lastUpdated,
+        });
+      } catch {
+        return res.status(404).json({ error: "Entity not found", guid });
+      }
     }),
   );
 
   router.get(
     "/:guid/events",
     authenticateJWT,
+    validateTenantAccess,
     asyncHandler(async (req, res) => {
       const { configId = "default" } = req.query;
       const { guid } = req.params;
-      
+
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
       if (!appInstance) {
-        return res.json([]);
+        return res.status(404).json({ error: "Tenant not found", configId });
       }
-      
+
       const allEvents = await appInstance.edm.getAllEvents();
-      
+
       // Filter events by entity GUID
       const entityEvents = allEvents.filter((event) => event.entityGuid === guid);
-      
+
       // Sort by timestamp ascending (oldest first)
       const sortedEvents = entityEvents.sort(
-        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
       );
-      
+
       res.json(sortedEvents);
     }),
   );

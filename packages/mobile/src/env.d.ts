@@ -21,9 +21,16 @@
 
 interface ImportMetaEnv {
   readonly VITE_ODOO_URL: string
-  // Add other env variables as needed
+  readonly VITE_DEVELOP: string
+  readonly VITE_BACKEND_API_URL: string
+  readonly VITE_SYNC_URL: string
+  readonly VITE_DB_ENCRYPTION_PASSWORD: string
 }
 
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+declare const __APP_VERSION__: string
+declare const __GIT_COMMIT_HASH__: string
+declare const __GIT_COMMIT_TITLE__: string

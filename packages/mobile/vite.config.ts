@@ -1,8 +1,14 @@
 import { defineConfig } from 'vite'
-import { resolve } from 'path'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
 import { execSync } from 'child_process'
 import vue from '@vitejs/plugin-vue'
+import vuetify from 'vite-plugin-vuetify'
+import wasm from 'vite-plugin-wasm'
+import topLevelAwait from 'vite-plugin-top-level-await'
 import fs from 'fs'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
 
 // Get git info
 const getGitInfo = () => {
@@ -28,11 +34,11 @@ const getGitInfo = () => {
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [vue(), vuetify({ autoImport: true }), wasm(), topLevelAwait()],
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
-      '~bootstrap': resolve(__dirname, 'node_modules/bootstrap'),
+      '@idpass/data-collect-core': resolve(__dirname, '../datacollect/src/browser.ts'),
     }
   },
 
@@ -44,20 +50,23 @@ export default defineConfig({
 
   define: {
     __GIT_COMMIT_TITLE__: JSON.stringify(getGitInfo().commitTitle),
-    __GIT_COMMIT_HASH__: JSON.stringify(getGitInfo().commitHash)
+    __GIT_COMMIT_HASH__: JSON.stringify(getGitInfo().commitHash),
+    __APP_VERSION__: JSON.stringify(JSON.parse(fs.readFileSync(resolve(__dirname, 'package.json'), 'utf-8')).version)
   },
 
-  // Optimize for offline usage
+  // Optimize for offline usage — single bundle for Capacitor file:// loading.
+  // inlineDynamicImports is required because RxJS/RxDB use CJS-style IIFEs
+  // that break when Rollup reorders modules across chunks.
+  // The @aparajita/capacitor-secure-storage plugin uses registerPlugin() with
+  // lazy dynamic imports that break when inlined. We pre-resolve the native
+  // module reference via a manual chunk to avoid the circular init issue.
   build: {
     rollupOptions: {
       output: {
         manualChunks: undefined,
         inlineDynamicImports: true,
-        // Ensure a single entry point
         entryFileNames: 'app.js',
-        // Put all assets in the same directory
         assetFileNames: 'assets/[name][extname]',
-        // Disable chunk splitting
         chunkFileNames: '[name].js'
       }
     },

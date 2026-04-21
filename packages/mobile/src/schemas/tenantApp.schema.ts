@@ -18,7 +18,7 @@
  */
 
 import { RxCollection, RxDocument, RxJsonSchema } from 'rxdb'
-import { Config } from '@/utils/dynamicFormIoUtils'
+import { Config } from '@/utils/formIoUtils'
 
 export type TenantAppData = Config
 
@@ -35,7 +35,32 @@ export const TenantAppSchema: RxJsonSchema<TenantAppData> = {
     url: { type: 'string', format: 'url' },
     entityForms: { type: 'array' },
     entityData: { type: 'array' },
-    syncServerUrl: { type: 'string', format: 'url' }
+    syncServerUrl: { type: 'string', format: 'url' },
+    externalSync: { type: 'object', default: {} },
+    authConfigs: {
+      type: 'array',
+      items: {
+        type: 'object'
+      },
+      default: []
+    },
+    trustedIssuers: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          issuerId: { type: 'string' },
+          publicKey: {
+            type: 'object',
+            properties: {
+              ed25519: { type: 'string' },
+              es256: { type: 'string' }
+            }
+          }
+        }
+      },
+      default: []
+    }
   },
   required: [
     'id',

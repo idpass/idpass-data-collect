@@ -1,0 +1,30 @@
+{% for c in clients %}
+<tr>
+  <td class="name-col">
+    <a href="/ui/clients/{{ c.uuid }}">
+      {{ c.name if c.name else '(unnamed)' }}
+    </a>
+  </td>
+  <td><code>{{ c.client_id }}</code></td>
+  <td><span class="uuid">{{ c.created_at.strftime("%Y-%m-%d %H:%M") }}</span></td>
+  <td>
+    {% if c.last_used_at %}
+      <span class="uuid">{{ c.last_used_at.strftime("%Y-%m-%d %H:%M") }}</span>
+    {% else %}
+      <span class="muted" style="color:var(--muted);">never</span>
+    {% endif %}
+  </td>
+  <td>
+    {% if c.revoked_at %}
+      <span class="chip" style="background:#f7dcd3;color:#8a2a1a;">Revoked</span>
+    {% else %}
+      <span class="chip positive">Active</span>
+    {% endif %}
+  </td>
+  <td class="row-actions">
+    <a href="/ui/clients/{{ c.uuid }}" class="btn ghost tiny">View</a>
+  </td>
+</tr>
+{% else %}
+<tr><td colspan="6" class="empty">No API clients yet. <a href="/ui/clients/new">Create one</a> to start issuing tokens.</td></tr>
+{% endfor %}

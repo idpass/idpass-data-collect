@@ -3,6 +3,9 @@
 .gitignore
 .github
 
+# Claude Code (worktrees can be multi-GB)
+.claude
+
 # Node modules (will be installed in container)
 node_modules
 */node_modules
@@ -60,3 +63,5 @@ temp
 docs
 *.md
 !README.md
+
+.cursor

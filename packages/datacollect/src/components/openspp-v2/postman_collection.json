@@ -1,0 +1,584 @@
+{
+  "info": {
+    "name": "OpenSPP API V2",
+    "description": "Complete collection for the OpenSPP REST API V2.\n\nCovers core resources (Individual, Group, Program, ProgramMembership), consent management, batch/bulk operations, and all extension modules.\n\n## Setup\n\n1. Create an API Client (spp.api.client) via the Odoo UI or RPC.\n2. Add scopes for all resources you want to test (action: 'all').\n3. For testing without consent, set `is_require_consent` to False on the client or use `legal_basis` = 'legal_obligation'.\n4. Set `client_id` and `client_secret` collection variables to your API client credentials.\n5. Run 'Get Access Token' first to populate the `access_token` variable.\n\n## Identifier Format\n\nAll identifiers use the vocabulary-based format:\n  system: `urn:openspp:vocab:id-type#<code>` (e.g., `urn:openspp:vocab:id-type#national_id`)\n  value: the actual ID value\n\nAvailable ID type codes: national_id, passport, tax_id, birth_certificate.\n\n## Notes\n\n- Consent and Change Request endpoints require specific Odoo user permissions beyond API scopes.\n- Verifiable Credentials and DRIMS endpoints require their respective extension modules to be installed.\n- If-Match headers use microsecond-precision timestamps from the resource's `meta.versionId` field.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8069/api/v2/spp" },
+    { "key": "client_id", "value": "your-client-id" },
+    { "key": "client_secret", "value": "your-client-secret" },
+    { "key": "access_token", "value": "" },
+    { "key": "individual_id", "value": "urn:openspp:vocab:id-type#national_id|PH-123", "description": "Example individual identifier for read/update operations" },
+    { "key": "group_id", "value": "urn:openspp:vocab:id-type#national_id|HH-001", "description": "Example group identifier for read/update operations" },
+    { "key": "version_id", "value": "", "description": "Resource versionId for If-Match header (populated by test scripts)" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{access_token}}" }]
+  },
+  "item": [
+    {
+      "name": "1. Authentication",
+      "item": [
+        {
+          "name": "Get Access Token",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if(pm.response.code===200){var d=pm.response.json();pm.collectionVariables.set('access_token',d.access_token);pm.test('Token received',function(){pm.expect(d.access_token).to.be.a('string')});pm.test('Token type is Bearer',function(){pm.expect(d.token_type).to.eql('Bearer')});pm.test('Scopes returned',function(){pm.expect(d.scope).to.be.a('string')});}"] } }],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"grant_type\":\"client_credentials\",\"client_id\":\"{{client_id}}\",\"client_secret\":\"{{client_secret}}\"}" },
+            "url": { "raw": "{{base_url}}/oauth/token", "host": ["{{base_url}}"], "path": ["oauth", "token"] }
+          }
+        },
+        {
+          "name": "Get API Metadata",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if(pm.response.code===200){var d=pm.response.json();pm.test('Has API name',function(){pm.expect(d.name).to.be.a('string')});pm.test('Has resources',function(){pm.expect(d.resources).to.be.an('object')});pm.test('Has authentication info',function(){pm.expect(d.authentication).to.be.an('object')});}"] } }],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/metadata", "host": ["{{base_url}}"], "path": ["metadata"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Individuals",
+      "description": "CRUD operations for Individual registrants.\n\nSearch responses use `data/meta/links` format:\n```json\n{\"data\": [...], \"meta\": {\"total\": N, \"count\": N, \"offset\": 0}, \"links\": {\"self\": \"...\"}}\n```\n\nRead responses return the resource directly (no wrapper).",
+      "item": [
+        {
+          "name": "Search Individuals",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if(pm.response.code===200){var d=pm.response.json();pm.test('Has data array',function(){pm.expect(d.data).to.be.an('array')});pm.test('Has meta object',function(){pm.expect(d.meta).to.be.an('object');pm.expect(d.meta.total).to.be.a('number')});pm.test('Has links',function(){pm.expect(d.links).to.be.an('object')});}"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Individual?name=Santos&_count=20", "host": ["{{base_url}}"], "path": ["Individual"], "query": [{ "key": "name", "value": "Santos" }, { "key": "_count", "value": "20" }] } }
+        },
+        {
+          "name": "Search by Identifier",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Individual?identifier=urn:openspp:vocab:id-type%23national_id|PH-123", "host": ["{{base_url}}"], "path": ["Individual"], "query": [{ "key": "identifier", "value": "urn:openspp:vocab:id-type#national_id|PH-123" }] } }
+        },
+        {
+          "name": "Read Individual",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if(pm.response.code===200){var d=pm.response.json();pm.test('Is Individual type',function(){pm.expect(d.type).to.eql('Individual')});pm.test('Has identifier',function(){pm.expect(d.identifier).to.be.an('array')});pm.test('Has meta with versionId',function(){pm.expect(d.meta).to.be.an('object');pm.expect(d.meta.versionId).to.be.a('string');pm.collectionVariables.set('version_id',d.meta.versionId)});}"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Individual/{{individual_id}}", "host": ["{{base_url}}"], "path": ["Individual", "{{individual_id}}"] } }
+        },
+        {
+          "name": "Read with Extensions",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Individual/{{individual_id}}?_extensions=*&_elements=name,birthDate", "host": ["{{base_url}}"], "path": ["Individual", "{{individual_id}}"], "query": [{ "key": "_extensions", "value": "*" }, { "key": "_elements", "value": "name,birthDate" }] } }
+        },
+        {
+          "name": "Create Individual",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if(pm.response.code===201){var d=pm.response.json();pm.test('Has Individual type',function(){pm.expect(d.type).to.eql('Individual')});pm.test('Has meta',function(){pm.expect(d.meta).to.be.an('object');pm.expect(d.meta.versionId).to.be.a('string')});}"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"type\": \"Individual\",\n  \"identifier\": [{\"system\": \"urn:openspp:vocab:id-type#national_id\", \"value\": \"PH-NEW-001\"}],\n  \"name\": {\"family\": \"REYES\", \"given\": \"Ana\"},\n  \"birthDate\": \"1990-05-20\",\n  \"gender\": {\"coding\": [{\"system\": \"urn:iso:std:iso:5218\", \"code\": \"2\"}]},\n  \"telecom\": [{\"system\": \"phone\", \"value\": \"+639171234567\", \"use\": \"mobile\"}]\n}" },
+            "url": { "raw": "{{base_url}}/Individual", "host": ["{{base_url}}"], "path": ["Individual"] }
+          }
+        },
+        {
+          "name": "Full Update (PUT)",
+          "description": "If-Match header must contain the versionId from a previous read (microsecond timestamp).",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "If-Match", "value": "\"{{version_id}}\"" }],
+            "body": { "mode": "raw", "raw": "{\n  \"type\": \"Individual\",\n  \"identifier\": [{\"system\": \"urn:openspp:vocab:id-type#national_id\", \"value\": \"PH-123\"}],\n  \"name\": {\"family\": \"SANTOS\", \"given\": \"Maria Elena\"},\n  \"birthDate\": \"1990-05-20\",\n  \"gender\": {\"coding\": [{\"system\": \"urn:iso:std:iso:5218\", \"code\": \"2\"}]}\n}" },
+            "url": { "raw": "{{base_url}}/Individual/{{individual_id}}", "host": ["{{base_url}}"], "path": ["Individual", "{{individual_id}}"] }
+          }
+        },
+        {
+          "name": "Partial Update (PATCH)",
+          "description": "If-Match header must contain the versionId from a previous read (microsecond timestamp).",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "If-Match", "value": "\"{{version_id}}\"" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": {\"given\": \"Maria Elena\"},\n  \"telecom\": [{\"system\": \"phone\", \"value\": \"+639179999999\", \"use\": \"mobile\"}]\n}" },
+            "url": { "raw": "{{base_url}}/Individual/{{individual_id}}", "host": ["{{base_url}}"], "path": ["Individual", "{{individual_id}}"] }
+          }
+        },
+        {
+          "name": "Get Group Memberships",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Individual/{{individual_id}}/groups", "host": ["{{base_url}}"], "path": ["Individual", "{{individual_id}}", "groups"] } }
+        }
+      ]
+    },
+    {
+      "name": "3. Groups",
+      "description": "CRUD and membership operations for Group registrants (households, families).\n\nSearch responses use `data/meta/links` format. Read responses return the resource directly.",
+      "item": [
+        {
+          "name": "Search Groups",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if(pm.response.code===200){var d=pm.response.json();pm.test('Has data array',function(){pm.expect(d.data).to.be.an('array')});pm.test('Has meta',function(){pm.expect(d.meta).to.be.an('object')});}"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Group?type=household&_count=20", "host": ["{{base_url}}"], "path": ["Group"], "query": [{ "key": "type", "value": "household" }, { "key": "_count", "value": "20" }] } }
+        },
+        {
+          "name": "Read Group",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if(pm.response.code===200){var d=pm.response.json();pm.test('Is Group type',function(){pm.expect(d.type).to.eql('Group')});if(d.meta&&d.meta.versionId){pm.collectionVariables.set('version_id',d.meta.versionId);}}"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Group/{{group_id}}", "host": ["{{base_url}}"], "path": ["Group", "{{group_id}}"] } }
+        },
+        {
+          "name": "Create Group",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"type\": \"Group\",\n  \"identifier\": [{\"system\": \"urn:openspp:vocab:id-type#national_id\", \"value\": \"HH-2024-NEW\"}],\n  \"groupType\": \"household\",\n  \"name\": \"Dela Cruz Household\",\n  \"member\": [{\"entity\": {\"reference\": \"Individual/urn:openspp:vocab:id-type#national_id|PH-001\"}, \"role\": {\"coding\": [{\"system\": \"urn:openspp:vocab:relationship\", \"code\": \"head\"}]}}]\n}" },
+            "url": { "raw": "{{base_url}}/Group", "host": ["{{base_url}}"], "path": ["Group"] }
+          }
+        },
+        {
+          "name": "Partial Update (PATCH)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "If-Match", "value": "\"{{version_id}}\"" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Santos-Cruz Household\"\n}" },
+            "url": { "raw": "{{base_url}}/Group/{{group_id}}", "host": ["{{base_url}}"], "path": ["Group", "{{group_id}}"] }
+          }
+        },
+        {
+          "name": "Add Member",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"entity\": {\"reference\": \"Individual/urn:openspp:vocab:id-type#national_id|PH-789\"},\n  \"role\": {\"coding\": [{\"system\": \"urn:openspp:vocab:relationship\", \"code\": \"child\"}]},\n  \"startDate\": \"2024-06-01\"\n}" },
+            "url": { "raw": "{{base_url}}/Group/{{group_id}}/$add-member", "host": ["{{base_url}}"], "path": ["Group", "{{group_id}}", "$add-member"] }
+          }
+        },
+        {
+          "name": "Remove Member",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"entity\": {\"reference\": \"Individual/urn:openspp:vocab:id-type#national_id|PH-789\"},\n  \"endedDate\": \"2024-12-31\",\n  \"reason\": \"Moved to another household\"\n}" },
+            "url": { "raw": "{{base_url}}/Group/{{group_id}}/$remove-member", "host": ["{{base_url}}"], "path": ["Group", "{{group_id}}", "$remove-member"] }
+          }
+        },
+        {
+          "name": "Update Member Role",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"role\": {\"coding\": [{\"system\": \"urn:openspp:vocab:relationship\", \"code\": \"head\"}]}\n}" },
+            "url": { "raw": "{{base_url}}/Group/{{group_id}}/member/urn:openspp:vocab:id-type#national_id|PH-789", "host": ["{{base_url}}"], "path": ["Group", "{{group_id}}", "member", "urn:openspp:vocab:id-type#national_id|PH-789"] }
+          }
+        },
+        {
+          "name": "Merge Groups",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"sourceGroup\": {\"reference\": \"Group/urn:openspp:vocab:id-type#national_id|HH-OLD\"},\n  \"targetGroup\": {\"reference\": \"Group/urn:openspp:vocab:id-type#national_id|HH-NEW\"},\n  \"roleMapping\": {\"head\": \"member\", \"spouse\": \"spouse\"}\n}" },
+            "url": { "raw": "{{base_url}}/Group/$merge", "host": ["{{base_url}}"], "path": ["Group", "$merge"] }
+          }
+        },
+        {
+          "name": "Split Group",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"newGroupIdentifier\": [{\"system\": \"urn:openspp:vocab:id-type#national_id\", \"value\": \"HH-002\"}],\n  \"membersToMove\": [\n    {\"reference\": \"Individual/urn:openspp:vocab:id-type#national_id|PH-111\"},\n    {\"reference\": \"Individual/urn:openspp:vocab:id-type#national_id|PH-222\"}\n  ],\n  \"newHead\": {\"reference\": \"Individual/urn:openspp:vocab:id-type#national_id|PH-111\"}\n}" },
+            "url": { "raw": "{{base_url}}/Group/{{group_id}}/$split", "host": ["{{base_url}}"], "path": ["Group", "{{group_id}}", "$split"] }
+          }
+        },
+        {
+          "name": "Membership History",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Group/{{group_id}}/membership-history?_count=100", "host": ["{{base_url}}"], "path": ["Group", "{{group_id}}", "membership-history"], "query": [{ "key": "_count", "value": "100" }] } }
+        }
+      ]
+    },
+    {
+      "name": "4. Programs & Memberships",
+      "description": "Program and enrollment operations.\n\nSearch responses use `data/meta/links` format.",
+      "item": [
+        {
+          "name": "Search Programs",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if(pm.response.code===200){var d=pm.response.json();pm.test('Has data array',function(){pm.expect(d.data).to.be.an('array')});pm.test('Has meta',function(){pm.expect(d.meta).to.be.an('object')});}"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Program?status=active", "host": ["{{base_url}}"], "path": ["Program"], "query": [{ "key": "status", "value": "active" }] } }
+        },
+        {
+          "name": "Read Program",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Program/urn:openspp:program|4PS-2024", "host": ["{{base_url}}"], "path": ["Program", "urn:openspp:program|4PS-2024"] } }
+        },
+        {
+          "name": "Search Memberships",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if(pm.response.code===200){var d=pm.response.json();pm.test('Has data array',function(){pm.expect(d.data).to.be.an('array')});pm.test('Has meta',function(){pm.expect(d.meta).to.be.an('object')});}"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/ProgramMembership?program=Program/urn:openspp:program|4PS-2024&status=enrolled", "host": ["{{base_url}}"], "path": ["ProgramMembership"], "query": [{ "key": "program", "value": "Program/urn:openspp:program|4PS-2024" }, { "key": "status", "value": "enrolled" }] } }
+        },
+        {
+          "name": "Read Membership",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/ProgramMembership/urn:openspp:membership|M-001", "host": ["{{base_url}}"], "path": ["ProgramMembership", "urn:openspp:membership|M-001"] } }
+        },
+        {
+          "name": "Create Enrollment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"type\": \"ProgramMembership\",\n  \"program\": {\"reference\": \"Program/urn:openspp:program|4Ps\"},\n  \"beneficiary\": {\"reference\": \"Group/urn:openspp:vocab:id-type#national_id|HH-2024-001\"},\n  \"status\": \"enrolled\",\n  \"enrollmentDate\": \"2024-11-28\"\n}" },
+            "url": { "raw": "{{base_url}}/ProgramMembership", "host": ["{{base_url}}"], "path": ["ProgramMembership"] }
+          }
+        },
+        {
+          "name": "Update Membership",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "If-Match", "value": "\"{{version_id}}\"" }],
+            "body": { "mode": "raw", "raw": "{\n  \"type\": \"ProgramMembership\",\n  \"program\": {\"reference\": \"Program/urn:openspp:program|4Ps\"},\n  \"beneficiary\": {\"reference\": \"Group/urn:openspp:vocab:id-type#national_id|HH-2024-001\"},\n  \"status\": \"paused\"\n}" },
+            "url": { "raw": "{{base_url}}/ProgramMembership/urn:openspp:membership|M-001", "host": ["{{base_url}}"], "path": ["ProgramMembership", "urn:openspp:membership|M-001"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Consent",
+      "description": "Consent management endpoints.\n\nNote: These endpoints require the API client's Odoo user to have consent model access permissions beyond just API scopes.",
+      "item": [
+        {
+          "name": "Get Consent Status",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Consent/550e8400-e29b-41d4-a716-446655440000", "host": ["{{base_url}}"], "path": ["Consent", "550e8400-e29b-41d4-a716-446655440000"] } }
+        },
+        {
+          "name": "Revoke Consent",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"reason\": \"No longer want to share data\"}" },
+            "url": { "raw": "{{base_url}}/Consent/550e8400-e29b-41d4-a716-446655440000/$revoke", "host": ["{{base_url}}"], "path": ["Consent", "550e8400-e29b-41d4-a716-446655440000", "$revoke"] }
+          }
+        },
+        {
+          "name": "Get Consent Receipt",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Consent/550e8400-e29b-41d4-a716-446655440000/$receipt", "host": ["{{base_url}}"], "path": ["Consent", "550e8400-e29b-41d4-a716-446655440000", "$receipt"] } }
+        },
+        {
+          "name": "Get Consent History",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Consent/550e8400-e29b-41d4-a716-446655440000/$history", "host": ["{{base_url}}"], "path": ["Consent", "550e8400-e29b-41d4-a716-446655440000", "$history"] } }
+        },
+        {
+          "name": "Get Access Summary",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Consent/550e8400-e29b-41d4-a716-446655440000/$access-summary?date_from=2024-01-01&date_to=2024-12-31", "host": ["{{base_url}}"], "path": ["Consent", "550e8400-e29b-41d4-a716-446655440000", "$access-summary"], "query": [{ "key": "date_from", "value": "2024-01-01" }, { "key": "date_to", "value": "2024-12-31" }] } }
+        }
+      ]
+    },
+    {
+      "name": "6. Batch & Bulk",
+      "description": "Batch operations use FHIR Bundle format for both request and response.",
+      "item": [
+        {
+          "name": "Transaction: Create Household",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if(pm.response.code===200){var d=pm.response.json();pm.test('Is transaction-response Bundle',function(){pm.expect(d.resourceType).to.eql('Bundle');pm.expect(d.type).to.eql('transaction-response')});pm.test('Has entries',function(){pm.expect(d.entry).to.be.an('array')});}"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"resourceType\": \"Bundle\",\n  \"type\": \"transaction\",\n  \"entry\": [\n    {\"fullUrl\": \"urn:uuid:head\", \"request\": {\"method\": \"POST\", \"url\": \"Individual\"}, \"resource\": {\"type\": \"Individual\", \"identifier\": [{\"system\": \"urn:openspp:vocab:id-type#national_id\", \"value\": \"PH-HEAD-001\"}], \"name\": {\"family\": \"SANTOS\", \"given\": \"Juan\"}}},\n    {\"fullUrl\": \"urn:uuid:household\", \"request\": {\"method\": \"POST\", \"url\": \"Group\"}, \"resource\": {\"type\": \"Group\", \"identifier\": [{\"system\": \"urn:openspp:vocab:id-type#national_id\", \"value\": \"HH-BATCH\"}], \"groupType\": \"household\", \"name\": \"Santos Household\", \"member\": [{\"entity\": {\"reference\": \"urn:uuid:head\"}, \"role\": {\"coding\": [{\"system\": \"urn:openspp:vocab:relationship\", \"code\": \"head\"}]}}]}}\n  ]\n}" },
+            "url": { "raw": "{{base_url}}/$batch", "host": ["{{base_url}}"], "path": ["$batch"] }
+          }
+        },
+        {
+          "name": "Batch: Read Multiple",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if(pm.response.code===200){var d=pm.response.json();pm.test('Is batch-response Bundle',function(){pm.expect(d.resourceType).to.eql('Bundle');pm.expect(d.type).to.eql('batch-response')});}"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"resourceType\": \"Bundle\",\n  \"type\": \"batch\",\n  \"entry\": [\n    {\"request\": {\"method\": \"GET\", \"url\": \"Individual/urn:openspp:vocab:id-type#national_id|PH-001\"}},\n    {\"request\": {\"method\": \"GET\", \"url\": \"Individual/urn:openspp:vocab:id-type#national_id|PH-002\"}}\n  ]\n}" },
+            "url": { "raw": "{{base_url}}/$batch", "host": ["{{base_url}}"], "path": ["$batch"] }
+          }
+        },
+        {
+          "name": "Bulk Export Individuals",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if(pm.response.code===200){var d=pm.response.json();pm.test('Has total',function(){pm.expect(d.total).to.be.a('number')});pm.test('Has items',function(){pm.expect(d.items).to.be.an('array')});}"] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"type\": \"Individual\",\n  \"identifiers\": [\n    \"urn:openspp:vocab:id-type#national_id|PH-123456789\",\n    \"urn:openspp:vocab:id-type#national_id|PH-987654321\"\n  ],\n  \"_elements\": \"name,birthDate,gender\"\n}" },
+            "url": { "raw": "{{base_url}}/$bulk/export", "host": ["{{base_url}}"], "path": ["$bulk", "export"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Filters & Advanced Search",
+      "description": "Advanced search with complex filter conditions.\n\nNote: Requires the router fix (filter routers registered before resource routers) to avoid route shadowing by the /{identifier} handler.",
+      "item": [
+        {
+          "name": "Get Individual Filters",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Individual/_filters", "host": ["{{base_url}}"], "path": ["Individual", "_filters"] } }
+        },
+        {
+          "name": "Advanced Individual Search",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"filters\": [\n    {\"field\": \"name\", \"operator\": \"ilike\", \"value\": \"Santos\"},\n    {\"field\": \"birthDate\", \"operator\": \"gte\", \"value\": \"1980-01-01\"}\n  ],\n  \"filter_logic\": \"AND\",\n  \"sort\": [{\"field\": \"birthDate\", \"direction\": \"desc\"}],\n  \"pagination\": {\"count\": 20, \"offset\": 0}\n}" },
+            "url": { "raw": "{{base_url}}/Individual/_search", "host": ["{{base_url}}"], "path": ["Individual", "_search"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Change Requests",
+      "description": "Change request lifecycle management.\n\nNote: These endpoints require the API client's Odoo user to have Change Request role permissions (Manager/User/Validator).",
+      "item": [
+        {
+          "name": "Search Change Requests",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/ChangeRequest?status=pending&_count=20", "host": ["{{base_url}}"], "path": ["ChangeRequest"], "query": [{ "key": "status", "value": "pending" }, { "key": "_count", "value": "20" }] } }
+        },
+        {
+          "name": "Create Change Request",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"type\": \"ChangeRequest\",\n  \"requestType\": {\"code\": \"edit_individual\"},\n  \"registrant\": {\"system\": \"urn:openspp:vocab:id-type#national_id\", \"value\": \"PH-123\"},\n  \"detail\": {\"name\": {\"given\": \"Maria Elena\"}},\n  \"description\": \"Update given name\"\n}" },
+            "url": { "raw": "{{base_url}}/ChangeRequest", "host": ["{{base_url}}"], "path": ["ChangeRequest"] }
+          }
+        },
+        {
+          "name": "Read Change Request",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/ChangeRequest/CR/2024/00001", "host": ["{{base_url}}"], "path": ["ChangeRequest", "CR/2024/00001"] } }
+        },
+        {
+          "name": "Update Change Request",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"detail\": {\"name\": {\"given\": \"Maria Elena\", \"middle\": \"Cruz\"}}\n}" },
+            "url": { "raw": "{{base_url}}/ChangeRequest/CR/2024/00001", "host": ["{{base_url}}"], "path": ["ChangeRequest", "CR/2024/00001"] }
+          }
+        },
+        {
+          "name": "Submit for Approval",
+          "request": { "method": "POST", "url": { "raw": "{{base_url}}/ChangeRequest/CR/2024/00001/$submit", "host": ["{{base_url}}"], "path": ["ChangeRequest", "CR/2024/00001", "$submit"] } }
+        },
+        {
+          "name": "Approve",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"comment\": \"Approved after verification\"}" },
+            "url": { "raw": "{{base_url}}/ChangeRequest/CR/2024/00001/$approve", "host": ["{{base_url}}"], "path": ["ChangeRequest", "CR/2024/00001", "$approve"] }
+          }
+        },
+        {
+          "name": "Reject",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"reason\": \"Insufficient documentation\"}" },
+            "url": { "raw": "{{base_url}}/ChangeRequest/CR/2024/00001/$reject", "host": ["{{base_url}}"], "path": ["ChangeRequest", "CR/2024/00001", "$reject"] }
+          }
+        },
+        {
+          "name": "Request Revision",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"notes\": \"Please provide supporting documents\"}" },
+            "url": { "raw": "{{base_url}}/ChangeRequest/CR/2024/00001/$request-revision", "host": ["{{base_url}}"], "path": ["ChangeRequest", "CR/2024/00001", "$request-revision"] }
+          }
+        },
+        {
+          "name": "Apply Changes",
+          "request": { "method": "POST", "url": { "raw": "{{base_url}}/ChangeRequest/CR/2024/00001/$apply", "host": ["{{base_url}}"], "path": ["ChangeRequest", "CR/2024/00001", "$apply"] } }
+        },
+        {
+          "name": "Reset to Draft",
+          "request": { "method": "POST", "url": { "raw": "{{base_url}}/ChangeRequest/CR/2024/00001/$reset", "host": ["{{base_url}}"], "path": ["ChangeRequest", "CR/2024/00001", "$reset"] } }
+        }
+      ]
+    },
+    {
+      "name": "9. Vocabulary",
+      "description": "Vocabulary and code list management.\n\nResponse format: `{total, items}` for list and `{namespace_uri, vocabulary_name, total, items}` for codes.",
+      "item": [
+        {
+          "name": "List Vocabularies",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if(pm.response.code===200){var d=pm.response.json();pm.test('Has total',function(){pm.expect(d.total).to.be.a('number')});pm.test('Has items',function(){pm.expect(d.items).to.be.an('array')});}"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Vocabulary", "host": ["{{base_url}}"], "path": ["Vocabulary"] } }
+        },
+        {
+          "name": "Get Vocabulary Details",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Vocabulary/urn:openspp:vocab:relationship", "host": ["{{base_url}}"], "path": ["Vocabulary", "urn:openspp:vocab:relationship"] } }
+        },
+        {
+          "name": "List Vocabulary Codes",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if(pm.response.code===200){var d=pm.response.json();pm.test('Has namespace_uri',function(){pm.expect(d.namespace_uri).to.be.a('string')});pm.test('Has items',function(){pm.expect(d.items).to.be.an('array')});}"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Vocabulary/urn:openspp:vocab:relationship/codes", "host": ["{{base_url}}"], "path": ["Vocabulary", "urn:openspp:vocab:relationship", "codes"] } }
+        }
+      ]
+    },
+    {
+      "name": "10. Cycles",
+      "description": "Program cycle management.\n\nSearch responses use `data/meta/links` format.",
+      "item": [
+        {
+          "name": "Search Cycles",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if(pm.response.code===200){var d=pm.response.json();pm.test('Has data array',function(){pm.expect(d.data).to.be.an('array')});pm.test('Has meta',function(){pm.expect(d.meta).to.be.an('object')});}"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Cycle?program=4Ps&_count=20", "host": ["{{base_url}}"], "path": ["Cycle"], "query": [{ "key": "program", "value": "4Ps" }, { "key": "_count", "value": "20" }] } }
+        },
+        {
+          "name": "Read Cycle",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Cycle/4Ps-2024-Q1", "host": ["{{base_url}}"], "path": ["Cycle", "4Ps-2024-Q1"] } }
+        }
+      ]
+    },
+    {
+      "name": "11. Entitlements",
+      "description": "Entitlement management.\n\nSearch responses use `data/meta/links` format.",
+      "item": [
+        {
+          "name": "Search Entitlements",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if(pm.response.code===200){var d=pm.response.json();pm.test('Has data array',function(){pm.expect(d.data).to.be.an('array')});pm.test('Has meta',function(){pm.expect(d.meta).to.be.an('object')});}"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Entitlement?program=4Ps&entitlementType=cash&_count=20", "host": ["{{base_url}}"], "path": ["Entitlement"], "query": [{ "key": "program", "value": "4Ps" }, { "key": "entitlementType", "value": "cash" }, { "key": "_count", "value": "20" }] } }
+        },
+        {
+          "name": "Read Entitlement",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Entitlement/550e8400-e29b-41d4-a716-446655440000", "host": ["{{base_url}}"], "path": ["Entitlement", "550e8400-e29b-41d4-a716-446655440000"] } }
+        }
+      ]
+    },
+    {
+      "name": "12. Service Points",
+      "description": "Service point management.\n\nSearch responses use FHIR Bundle format: `{resourceType, type, total, link, entry}`.",
+      "item": [
+        {
+          "name": "Search Service Points",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/ServicePoint?contractActive=true&_count=20", "host": ["{{base_url}}"], "path": ["ServicePoint"], "query": [{ "key": "contractActive", "value": "true" }, { "key": "_count", "value": "20" }] } }
+        },
+        {
+          "name": "Read Service Point",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/ServicePoint/Main%20Office", "host": ["{{base_url}}"], "path": ["ServicePoint", "Main%20Office"] } }
+        }
+      ]
+    },
+    {
+      "name": "13. Products",
+      "description": "Product catalog.\n\nSearch responses use FHIR Bundle format: `{resourceType, type, total, link, entry}`.",
+      "item": [
+        {
+          "name": "Search Products",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Product?_count=20", "host": ["{{base_url}}"], "path": ["Product"], "query": [{ "key": "_count", "value": "20" }] } }
+        },
+        {
+          "name": "Read Product",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Product/RICE-5KG", "host": ["{{base_url}}"], "path": ["Product", "RICE-5KG"] } }
+        },
+        {
+          "name": "Search Product Categories",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/ProductCategory", "host": ["{{base_url}}"], "path": ["ProductCategory"] } }
+        },
+        {
+          "name": "Search Units of Measure",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/UnitOfMeasure", "host": ["{{base_url}}"], "path": ["UnitOfMeasure"] } }
+        }
+      ]
+    },
+    {
+      "name": "14. Verifiable Credentials",
+      "description": "Verifiable credential issuance and verification.\n\nNote: Requires the `spp_api_v2_verifiable_credentials` module to be installed.",
+      "item": [
+        {
+          "name": "Issue Credential",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"credential_type_code\": \"social_registry_id\",\n  \"subject_spp_id\": \"PH-123456789\"\n}" },
+            "url": { "raw": "{{base_url}}/Credential/$issue", "host": ["{{base_url}}"], "path": ["Credential", "$issue"] }
+          }
+        },
+        {
+          "name": "Verify Credential",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"credential\": \"eyJ0eXAiOiJ2YytzZC1qd3QiLCJhbGciOiJFZERTQSJ9...\"\n}" },
+            "url": { "raw": "{{base_url}}/Credential/$verify", "host": ["{{base_url}}"], "path": ["Credential", "$verify"] }
+          }
+        },
+        {
+          "name": "Get Status List",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/Credential/StatusList/default", "host": ["{{base_url}}"], "path": ["Credential", "StatusList", "default"] }
+          }
+        },
+        {
+          "name": "List Subject Credentials",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Credential/Subject/PH-123456789?status=active", "host": ["{{base_url}}"], "path": ["Credential", "Subject", "PH-123456789"], "query": [{ "key": "status", "value": "active" }] } }
+        }
+      ]
+    },
+    {
+      "name": "15. Studio",
+      "description": "Studio field and variable introspection.\n\nResponse format: `{total, items}`.",
+      "item": [
+        {
+          "name": "List Studio Fields",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if(pm.response.code===200){var d=pm.response.json();pm.test('Has total',function(){pm.expect(d.total).to.be.a('number')});pm.test('Has items',function(){pm.expect(d.items).to.be.an('array')});}"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Studio/fields?target_type=individual", "host": ["{{base_url}}"], "path": ["Studio", "fields"], "query": [{ "key": "target_type", "value": "individual" }] } }
+        },
+        {
+          "name": "Get Field Schema",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Studio/fields/x_household_income/schema", "host": ["{{base_url}}"], "path": ["Studio", "fields", "x_household_income", "schema"] } }
+        },
+        {
+          "name": "List Variables",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if(pm.response.code===200){var d=pm.response.json();pm.test('Has total',function(){pm.expect(d.total).to.be.a('number')});pm.test('Has items',function(){pm.expect(d.items).to.be.an('array')});}"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Studio/variables?applies_to=individual", "host": ["{{base_url}}"], "path": ["Studio", "variables"], "query": [{ "key": "applies_to", "value": "individual" }] } }
+        },
+        {
+          "name": "Get Subject Variable Values",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Studio/variables/Individual/{{individual_id}}?variables=*", "host": ["{{base_url}}"], "path": ["Studio", "variables", "Individual", "{{individual_id}}"], "query": [{ "key": "variables", "value": "*" }] } }
+        }
+      ]
+    },
+    {
+      "name": "16. Data Operations",
+      "description": "Data push/pull for external variable providers.\n\nResponse format: `{total, items}` for list operations.",
+      "item": [
+        {
+          "name": "Push Values",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"provider_code\": \"education_ministry\",\n  \"values\": [\n    {\"variable\": \"school_enrollment\", \"subject_external_id\": \"urn:openspp:vocab:id-type#national_id|PH-123\", \"value\": true, \"periodKey\": \"2024-Q4\"}\n  ]\n}" },
+            "url": { "raw": "{{base_url}}/Data/push", "host": ["{{base_url}}"], "path": ["Data", "push"] }
+          }
+        },
+        {
+          "name": "Pull Values",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Data/pull?variable=school_enrollment&subject_external_ids=urn:openspp:vocab:id-type%23national_id|PH-123", "host": ["{{base_url}}"], "path": ["Data", "pull"], "query": [{ "key": "variable", "value": "school_enrollment" }, { "key": "subject_external_ids", "value": "urn:openspp:vocab:id-type#national_id|PH-123" }] } }
+        },
+        {
+          "name": "Invalidate Cache",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"provider_code\": \"education_ministry\",\n  \"variable\": \"school_enrollment\"\n}" },
+            "url": { "raw": "{{base_url}}/Data/invalidate", "host": ["{{base_url}}"], "path": ["Data", "invalidate"] }
+          }
+        },
+        {
+          "name": "List Data Variables",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": ["if(pm.response.code===200){var d=pm.response.json();pm.test('Has total',function(){pm.expect(d.total).to.be.a('number')});pm.test('Has items',function(){pm.expect(d.items).to.be.an('array')});}"] } }],
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/Data/variables", "host": ["{{base_url}}"], "path": ["Data", "variables"] } }
+        }
+      ]
+    },
+    {
+      "name": "17. DRIMS",
+      "description": "Disaster Response Information Management System.\n\nNote: Requires the `spp_api_v2_drims` module to be installed.",
+      "item": [
+        {
+          "name": "Dispatches GeoJSON",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/DRIMS/dispatches/geojson?_count=100", "host": ["{{base_url}}"], "path": ["DRIMS", "dispatches", "geojson"], "query": [{ "key": "_count", "value": "100" }] } }
+        },
+        {
+          "name": "Incidents GeoJSON",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/DRIMS/incidents/geojson?status=active", "host": ["{{base_url}}"], "path": ["DRIMS", "incidents", "geojson"], "query": [{ "key": "status", "value": "active" }] } }
+        },
+        {
+          "name": "Requests GeoJSON",
+          "request": { "method": "GET", "url": { "raw": "{{base_url}}/DRIMS/requests/geojson", "host": ["{{base_url}}"], "path": ["DRIMS", "requests", "geojson"] } }
+        }
+      ]
+    }
+  ]
+}

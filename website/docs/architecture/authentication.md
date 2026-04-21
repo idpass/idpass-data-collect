@@ -14,7 +14,7 @@ The ID PASS Data Collect authentication system provides a flexible, secure, and 
 The authentication architecture consists of three main components:
 
 1. **AuthManager**: Central authentication coordinator
-2. **Auth Adapters**: Provider-specific implementations (Auth0, Keycloak)
+2. **Auth Adapters**: Provider-specific implementations (Auth0, Keycloak, OTP, National ID)
 3. **Storage Adapters**: Token persistence layer
 
 ```mermaid
@@ -23,6 +23,8 @@ graph TD
     A --> C[Storage Adapters]
     B --> D[Auth0]
     B --> E[Keycloak]
+    B --> H[OTP]
+    B --> I[National ID]
     C --> F[IndexedDB]
     C --> G[Future Storage]
 ```
@@ -42,9 +44,11 @@ The `AuthManager` class serves as the central coordinator for authentication ope
 
 Provider-specific adapters implement the `AuthAdapter` interface:
 
-- **Auth0Adapter**: Auth0-specific implementation
-- **KeycloakAdapter**: Keycloak-specific implementation
-- Future adapters can be added by implementing the interface
+- **Auth0Adapter** (`auth0`): Auth0-specific OIDC implementation for field workers
+- **KeycloakAdapter** (`keycloak`): Keycloak-specific OIDC implementation for field workers
+- **OtpAuthAdapter** (`otp`): One-time password via SMS/email for citizen self-service
+- **IdAuthAdapter** (`id`): National ID card verification for citizen self-service
+- New adapters can be added by implementing the `AuthAdapter` interface and registering the registry key in `AuthManager`
 
 ### Storage Adapters
 
@@ -139,6 +143,70 @@ const keycloakConfig = {
 };
 ```
 
+### OTP Configuration
+
+The `otp` adapter sends a 6-digit one-time password to a beneficiary's phone number or email address. It is designed for citizen self-service scenarios where beneficiaries do not hold traditional login credentials. The resulting JWT carries a `self-service` scope and is scoped to the matched beneficiary entity.
+
+```typescript
+const otpConfig = {
+  type: "otp",
+  fields: {
+    serverUrl: "https://sync.example.com"
+  }
+};
+```
+
+Authentication is a two-step process — call `requestOtp()` first, then `verifyOtp()`:
+
+```typescript
+// 1. Request OTP delivery
+const { success, expiresIn } = await otpAdapter.requestOtp("+15551234567");
+
+// 2. Verify the received code and retrieve a JWT
+const { username, token } = await otpAdapter.verifyOtp("+15551234567", "123456");
+```
+
+The standard `login()` method is not supported for this adapter; use `requestOtp()` and `verifyOtp()` directly.
+
+**Backend endpoints used:**
+- `POST /api/auth/otp/request` — sends the one-time code
+- `POST /api/auth/otp/verify` — exchanges the code for a JWT
+- `POST /api/users/check-token` — validates a stored token
+
+### National ID Configuration
+
+The `id` adapter authenticates beneficiaries using a national ID document combined with their date of birth, or via a scanned QR code. It is designed for self-service kiosks or assisted-service workflows where identity documents replace usernames and passwords. The resulting JWT carries a `self-service` scope and is scoped to the matched beneficiary entity.
+
+```typescript
+const idConfig = {
+  type: "id",
+  fields: {
+    serverUrl: "https://sync.example.com"
+  }
+};
+```
+
+Two authentication flows are available:
+
+```typescript
+// ID document + date of birth
+const { username, token } = await idAdapter.authenticateWithId(
+  "A1234567",       // national ID number
+  "1990-05-15",     // date of birth (ISO 8601)
+  "tenant-id"
+);
+
+// QR code scan
+const { username, token } = await idAdapter.authenticateWithQr(qrCodePayload);
+```
+
+The standard `login()` method is not supported for this adapter; use `authenticateWithId()` or `authenticateWithQr()` directly.
+
+**Backend endpoints used:**
+- `POST /api/auth/id/verify` — verifies national ID + date of birth
+- `POST /api/auth/qr/verify` — verifies QR code payload
+- `POST /api/users/check-token` — validates a stored token
+
 ## Extension Points
 
 The authentication system can be extended in several ways:
@@ -146,7 +214,7 @@ The authentication system can be extended in several ways:
 1. **New Auth Providers**
    - Implement `AuthAdapter` interface
    - Add provider-specific configuration
-   - Register with `AuthManager`
+   - Register with `AuthManager` using a new registry key alongside the existing `auth0`, `keycloak`, `otp`, and `id` entries
 
 2. **Storage Backends**
    - Implement `AuthStorageAdapter` interface

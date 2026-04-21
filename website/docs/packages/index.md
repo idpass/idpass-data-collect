@@ -8,7 +8,7 @@ sidebar_position: 2
 
 ID PASS DataCollect is organized into three main packages, each serving a specific role in the offline-first data management ecosystem:
 
-## 📦 Package Architecture
+## Package Architecture
 
 ```mermaid
 graph TB
@@ -35,10 +35,10 @@ graph TB
 ### [DataCollect](/packages/datacollect)
 **Client Library for Offline-First Data Management**
 
-- 🗄️ **IndexedDB Storage**: Offline-capable data persistence
-- 🔄 **Event Sourcing**: Complete audit trail and state reconstruction
-- 📱 **Cross-Platform**: Works in browsers, mobile apps, and desktop applications
-- 🔐 **Encryption Support**: Client-side data encryption capabilities
+- **IndexedDB Storage**: Offline-capable data persistence
+- **Event Sourcing**: Complete audit trail and state reconstruction
+- **Cross-Platform**: Works in browsers, mobile apps, and desktop applications
+- **Encryption Support**: Client-side data encryption capabilities
 
 **Use Cases**: Mobile DataCollection, offline surveys, field data entry
 
@@ -47,10 +47,10 @@ graph TB
 ### [Backend](/packages/backend)
 **Central Sync Server & API**
 
-- 🗃️ **PostgreSQL Storage**: Centralized, reliable data persistence
-- 🔄 **Multi-Client Sync**: Synchronize data across multiple client instances
-- 🔌 **External Integration**: Connect with third-party systems (OpenFn, OpenSPP)
-- 👥 **Multi-Tenant**: Support for multiple organizations and configurations
+- **PostgreSQL Storage**: Centralized, reliable data persistence
+- **Multi-Client Sync**: Synchronize data across multiple client instances
+- **External Integration**: Connect with third-party systems (OpenFn, OpenSPP)
+- **Multi-Tenant**: Support for multiple organizations and configurations
 
 **Use Cases**: Central data management, team collaboration, system integration
 
@@ -59,10 +59,10 @@ graph TB
 ### [Mobile](/packages/mobile)
 **Vue.js Administration Interface**
 
-- 👥 **User Management**: Create and manage user accounts and permissions
-- ⚙️ **Configuration**: Set up multi-tenant configurations and forms
-- 📊 **Data Visualization**: View and analyze collected data
-- 🎨 **Customizable**: Theming and branding options
+- **User Management**: Create and manage user accounts and permissions
+- **Configuration**: Set up multi-tenant configurations and forms
+- **Data Visualization**: View and analyze collected data
+- **Customizable**: Theming and branding options
 
 **Use Cases**: Administrative oversight, user onboarding, data analysis
 
@@ -71,10 +71,10 @@ graph TB
 ### [Admin](/packages/admin)
 **Vue.js Administration Interface**
 
-- 👥 **User Management**: Create and manage user accounts and permissions
-- ⚙️ **Configuration**: Set up multi-tenant configurations and forms
-- 📊 **Data Visualization**: View and analyze collected data
-- 🎨 **Customizable**: Theming and branding options
+- **User Management**: Create and manage user accounts and permissions
+- **Configuration**: Set up multi-tenant configurations and forms
+- **Data Visualization**: View and analyze collected data
+- **Customizable**: Theming and branding options
 
 **Use Cases**: Administrative oversight, user onboarding, data analysis
 
@@ -94,6 +94,6 @@ graph TB
 
 ## Next Steps
 
-- 📚 [Getting Started Guide](../../getting-started/) - Installation and setup
-- 🏗️ [Architecture Overview](../../architecture/) - System design principles
-- 🚀 [Integration Guides](../adapters/openfn-adapter.md) - Cross-package development patterns
+- [Getting Started Guide](../../getting-started/) - Installation and setup
+- [Architecture Overview](../../architecture/) - System design principles
+- [Integration Guides](../adapters/openfn-adapter.md) - Cross-package development patterns

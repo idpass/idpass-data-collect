@@ -5,11 +5,27 @@ import {
   createUser as createUserApi,
   updateUser as updateUserApi,
   deleteUser as deleteUserApi,
+  getApps,
 } from '@/api'
+import type { AppListItem } from '@/api'
+import { useSnackBarStore } from '@/stores/snackBar'
+import { AxiosError } from 'axios'
+
+interface UserRecord {
+  id: string
+  email: string
+  role: string
+  programIds?: string[]
+  roleAssignments?: Array<{ programId: string; role: string; areaId?: string }>
+}
+
+const snackBarStore = useSnackBarStore()
 
 // State
+const userForm = ref<{ validate: () => Promise<{ valid: boolean }> } | null>(null)
 const loading = ref(false)
-const users = ref<{ id: string; email: string; role: string }[]>([])
+const users = ref<UserRecord[]>([])
+const programs = ref<AppListItem[]>([])
 const showCreateDialog = ref(false)
 const showDeleteDialog = ref(false)
 const editedIndex = ref(-1)
@@ -17,6 +33,7 @@ const editedIndex = ref(-1)
 const headers = [
   { title: 'Email', value: 'email' },
   { title: 'Role', value: 'role' },
+  { title: 'Programs', value: 'programCount', sortable: false },
   { title: 'Actions', value: 'actions', sortable: false },
 ]
 
@@ -24,17 +41,35 @@ const itemActionsSlot = 'item.actions'
 
 const roles = ['ADMIN', 'USER']
 
-const defaultItem = {
-  email: '',
-  password: '',
-  role: 'USER',
-}
+const passwordRules = [
+  (v: string) => {
+    if (editedIndex.value > -1 && !v) return true // optional when editing
+    if (!v) return 'Password is required'
+    if (v.length < 8) return 'Must be at least 8 characters'
+    if (!/[A-Z]/.test(v)) return 'Must contain at least one uppercase letter'
+    if (!/[a-z]/.test(v)) return 'Must contain at least one lowercase letter'
+    if (!/[0-9]/.test(v)) return 'Must contain at least one number'
+    if (!/[^A-Za-z0-9]/.test(v)) return 'Must contain at least one special character'
+    return true
+  },
+]
 
-const editedItem = reactive({
+const passwordHint = computed(() => {
+  if (editedIndex.value > -1) return 'Leave blank to keep current password'
+  return 'Min 8 characters with uppercase, lowercase, number, and special character'
+})
+
+const defaultItem: UserRecord & { password: string } = {
   id: '',
   email: '',
   password: '',
   role: 'USER',
+  programIds: [],
+  roleAssignments: [],
+}
+
+const editedItem = reactive<UserRecord & { password: string }>({
+  ...defaultItem,
 })
 
 // Computed
@@ -42,26 +77,49 @@ const formTitle = computed(() => {
   return editedIndex.value === -1 ? 'Create User' : 'Edit User'
 })
 
+const _programNames = computed(() => {
+  const map: Record<string, string> = {}
+  for (const t of programs.value) {
+    map[t.id] = t.name
+  }
+  return map
+})
+
 // Methods
 const fetchUsers = async () => {
   loading.value = true
   try {
     const response = await getUsersApi()
-    users.value = response
+    users.value = response as UserRecord[]
   } catch (error) {
-    console.error('Error fetching users:', error)
+    const msg = error instanceof AxiosError ? error.response?.data?.error || error.message : 'Failed to load users'
+    snackBarStore.showSnackbar(msg, 'error')
   } finally {
     loading.value = false
   }
 }
 
-const editUser = (item: { id: string; email: string; role: string }) => {
+const loadPrograms = async () => {
+  try {
+    const response = await getApps()
+    programs.value = response.data
+  } catch (error) {
+    console.error('Error fetching programs list:', error)
+  }
+}
+
+const editUser = (item: UserRecord) => {
   editedIndex.value = users.value.indexOf(item)
-  Object.assign(editedItem, item)
+  Object.assign(editedItem, {
+    ...item,
+    password: '',
+    programIds: item.programIds ?? [],
+    roleAssignments: item.roleAssignments ?? [],
+  })
   showCreateDialog.value = true
 }
 
-const confirmDelete = (item: { id: string; email: string; role: string }) => {
+const confirmDelete = (item: UserRecord) => {
   editedIndex.value = users.value.indexOf(item)
   Object.assign(editedItem, item)
   showDeleteDialog.value = true
@@ -72,52 +130,94 @@ const deleteUser = async () => {
     await deleteUserApi(editedItem.id)
     users.value.splice(editedIndex.value, 1)
     showDeleteDialog.value = false
+    snackBarStore.showSnackbar('User deleted', 'success')
   } catch (error) {
-    console.error('Error deleting user:', error)
+    const msg = error instanceof AxiosError ? error.response?.data?.error || error.message : 'Failed to delete user'
+    snackBarStore.showSnackbar(msg, 'error')
   }
 }
 
 const closeDialog = () => {
   showCreateDialog.value = false
-  Object.assign(editedItem, defaultItem)
+  Object.assign(editedItem, { ...defaultItem })
   editedIndex.value = -1
 }
 
 const saveUser = async () => {
+  if (userForm.value) {
+    const { valid } = await userForm.value.validate()
+    if (!valid) return
+  }
+  const isEditing = editedIndex.value > -1
   try {
     if (editedIndex.value > -1) {
       // Update existing user
-      console.log('updateUserApi', editedItem)
-      await updateUserApi(editedItem)
+      const payload: Parameters<typeof updateUserApi>[0] = {
+        id: editedItem.id,
+        email: editedItem.email,
+        role: editedItem.role,
+        programIds: editedItem.programIds,
+      }
+      if (editedItem.password) {
+        payload.password = editedItem.password
+      }
+      await updateUserApi(payload)
       Object.assign(users.value[editedIndex.value], editedItem)
     } else {
       // Create new user
-      await createUserApi(editedItem)
+      await createUserApi({
+        email: editedItem.email,
+        password: editedItem.password,
+        role: editedItem.role,
+        programIds: editedItem.programIds,
+      })
       users.value.push({ ...editedItem })
     }
     closeDialog()
+    snackBarStore.showSnackbar(isEditing ? 'User updated' : 'User created', 'success')
   } catch (error) {
-    console.error('Error saving user:', error)
+    const msg = error instanceof AxiosError ? error.response?.data?.error || error.message : 'Failed to save user'
+    snackBarStore.showSnackbar(msg, 'error')
   }
+}
+
+const getProgramCount = (item: UserRecord): number => {
+  return item.programIds?.length ?? 0
 }
 
 // Lifecycle hooks
 onMounted(() => {
   fetchUsers()
+  loadPrograms()
 })
 </script>
 
 <template>
   <v-container>
-    <v-row>
-      <v-col cols="12">
-        <h1 class="text-h4 mb-4">User Management</h1>
-
-        <!-- Create User Button -->
-        <v-btn color="primary" class="mb-4" @click="showCreateDialog = true"> Create User </v-btn>
+    <div class="page-header">
+      <div class="page-header__text">
+        <h1 class="page-header__title">User Management</h1>
+        <p class="page-header__subtitle">Create and manage user accounts and role assignments</p>
+      </div>
+      <div class="page-header__actions">
+        <v-btn
+          variant="flat"
+          color="primary"
+          prepend-icon="mdi-account-plus"
+          @click="showCreateDialog = true"
+        >
+          Create User
+        </v-btn>
+      </div>
+    </div>
 
         <!-- Users Table -->
-        <v-data-table :headers="headers" :items="users" :loading="loading" class="elevation-1">
+        <v-data-table :headers="headers" :items="users" :loading="loading" class="users-table">
+          <template #[`item.programCount`]="{ item }">
+            <v-chip size="small" variant="tonal">
+              {{ getProgramCount(item) }} program(s)
+            </v-chip>
+          </template>
           <template v-slot:[itemActionsSlot]="{ item }">
             <v-btn
               variant="text"
@@ -139,72 +239,95 @@ onMounted(() => {
         </v-data-table>
 
         <!-- Create/Edit User Dialog -->
-        <v-dialog v-model="showCreateDialog" max-width="500px">
+        <v-dialog v-model="showCreateDialog" :max-width="540">
           <v-card>
-            <v-card-title>
-              <span class="text-h5">{{ formTitle }}</span>
-            </v-card-title>
+            <v-card-title class="text-h6">{{ formTitle }}</v-card-title>
 
             <v-card-text>
-              <v-container>
-                <v-row>
-                  <v-col cols="12">
-                    <v-text-field
-                      v-model="editedItem.email"
-                      label="Email"
-                      type="email"
-                      required
-                    ></v-text-field>
-                  </v-col>
-                  <v-col cols="12">
-                    <v-text-field
-                      v-model="editedItem.password"
-                      label="Password"
-                      type="password"
-                      required
-                    ></v-text-field>
-                  </v-col>
-                  <v-col cols="12">
-                    <v-select
-                      v-model="editedItem.role"
-                      :items="roles"
-                      label="Role"
-                      required
-                    ></v-select>
-                  </v-col>
-                </v-row>
-              </v-container>
+              <v-form ref="userForm">
+              <div class="user-form">
+                <v-text-field
+                  v-model="editedItem.email"
+                  label="Email"
+                  type="email"
+                  variant="outlined"
+                  density="comfortable"
+                  required
+                />
+                <v-text-field
+                  v-model="editedItem.password"
+                  label="Password"
+                  type="password"
+                  variant="outlined"
+                  density="comfortable"
+                  :required="editedIndex === -1"
+                  :rules="passwordRules"
+                  :hint="passwordHint"
+                  persistent-hint
+                />
+                <v-select
+                  v-model="editedItem.role"
+                  :items="roles"
+                  label="Role"
+                  variant="outlined"
+                  density="comfortable"
+                  required
+                />
+                <v-autocomplete
+                  v-model="editedItem.programIds"
+                  :items="programs"
+                  item-title="name"
+                  item-value="id"
+                  label="Assigned Programs"
+                  multiple
+                  chips
+                  closable-chips
+                  variant="outlined"
+                  density="comfortable"
+                />
+
+              </div>
+              </v-form>
             </v-card-text>
 
             <v-card-actions>
-              <v-spacer></v-spacer>
-              <v-btn color="error" text @click="closeDialog">Cancel</v-btn>
-              <v-btn color="primary" text @click="saveUser">Save</v-btn>
+              <v-spacer />
+              <v-btn variant="text" @click="closeDialog">Cancel</v-btn>
+              <v-btn color="primary" variant="tonal" @click="saveUser">Save</v-btn>
             </v-card-actions>
           </v-card>
         </v-dialog>
 
         <!-- Delete Confirmation Dialog -->
-        <v-dialog v-model="showDeleteDialog" max-width="400px">
+        <v-dialog v-model="showDeleteDialog" :max-width="400">
           <v-card>
-            <v-card-title class="text-h5">Delete User</v-card-title>
+            <v-card-title class="text-h6">Delete User</v-card-title>
             <v-card-text>
-              Are you sure you want to delete user {{ editedItem.email }}?
+              <p>Are you sure you want to delete user <strong>{{ editedItem.email }}</strong>?</p>
+              <p class="mt-2 text-medium-emphasis text-body-2">
+                This action cannot be undone.
+              </p>
             </v-card-text>
             <v-card-actions>
-              <v-spacer></v-spacer>
-              <v-btn color="primary" text @click="showDeleteDialog = false">Cancel</v-btn>
-              <v-btn color="error" text @click="deleteUser">Delete</v-btn>
+              <v-spacer />
+              <v-btn variant="text" @click="showDeleteDialog = false">Cancel</v-btn>
+              <v-btn color="error" variant="tonal" @click="deleteUser">Delete</v-btn>
             </v-card-actions>
           </v-card>
         </v-dialog>
-      </v-col>
-    </v-row>
   </v-container>
 </template>
 
 <style scoped>
-.v-data-table {
-  margin-top: 1rem;
+.users-table {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-light);
+  box-shadow: var(--shadow-card);
+}
+
+.user-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
 }
 </style>

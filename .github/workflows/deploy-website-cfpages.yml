@@ -12,6 +12,8 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     permissions:
       contents: read
       deployments: write
@@ -26,12 +28,12 @@ jobs:
           node-version: '22.x'
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v4
         with:
-          version: 8
+          run_install: false
 
       - name: Install dependencies
-        run: pnpm recursive install
+        run: pnpm -r install --frozen-lockfile
 
       - name: Build website
         run: pnpm run build:docs

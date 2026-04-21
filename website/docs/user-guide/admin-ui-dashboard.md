@@ -83,6 +83,35 @@ Configure how the system synchronizes data with external, third-party systems.
 -   **Type**: Select the type of external system (e.g., OpenSPP, OpenFn).
 -   **URL**: The endpoint URL of the external system.
 -   **Extra Fields**: Add any additional key-value parameters required by the sync adapter (e.g., API keys, batch sizes).
+-   **Field Mapping** (OpenSPP only): For OpenSPP adapters, you can configure field mappings to connect form fields with OpenSPP fields.
+
+#### Field Mapping for OpenSPP
+
+When configuring an OpenSPP adapter, you can map form fields to OpenSPP fields with automatic data transformation. This workflow uses JSON data to identify OpenSPP field structures:
+
+1. **Import OpenSPP Fields**: Click the "Import OpenSPP Fields" button to fetch field metadata. You have three options:
+   - **Upload JSON File**: Upload a JSON file containing a sample OpenSPP payload (single object or array)
+   - **Paste JSON**: Paste JSON payload directly into the dialog from OpenSPP API responses or exports
+   - **Fetch from API**: Connect directly to your OpenSPP/Odoo instance to fetch complete field metadata using the `fields_get` API
+
+   The JSON workflow allows you to work with sample data from your OpenSPP instance, making it easy to identify field names, types, and structures.
+
+2. **Map Fields**: In the field mapping dialog:
+   - Select a form field from your configuration (extracted from your Form.io forms)
+   - Select the corresponding OpenSPP field (from the imported fields)
+   - Choose a transformer type (text, date, id, multiselect, boolean)
+   - Configure transformer options if needed (e.g., date formats, delimiters)
+
+3. **Transformer Types**:
+   - **Text**: Pass-through or string conversion (default)
+   - **Date**: Converts dates between formats (supports auto-detection of input format)
+   - **ID**: Handles ID values for relation fields (extracts ID from `{"id": 0, "display_name": ""}` format)
+   - **Multi-select**: Joins/splits array values with a configurable delimiter
+   - **Boolean**: Normalizes checkbox values with configurable truthy/falsy values
+
+4. **Save Mappings**: Field mappings are automatically saved to the configuration's `fieldMappings` extraField as JSON.
+
+For detailed information about field mapping and transformers, see the [OpenSPP Adapter documentation](/adapters/openspp-adapter) and [Import OpenSPP Fields guide](./import-openspp-fields.md).
 
 ### Auth Configs
 

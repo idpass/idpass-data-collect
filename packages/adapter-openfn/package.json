@@ -1,0 +1,43 @@
+{
+  "name": "@idpass/adapter-openfn",
+  "version": "2.0.0",
+  "description": "OpenFn sync adapter for ID PASS DataCollect",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "jest --silent",
+    "lint": "eslint 'src/**/*.{ts,js}'",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@idpass/data-collect-core": "workspace:*",
+    "axios": "^1.13.5",
+    "uuid": "^10.0.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^20.19.33",
+    "@types/uuid": "^10.0.0",
+    "eslint": "^9.27.0",
+    "globals": "^15.15.0",
+    "jest": "^29.7.0",
+    "jest-fetch-mock": "^3.0.3",
+    "ts-jest": "^29.4.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.55.0"
+  },
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  }
+}

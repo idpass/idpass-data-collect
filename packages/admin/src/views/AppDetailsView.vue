@@ -3,8 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { AxiosError } from 'axios'
 import {
-  deleteApp as deleteAppApi,
-  externalSync as externalSyncApi,
+  archiveApp as archiveAppApi,
   getApp,
   getAppConfigJsonUrl,
   getAppQrCodeUrl,
@@ -15,11 +14,13 @@ import BasicAuthDialog from '@/components/BasicAuthDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSnackBarStore } from '@/stores/snackBar'
 import DataDiagnostics from '@/components/DataDiagnostics.vue'
+import SyncStatusPanel from '@/components/SyncStatusPanel.vue'
 
 interface EntityForm {
   name: string
   title: string
   dependsOn?: string
+  entityType?: 'group' | 'individual' | 'record'
   formio?: Record<string, unknown>
   version?: string
 }
@@ -29,11 +30,26 @@ interface EntityData {
   data?: Array<Record<string, unknown>>
 }
 
+interface FieldMapping {
+  formField: string
+  opensppField: string
+  transformer: { type: string; options?: Record<string, unknown> }
+}
+
 interface ExternalSyncConfig {
   type?: string
   url?: string
   auth?: string
+  adapterConfig?: Record<string, string | number | boolean>
+  fieldMappings?: FieldMapping[]
   [key: string]: unknown
+}
+
+interface SelfServiceConfig {
+  enabled: boolean
+  authMethods: string[]
+  allowedForms: string[]
+  requireReview: boolean
 }
 
 interface AuthConfig {
@@ -51,6 +67,7 @@ interface AppConfig {
   entityData?: EntityData[]
   externalSync?: ExternalSyncConfig
   authConfigs?: AuthConfig[]
+  selfService?: SelfServiceConfig
   createdAt?: string
   updatedAt?: string
 }
@@ -71,12 +88,13 @@ const router = useRouter()
 const app = ref<AppConfig | null>(null)
 const isLoading = ref(true)
 const error = ref<string | null>(null)
-const activeTab = ref<'entities' | 'forms'>('entities')
+const activeTab = ref<'entities' | 'forms' | 'integration' | 'mapping' | 'auth'>('entities')
 const showQrDialog = ref(false)
 const showAuthDialog = ref(false)
-const isSyncing = ref(false)
 const isDeleting = ref(false)
+const qrError = ref(false)
 const entityRecords = ref<Record<string, unknown[]>>({})
+const syncPanelRef = ref<InstanceType<typeof SyncStatusPanel> | null>(null)
 
 const routeId = computed(() => route.params.id as string)
 
@@ -93,18 +111,33 @@ const syncStatus = computed(() => {
       label: 'Local only',
       color: 'grey-darken-2',
       icon: 'mdi-lan-disconnect',
-      description: 'Data remains on device until exported manually.',
     }
   }
 
-  const requiresAuth = app.value?.externalSync?.auth === 'basic'
-
-  return {
-    label: requiresAuth ? 'Sync secured' : 'Sync enabled',
-    color: requiresAuth ? 'warning' : 'success',
-    icon: requiresAuth ? 'mdi-shield-key-outline' : 'mdi-sync',
-    description: app.value?.description || '',
+  if (syncPanelRef.value?.isSyncing) {
+    return {
+      label: 'Syncing...',
+      color: 'info',
+      icon: 'mdi-sync',
+    }
   }
+
+  const last = syncPanelRef.value?.lastEvent
+  if (!last) {
+    return {
+      label: 'Ready',
+      color: 'blue-grey',
+      icon: 'mdi-sync',
+    }
+  }
+
+  const map: Record<string, { label: string; color: string; icon: string }> = {
+    success: { label: 'Last sync OK', color: 'success', icon: 'mdi-check-circle-outline' },
+    partial: { label: 'Sync warnings', color: 'warning', icon: 'mdi-alert-outline' },
+    failed: { label: 'Sync failed', color: 'error', icon: 'mdi-alert-circle-outline' },
+  }
+
+  return map[last.status] || { label: 'Ready', color: 'blue-grey', icon: 'mdi-sync' }
 })
 
 const forms = computed(() => app.value?.entityForms ?? [])
@@ -121,8 +154,10 @@ const entityDataMap = computed(() => {
 })
 
 const totalEntities = computed(() => {
+  // Sum all entity counts, including "Unknown" and any other entityNames
+  // This ensures consistency with backend /count endpoint which counts all entities
   let count = 0
-  entityDataMap.value.forEach((value) => {
+  Object.values(entityCounts.value).forEach((value) => {
     count += value
   })
   return count
@@ -218,6 +253,17 @@ const qrUrl = computed(() => {
   }
 })
 
+const handleQrError = () => {
+  qrError.value = true
+}
+
+watch(showQrDialog, (isOpen) => {
+  if (isOpen) {
+    // Reset error when dialog opens
+    qrError.value = false
+  }
+})
+
 const lastUpdated = computed(() => app.value?.updatedAt || app.value?.createdAt || '')
 
 const formattedLastUpdated = computed(() => {
@@ -252,6 +298,32 @@ const overviewMetrics = computed(() => [
   },
 ])
 
+const syncTypeLabel = computed(() => {
+  const typeMap: Record<string, string> = {
+    'mock': 'Mock Registry Server',
+    'openspp-v1-adapter': 'OpenSPP V1',
+    'openspp-v2-adapter': 'OpenSPP V2',
+    'openfn-adapter': 'OpenFn',
+  }
+  return typeMap[app.value?.externalSync?.type || ''] || app.value?.externalSync?.type || 'Not configured'
+})
+
+const fieldMappings = computed(() => app.value?.externalSync?.fieldMappings ?? [])
+
+const authConfigs = computed(() => app.value?.authConfigs ?? [])
+
+const selfServiceConfig = computed(() => app.value?.selfService)
+
+const authTypeLabel = (type: string) => {
+  const typeMap: Record<string, string> = {
+    auth0: 'Auth0',
+    keycloak: 'Keycloak',
+  }
+  return typeMap[type] || type || 'Unknown'
+}
+
+const isLoadingEntities = ref(false)
+
 const fetchApp = async () => {
   if (!routeId.value) {
     error.value = 'Missing collection program id.'
@@ -264,26 +336,28 @@ const fetchApp = async () => {
   try {
     const data = await getApp(routeId.value)
     app.value = data
-    console.log('Fetched app data:', data)
     
     // Fetch entity counts grouped by form
-    const counts = await getEntitiesCountByForm(routeId.value)
-    entityCounts.value = counts
-    
-    // Fetch entity records
-    const records = await getEntities(routeId.value)
-    console.log('Fetched entity records:', records, 'Record count:', records.length)
-    // Group records by entityName for easier display
-    const grouped: Record<string, unknown[]> = {}
-    records.forEach((record) => {
-      const key = record.entityName || 'Unknown'
-      if (!grouped[key]) {
-        grouped[key] = []
-      }
-      grouped[key].push(record)
-    })
-    console.log('Grouped records:', grouped)
-    entityRecords.value = grouped
+    isLoadingEntities.value = true
+    try {
+      const counts = await getEntitiesCountByForm(routeId.value)
+      entityCounts.value = counts
+      
+      // Fetch entity records
+      const records = await getEntities(routeId.value)
+      // Group records by entityName for easier display
+      const grouped: Record<string, unknown[]> = {}
+      records.forEach((record) => {
+        const key = record.entityName || 'Unknown'
+        if (!grouped[key]) {
+          grouped[key] = []
+        }
+        grouped[key].push(record)
+      })
+      entityRecords.value = grouped
+    } finally {
+      isLoadingEntities.value = false
+    }
   } catch (err) {
     if (err instanceof AxiosError && err.response?.status === 401) {
       authStore.logout()
@@ -296,45 +370,17 @@ const fetchApp = async () => {
   }
 }
 
-const handleSync = async () => {
-  if (!app.value || !hasExternalSync.value) {
-    snackBarStore.showSnackbar('No external sync configured for this collection program', 'warning')
-    return
-  }
-
-  if (requiresCredentials.value) {
-    showAuthDialog.value = true
-    return
-  }
-
-  await triggerSync()
-}
-
-const triggerSync = async (credentials?: { username: string; password: string }) => {
-  if (!app.value) {
-    return
-  }
-
-  try {
-    isSyncing.value = true
-    await externalSyncApi(app.value.id, credentials)
-    snackBarStore.showSnackbar('External sync triggered', 'success')
-  } catch (err) {
-    console.error('Failed to sync collection program', err)
-    snackBarStore.showSnackbar('Failed to trigger external sync', 'red')
-  } finally {
-    isSyncing.value = false
-  }
-}
-
 const onCredentialsSubmit = async (credentials: { username: string; password: string }) => {
   showAuthDialog.value = false
-  await triggerSync(credentials)
+  syncPanelRef.value?.triggerWithCredentials(credentials)
 }
 
-const openEditor = () => {
+const openEditor = (step: string = 'general') => {
   if (!routeId.value) return
-  router.push({ name: 'edit', params: { id: routeId.value } })
+  router.push({
+    name: `wizard-${step}`,
+    query: { mode: 'edit', id: routeId.value },
+  })
 }
 
 const duplicateConfig = () => {
@@ -342,28 +388,32 @@ const duplicateConfig = () => {
   router.push({ name: 'copy', params: { id: routeId.value } })
 }
 
-const handleDelete = async () => {
+const showArchiveDialog = ref(false)
+
+const handleArchive = async () => {
   if (!app.value) {
     return
   }
 
-  const confirmed = window.confirm(
-    'Are you sure you want to delete this collection program? This action cannot be undone.',
-  )
-  if (!confirmed) {
+  showArchiveDialog.value = true
+}
+
+const confirmArchive = async () => {
+  if (!app.value) {
     return
   }
 
   try {
     isDeleting.value = true
-    await deleteAppApi(app.value.id)
-    snackBarStore.showSnackbar('Collection program deleted', 'success')
+    await archiveAppApi(app.value.id)
+    snackBarStore.showSnackbar('Collection program archived', 'success')
     router.push({ name: 'home' })
   } catch (err) {
-    console.error('Failed to delete collection program', err)
-    snackBarStore.showSnackbar('Failed to delete collection program', 'red')
+    console.error('Failed to archive collection program', err)
+    snackBarStore.showSnackbar('Failed to archive collection program', 'red')
   } finally {
     isDeleting.value = false
+    showArchiveDialog.value = false
   }
 }
 
@@ -393,9 +443,11 @@ watch(
 
 <template>
   <v-container class="app-details" fluid>
-    <v-btn class="details-back" variant="text" prepend-icon="mdi-arrow-left" @click="goBack">
-      Back to Collection Programs
-    </v-btn>
+    <div class="subpage-nav">
+      <v-btn variant="text" size="small" prepend-icon="mdi-arrow-left" @click="goBack">
+        Collection Programs
+      </v-btn>
+    </div>
 
     <v-skeleton-loader v-if="isLoading" class="mt-6" type="card, list-item-two-line" />
 
@@ -420,27 +472,16 @@ watch(
         </div>
         <div class="details-header__actions">
           <v-btn
-            class="details-header__action"
             variant="tonal"
             color="primary"
-            prepend-icon="mdi-qrcode"
-            :disabled="!qrUrl"
-            @click="showQrDialog = true"
-          >
-            Show QR
-          </v-btn>
-          <v-btn
-            class="details-header__action"
-            color="primary"
             prepend-icon="mdi-pencil"
-            @click="openEditor"
+            @click="openEditor()"
           >
-            Open in Editor
+            Edit
           </v-btn>
           <v-menu location="bottom end">
             <template #activator="{ props }">
               <v-btn
-                class="details-header__action"
                 icon="mdi-dots-vertical"
                 variant="text"
                 color="primary"
@@ -449,14 +490,19 @@ watch(
             </template>
             <v-list density="compact">
               <v-list-item
-                prepend-icon="mdi-sync"
-                title="Trigger sync"
-                :disabled="isSyncing || !hasExternalSync"
-                @click="handleSync"
+                prepend-icon="mdi-qrcode"
+                title="Deploy to Device"
+                :disabled="!qrUrl"
+                @click="showQrDialog = true"
+              />
+              <v-list-item
+                prepend-icon="mdi-content-duplicate"
+                title="Duplicates"
+                @click="router.push({ name: 'duplicates', params: { id: routeId } })"
               />
               <v-list-item
                 prepend-icon="mdi-content-copy"
-                title="Duplicate"
+                title="Duplicate Config"
                 @click="duplicateConfig"
               />
               <v-list-item
@@ -468,23 +514,36 @@ watch(
               />
               <v-divider class="my-1" />
               <v-list-item
-                prepend-icon="mdi-delete"
-                title="Delete"
-                color="error"
+                prepend-icon="mdi-archive"
+                title="Archive"
+                color="warning"
                 :disabled="isDeleting"
-                @click="handleDelete"
+                @click="handleArchive"
               />
             </v-list>
           </v-menu>
         </div>
       </div>
 
-      <v-row class="mt-6" dense>
-        <v-col cols="12" lg="8">
+      <SyncStatusPanel
+        v-if="hasExternalSync"
+        ref="syncPanelRef"
+        :config-id="app.id"
+        :has-external-sync="hasExternalSync"
+        :requires-credentials="requiresCredentials"
+        @sync-completed="fetchApp"
+        @request-credentials="showAuthDialog = true"
+      />
+
+      <div class="details-grid">
+        <div>
           <v-card class="details-content" border="md" elevation="0">
-            <v-tabs v-model="activeTab" class="details-tabs" color="primary" slider-color="primary">
+            <v-tabs v-model="activeTab" class="details-tabs" color="primary" slider-color="primary" show-arrows>
               <v-tab value="entities">Entities</v-tab>
               <v-tab value="forms">Forms</v-tab>
+              <v-tab value="integration">Integration</v-tab>
+              <v-tab value="mapping">Field Mapping</v-tab>
+              <v-tab value="auth">Authentication</v-tab>
             </v-tabs>
 
             <v-window v-model="activeTab" class="details-window">
@@ -494,7 +553,9 @@ watch(
                     View the latest captured entity records across each form.
                   </p>
 
-                  <div v-if="Object.keys(entityRecords).length === 0" class="entities-table__empty mt-6">
+                  <v-progress-linear v-if="isLoadingEntities" class="mt-4" color="primary" indeterminate />
+
+                  <div v-else-if="Object.keys(entityRecords).length === 0" class="entities-table__empty mt-6">
                     No entities have been captured for this collection program yet.
                   </div>
 
@@ -535,7 +596,7 @@ watch(
                             <td>{{ (record as any).name || '—' }}</td>
                             <td>
                               <v-chip size="small" variant="outlined">
-                                {{ (record as any).type }}
+                                {{ (record as any).entityName || (record as any).type }}
                               </v-chip>
                             </td>
                             <td class="text-medium-emphasis">
@@ -559,9 +620,20 @@ watch(
 
               <v-window-item value="forms">
                 <div class="forms-panel">
-                  <p class="forms-panel__subtitle">
-                    Review each form schema, track field coverage, and understand entity dependencies.
-                  </p>
+                  <div class="section-panel__header">
+                    <p class="forms-panel__subtitle">
+                      Review each form schema, track field coverage, and understand entity dependencies.
+                    </p>
+                    <v-btn
+                      variant="tonal"
+                      color="primary"
+                      size="small"
+                      prepend-icon="mdi-pencil"
+                      @click="openEditor('forms')"
+                    >
+                      Edit Forms
+                    </v-btn>
+                  </div>
 
                   <v-row class="mt-2" dense>
                     <v-col
@@ -608,11 +680,193 @@ watch(
                   </v-row>
                 </div>
               </v-window-item>
+
+              <v-window-item value="integration">
+                <div class="section-panel">
+                  <div class="section-panel__header">
+                    <p class="section-panel__subtitle">
+                      External system integration configuration for data synchronization.
+                    </p>
+                    <v-btn
+                      variant="tonal"
+                      color="primary"
+                      size="small"
+                      prepend-icon="mdi-pencil"
+                      @click="openEditor('integration')"
+                    >
+                      Edit Integration
+                    </v-btn>
+                  </div>
+
+                  <template v-if="hasExternalSync">
+                    <div class="summary-fields">
+                      <div class="summary-field">
+                        <span class="summary-field__label">Integration Type</span>
+                        <span class="summary-field__value">{{ syncTypeLabel }}</span>
+                      </div>
+                      <div class="summary-field">
+                        <span class="summary-field__label">API URL</span>
+                        <span class="summary-field__value">{{ app.externalSync?.url || '—' }}</span>
+                      </div>
+                      <div class="summary-field">
+                        <span class="summary-field__label">Authentication</span>
+                        <span class="summary-field__value">{{ app.externalSync?.auth || 'None' }}</span>
+                      </div>
+                    </div>
+                  </template>
+
+                  <div v-else class="section-panel__empty">
+                    <v-icon icon="mdi-lan-disconnect" size="48" color="grey-lighten-1" />
+                    <p class="section-panel__empty-text">No integration configured</p>
+                    <p class="section-panel__empty-hint">
+                      Connect to an external system to enable data synchronization.
+                    </p>
+                    <v-btn
+                      variant="tonal"
+                      color="primary"
+                      prepend-icon="mdi-plus"
+                      @click="openEditor('integration')"
+                    >
+                      Configure Integration
+                    </v-btn>
+                  </div>
+                </div>
+              </v-window-item>
+
+              <v-window-item value="mapping">
+                <div class="section-panel">
+                  <div class="section-panel__header">
+                    <p class="section-panel__subtitle">
+                      Map form fields to external system fields for data synchronization.
+                    </p>
+                    <v-btn
+                      variant="tonal"
+                      color="primary"
+                      size="small"
+                      prepend-icon="mdi-pencil"
+                      @click="openEditor('mapping')"
+                    >
+                      Edit Mapping
+                    </v-btn>
+                  </div>
+
+                  <template v-if="fieldMappings.length > 0">
+                    <p class="section-panel__count">
+                      {{ fieldMappings.length }} mapping{{ fieldMappings.length === 1 ? '' : 's' }} configured
+                    </p>
+                    <v-table density="comfortable" class="mapping-table">
+                      <thead>
+                        <tr>
+                          <th>Form Field</th>
+                          <th>External Field</th>
+                          <th>Transformer</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="(mapping, index) in fieldMappings.slice(0, 5)" :key="index">
+                          <td>{{ mapping.formField }}</td>
+                          <td>{{ mapping.opensppField }}</td>
+                          <td>
+                            <v-chip size="x-small" variant="outlined">
+                              {{ mapping.transformer.type }}
+                            </v-chip>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </v-table>
+                    <p v-if="fieldMappings.length > 5" class="section-panel__more">
+                      … and {{ fieldMappings.length - 5 }} more
+                    </p>
+                  </template>
+
+                  <div v-else class="section-panel__empty">
+                    <v-icon icon="mdi-swap-horizontal" size="48" color="grey-lighten-1" />
+                    <p class="section-panel__empty-text">No field mappings configured</p>
+                    <p class="section-panel__empty-hint">
+                      Field mappings are optional and define how form data maps to external system fields.
+                    </p>
+                    <v-btn
+                      variant="tonal"
+                      color="primary"
+                      prepend-icon="mdi-plus"
+                      @click="openEditor('mapping')"
+                    >
+                      Configure Mapping
+                    </v-btn>
+                  </div>
+                </div>
+              </v-window-item>
+
+              <v-window-item value="auth">
+                <div class="section-panel">
+                  <div class="section-panel__header">
+                    <p class="section-panel__subtitle">
+                      Identity provider and self-service authentication settings.
+                    </p>
+                    <v-btn
+                      variant="tonal"
+                      color="primary"
+                      size="small"
+                      prepend-icon="mdi-pencil"
+                      @click="openEditor('auth')"
+                    >
+                      Edit Authentication
+                    </v-btn>
+                  </div>
+
+                  <template v-if="authConfigs.length > 0 || selfServiceConfig?.enabled">
+                    <div v-if="authConfigs.length > 0" class="auth-providers">
+                      <h4 class="auth-providers__title">Identity Providers</h4>
+                      <div
+                        v-for="(auth, index) in authConfigs"
+                        :key="index"
+                        class="auth-provider-item"
+                      >
+                        <v-icon icon="mdi-shield-key" size="small" color="primary" />
+                        <span class="auth-provider-item__type">{{ authTypeLabel(auth.type) }}</span>
+                        <v-chip size="x-small" variant="tonal">
+                          {{ Object.keys(auth.fields).length }} fields
+                        </v-chip>
+                      </div>
+                    </div>
+
+                    <div v-if="selfServiceConfig?.enabled" class="self-service-status">
+                      <h4 class="self-service-status__title">Self-service</h4>
+                      <div class="summary-fields">
+                        <div class="summary-field">
+                          <span class="summary-field__label">Status</span>
+                          <v-chip size="small" color="success" variant="tonal">Enabled</v-chip>
+                        </div>
+                        <div v-if="selfServiceConfig.allowedForms.length" class="summary-field">
+                          <span class="summary-field__label">Allowed Forms</span>
+                          <span class="summary-field__value">{{ selfServiceConfig.allowedForms.join(', ') }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+
+                  <div v-else class="section-panel__empty">
+                    <v-icon icon="mdi-shield-off-outline" size="48" color="grey-lighten-1" />
+                    <p class="section-panel__empty-text">No authentication configured</p>
+                    <p class="section-panel__empty-hint">
+                      Authentication is optional. Configure identity providers to enable user verification.
+                    </p>
+                    <v-btn
+                      variant="tonal"
+                      color="primary"
+                      prepend-icon="mdi-plus"
+                      @click="openEditor('auth')"
+                    >
+                      Configure Authentication
+                    </v-btn>
+                  </div>
+                </div>
+              </v-window-item>
             </v-window>
           </v-card>
-        </v-col>
+        </div>
 
-        <v-col cols="12" lg="4">
+        <aside>
           <v-card class="overview-card" border="md" elevation="0">
             <v-card-text>
               <div class="overview-card__header">
@@ -652,66 +906,49 @@ watch(
                 </div>
                 <div class="overview-card__row">
                   <span class="overview-card__row-label">External sync</span>
-                  <span class="overview-card__row-value">{{ syncStatus.description }}</span>
-                </div>
-                <div class="overview-card__row">
-                  <span class="overview-card__row-label">Deployment URL</span>
-                  <a
-                    v-if="downloadUrl"
-                    :href="downloadUrl"
-                    target="_blank"
-                    rel="noopener"
-                    class="overview-card__link"
-                  >
-                    {{ downloadUrl }}
-                  </a>
-                  <span v-else class="overview-card__row-value overview-card__row-value--muted">
-                    Not generated yet
+                  <span class="overview-card__row-value">
+                    {{ syncPanelRef?.lastSyncRelativeTime || syncStatus.label }}
                   </span>
                 </div>
               </div>
             </v-card-text>
-            <v-divider />
-            <v-card-actions class="overview-card__actions">
-              <v-btn
-                variant="tonal"
-                color="primary"
-                prepend-icon="mdi-sync"
-                :loading="isSyncing"
-                :disabled="isSyncing || !hasExternalSync"
-                @click="handleSync"
-              >
-                Trigger Sync
-              </v-btn>
-              <v-btn
-                variant="text"
-                color="primary"
-                prepend-icon="mdi-download"
-                :href="downloadUrl || undefined"
-                :disabled="!downloadUrl"
-                target="_blank"
-              >
-                Download JSON
-              </v-btn>
-            </v-card-actions>
           </v-card>
-        </v-col>
-      </v-row>
+        </aside>
+      </div>
+      <div v-if="app" class="diagnostic-container">
+        <DataDiagnostics :config-id="routeId" />
+      </div>
     </template>
   </v-container>
 
-  <div v-if="app" class="diagnostic-container">
-    <DataDiagnostics :config-id="routeId" />
-  </div>
-
-  <v-dialog v-model="showQrDialog" max-width="360">
+  <v-dialog v-model="showQrDialog" :max-width="400">
     <v-card>
-      <v-card-title class="text-h6">Scan to deploy</v-card-title>
+      <v-card-title class="text-h6">Deploy to Device</v-card-title>
       <v-card-text class="text-center">
-        <v-img :src="qrUrl" alt="QR Code" max-width="220" class="mx-auto my-4" />
-        <p class="text-body-2 text-medium-emphasis">
-          Share this code with field teams to load the configuration instantly on their devices.
+        <v-img
+          :src="qrUrl"
+          alt="Deployment QR code"
+          max-width="220"
+          class="mx-auto my-4"
+          @error="handleQrError"
+        >
+          <template v-if="qrError" #placeholder>
+            <div class="text-center pa-4">
+              <v-icon icon="mdi-alert-circle" size="48" color="error" class="mb-2" />
+              <p class="text-body-2 text-error">Could not load deployment code</p>
+              <p class="text-caption text-medium-emphasis mt-2">
+                Please ensure the backend is accessible and the artifact ID is valid.
+              </p>
+            </div>
+          </template>
+        </v-img>
+        <p v-if="!qrError" class="text-body-2 text-medium-emphasis">
+          Scan from the mobile app to load this program configuration onto a device.
         </p>
+        <v-alert v-if="qrError" type="warning" variant="tonal" density="compact" class="mt-2">
+          Ensure the URL in the code is accessible from your network.
+          If using localhost, configure PUBLIC_BASE_URL in your backend environment.
+        </v-alert>
       </v-card-text>
       <v-card-actions class="justify-end">
         <v-btn variant="text" color="primary" @click="showQrDialog = false">Close</v-btn>
@@ -723,7 +960,7 @@ watch(
           target="_blank"
           prepend-icon="mdi-download"
         >
-          Download JSON
+          Download Config
         </v-btn>
       </v-card-actions>
     </v-card>
@@ -735,23 +972,40 @@ watch(
     description="Enter your credentials to start the external sync."
     @submit="onCredentialsSubmit"
   />
+
+  <v-dialog v-model="showArchiveDialog" :max-width="540">
+    <v-card>
+      <v-card-title class="text-h6">
+        <v-icon icon="mdi-archive" start />
+        Archive Collection Program
+      </v-card-title>
+      <v-card-text>
+        <p>Are you sure you want to archive <strong>{{ app?.name }}</strong>?</p>
+        <p class="mt-2 text-medium-emphasis">
+          The program configuration will be removed. Collected entity data will not be affected.
+        </p>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer />
+        <v-btn variant="text" @click="showArchiveDialog = false">Cancel</v-btn>
+        <v-btn color="warning" variant="tonal" :loading="isDeleting" @click="confirmArchive">
+          Archive
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <style scoped>
 .app-details {
-  padding-bottom: 64px;
-}
-
-.details-back {
-  margin-top: 8px;
-  padding-left: 0;
+  padding-bottom: var(--spacing-2xl);
 }
 
 .details-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 24px;
+  gap: var(--spacing-lg);
   flex-wrap: wrap;
 }
 
@@ -760,86 +1014,90 @@ watch(
   min-width: 260px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-sm);
 }
 
 .details-header__meta {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-sm);
   flex-wrap: wrap;
 }
 
 .details-header__version {
-  font-size: 0.9rem;
-  color: rgba(0, 0, 0, 0.6);
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
 }
 
 .details-header__title {
   font-size: clamp(1.75rem, 1.6rem + 0.5vw, 2.4rem);
   font-weight: 600;
   margin: 0;
+  color: var(--text-main);
 }
 
 .details-header__subtitle {
   margin: 0;
-  font-size: 1rem;
-  color: rgba(0, 0, 0, 0.6);
+  font-size: var(--font-size-base);
+  color: var(--text-muted);
 }
 
 .details-header__actions {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: var(--spacing-sm);
 }
 
-.details-header__action {
-  min-width: 0;
+.details-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: var(--spacing-xl);
+  align-items: start;
+  margin-top: var(--spacing-lg);
 }
 
 .details-content {
-  border-radius: 20px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
 .details-tabs {
-  padding: 0 24px;
+  padding: 0 var(--spacing-lg);
 }
 
 .details-window {
-  padding: 24px;
+  padding: var(--spacing-lg);
 }
 
 .entities-panel__subtitle,
 .forms-panel__subtitle {
-  margin: 0 0 16px;
-  color: rgba(0, 0, 0, 0.6);
+  margin: 0 0 var(--spacing-md);
+  color: var(--text-muted);
 }
 
 .entities-table {
-  border-radius: 16px;
+  border-radius: var(--radius-xl);
   overflow: hidden;
 }
 
 .entities-table thead th {
-  font-size: 0.8rem;
+  font-size: var(--font-size-sm);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.5);
-  padding-top: 12px;
-  padding-bottom: 12px;
+  color: var(--text-muted);
+  padding-top: var(--spacing-sm);
+  padding-bottom: var(--spacing-sm);
 }
 
 .entities-table tbody td {
-  padding-top: 16px;
-  padding-bottom: 16px;
+  padding-top: var(--spacing-md);
+  padding-bottom: var(--spacing-md);
   vertical-align: middle;
 }
 
 .entities-table__id {
   font-weight: 600;
-  color: rgba(0, 0, 0, 0.75);
+  color: var(--text-main);
 }
 
 .entities-table__title {
@@ -852,64 +1110,197 @@ watch(
 
 .entities-table__empty {
   text-align: center;
-  padding: 32px 16px;
-  color: rgba(0, 0, 0, 0.6);
+  padding: var(--spacing-xl) var(--spacing-md);
+  color: var(--text-muted);
 }
 
 .entities-list {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--spacing-lg);
 }
 
 .entity-form-group {
-  padding: 16px;
-  background: rgba(0, 0, 0, 0.02);
-  border-radius: 12px;
+  padding: var(--spacing-md);
+  background: var(--neutral-50);
+  border-radius: var(--radius-lg);
 }
 
 .entity-form-group__title {
-  margin: 0 0 16px;
-  font-size: 1rem;
+  margin: 0 0 var(--spacing-md);
+  font-size: var(--font-size-base);
   font-weight: 600;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
+  color: var(--text-main);
 }
 
 .entity-records-table {
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 
 .entity-records-table thead th {
-  font-size: 0.8rem;
+  font-size: var(--font-size-sm);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.5);
-  padding-top: 12px;
-  padding-bottom: 12px;
+  color: var(--text-muted);
+  padding-top: var(--spacing-sm);
+  padding-bottom: var(--spacing-sm);
 }
 
 .entity-records-table tbody td {
-  padding-top: 12px;
-  padding-bottom: 12px;
+  padding-top: var(--spacing-sm);
+  padding-bottom: var(--spacing-sm);
   vertical-align: middle;
 }
 
 .entity-records-table tbody tr {
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: background-color var(--transition-fast);
 }
 
 .entity-records-table tbody tr:hover {
-  background-color: rgba(0, 0, 0, 0.04);
+  background-color: var(--neutral-50);
 }
 
 .entity-guid {
   font-family: monospace;
-  font-size: 0.85rem;
-  color: rgba(0, 0, 0, 0.7);
+  font-size: var(--font-size-sm);
+  color: var(--text-main);
+}
+
+.section-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.section-panel__subtitle {
+  margin: 0;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.section-panel__count {
+  margin: 0 0 var(--spacing-md);
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.section-panel__more {
+  margin: var(--spacing-sm) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.section-panel__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xl) var(--spacing-md);
+  text-align: center;
+}
+
+.section-panel__empty-text {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.section-panel__empty-hint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  max-width: 360px;
+}
+
+.summary-fields {
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-field {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-sm) 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.summary-field:last-child {
+  border-bottom: none;
+}
+
+.summary-field__label {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
+.summary-field__value {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  text-align: right;
+  max-width: 60%;
+  word-break: break-word;
+  color: var(--text-main);
+}
+
+.mapping-table {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.mapping-table thead th {
+  font-size: var(--font-size-sm);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding-top: var(--spacing-sm);
+  padding-bottom: var(--spacing-sm);
+}
+
+.mapping-table tbody td {
+  padding-top: var(--spacing-sm);
+  padding-bottom: var(--spacing-sm);
+  vertical-align: middle;
+}
+
+.auth-providers {
+  margin-bottom: var(--spacing-lg);
+}
+
+.auth-providers__title,
+.self-service-status__title {
+  margin: 0 0 var(--spacing-sm);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+
+.auth-provider-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) 0;
+}
+
+.auth-provider-item__type {
+  font-weight: 500;
+  color: var(--text-main);
+  flex: 1;
+}
+
+.self-service-status {
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-light);
 }
 
 .forms-panel {
@@ -918,7 +1309,7 @@ watch(
 }
 
 .form-card {
-  border-radius: 18px;
+  border-radius: var(--radius-xl);
   height: 100%;
 }
 
@@ -926,86 +1317,89 @@ watch(
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--spacing-md);
   flex-wrap: wrap;
 }
 
 .form-card__title {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: var(--font-size-lg);
   font-weight: 600;
+  color: var(--text-main);
 }
 
 .form-card__id {
-  margin: 4px 0 0;
-  font-size: 0.85rem;
-  color: rgba(0, 0, 0, 0.55);
+  margin: var(--spacing-xs) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
 }
 
 .form-card__summary {
-  margin: 16px 0;
-  font-size: 0.95rem;
-  color: rgba(0, 0, 0, 0.6);
+  margin: var(--spacing-md) 0;
+  font-size: var(--font-size-base);
+  color: var(--text-muted);
 }
 
 .form-card__meta {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 16px;
+  gap: var(--spacing-md);
 }
 
 .form-card__meta-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-xs);
 }
 
 .form-card__meta-label {
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: rgba(0, 0, 0, 0.5);
+  color: var(--text-muted);
 }
 
 .form-card__meta-value {
   font-weight: 600;
+  color: var(--text-main);
 }
 
 .overview-card {
-  border-radius: 20px;
+  border-radius: var(--radius-xl);
 }
 
 .overview-card__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--spacing-sm);
 }
 
 .overview-card__title {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--font-size-xl);
   font-weight: 600;
+  color: var(--text-main);
 }
 
 .overview-card__stats {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-top: 16px;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
 }
 
 .overview-card__stat {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-sm);
 }
 
 .overview-card__stat-icon {
   width: 40px;
   height: 40px;
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.04);
+  border-radius: var(--radius-lg);
+  background: var(--neutral-50);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1013,67 +1407,62 @@ watch(
 
 .overview-card__stat-label {
   margin: 0;
-  font-size: 0.85rem;
-  color: rgba(0, 0, 0, 0.55);
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
 }
 
 .overview-card__stat-value {
-  margin: 4px 0 0;
-  font-size: 1.5rem;
+  margin: var(--spacing-xs) 0 0;
+  font-size: var(--font-size-2xl);
   font-weight: 600;
+  color: var(--text-main);
 }
 
 .overview-card__details {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--spacing-sm);
 }
 
 .overview-card__row {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--spacing-xs);
 }
 
 .overview-card__row-label {
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--text-muted);
 }
 
 .overview-card__row-value {
-  font-size: 0.95rem;
+  font-size: var(--font-size-base);
   font-weight: 500;
-  color: rgba(0, 0, 0, 0.78);
+  color: var(--text-main);
   word-break: break-word;
 }
 
 .overview-card__row-value--muted {
-  color: rgba(0, 0, 0, 0.45);
+  color: var(--text-muted);
 }
 
 .overview-card__link {
-  font-size: 0.95rem;
+  font-size: var(--font-size-base);
   word-break: break-all;
-  color: rgb(25, 118, 210);
+  color: var(--primary);
   text-decoration: none;
 }
 
 .overview-card__link:hover {
   text-decoration: underline;
-}
-
-.overview-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  justify-content: space-between;
+  color: var(--brand);
 }
 
 @media (max-width: 1280px) {
-  .overview-card__actions {
-    justify-content: flex-start;
+  .details-grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1084,16 +1473,13 @@ watch(
   .details-header__actions {
     justify-content: flex-start;
   }
-  .details-back {
-    padding-left: 12px;
-  }
 }
 
 .diagnostic-container {
-  margin-top: 24px;
-  padding: 24px;
-  background-color: #f5f5f5;
-  border-radius: 16px;
-  border: 1px solid #e0e0e0;
+  margin-top: var(--spacing-xl);
+  padding: var(--spacing-lg);
+  background-color: var(--neutral-50);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border-light);
 }
 </style>

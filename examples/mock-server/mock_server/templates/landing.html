@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Mock Registry{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="eyebrow">Reference registry · PublicSchema-aligned</p>
+    <h1>An operating ledger for<br>registration data.</h1>
+    <p class="lede">A small, opinionated target for DataCollect sync adapters. Create, query, and mutate Persons and Groups with proper identifiers, optimistic concurrency, and a clean OAuth2 API.</p>
+  </div>
+</div>
+
+<div class="stat-grid">
+  <div class="stat">
+    <span class="label">Persons</span>
+    <span class="value">{{ person_count }}</span>
+    <span class="note">Natural persons on file.</span>
+    <a href="/ui/persons">Manage &rarr;</a>
+  </div>
+  <div class="stat">
+    <span class="label">Groups</span>
+    <span class="value">{{ group_count }}</span>
+    <span class="note">Households and collections.</span>
+    <a href="/ui/groups">Manage &rarr;</a>
+  </div>
+</div>
+
+<div class="split">
+  <section class="card">
+    <div class="card-head">
+      <h3>API surface</h3>
+      <span class="meta">OAuth2 Bearer · PublicSchema JSON</span>
+    </div>
+    <dl class="meta-grid">
+      <dt>Token</dt>
+      <dd class="mono">POST <code>/oauth/token</code></dd>
+      <dt>Persons</dt>
+      <dd class="mono"><code>/v1/persons</code> · <code>/v1/persons/{uuid}</code></dd>
+      <dt>Groups</dt>
+      <dd class="mono"><code>/v1/groups</code> · <code>/v1/groups/{uuid}</code></dd>
+      <dt>Discover</dt>
+      <dd><a href="/docs" target="_blank" rel="noopener">Swagger UI</a> · <a href="/schema">OpenAPI JSON</a> · <a href="/health">Health</a></dd>
+    </dl>
+  </section>
+
+  <aside class="card">
+    <div class="card-head"><h3>Conventions</h3></div>
+    <ul style="padding-left: 1.1rem; margin: 0; color: var(--ink-soft); font-size: 0.9rem; line-height: 1.7;">
+      <li><strong>system_id</strong> — stable UUID auto-assigned on create. Visible to the API, hidden here.</li>
+      <li><strong>If-Match</strong> — pass <code>updated_at</code> to PATCH endpoints for optimistic concurrency.</li>
+      <li><strong>updated_since</strong> — RFC 3339 timestamp for delta pulls.</li>
+      <li><strong>Identifier ≠ Document</strong> — identifiers are coded values; documents carry them.</li>
+    </ul>
+  </aside>
+</div>
+{% endblock %}

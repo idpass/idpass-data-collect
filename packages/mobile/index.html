@@ -2,8 +2,49 @@
 <html lang="en">
 
 <head>
+  <script>
+  (function() {
+    function showError(title, msg, source) {
+      var el = document.getElementById('__error_overlay');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = '__error_overlay';
+        el.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#1a1a2e;color:#e0e0e0;padding:24px;overflow:auto;font-family:monospace;font-size:14px;';
+        document.body.appendChild(el);
+      }
+      var entry = document.createElement('div');
+      entry.style.cssText = 'margin-bottom:16px;';
+      var heading = document.createElement('div');
+      heading.style.cssText = 'color:#ff6b6b;font-weight:bold;font-size:16px;margin-bottom:8px;';
+      heading.textContent = title;
+      entry.appendChild(heading);
+      var pre = document.createElement('pre');
+      pre.style.cssText = 'white-space:pre-wrap;word-break:break-word;background:#2d2d44;padding:12px;border-radius:6px;border-left:4px solid #ff6b6b;';
+      pre.textContent = msg;
+      entry.appendChild(pre);
+      if (source) {
+        var src = document.createElement('div');
+        src.style.cssText = 'color:#888;font-size:12px;margin-top:4px;';
+        src.textContent = source;
+        entry.appendChild(src);
+      }
+      el.appendChild(entry);
+    }
+    window.onerror = function(msg, source, line, col) {
+      showError('Uncaught Error', msg, source + ':' + line + ':' + col);
+    };
+    window.onunhandledrejection = function(e) {
+      var msg = e.reason instanceof Error ? e.reason.stack || e.reason.message : String(e.reason);
+      showError('Unhandled Promise Rejection', msg);
+    };
+    window.__showError = showError;
+  })();
+  </script>
   <link rel="preload" href="/node_modules/font-awesome/fonts/fontawesome-webfont.woff2?v=4.7.0" as="font"
     type="font/woff2" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <meta charset="UTF-8" />
   <link rel="icon" type="image/svg+xml" href="/vite.svg" />
   <meta name="viewport"

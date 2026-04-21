@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/enforce-pnpm.sh"
+          },
+          {
+            "type": "command",
+            "command": ".claude/hooks/git-safeguards.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

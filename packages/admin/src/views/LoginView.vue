@@ -39,62 +39,105 @@ const handleLogin = async () => {
 
 <template>
   <v-container class="fill-height login-container" fluid>
-    <v-row align="center" justify="center" class="fill-height">
-      <v-card class="elevation-12">
-        <v-toolbar color="primary" dark flat>
-          <v-toolbar-title>Login</v-toolbar-title>
-        </v-toolbar>
-        <v-card-text>
+    <div class="login-card">
+      <div class="login-card__header">
+        <h1 class="login-card__title">ID PASS DataCollect</h1>
+        <p class="login-card__subtitle">Sign in to the admin panel</p>
+      </div>
+
+      <v-card class="login-card__form" border="md" elevation="0">
+        <v-card-text class="pa-6">
           <v-form @submit.prevent="handleLogin">
-            <v-text-field
-              v-model="form.username"
-              label="Username"
-              name="username"
-              prepend-icon="mdi-account"
-              type="text"
-              :rules="[rules.required]"
-              required
-            />
+            <div class="login-form">
+              <v-text-field
+                v-model="form.username"
+                label="Email"
+                name="username"
+                prepend-inner-icon="mdi-account"
+                type="text"
+                variant="outlined"
+                density="comfortable"
+                :rules="[rules.required]"
+                required
+              />
 
-            <v-text-field
-              v-model="form.password"
-              label="Password"
-              name="password"
-              prepend-icon="mdi-lock"
-              type="password"
-              :rules="[rules.required]"
-              required
-            />
+              <v-text-field
+                v-model="form.password"
+                label="Password"
+                name="password"
+                prepend-inner-icon="mdi-lock"
+                type="password"
+                variant="outlined"
+                density="comfortable"
+                :rules="[rules.required]"
+                required
+              />
 
-            <v-alert v-if="error" type="error" class="mt-3" density="compact">
-              {{ error }}
-            </v-alert>
+              <v-alert v-if="error" type="error" density="compact" variant="tonal">
+                {{ error }}
+              </v-alert>
+
+              <v-btn
+                type="submit"
+                color="primary"
+                variant="flat"
+                size="large"
+                block
+                :loading="loading"
+                :disabled="loading"
+              >
+                Sign in
+              </v-btn>
+            </div>
           </v-form>
         </v-card-text>
-
-        <v-card-actions>
-          <v-spacer />
-          <v-btn color="primary" :loading="loading" :disabled="loading" @click="handleLogin">
-            Login
-          </v-btn>
-        </v-card-actions>
       </v-card>
-    </v-row>
+    </div>
   </v-container>
 </template>
 
 <style scoped>
 .login-container {
-  background-color: #f5f5f5;
+  background-color: var(--background);
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.v-card {
+.login-card {
   width: 100%;
-  max-width: 450px;
-  margin: 0 auto;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+}
+
+.login-card__header {
+  text-align: center;
+}
+
+.login-card__title {
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  margin: 0;
+  color: var(--primary);
+}
+
+.login-card__subtitle {
+  margin: var(--spacing-xs) 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+}
+
+.login-card__form {
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
 }
 </style>

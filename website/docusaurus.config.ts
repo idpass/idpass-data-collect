@@ -1,16 +1,17 @@
 import {themes as prismThemes} from 'prism-react-renderer';
 import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
+import remarkMermaid from './src/plugin/remark-mermaid/index.js';
 
 const config: Config = {
-  title: 'ID PASS  DataCollect',
+  title: 'ID PASS DataCollect',
   tagline: 'Offline-first data management for social protection and humanitarian assistance',
-  favicon: 'img/favicon.ico',
+  favicon: 'img/favicon.png',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
     v4: true, // Improve compatibility with the upcoming Docusaurus v4
-    experimental_faster: false // if true, causes "Rspack FS Error: No such file or directory"
+    experimental_faster: true // if true, causes "Rspack FS Error: No such file or directory"
   },
 
   // Set the production url of your site here
@@ -18,8 +19,8 @@ const config: Config = {
   baseUrl: '/',
   trailingSlash: false,
 
-  onBrokenLinks: 'warn',
-  onBrokenMarkdownLinks: 'warn',
+  onBrokenLinks: 'throw',
+  onBrokenMarkdownLinks: 'throw',
 
   // Even if you don't use internationalization, you can use this field to set
   // useful metadata like html lang. For example, if your site is Chinese, you
@@ -35,7 +36,10 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
-          routeBasePath: '/'
+          routeBasePath: '/',
+          remarkPlugins: [
+            remarkMermaid,
+          ],
         },
         theme: {
           customCss: './src/css/custom.css',
@@ -90,22 +94,14 @@ const config: Config = {
     ],
   ],
 
-  themes: [
-    '@docusaurus/theme-mermaid',
-  ],
-  
-  markdown: {
-    mermaid: true,
-  },
-
   themeConfig: {
     // Replace with your project's social card
     image: 'img/docusaurus-social-card.jpg',
     navbar: {
-      title: 'ID PASS DataCollect',
+      title: 'DataCollect',
       logo: {
-        alt: 'ID PASS DataCollect Logo',
-        src: 'img/logo.svg',
+        alt: 'ID PASS',
+        src: 'img/idpass-logo.svg',
       },
       items: [
         {
@@ -224,13 +220,7 @@ const config: Config = {
     prism: {
       theme: prismThemes.oneLight,
       darkTheme: prismThemes.oneDark,
-      additionalLanguages: ['typescript', 'javascript', 'bash', 'json', 'yaml', 'markdown'],
-    },
-    mermaid: {
-      theme: {
-        light: 'default', 
-        dark: 'dark'
-      },
+      additionalLanguages: ['typescript', 'javascript', 'bash', 'json', 'yaml', 'markdown', 'diff'],
     },
   } satisfies Preset.ThemeConfig,
 };

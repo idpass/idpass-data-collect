@@ -89,8 +89,23 @@ backend/src/public/*.json
 backend/src/public/*.png
 packages/backend/src/public/*.json
 packages/backend/src/public/*.png
+packages/backend/src/public/artifacts/
 docker-compose.local.yaml
 website/docs/packages/datacollect/api/
 website/docs/packages/backend/api-reference-generated/
 
 .cursor/
+.claude/
+!.claude/hooks/
+!.claude/settings.json
+# Playwright
+test-results/
+playwright-report/
+**/test-results/
+**/playwright-report/
+
+*storybook.log
+.worktrees/
+docs/superpowers/
+docs/proposals/
+.superpowers/

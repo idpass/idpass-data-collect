@@ -18,17 +18,85 @@
  */
 
 import { randomBytes } from "crypto";
+import path from "path";
 import { Router } from "express";
-import { authenticateJWT } from "../middlewares/authentication";
+import { z } from "zod";
+import { AuthenticatedRequest, authenticateJWT, createAuthAdminMiddleware } from "../middlewares/authentication";
 import { AppError, asyncHandler } from "../middlewares/errorHandlers";
-import { AppConfigStore, AppInstanceStore } from "../types";
+import { AppConfig, AppConfigStore, AppInstanceStore, Role, UserStore } from "../types";
 import multer from "multer";
 import fs from "fs/promises";
 import { generatePublicArtifacts, getPublicArtifactPaths, resolvePublicBaseUrl } from "../utils/publicArtifacts";
+import rateLimit from "express-rate-limit";
+const isTest = process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID !== undefined;
 
-export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanceStore: AppInstanceStore): Router {
+const AppConfigSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().nullish(),
+  version: z.string().nullish(),
+  url: z.string().nullish(),
+  entityForms: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    title: z.string(),
+    dependsOn: z.string().nullish(),
+    entityType: z.enum(["group", "individual", "record"]).optional(),
+    nameField: z.string().nullish(),
+    formio: z.record(z.string(), z.unknown()),
+  })).nullish(),
+  entityData: z.array(z.object({
+    name: z.string(),
+    data: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+    }).passthrough()),
+  })).nullish(),
+  externalSync: z.record(z.string(), z.unknown()).nullish(),
+  authConfigs: z.array(z.object({
+    type: z.string(),
+    fields: z.record(z.string(), z.string()),
+  })).nullish(),
+  selfService: z.object({
+    enabled: z.boolean(),
+    authMethods: z.array(z.enum(["otp", "id", "qr", "oidc"])),
+    allowedForms: z.array(z.string()),
+    languages: z.array(z.string()),
+    requireReview: z.boolean(),
+    oidcConfig: z.object({
+      authority: z.string().url(),
+      clientId: z.string().min(1),
+      redirectUri: z.string().url(),
+      scope: z.string().min(1),
+      acrValues: z.string().nullish(),
+      entityMapping: z.object({
+        primaryClaim: z.string().min(1),
+        fallbackClaim: z.string().nullish(),
+        entityField: z.string().min(1),
+        fallbackField: z.string().nullish(),
+      }),
+    }).nullish(),
+  }).nullish(),
+  // Extra fields present in downloaded artifacts — accepted on upload but not persisted
+  syncServerUrl: z.string().nullish(),
+  artifactId: z.string().nullish(),
+  archivedAt: z.unknown().nullish(),
+});
+
+/** Strip directory separators and special characters from filenames to prevent path traversal */
+function sanitizeFilename(filename: string): string {
+  // Extract only the base filename, removing any directory components
+  const basename = path.basename(filename);
+  // Remove any remaining path separators and null bytes
+  return basename.replace(/[\\/\0]/g, "_");
+}
+
+export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanceStore: AppInstanceStore, userStore?: UserStore): Router {
   const router = Router();
   const CONFIG_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+  // Admin middleware for mutation routes; falls back to authenticateJWT when
+  // userStore is not provided (e.g. in tests that predate the admin guard).
+  const adminAuth = userStore ? createAuthAdminMiddleware(userStore) : authenticateJWT;
 
   const ensureValidConfigId = (id: unknown) => {
     if (typeof id !== "string" || !CONFIG_ID_PATTERN.test(id)) {
@@ -39,13 +107,15 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
   const generateArtifactId = () => randomBytes(16).toString("hex");
 
   // Configure multer for JSON file uploads
+  const uploadDestination = path.resolve(__dirname, "../../uploads");
   const upload = multer({
     storage: multer.diskStorage({
-      destination: "./uploads",
+      destination: uploadDestination,
       filename: (req, file, cb) => {
-        cb(null, `${Date.now()}-${file.originalname}`);
+        cb(null, `${Date.now()}-${sanitizeFilename(file.originalname)}`);
       },
     }),
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
     fileFilter: (req, file, cb) => {
       if (file.mimetype === "application/json") {
         cb(null, true);
@@ -65,6 +135,7 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
         sortBy = "name",
         sortOrder = "asc",
         search,
+        includeArchived,
       } = req.query;
 
       const pageNumber = Math.max(parseInt(page as string, 10) || 1, 1);
@@ -73,7 +144,13 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
       const order = typeof sortOrder === "string" && sortOrder.toLowerCase() === "desc" ? "desc" : "asc";
       const searchTerm = typeof search === "string" ? search.trim().toLowerCase() : "";
 
-      const appConfigs = await appConfigStore.getConfigs();
+      const allConfigs = await appConfigStore.getConfigs(includeArchived === "true");
+
+      // Non-admin users only see programs they are assigned to
+      const user = (req as AuthenticatedRequest).user;
+      const appConfigs = user.role === Role.ADMIN
+        ? allConfigs
+        : allConfigs.filter((c) => (user.tenantIds ?? []).includes(c.id));
 
       const appsWithCounts = await Promise.all(
         appConfigs.map(async (config) => {
@@ -88,6 +165,7 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
             externalSync: config.externalSync || {},
             entitiesCount: entities?.length || 0,
             description: config.description || "",
+            archivedAt: config.archivedAt || null,
           };
         }),
       );
@@ -142,14 +220,74 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
     authenticateJWT,
     asyncHandler(async (req, res) => {
       const { id } = req.params;
+      const user = (req as AuthenticatedRequest).user;
+      if (user.role !== Role.ADMIN && !(user.tenantIds ?? []).includes(id)) {
+        res.status(403).json({ error: "You do not have permission to view this program." });
+        return;
+      }
       const appConfig = await appConfigStore.getConfig(id);
       res.json(appConfig);
     }),
   );
 
+  // Public config endpoint — unauthenticated, returns only safe-to-expose fields
+  const publicConfigLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: isTest ? 1000 : 60,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    message: { error: "Too many requests, please try again later" },
+  });
+
+  router.get(
+    "/:id/public",
+    publicConfigLimiter,
+    asyncHandler(async (req, res) => {
+      const { id } = req.params;
+      let appConfig;
+      try {
+        appConfig = await appConfigStore.getConfig(id);
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("not found")) {
+          res.status(404).json({ error: "Configuration not found" });
+          return;
+        }
+        throw error;
+      }
+
+      const publicConfig: Record<string, unknown> = {
+        name: appConfig.name,
+        description: appConfig.description,
+      };
+
+      if (appConfig.selfService) {
+        publicConfig.selfService = {
+          enabled: appConfig.selfService.enabled,
+          authMethods: appConfig.selfService.authMethods,
+          languages: appConfig.selfService.languages || ["en"],
+          ...(appConfig.selfService.oidcConfig ? {
+            oidcConfig: {
+              authority: appConfig.selfService.oidcConfig.authority,
+              clientId: appConfig.selfService.oidcConfig.clientId,
+              redirectUri: appConfig.selfService.oidcConfig.redirectUri,
+              scope: appConfig.selfService.oidcConfig.scope,
+              acrValues: appConfig.selfService.oidcConfig.acrValues,
+            },
+          } : {}),
+        };
+      }
+
+      if (appConfig.authConfigs) {
+        publicConfig.authConfigs = appConfig.authConfigs.map((c) => ({ type: c.type }));
+      }
+
+      res.json(publicConfig);
+    }),
+  );
+
   router.post(
     "/",
-    authenticateJWT,
+    adminAuth,
     upload.single("config"),
     asyncHandler(async (req, res) => {
       if (!req.file) {
@@ -159,9 +297,17 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
       try {
         // Read the uploaded JSON file
         const fileContent = await fs.readFile(req.file.path, "utf-8");
-        const appConfig = JSON.parse(fileContent);
+        const rawConfig = JSON.parse(fileContent);
+        const parseResult = AppConfigSchema.safeParse(rawConfig);
+        if (!parseResult.success) {
+          await fs.unlink(req.file.path).catch(() => {});
+          return res.status(400).json({ error: "Invalid app config JSON", details: parseResult.error.issues });
+        }
+        // Use validated data structure but cast to AppConfig since the Zod schema
+        // validates the shape while the runtime object carries the full type information
+        const appConfig = parseResult.data as unknown as AppConfig;
         ensureValidConfigId(appConfig.id);
-        const configToPersist = {
+        const configToPersist: AppConfig = {
           ...appConfig,
           artifactId: generateArtifactId(),
         };
@@ -190,7 +336,7 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
 
   router.put(
     "/:id",
-    authenticateJWT,
+    adminAuth,
     upload.single("config"),
     asyncHandler(async (req, res) => {
       const { id } = req.params;
@@ -201,14 +347,22 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
       try {
         // Read the uploaded JSON file
         const fileContent = await fs.readFile(req.file.path, "utf-8");
-        const updatedAppConfig = JSON.parse(fileContent);
+        const rawConfig = JSON.parse(fileContent);
+        const parseResult = AppConfigSchema.safeParse(rawConfig);
+        if (!parseResult.success) {
+          await fs.unlink(req.file.path).catch(() => {});
+          return res.status(400).json({ error: "Invalid app config JSON", details: parseResult.error.issues });
+        }
+        // Use validated data structure but cast to AppConfig since the Zod schema
+        // validates the shape while the runtime object carries the full type information
+        const updatedAppConfig = parseResult.data as unknown as AppConfig;
         ensureValidConfigId(updatedAppConfig.id);
         if (updatedAppConfig.id !== id) {
           throw new AppError("Config id mismatch between payload and URL", 400);
         }
 
         const existingConfig = await appConfigStore.getConfig(id);
-        const configToPersist = {
+        const configToPersist: AppConfig = {
           ...updatedAppConfig,
           artifactId: existingConfig.artifactId ?? generateArtifactId(),
         };
@@ -235,27 +389,46 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
 
   router.delete(
     "/:id",
-    authenticateJWT,
+    adminAuth,
     asyncHandler(async (req, res) => {
-      // get body
       const { id } = req.params;
-      let artifactId: string | undefined;
-      try {
-        const config = await appConfigStore.getConfig(id);
-        artifactId = config.artifactId;
-      } catch (error) {
-        if (!(error instanceof Error) || !error.message.includes("not found")) {
-          throw error;
-        }
-      }
-
-      await appConfigStore.deleteConfig(id);
-      await appInstanceStore.clearAppInstance(id);
-      await deletePublicArtifacts(artifactId);
-
+      await appConfigStore.archiveConfig(id);
       res.json({ status: "success" });
     }),
   );
+
+  // Restore an archived config
+  router.post(
+    "/:id/restore",
+    adminAuth,
+    asyncHandler(async (req, res) => {
+      const { id } = req.params;
+      await appConfigStore.restoreConfig(id);
+      res.json({ status: "success" });
+    }),
+  );
+
+  // Hard delete — development only, for cleaning up test programs
+  if (process.env.NODE_ENV !== "production") {
+    router.delete(
+      "/:id/purge",
+      adminAuth,
+      asyncHandler(async (req, res) => {
+        const { id } = req.params;
+        let artifactId: string | undefined;
+        try {
+          const config = await appConfigStore.getConfig(id);
+          artifactId = config.artifactId;
+        } catch {
+          // Config may already be archived; try to delete by id directly
+        }
+        await appConfigStore.deleteConfig(id);
+        await appInstanceStore.clearAppInstance(id);
+        await deletePublicArtifacts(artifactId);
+        res.json({ status: "success", warning: "Program permanently deleted. This endpoint is for development only." });
+      }),
+    );
+  }
 
   async function deletePublicArtifacts(artifactId?: string) {
     if (!artifactId) {

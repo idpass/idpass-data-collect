@@ -1,4 +1,29 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap');
+/*
+ * Licensed to the Association pour la cooperation numerique (ACN) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ACN licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+/**
+ * Base Styles - Humanitarian Tech Theme for Mobile
+ */
+
+/* Inter font is loaded via the system font stack fallback in design-tokens.css.
+   No external Google Fonts import is used to ensure offline-first compatibility. */
+@import './design-tokens.css';
 
 @font-face {
   font-family: 'FontAwesome';
@@ -10,67 +35,171 @@
   font-style: normal;
 }
 
-/* color palette from <https://github.com/vuejs/theme> */
-:root {
-  --color-white: #ffffff;
-  --color-very-light-blue: #f9fafb;
-  --color-light-blue: #e6ecf6;
-  --color-blue: #3264c8;
-  --color-medium-dark-blue: #59667d;
-  --color-dark-blue: #023a51;
-  --primary: #3264c8;
-}
-
-/* semantic color variables for this project */
-:root {
-  --color-bg: var(--color-blue);
-  --color-heading: var(--color-dark-blue);
-  --color-text: var(--color-medium-dark-blue);
-
-  --color-btn-primary: var(--color-white);
-  --color-btn-primary-bg: var(--color-blue);
-  --color-btn-default: var(--color-medium-dark-blue);
-  --color-btn-default-bg: var(--color-light-blue);
-  --color-card-bg: var(--color-blue);
-}
-
 /* Link styles */
 a {
   color: var(--primary);
   text-decoration: none;
-  transition: color 0.2s ease;
+  transition: color var(--transition-fast);
 }
 
 a:hover {
-  color: var(--color-dark-blue);
+  color: var(--brand);
 }
 
+/* Safe Area Utilities for Mobile Devices */
 .safe-top {
   padding-top: constant(safe-area-inset-top);
   padding-top: env(safe-area-inset-top);
 }
+
 .safe-left {
   padding-left: constant(safe-area-inset-left);
   padding-left: env(safe-area-inset-left);
 }
+
 .safe-right {
   padding-right: constant(safe-area-inset-right);
   padding-right: env(safe-area-inset-right);
 }
+
 .safe-bottom {
   padding-bottom: constant(safe-area-inset-bottom);
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* Card styles */
+/* Card styles - Updated for Humanitarian Tech theme */
 .card-primary {
   background: var(--primary);
+  color: var(--primary-foreground);
 }
 
 .card-primary-outline {
   border: 2px solid var(--primary);
 }
 
+.card-brand {
+  background: var(--brand);
+  color: var(--text-main);
+}
+
+.card-brand-outline {
+  border: 2px solid var(--brand);
+}
+
+/* Background Utilities */
 .bg-primary {
   background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.bg-brand {
+  background: var(--brand);
+  color: var(--text-main);
+}
+
+.bg-brand-light {
+  background: var(--brand-100);
+}
+
+.bg-surface {
+  background: var(--surface);
+}
+
+.bg-background {
+  background: var(--background);
+}
+
+/* Text Utilities */
+.text-brand {
+  color: var(--brand);
+}
+
+.text-primary {
+  color: var(--primary);
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.text-main {
+  color: var(--text-main);
+}
+
+.text-inverted {
+  color: var(--text-inverted);
+}
+
+/* Status Colors */
+.text-success {
+  color: var(--status-success);
+}
+
+.text-warning {
+  color: var(--status-warning);
+}
+
+.text-danger {
+  color: var(--status-danger);
+}
+
+.text-info {
+  color: var(--status-info);
+}
+
+.bg-success {
+  background: var(--status-success);
+  color: var(--text-inverted);
+}
+
+.bg-warning {
+  background: var(--status-warning);
+  color: var(--text-inverted);
+}
+
+.bg-danger {
+  background: var(--status-danger);
+  color: var(--text-inverted);
+}
+
+.bg-info {
+  background: var(--status-info);
+  color: var(--text-inverted);
+}
+
+/* Border Utilities */
+.border-brand {
+  border-color: var(--brand);
+}
+
+.border-primary {
+  border-color: var(--primary);
+}
+
+.border-light {
+  border-color: var(--border-light);
+}
+
+/* Shadow Utilities */
+.shadow-card {
+  box-shadow: var(--shadow-card);
+}
+
+.shadow-floating {
+  box-shadow: var(--shadow-floating);
+}
+
+/* Focus States - Accessibility.
+ * Uses outline instead of box-shadow to prevent overlap in nested inputs
+ * (e.g., search boxes with affix icons or input-group wrappers). */
+/* Vuetify manages its own focus styles; only apply to non-Vuetify elements */
+:focus-visible:not(.v-field *):not(.v-btn):not(.v-list-item):not(.v-expansion-panel *) {
+  outline: var(--focus-outline-width) solid var(--focus-outline-color);
+  outline-offset: var(--focus-outline-offset);
+}
+
+/* Selection */
+::selection {
+  background-color: var(--brand-100);
+  color: var(--text-main);
 }

@@ -23,6 +23,9 @@ import path from "path";
 import qrcode from "qrcode";
 import { cloneDeep, set } from "lodash";
 import { AppConfig } from "../types";
+import { createLogger } from "./logger";
+
+const log = createLogger("publicArtifacts");
 
 const PUBLIC_FOLDER = path.join(__dirname, "..", "public", "artifacts");
 
@@ -32,10 +35,28 @@ export interface PublicArtifactPaths {
 }
 
 export function resolvePublicBaseUrl(req: Request): string {
+  // Allow explicit configuration via environment variable (recommended for production)
   const configured = process.env.PUBLIC_BASE_URL?.trim();
   if (configured) {
     return configured.replace(/\/+$/, "");
   }
+
+  // Check for Railway's public domain (when behind Railway's proxy)
+  const railwayPublicDomain = process.env.RAILWAY_PUBLIC_DOMAIN;
+  if (railwayPublicDomain) {
+    // Railway always uses HTTPS for public domains
+    return `https://${railwayPublicDomain}`;
+  }
+
+  // Check for X-Forwarded-Host header (when behind a reverse proxy)
+  const forwardedHost = req.get("x-forwarded-host");
+  const forwardedProto = req.get("x-forwarded-proto") || req.protocol;
+  if (forwardedHost) {
+    // Don't include port for standard HTTP/HTTPS (80/443)
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+
+  // Fallback: construct from request (for local development)
   const protocol = req.protocol;
   const hostname = req.hostname;
   const port = req.socket.localPort;
@@ -75,7 +96,17 @@ export async function generatePublicArtifacts(baseUrl: string, appConfig: AppCon
   await fs.writeFile(jsonPath, publicJson);
   const sanitizedBaseUrl = baseUrl.replace(/\/+$/, "");
   const publicJsonUrl = `${sanitizedBaseUrl}/artifacts/${appConfig.artifactId}.json`;
-  await qrcode.toFile(qrPath, publicJsonUrl);
+  
+  try {
+    await qrcode.toFile(qrPath, publicJsonUrl, {
+      errorCorrectionLevel: 'M',
+      type: 'png',
+      margin: 1,
+    });
+  } catch (qrError) {
+    log.error({ err: qrError, artifactId: appConfig.artifactId }, "Failed to generate QR code");
+    throw new Error(`Failed to generate QR code: ${qrError instanceof Error ? qrError.message : 'Unknown error'}`);
+  }
 
   return { jsonPath, qrPath };
 }

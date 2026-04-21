@@ -18,6 +18,7 @@
  */
 
 import '@mdi/font/css/materialdesignicons.css'
+import './assets/design-tokens.css'
 import './assets/main.css'
 import 'vuetify/styles'
 import { createApp } from 'vue'
@@ -31,13 +32,59 @@ import App from './App.vue'
 import router from './router'
 import { useAuthStore } from '@/stores/auth'
 import { initializeInstance } from './api'
+import { trimDirective } from './directives/trim'
+
+/**
+ * Humanitarian Tech Theme - ID PASS Brand Identity
+ * Based on BRAND_REDESIGN.md guidelines
+ */
+const humanitarianTechTheme = {
+  dark: false,
+  colors: {
+    // Primary (Trust/Authority) - Deep Slate Blue
+    primary: '#2C3E50',
+    'primary-darken-1': '#1A252F',
+    'primary-lighten-1': '#34495E',
+    // Secondary (Surface)
+    secondary: '#F8F9FA',
+    // Brand Accent - ID PASS Orange
+    accent: '#ff6d37',
+    // Status Colors - Desaturated for professionalism
+    error: '#E53E3E',
+    info: '#3B82F6',
+    success: '#2D8A56',
+    warning: '#D97706',
+    // Surface and Background
+    background: '#F8F9FA',
+    surface: '#FFFFFF',
+    // On-colors for contrast
+    'on-primary': '#FFFFFF',
+    'on-secondary': '#1A202C',
+    'on-accent': '#1A202C',
+    'on-surface': '#1A202C',
+    'on-background': '#1A202C',
+    'on-error': '#FFFFFF',
+    'on-info': '#FFFFFF',
+    'on-success': '#FFFFFF',
+    'on-warning': '#FFFFFF',
+  },
+}
 
 const app = createApp(App)
 const pinia = createPinia()
 
+// Register custom directives BEFORE router and other plugins
+app.directive('trim', trimDirective)
+
 app.use(pinia)
 app.use(
   createVuetify({
+    theme: {
+      defaultTheme: 'humanitarianTech',
+      themes: {
+        humanitarianTech: humanitarianTechTheme,
+      },
+    },
     icons: {
       defaultSet: 'mdi',
       aliases,

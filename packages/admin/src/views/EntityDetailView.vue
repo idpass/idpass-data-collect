@@ -18,25 +18,42 @@
 -->
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { AxiosError } from 'axios'
-import { getEntities, getEntityEvents } from '@/api'
+import { getEntities, getEntityEvents, getAttachmentDownloadUrl } from '@/api'
 import type { EntityRecord, EventRecord } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { useAttachmentsStore } from '@/stores/attachments'
+import { useSnackBarStore } from '@/stores/snackBar'
 
 const authStore = useAuthStore()
+const attachmentsStore = useAttachmentsStore()
+const snackBarStore = useSnackBarStore()
 const route = useRoute()
 const router = useRouter()
 
 const isLoading = ref(true)
 const error = ref<string | null>(null)
 const entity = ref<EntityRecord | null>(null)
+const allEntities = ref<EntityRecord[]>([])
 const events = ref<EventRecord[]>([])
 const expandedEventIndices = ref<Set<number>>(new Set())
+const fileInput = ref<HTMLInputElement | null>(null)
 
 const routeId = computed(() => route.params.id as string)
 const entityGuid = computed(() => route.params.guid as string)
+
+const members = computed(() => {
+  if (!entity.value || entity.value.type !== 'group' || !entity.value.memberIds?.length) {
+    return []
+  }
+  const entityMap = new Map(allEntities.value.map((e) => [e.guid, e]))
+  return entity.value.memberIds.map((guid) => {
+    const resolved = entityMap.get(guid)
+    return resolved ?? { guid, id: guid, name: guid, type: 'unknown', data: {}, lastUpdated: '' }
+  })
+})
 
 const formatDate = (dateString: string): string => {
   try {
@@ -54,6 +71,8 @@ const formatDate = (dateString: string): string => {
 }
 
 const getEventTypeColor = (type: string): string => {
+  if (type === 'add-member') return 'deep-purple'
+  if (type === 'remove-member') return 'warning'
   if (type.startsWith('create-')) return 'success'
   if (type.startsWith('update-')) return 'info'
   if (type.startsWith('delete-')) return 'error'
@@ -61,6 +80,8 @@ const getEventTypeColor = (type: string): string => {
 }
 
 const getEventTypeIcon = (type: string): string => {
+  if (type === 'add-member') return 'mdi-account-plus'
+  if (type === 'remove-member') return 'mdi-account-minus'
   if (type.startsWith('create-')) return 'mdi-plus-circle'
   if (type.startsWith('update-')) return 'mdi-pencil-circle'
   if (type.startsWith('delete-')) return 'mdi-delete-circle'
@@ -85,9 +106,13 @@ const fetchEntityAndEvents = async () => {
   error.value = null
 
   try {
-    // Fetch all entities to find the one we need
-    const allEntities = await getEntities(routeId.value, 1000)
-    const foundEntity = allEntities.find((e) => e.guid === entityGuid.value)
+    // Fetch all entities to find the one we need and to resolve member GUIDs
+    const fetchedEntities = await getEntities(routeId.value, 1000)
+    if (fetchedEntities.length >= 1000) {
+      console.warn('Entity list may be truncated — member names may not resolve for large tenants')
+    }
+    allEntities.value = fetchedEntities
+    const foundEntity = fetchedEntities.find((e) => e.guid === entityGuid.value)
 
     if (!foundEntity) {
       error.value = 'Entity not found'
@@ -111,20 +136,65 @@ const fetchEntityAndEvents = async () => {
   }
 }
 
+const getFileIcon = (mimeType: string): string => {
+  if (mimeType.startsWith('image/')) return 'mdi-file-image'
+  if (mimeType === 'application/pdf') return 'mdi-file-pdf-box'
+  if (mimeType.includes('word') || mimeType.includes('document')) return 'mdi-file-word'
+  return 'mdi-file'
+}
+
+const formatFileSize = (bytes: number): string => {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+const handleUpload = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  try {
+    await attachmentsStore.upload(file, entityGuid.value, routeId.value)
+    snackBarStore.showSnackbar('Attachment uploaded', 'success')
+  } catch {
+    snackBarStore.showSnackbar('Failed to upload attachment', 'error')
+  }
+  input.value = ''
+}
+
+const handleDeleteAttachment = async (guid: string) => {
+  try {
+    await attachmentsStore.remove(guid, routeId.value)
+    snackBarStore.showSnackbar('Attachment deleted', 'success')
+  } catch {
+    snackBarStore.showSnackbar('Failed to delete attachment', 'error')
+  }
+}
+
 const goBack = () => {
   router.push({ name: 'app-details', params: { id: routeId.value } })
 }
 
-onMounted(() => {
+const loadEntity = () => {
   fetchEntityAndEvents()
-})
+  if (entityGuid.value && routeId.value) {
+    attachmentsStore.fetchForEntity(entityGuid.value, routeId.value)
+  }
+}
+
+onMounted(loadEntity)
+
+// Re-fetch when navigating between entity details (same component, different params)
+watch(entityGuid, loadEntity)
 </script>
 
 <template>
   <v-container class="entity-detail" fluid>
-    <v-btn class="detail-back" variant="text" prepend-icon="mdi-arrow-left" @click="goBack">
-      Back to Collection Program
-    </v-btn>
+    <div class="subpage-nav">
+      <v-btn variant="text" size="small" prepend-icon="mdi-arrow-left" @click="goBack">
+        Collection Program
+      </v-btn>
+    </div>
 
     <v-skeleton-loader v-if="isLoading" class="mt-6" type="card" />
 
@@ -139,7 +209,7 @@ onMounted(() => {
           <p class="detail-header__subtitle">{{ entity.entityName }}</p>
         </div>
         <v-chip :color="entity.type === 'individual' ? 'primary' : 'secondary'" variant="tonal">
-          {{ entity.type }}
+          {{ entity.entityName || entity.type }}
         </v-chip>
       </div>
 
@@ -162,7 +232,7 @@ onMounted(() => {
                 </div>
                 <div class="info-item">
                   <span class="info-label">Type</span>
-                  <span class="info-value">{{ entity.type }}</span>
+                  <span class="info-value">{{ entity.entityName || entity.type }}</span>
                 </div>
                 <div class="info-item">
                   <span class="info-label">Last Updated</span>
@@ -176,6 +246,46 @@ onMounted(() => {
               <v-sheet class="data-sheet pa-4" color="surface-variant">
                 <pre class="data-display">{{ JSON.stringify(entity.data, null, 2) }}</pre>
               </v-sheet>
+            </v-card-text>
+          </v-card>
+
+          <!-- Members Section (groups only) -->
+          <v-card
+            v-if="entity.type === 'group' && members.length > 0"
+            class="detail-content mt-6"
+            border="md"
+            elevation="0"
+          >
+            <v-card-text class="pa-6">
+              <h2 class="section-title mb-4">
+                Members
+                <v-chip size="small" variant="tonal" color="deep-purple" class="ml-2">
+                  {{ members.length }}
+                </v-chip>
+              </h2>
+
+              <v-list density="compact">
+                <v-list-item
+                  v-for="member in members"
+                  :key="member.guid"
+                  :to="member.type !== 'unknown' ? { name: 'entity-details', params: { id: routeId, guid: member.guid } } : undefined"
+                >
+                  <template #prepend>
+                    <v-icon :icon="member.type === 'group' ? 'mdi-account-group' : 'mdi-account'" />
+                  </template>
+                  <v-list-item-title>{{ member.name || 'Unnamed' }}</v-list-item-title>
+                  <v-list-item-subtitle>{{ member.entityName || member.type }}</v-list-item-subtitle>
+                  <template #append>
+                    <v-chip
+                      :color="member.type === 'group' ? 'secondary' : 'primary'"
+                      size="x-small"
+                      variant="tonal"
+                    >
+                      {{ member.type }}
+                    </v-chip>
+                  </template>
+                </v-list-item>
+              </v-list>
             </v-card-text>
           </v-card>
 
@@ -250,6 +360,71 @@ onMounted(() => {
               </div>
             </v-card-text>
           </v-card>
+
+          <!-- Attachments Section -->
+          <v-card class="detail-content mt-6" border="md" elevation="0">
+            <v-card-text class="pa-6">
+              <div class="d-flex align-center justify-space-between mb-4">
+                <h2 class="section-title">
+                  Attachments
+                  <v-chip size="small" variant="tonal" color="primary" class="ml-2">
+                    {{ attachmentsStore.attachments.length }}
+                  </v-chip>
+                </h2>
+                <v-btn
+                  color="primary"
+                  variant="tonal"
+                  size="small"
+                  prepend-icon="mdi-upload"
+                  :loading="attachmentsStore.uploading"
+                  @click="fileInput?.click()"
+                >
+                  Upload
+                </v-btn>
+                <input
+                  ref="fileInput"
+                  type="file"
+                  style="display: none"
+                  @change="handleUpload"
+                />
+              </div>
+
+              <v-progress-linear v-if="attachmentsStore.loading" indeterminate color="primary" />
+
+              <div v-else-if="attachmentsStore.attachments.length === 0" class="empty-state">
+                No attachments for this entity.
+              </div>
+
+              <v-list v-else density="compact">
+                <v-list-item
+                  v-for="attachment in attachmentsStore.attachments"
+                  :key="attachment.guid"
+                >
+                  <template #prepend>
+                    <v-icon :icon="getFileIcon(attachment.mimeType)" />
+                  </template>
+                  <v-list-item-title>{{ attachment.filename }}</v-list-item-title>
+                  <v-list-item-subtitle>{{ formatFileSize(attachment.sizeBytes) }}</v-list-item-subtitle>
+                  <template #append>
+                    <v-btn
+                      icon="mdi-download"
+                      variant="text"
+                      size="small"
+                      :href="getAttachmentDownloadUrl(attachment.guid, routeId)"
+                      target="_blank"
+                    />
+                    <v-btn
+                      icon="mdi-delete"
+                      variant="text"
+                      size="small"
+                      color="error"
+                      @click="handleDeleteAttachment(attachment.guid)"
+                    />
+                  </template>
+                </v-list-item>
+              </v-list>
+            </v-card-text>
+          </v-card>
         </v-col>
 
         <v-col cols="12" lg="4">
@@ -298,11 +473,6 @@ onMounted(() => {
 <style scoped>
 .entity-detail {
   padding-bottom: 64px;
-}
-
-.detail-back {
-  margin-top: 8px;
-  padding-left: 0;
 }
 
 .detail-header {
@@ -450,6 +620,16 @@ onMounted(() => {
 .marker-grey {
   border-color: rgb(158, 158, 158);
   color: rgb(158, 158, 158);
+}
+
+.marker-deep-purple {
+  border-color: rgb(103, 58, 183);
+  color: rgb(103, 58, 183);
+}
+
+.marker-warning {
+  border-color: rgb(255, 152, 0);
+  color: rgb(255, 152, 0);
 }
 
 .timeline-content {

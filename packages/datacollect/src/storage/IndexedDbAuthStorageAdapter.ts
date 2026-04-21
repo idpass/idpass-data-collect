@@ -18,6 +18,9 @@
  */
 
 import { AuthStorageAdapter } from "../interfaces/types";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("IndexedDbAuthStorageAdapter");
 
 /**
  * IndexedDB implementation of the AuthStorageAdapter for browser-based authentication token persistence.
@@ -149,7 +152,7 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
    */
   async getUsername(): Promise<string> {
     if (!this.db) {
-      console.warn("IndexedDB not initialized for auth storage");
+      log.warn("IndexedDB not initialized for auth storage");
       return "";
     }
 
@@ -159,7 +162,7 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
 
     return new Promise((resolve, reject) => {
       request.onerror = () => {
-        console.error("Error retrieving username from IndexedDB:", request.error);
+        log.error({ err: request.error }, "Error retrieving username from IndexedDB");
         reject(request.error);
       };
 
@@ -177,7 +180,7 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
    */
   async getToken(): Promise<{ provider: string; token: string } | null> {
     if (!this.db) {
-      console.warn("IndexedDB not initialized for auth storage");
+      log.warn("IndexedDB not initialized for auth storage");
       return null;
     }
 
@@ -188,7 +191,7 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
       const request = objectStore.openCursor();
 
       request.onerror = () => {
-        console.error("Error retrieving token from IndexedDB:", request.error);
+        log.error({ err: request.error }, "Error retrieving token from IndexedDB");
         reject(request.error);
       };
 
@@ -226,7 +229,7 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
       const request = objectStore.clear();
 
       request.onerror = () => {
-        console.error("Error removing all tokens from IndexedDB:", request.error);
+        log.error({ err: request.error }, "Error removing all tokens from IndexedDB");
         reject(request.error);
       };
 
@@ -266,7 +269,7 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
       const request = window.indexedDB.open(this.dbName, 1);
 
       request.onerror = (event) => {
-        console.error("Error opening IndexedDB for auth storage:", event);
+        log.error({ event }, "Error opening IndexedDB for auth storage");
         reject(new Error("Failed to open IndexedDB for authentication storage"));
       };
 
@@ -293,7 +296,7 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
    */
   async getTokenByProvider(provider: string = "current_token"): Promise<string> {
     if (!this.db) {
-      console.warn("IndexedDB not initialized for auth storage");
+      log.warn("IndexedDB not initialized for auth storage");
       return "";
     }
 
@@ -303,7 +306,7 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
 
     return new Promise((resolve, reject) => {
       request.onerror = () => {
-        console.error("Error retrieving token from IndexedDB:", request.error);
+        log.error({ err: request.error }, "Error retrieving token from IndexedDB");
         reject(request.error);
       };
 
@@ -350,7 +353,7 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
       });
 
       storeRequest.onerror = () => {
-        console.error("Error storing username:", storeRequest.error);
+        log.error({ err: storeRequest.error }, "Error storing username");
         reject(storeRequest.error);
       };
 
@@ -392,7 +395,7 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
       });
 
       storeRequest.onerror = () => {
-        console.error("Error storing token:", storeRequest.error);
+        log.error({ err: storeRequest.error }, "Error storing token");
         reject(storeRequest.error);
       };
 
@@ -421,7 +424,7 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
       const request = objectStore.delete(key);
 
       request.onerror = () => {
-        console.error("Error removing token from IndexedDB:", request.error);
+        log.error({ err: request.error }, "Error removing token from IndexedDB");
         reject(request.error);
       };
 
@@ -461,7 +464,7 @@ export class IndexedDbAuthStorageAdapter implements AuthStorageAdapter {
       const request = objectStore.clear();
 
       request.onerror = () => {
-        console.error("Error clearing auth store:", request.error);
+        log.error({ err: request.error }, "Error clearing auth store");
         reject(request.error);
       };
 

@@ -23,19 +23,20 @@ import {
   DetailEntityDoc,
   DetailGroupDoc,
   EntityDoc,
+  EntityPair,
   EntityStore,
   EventStore,
   FormSubmission,
   GroupDoc,
   SearchCriteria,
-  SyncLevel,
   ExternalSyncCredentials,
   PasswordCredentials,
   TokenCredentials,
 } from "../interfaces/types";
+import type { SyncResult } from "../interfaces/adapter";
 import { EventApplierService } from "../services/EventApplierService";
 import { AppError } from "../utils/AppError";
-import { ExternalSyncManager } from "./ExternalSyncManager";
+import { ExternalSyncManager, SyncOptions } from "./ExternalSyncManager";
 import { InternalSyncManager } from "./InternalSyncManager";
 import { AuthManager } from "./AuthManager";
 
@@ -62,7 +63,7 @@ export interface ReadAuditOptions {
  * @example
  * Basic usage:
  * ```typescript
- * import { EntityDataManager, EntityType, SyncLevel } from 'idpass-data-collect';
+ * import { EntityDataManager, EntityType, SyncLevel } from '@idpass/data-collect-core';
  *
  * // Initialize the manager (typically done once)
  * const manager = new EntityDataManager(
@@ -160,6 +161,14 @@ export class EntityDataManager {
   ) {}
 
   /**
+   * Returns the last refresh token received from the sync server after login.
+   * Used by mobile clients to store the token for offline silent re-authentication.
+   */
+  get lastRefreshToken(): string | null {
+    return this.authManager?.lastRefreshToken ?? null;
+  }
+
+  /**
    * Checks if a synchronization operation is currently in progress.
    *
    * @returns True if sync is active, false otherwise.
@@ -167,6 +176,18 @@ export class EntityDataManager {
   isSyncing(): boolean {
     if (this.internalSyncManager) {
       return this.internalSyncManager.isSyncing;
+    }
+    return false;
+  }
+
+  /**
+   * Checks if an external synchronization operation is currently in progress.
+   *
+   * @returns True if external sync is active, false otherwise.
+   */
+  isExternalSyncing(): boolean {
+    if (this.externalSyncManager) {
+      return this.externalSyncManager.isSyncing;
     }
     return false;
   }
@@ -206,6 +227,49 @@ export class EntityDataManager {
    */
   async submitForm(formData: FormSubmission): Promise<EntityDoc | null> {
     return await this.eventApplierService.submitForm(formData);
+  }
+
+  /**
+   * Submits a batch of form submissions atomically.
+   *
+   * All events in the batch are processed in sequence. If any event fails, the
+   * error is thrown immediately and the caller is responsible for handling the
+   * partial state. The response includes the count of successfully applied events
+   * and details about the failing event.
+   *
+   * This method is intended for server-side sync push handlers where it is critical
+   * that the client receives an accurate success or failure signal. On failure the
+   * client should NOT advance its sync cursor so that the failed events can be
+   * retried on the next push.
+   *
+   * @param events The ordered list of form submissions to process.
+   * @returns An object describing the outcome: applied count and any error details.
+   *
+   * @example
+   * ```typescript
+   * const result = await manager.submitFormBatch(events);
+   * if (!result.success) {
+   *   console.error(`Batch failed after ${result.applied} events: ${result.errors}`);
+   * }
+   * ```
+   */
+  async submitFormBatch(
+    events: FormSubmission[],
+  ): Promise<{ success: boolean; applied: number; failed: FormSubmission[]; errors: string[] }> {
+    let applied = 0;
+    const failed: FormSubmission[] = [];
+    const errors: string[] = [];
+    for (const event of events) {
+      try {
+        await this.eventApplierService.submitForm(event);
+        applied += 1;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        failed.push(event);
+        errors.push(`Event ${event.guid}: ${message}`);
+      }
+    }
+    return { success: failed.length === 0, applied, failed, errors };
   }
 
   /**
@@ -266,7 +330,7 @@ export class EntityDataManager {
    */
   async getAllEntities(
     options: ReadAuditOptions = {},
-  ): Promise<{ initial: EntityDoc; modified: EntityDoc }[]> {
+  ): Promise<EntityPair[]> {
     const entities = await this.entityStore.getAllEntities();
     await this.logReadAudit("read-all-entities", "*", { count: entities.length }, options);
     return entities;
@@ -304,7 +368,7 @@ export class EntityDataManager {
   async getEntity(
     id: string,
     options: ReadAuditOptions = {},
-  ): Promise<{ initial: EntityDoc; modified: EntityDoc }> {
+  ): Promise<EntityPair> {
     try {
       const entityPair = await this.entityStore.getEntity(id);
       if (!entityPair) {
@@ -317,16 +381,17 @@ export class EntityDataManager {
 
       this.logger.debug(`Updated entity after applying events: ${JSON.stringify(updatedEntity)}`);
 
-      let result: { initial: EntityDoc; modified: EntityDoc };
+      let result: EntityPair;
       if (updatedEntity.type === "group") {
         const groupWithDetails = await this.loadGroupDetails(updatedEntity as GroupDoc);
         this.logger.debug(`Group with loaded details: ${JSON.stringify(groupWithDetails)}`);
         result = {
+          guid: entityPair.guid,
           initial: entityPair.initial,
           modified: groupWithDetails,
         };
       } else {
-        result = { initial: entityPair.initial, modified: updatedEntity };
+        result = { guid: entityPair.guid, initial: entityPair.initial, modified: updatedEntity };
       }
 
       await this.logReadAudit("read-entity", id, { entityType: result.modified.type }, options);
@@ -385,20 +450,9 @@ export class EntityDataManager {
     this.logger.debug(`Loaded members: ${JSON.stringify(loadedMembers)}`);
     if (missingMembers.length > 0) {
       this.logger.warn(`Missing members: ${JSON.stringify(missingMembers)}`);
-      // update members to remove missing members
-      const updatedGroup = {
-        ...group,
-        memberIds: loadedMembers.map((member) => member.id),
-      };
-      await this.eventApplierService.submitForm({
-        type: "update-group",
-        guid: uuidv4(),
-        entityGuid: group.id,
-        data: updatedGroup,
-        userId: "system",
-        timestamp: new Date().toISOString(),
-        syncLevel: SyncLevel.LOCAL,
-      });
+      // Read operations must not produce side effects. Missing members are
+      // logged above so operators can investigate, but we do not submit an
+      // auto-heal event from the read path.
     }
 
     return {
@@ -431,7 +485,7 @@ export class EntityDataManager {
    * }
    * ```
    */
-  async getMembers(groupId: string): Promise<{ initial: EntityDoc; modified: EntityDoc }[]> {
+  async getMembers(groupId: string): Promise<EntityPair[]> {
     const groupPair = await this.entityStore.getEntity(groupId);
     if (!groupPair || groupPair.modified.type !== "group") {
       throw new AppError("INVALID_GROUP", `Group with ID ${groupId} not found or is not a group`);
@@ -540,7 +594,7 @@ export class EntityDataManager {
   async searchEntities(
     criteria: SearchCriteria,
     options: ReadAuditOptions = {},
-  ): Promise<{ initial: EntityDoc; modified: EntityDoc }[]> {
+  ): Promise<EntityPair[]> {
     const results = await this.entityStore.searchEntities(criteria);
     await this.logReadAudit("search-entities", "*", { criteria, resultCount: results.length }, options);
     return results;
@@ -793,10 +847,11 @@ export class EntityDataManager {
    * await manager.syncWithExternalSystem();
    * ```
    */
-  async syncWithExternalSystem(credentials?: ExternalSyncCredentials): Promise<void> {
+  async syncWithExternalSystem(credentials?: ExternalSyncCredentials, options?: SyncOptions): Promise<SyncResult | undefined> {
     if (this.externalSyncManager) {
-      await this.externalSyncManager.synchronize(credentials);
+      return await this.externalSyncManager.synchronize(credentials, options);
     }
+    return undefined;
   }
 
   private async logReadAudit(

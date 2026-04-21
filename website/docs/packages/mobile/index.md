@@ -9,48 +9,69 @@ The Mobile package is an offline-first client application for ID PASS DataCollec
 
 The Mobile package provides a Vue.js-based mobile application for ID PASS DataCollect, built with Capacitor for cross-platform mobile development. It supports both traditional form-based data collection and dynamic app configurations.
 
-Built with Vue 3, TypeScript, and Capacitor, the mobile application offers a flexible data collection solution for:
+Built with Vue 3, Vuetify 3, TypeScript, XState v5, and Capacitor, the mobile application offers a flexible data collection solution for:
 - Dynamic app configuration loading via QR codes or URLs
 - Traditional form-based data collection
-- Offline-first data storage with RxDB
+- Offline-first data storage via the `@idpass/data-collect-core` library (IndexedDB)
 - Cross-platform mobile deployment (iOS/Android)
 
 ### Key Features
 
-- 📱 **Cross-Platform**: Native mobile apps for iOS and Android using Capacitor
-- 🔄 **Dynamic App Loading**: Load app configurations via QR code scanning or URL input
-- 📊 **Form Builder Integration**: Full FormIO integration for dynamic form creation
-- 💾 **Offline Storage**: Local database with RxDB for offline data collection
-- 🔐 **Secure Authentication**: JWT-based authentication with OAuth provider support (Auth0, Keycloak)
-- 🔑 **Multi-Provider Auth**: Support for multiple authentication providers per app configuration
-- 🎨 **QR Code Scanning**: Built-in barcode scanning for app configuration loading
-- 🎨 **Responsive Design**: Bootstrap-based UI with mobile-optimized components
+- **Cross-Platform**: Native mobile apps for iOS and Android using Capacitor
+- **Dynamic App Loading**: Load app configurations via QR code scanning or URL input
+- **Form Builder Integration**: Full FormIO integration for dynamic form creation
+- **Offline Storage**: IndexedDB-backed local storage via `@idpass/data-collect-core`
+- **Secure Authentication**: JWT-based authentication with OAuth provider support (Auth0, Keycloak), managed by XState v5 state machines
+- **Biometric App Lock**: Device biometric authentication (fingerprint/face) via XState-driven lock machine and `@aparajita/capacitor-biometric-auth`
+- **Secure Storage**: Sensitive credentials stored with `@aparajita/capacitor-secure-storage`
+- **Multi-Provider Auth**: Support for multiple authentication providers per app configuration
+- **QR Code Scanning**: Built-in barcode scanning for app configuration loading
+- **Material Design 3 UI**: Vuetify 3 components for a consistent, mobile-optimized interface
+- **Error Overlay**: Global error handling with user-facing snackbar notifications
+
+## Technology Stack
+
+| Layer | Technology |
+| :--- | :--- |
+| UI Framework | Vue 3 + Vuetify 3 (Material Design 3) |
+| State Management | XState v5 (`authMachine`, `lockMachine`) + Pinia |
+| Storage | IndexedDB via `@idpass/data-collect-core` |
+| Platform Bridge | Capacitor 6 |
+| Biometrics | `@aparajita/capacitor-biometric-auth` |
+| Secure Storage | `@aparajita/capacitor-secure-storage` |
+| Forms | FormIO (`@formio/vue`, `formiojs`) |
+| Auth | JWT + OAuth (Auth0 / Keycloak) |
 
 ## Architecture
 
 ```mermaid
 graph TB
-    A[Mobile App] -->|Feature Flag| B[DyApp.vue]
-    A -->|Feature Flag| C[App.vue]
-    
-    B --> D[Dynamic Views]
-    C --> E[Traditional Views]
-    
-    D --> F[DyHome.vue]
-    D --> G[DynamicAppView.vue]
-    D --> H[DynamicDetailView.vue]
-    
-    E --> I[Form Views]
-    E --> J[Auth Views]
-    
-    F --> K[QR Scanner]
-    F --> L[App Management]
-    
-    G --> M[Form Rendering]
-    G --> N[Data Collection]
-    
-    H --> O[Entity Details]
-    H --> P[Data Editing]
+    A[Mobile App - App.vue] --> B[XState lockMachine]
+    A --> C[XState authMachine]
+    A --> D[RouterView]
+
+    B --> E[LockScreen.vue]
+    B --> F[BiometricAuth Plugin]
+
+    C --> G[LoginView.vue]
+    C --> H[AuthStore - Pinia]
+
+    D --> I[HomeView.vue]
+    D --> J[AppView.vue]
+    D --> K[DetailView / EditView]
+
+    I --> L[QR Scanner]
+    I --> M[App Management]
+
+    J --> N[Form Rendering - FormIO]
+    J --> O[Data Collection]
+
+    K --> P[Entity Details]
+    K --> Q[Data Editing]
+
+    H --> R[datacollect-core]
+    R --> S[IndexedDB]
+    R --> T[Sync Server]
 ```
 
 ## Core Features
@@ -59,7 +80,7 @@ graph TB
 The mobile app supports loading app configurations dynamically:
 - **QR Code Scanning**: Scan QR codes to load app configurations
 - **URL Input**: Manually enter app configuration URLs
-- **Local Storage**: Store multiple app configurations locally
+- **Local Storage**: Store multiple app configurations locally using IndexedDB via `@idpass/data-collect-core`
 - **App Switching**: Switch between different app configurations
 
 ### Form-Based Data Collection
@@ -71,39 +92,123 @@ Traditional form-based data collection:
 
 ### Offline Capabilities
 Offline-first data collection:
-- **Local Database**: RxDB for local data storage
+- **IndexedDB Storage**: Local data persistence via the `@idpass/data-collect-core` library's `IndexedDbStorageAdapter`
 - **Sync Management**: Background synchronization when online
-- **Conflict Resolution**: Handle data conflicts during sync
+- **Conflict Resolution**: Handle data conflicts during sync via the core library's event-sourcing model
+
+### Biometric App Lock (v2.0.0)
+
+The mobile app protects sensitive beneficiary data with a biometric app lock that activates automatically after a period of inactivity. The lock is managed by a dedicated `lockMachine` (XState v5) that persists state across app restarts.
+
+#### How it works
+
+When the app starts on a native device (iOS or Android), `AppLockService.init()` loads the last persisted lock state from secure storage. If the app was previously locked (or has no persisted state — the safe default for cold starts), the `LockScreen` overlay is shown immediately and the user must authenticate before accessing any data.
+
+While unlocked, the `lockMachine` runs an inactivity timer. Any user interaction (pointer or touch event) resets the timer via `AppLockService.resetInactivityTimer()`. After **5 minutes of inactivity** the machine transitions to the `locked` state automatically.
+
+Authentication is handled by the `@aparajita/capacitor-biometric-auth` plugin. The plugin uses whatever the device has available — fingerprint, face recognition, or the device screen lock PIN/pattern/passcode — controlled by the `allowDeviceCredential: true` flag. On devices with no screen lock configured the lock remains engaged and cannot be bypassed, protecting data on unsecured devices.
+
+The feature is native-platform only. On web builds `Capacitor.isNativePlatform()` returns `false`, so the lock machine transitions directly to `unlocked` on init and all biometric calls are no-ops.
+
+#### XState lock machine states
+
+```
+idle → initializing → locked ←→ authenticating
+                   ↘ unlocked (5 min timer → locked)
+```
+
+| State | Description |
+| :--- | :--- |
+| `idle` | Machine created but not yet started |
+| `initializing` | Loading persisted lock state from secure storage |
+| `locked` | App locked; persists `isLocked=true`; waits for `AUTHENTICATE` event |
+| `authenticating` | Biometric prompt shown; transitions to `unlocked` on success or back to `locked` on failure/cancel |
+| `unlocked` | Normal operation; inactivity timer running; transitions to `locked` after 5 minutes or on explicit `LOCK` event |
+
+#### AppLockService API
+
+The `AppLockService` singleton wraps the XState actor and exposes a Vue-reactive API:
+
+```typescript
+import { AppLockService } from '@/services/AppLockService'
+
+// Initialise on app mount (loads persisted lock state)
+await AppLockService.init()
+
+// Reactive boolean — use in Vue templates
+AppLockService.locked.value  // true when locked
+
+// Trigger biometric prompt programmatically
+const success = await AppLockService.authenticate()
+
+// Lock immediately (e.g. on a "lock now" button)
+await AppLockService.lock()
+
+// Reset the inactivity timer on user activity
+AppLockService.resetInactivityTimer()
+
+// Check whether biometrics are available on this device
+const available = await AppLockService.isAvailable()
+```
+
+#### Root component integration
+
+`App.vue` shows the `LockScreen` overlay when the machine is in the locked state and calls `resetInactivityTimer` on all user interactions:
+
+```vue
+<template>
+  <v-app @pointerdown="AppLockService.resetInactivityTimer()">
+    <LockScreen v-if="AppLockService.locked.value" />
+    <!-- rest of app -->
+  </v-app>
+</template>
+
+<script setup lang="ts">
+import { onMounted } from 'vue'
+import { AppLockService } from '@/services/AppLockService'
+
+onMounted(async () => {
+  await AppLockService.init()
+})
+</script>
+```
+
+#### Inactivity timeout
+
+The timeout is defined as a constant in `lockMachine.ts`:
+
+```typescript
+const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000  // 5 minutes
+```
+
+To change the timeout, modify this constant. Future versions may expose it as a configurable setting.
+
+### XState Auth/Lock Flows (v2.0.0)
+Authentication and lock state are managed by two XState v5 state machines:
+- **`authMachine`**: Handles the full auth lifecycle — initialization, username/password login, OAuth callback handling, token refresh, and logout
+- **`lockMachine`**: Handles inactivity-based locking, biometric unlock attempts, and persisted lock state
 
 ## Authentication
 
 ### Authentication Setup
-The mobile app supports multiple authentication methods:
+The mobile app authentication is driven by the `authMachine` XState state machine and exposed via the `useAuthStore` Pinia store.
 
 #### Username/Password Authentication
 ```typescript
-import { AuthManager, IndexedDbAuthStorageAdapter } from '@idpass/data-collect-core';
+import { useAuthStore } from '@/store/auth';
 
-// Initialize authentication
-const authStorageAdapter = new IndexedDbAuthStorageAdapter('mobile-auth');
-await authStorageAdapter.initialize();
-
-const authManager = new AuthManager(
-  [], // Auth configs loaded from app configuration
-  syncServerUrl,
-  authStorageAdapter
-);
+const authStore = useAuthStore();
 
 // Login with credentials
-await authManager.login({
-  username: 'user@example.com',
+await authStore.loginSyncServer(syncServerUrl, {
+  email: 'user@example.com',
   password: 'password123'
-}, null);
+});
 ```
 
 #### OAuth Provider Authentication
 ```typescript
-// Auth0 login
+// Auth0 login via authMachine
 const auth0Config = {
   type: 'auth0',
   fields: {
@@ -113,89 +218,50 @@ const auth0Config = {
   }
 };
 
-const authManager = new AuthManager(
-  [auth0Config],
-  process.env.VITE_BACKEND_URL,
-  authStorageAdapter
-);
-
-// Login with OAuth token
-await authManager.loginWithToken(null, 'auth0');
+// The authMachine actor handles the OAuth flow and callback
+authStore.send({ type: 'LOGIN', provider: 'auth0' });
 ```
 
 ### Authentication Components
 
 #### LoginView.vue
+The login view uses Vuetify 3 components for a Material Design layout:
 ```vue
 <template>
-  <div class="login-container">
-    <form @submit.prevent="handleLogin">
-      <div class="form-group">
-        <label for="email">Email</label>
-        <input 
-          id="email"
-          v-model="credentials.email"
-          type="email"
-          class="form-control"
-          required
-        />
-      </div>
-      <div class="form-group">
-        <label for="password">Password</label>
-        <input 
-          id="password"
-          v-model="credentials.password"
-          type="password"
-          class="form-control"
-          required
-        />
-      </div>
-      <button type="submit" class="btn btn-primary">Login</button>
-    </form>
-    
-    <!-- OAuth provider buttons -->
-    <div class="oauth-providers mt-3">
-      <button @click="loginWithAuth0" class="btn btn-outline-primary">
-        Login with Auth0
-      </button>
-      <button @click="loginWithKeycloak" class="btn btn-outline-secondary">
-        Login with Keycloak
-      </button>
-    </div>
-  </div>
+  <v-container class="fill-height">
+    <v-row justify="center" align="center" class="fill-height">
+      <v-col cols="12" sm="8" md="5" lg="4">
+        <v-form @submit.prevent="onLogin">
+          <v-text-field
+            v-model="form.email"
+            label="Email"
+            type="email"
+            required
+          />
+          <v-text-field
+            v-model="form.password"
+            label="Password"
+            type="password"
+            required
+          />
+          <v-btn type="submit" color="secondary" variant="flat" size="large">
+            Login
+          </v-btn>
+        </v-form>
+      </v-col>
+    </v-row>
+  </v-container>
 </template>
-
-<script setup lang="ts">
-import { ref } from 'vue';
-import { useAuthStore } from '@/stores/auth';
-
-const authStore = useAuthStore();
-const credentials = ref({
-  email: '',
-  password: ''
-});
-
-const handleLogin = async () => {
-  await authStore.login(credentials.value);
-};
-
-const loginWithAuth0 = async () => {
-  await authStore.loginWithProvider('auth0');
-};
-
-const loginWithKeycloak = async () => {
-  await authStore.loginWithProvider('keycloak');
-};
-</script>
 ```
 
-#### AuthGuard
+#### Route Guards
+Authentication state from the `authMachine` is used to protect routes:
 ```typescript
 // Route guard for authentication
 export const authGuard = async (to: any, from: any, next: any) => {
   const authStore = useAuthStore();
-  
-  if (await authStore.isAuthenticated()) {
+
+  if (authStore.isAuthenticated) {
     next();
   } else {
     next('/login');
@@ -209,7 +275,7 @@ export const authGuard = async (to: any, from: any, next: any) => {
 
 ```bash
 cd ./packages/mobile
-npm install
+pnpm install
 ```
 
 ### Development Setup
@@ -226,7 +292,7 @@ VITE_DEVELOP=true
 ### Development
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 The mobile app will be available at `http://localhost:8081`
@@ -235,88 +301,91 @@ The mobile app will be available at `http://localhost:8081`
 
 ```bash
 # Build for iOS
-npm run build:ios
+pnpm run build:ios
 
 # Build for Android
-npm run build:android
+pnpm run build:android
 ```
 
 ## Application Structure
 
-### Root Components
-
-#### DyApp.vue
-The dynamic app root component used when `VITE_FEATURE_DYNAMIC` is enabled:
-
-```vue
-<template>
-  <header>
-    <nav class="safe-top navbar p-3 d-flex justify-content-center border-bottom align-items-center">
-      <h5 class="m-0 bold title text-black">ID PASS DataCollect</h5>
-    </nav>
-  </header>
-  <main class="mx-2">
-    <div class="user-select-none disable-scrollbars">
-      <RouterView />
-    </div>
-  </main>
-</template>
-```
+### Root Component
 
 #### App.vue
-The traditional app root component used when dynamic features are disabled:
+The root component initializes the `AppLockService` and renders the Vuetify application shell with bottom navigation, offline indicator, and global overlays:
 
 ```vue
 <template>
-  <div id="app" class="vh-100 h-100 overflow-scroll text-break">
-    <header>
-      <nav class="safe-top navbar p-3 d-flex justify-content-center border-bottom align-items-center">
-        <h5 class="m-0 bold title text-black">ID PASS DataCollect</h5>
-      </nav>
-    </header>
-    <main class="mx-2">
-      <div class="user-select-none disable-scrollbars">
-        <RouterView />
-      </div>
-    </main>
-    <footer class="pb-safe"></footer>
+  <v-app>
+    <LockScreen v-if="AppLockService.locked" />
+    <AppSnackbar />
+    <!-- ... bottom navigation, router view ... -->
+  </v-app>
+</template>
+
+<script setup lang="ts">
+import { onMounted } from 'vue';
+import { AppLockService } from '@/services/AppLockService';
+
+onMounted(async () => {
+  await AppLockService.init();
+});
+</script>
+```
+
+### Views
+
+| View | Route | Description |
+| :--- | :--- | :--- |
+| `HomeView.vue` | `/` | App list and QR scanner entry point |
+| `AppView.vue` | `/app/:id` | Dynamic form rendering for a loaded app config |
+| `LoginView.vue` | `/login/:id` | Sync server credential login |
+| `DetailView.vue` | `/app/:id/entity/:eid` | Read-only entity detail |
+| `EditView.vue` | `/app/:id/entity/:eid/edit` | Entity edit form |
+| `SettingsView.vue` | `/settings` | App settings and biometric lock toggle |
+| `ToolsView.vue` | `/tools` | Developer/diagnostic tools |
+
+### Key Components
+
+#### LockScreen.vue
+Full-screen overlay rendered by the `lockMachine` when the app is locked. Uses Vuetify 3 cards and buttons with Material Design icons:
+```vue
+<template>
+  <div class="lock-screen">
+    <v-card elevation="0" width="320" class="text-center pa-6" rounded="lg">
+      <v-icon size="64" color="primary" class="mb-4">mdi-lock-outline</v-icon>
+      <v-btn color="primary" variant="flat" @click="unlock">Unlock</v-btn>
+    </v-card>
   </div>
 </template>
 ```
 
-### Dynamic Views
+#### AppSnackbar.vue
+Global error and notification overlay driven by the `useSnackbar` composable. Surfaces errors from auth failures, sync issues, and form validation via `v-snackbar`.
 
-#### DyHome.vue
-The main dashboard for dynamic app management:
-
+#### QrScanner
+QR code scanning for app configuration loading via `@capacitor-mlkit/barcode-scanning`:
 ```vue
 <template>
-  <div class="d-flex flex-column gap-2">
-    <h2 class="mb-4">Apps</h2>
-    <!-- App list and management -->
-    <ul role="list" class="list-group list-group-flush shadow-sm mt-2">
-      <li v-for="app in tenantapps" :key="app.name" class="card border-0 rounded-0">
-        <!-- App item -->
-      </li>
-    </ul>
-    <!-- QR scanner button -->
-  </div>
+  <QrScanner
+    @scan="handleScan"
+    @error="handleError"
+  />
 </template>
 ```
 
-#### DynamicAppView.vue
-Renders dynamic forms based on app configuration:
-
+#### SaveDialog
+Modal dialog for saving data using Vuetify 3's `v-dialog`:
 ```vue
 <template>
-  <div class="dynamic-app">
-    <!-- Form rendering based on configuration -->
-    <Formio 
-      :form="formConfig"
-      :submission="submission"
-      @submit="handleSubmit"
-    />
-  </div>
+  <v-dialog v-model="open">
+    <v-card>
+      <v-card-title>{{ title }}</v-card-title>
+      <v-card-actions>
+        <v-btn @click="onSave">Save</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 ```
 
@@ -350,7 +419,7 @@ const config: CapacitorConfig = {
 };
 ```
 
-## Database Schema
+## Data Schemas
 
 ### Tenant App Schema
 ```typescript
@@ -368,7 +437,7 @@ interface TenantAppData {
 ### Auth Config Schema
 ```typescript
 interface AuthConfig {
-  type: 'auth0' | 'keycloak';
+  type: 'auth0' | 'keycloak' | 'otp' | 'id';
   fields: {
     domain?: string;        // Auth0 domain
     clientId: string;       // Client ID
@@ -394,134 +463,45 @@ interface UserSession {
 }
 ```
 
-### Form Schema
-```typescript
-interface FormData {
-  id: string;
-  appId: string;
-  userId: string;
-  formConfig: any;
-  submissions: any[];
-  createdAt: Date;
-}
-```
-
-## Components
-
-### Core Components
-
-#### AuthStore
-Pinia store for authentication state management:
-```typescript
-import { defineStore } from 'pinia';
-import { AuthManager } from '@idpass/data-collect-core';
-
-export const useAuthStore = defineStore('auth', {
-  state: () => ({
-    user: null as any,
-    isAuthenticated: false,
-    authManager: null as AuthManager | null
-  }),
-  
-  actions: {
-    async login(credentials: { email: string; password: string }) {
-      if (!this.authManager) return;
-      
-      await this.authManager.login({
-        username: credentials.email,
-        password: credentials.password
-      });
-      
-      this.isAuthenticated = await this.authManager.isAuthenticated();
-      this.user = await this.authManager.getCurrentUser();
-    },
-    
-    async loginWithProvider(provider: string) {
-      // Handle OAuth provider login
-      if (!this.authManager) return;
-      
-      // Implement OAuth flow for mobile
-      await this.authManager.handleCallback(provider);
-      this.isAuthenticated = await this.authManager.isAuthenticated();
-      this.user = await this.authManager.getCurrentUser();
-    },
-    
-    async logout() {
-      if (!this.authManager) return;
-      
-      await this.authManager.logout();
-      this.isAuthenticated = false;
-      this.user = null;
-    }
-  }
-});
-```
-
-#### QrScanner
-QR code scanning for app configuration loading:
-```vue
-<template>
-  <QrScanner 
-    @scan="handleScan"
-    @error="handleError"
-  />
-</template>
-```
-
-#### SaveDialog
-Modal dialog for saving data:
-```vue
-<template>
-  <Dialog
-    :open="open"
-    :title="title"
-    @update:open="$emit('update:open', $event)"
-    :onSave="onSave"
-  >
-    <template #form-content>
-      <!-- Dialog content -->
-    </template>
-  </Dialog>
-</template>
-```
-
-### Form Components
-- FormIO integration components
-- Dynamic form rendering
-- Validation components
-- File upload components
-
-
 ## Mobile Features
 
 ### Capacitor Plugins
-- **Camera**: QR code scanning
+- **`@capacitor-mlkit/barcode-scanning`**: QR/barcode scanning for app config loading
+- **`@aparajita/capacitor-biometric-auth`**: Biometric authentication for app lock
+- **`@aparajita/capacitor-secure-storage`**: Secure storage for lock state and sensitive data
+- **Camera**: Fallback camera access
 - **Haptics**: Tactile feedback
 - **Keyboard**: Mobile keyboard handling
 - **Status Bar**: Status bar customization
 
 ### Platform-Specific Features
-- **Android**: Native Android integration
+- **Android**: Native Android integration, APK build scripts available (`build-apk.sh`)
+- **iOS**: Native iOS integration via Xcode
 
 ## Testing
 
 ### Unit Tests
 ```bash
-npm run test:unit
+pnpm run test
 ```
 
 ### Component Testing
 ```bash
-npm run test:component
+pnpm run test:ui
+```
+
+### End-to-End Tests
+```bash
+pnpm run test:e2e
 ```
 
 ### Mobile Testing
 ```bash
 # iOS Simulator
-npm run build:ios
+pnpm run build:ios
 
 # Android Emulator
-npm run build:android
+pnpm run build:android
 ```
 
 ## Deployment
@@ -532,17 +512,23 @@ npm run build:android
 
 ### Web Deployment
 ```bash
-npm run build
-npm run preview
+pnpm run build
+pnpm run preview
 ```
 
 ### Capacitor Build
 ```bash
 # iOS
-npm run build:ios
+pnpm run build:ios
 
 # Android
-npm run build:android
+pnpm run build:android
+
+# Android APK (debug)
+pnpm run build:android:apk
+
+# Android APK (release)
+pnpm run build:android:apk:release
 ```
 
 ## Browser Support
@@ -554,12 +540,13 @@ npm run build:android
 
 ## Mobile Platform Support
 - **Android**: API level 21+
+- **iOS**: iOS 13+
 
 ## Performance
 
 - Lazy loading of app configurations
 - Optimized form rendering
-- Efficient local database operations
+- Efficient local database operations via IndexedDB
 - Background sync capabilities
 - Image optimization for mobile
 
@@ -567,4 +554,4 @@ npm run build:android
 
 ## Next Steps
 
-- 🔧 [Configuration Guide](../../../configuration/) - App configuration management
+- [Configuration Guide](../../../configuration/) - App configuration management

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Error — Mock Registry{% endblock %}
+{% block content %}
+<div style="max-width: 560px; margin: 4rem auto;">
+  <p class="eyebrow">Error · {{ status_code }}</p>
+  <h2 style="margin-bottom: 0.5rem;">Something went sideways.</h2>
+  <p class="lede" style="margin-bottom: 1.75rem;">{{ message }}</p>
+  <p class="uuid" style="margin-bottom: 2rem;"><strong>Code</strong> <code>{{ code }}</code></p>
+  <div class="cluster">
+    <a href="/" class="btn primary">Back to home</a>
+    <a href="javascript:history.back()" class="btn ghost">Go back</a>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% for g in groups %}
+<tr>
+  <td class="name-col"><a href="/ui/groups/{{ g.uuid }}">{{ g.name }}</a></td>
+  <td><span class="chip">{{ g.group_type }}</span></td>
+  <td>{{ g.memberships | length }}</td>
+  <td><code>{{ g.uuid[:8] }}</code></td>
+  <td><span class="uuid">{{ g.updated_at.strftime("%Y-%m-%d %H:%M") }}</span></td>
+  <td class="row-actions"><a href="/ui/groups/{{ g.uuid }}" class="btn ghost tiny">View</a></td>
+</tr>
+{% else %}
+<tr><td colspan="6" class="empty">No groups match that filter yet. <a href="/ui/groups/new">Create one</a>.</td></tr>
+{% endfor %}

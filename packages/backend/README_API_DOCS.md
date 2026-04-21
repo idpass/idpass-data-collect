@@ -23,13 +23,13 @@ This provides an interactive Swagger UI where you can:
 
 ```bash
 cd packages/backend
-npm install
+pnpm install
 ```
 
 ### 3. Start Development Server
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 The server will start on port 3000 with API documentation available at `/api-docs`.
@@ -44,7 +44,7 @@ The server will start on port 3000 with API documentation available at `/api-doc
 ### Validate OpenAPI Specification
 
 ```bash
-npm run validate-api
+pnpm validate-api
 ```
 
 This checks the OpenAPI spec for syntax errors and validates against the OpenAPI 3.0 schema.
@@ -119,14 +119,14 @@ When adding new API endpoints:
 
 1. **Update the code** - Add routes, handlers, types
 2. **Update OpenAPI spec** - Document new endpoints in `openapi.yaml`
-3. **Validate changes** - Run `npm run validate-api`
+3. **Validate changes** - Run `pnpm validate-api`
 4. **Test in Swagger UI** - Verify documentation accuracy
 5. **Add tests** - Include API contract tests
 
 ### Maintenance Checklist
 
 - [ ] OpenAPI spec updated for any API changes
-- [ ] Validation passes (`npm run validate-api`)
+- [ ] Validation passes (`pnpm validate-api`)
 - [ ] Swagger UI displays correctly
 - [ ] Tests include API contract validation
 - [ ] CI pipeline passes

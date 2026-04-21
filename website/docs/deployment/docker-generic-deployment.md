@@ -29,56 +29,59 @@ cd idpass-data-collect
 
 ## Step 2: Configure Environment Variables
 
-Navigate to the `docker` directory and copy the example environment file:
+Copy the example environment file into place:
 
 ```bash
-cd docker
+cp docker/.env.example docker/.env
 ```
 
-```bash
-cp .env.example .env
-```
+Edit `docker/.env` to change the default admin credentials, JWT secret, and CORS origins. The defaults are sufficient to boot the stack locally but **must** be changed before any non-local deployment.
 
-```bash
-cp .env.example .env
-```
-
-You may edit the `.env` and `postgresql.env` files to configure your database settings and any other environment variables.
+Key requirements:
+- `ADMIN_PASSWORD` must be ≥8 characters and include uppercase, lowercase, digit, and special character
+- `JWT_SECRET` must be ≥32 characters
 
 ## Step 3: Build and Run Docker Containers
 
-From the `docker` directory, run Docker Compose to build and start the services using the development compose file:
+From the repository root, bring up the development compose stack:
 
 ```bash
-docker compose -f docker-compose.dev.yaml up --build -d
+docker compose -f docker/docker-compose.dev.yaml up --build -d
 ```
 
 This command will:
 
 *   `--build`: Build the Docker images (if not already built).
 *   `-d`: Run the containers in detached mode (in the background).
-*   `-f docker-compose.dev.yaml`: Use the development Docker Compose file.
 
 ## Step 4: Verify Deployment
 
 After the containers are up and running, you can verify their status:
 
 ```bash
-docker compose -f docker-compose.dev.yaml ps
+docker compose -f docker/docker-compose.dev.yaml ps
 ```
 
-You should see a list of running services. The application should be accessible at `http://localhost:8080` (or your configured port).
+Expected services and host URLs:
+
+| Service | URL |
+|---------|-----|
+| Sync server | http://localhost:3000 (health at `/health`) |
+| Admin UI | http://localhost:5173 |
+| Web app | http://localhost:5174 |
+| Mobile app (browser) | http://localhost:8081 |
+| PostgreSQL | localhost:5432 |
 
 ## Step 5: Stop and Remove Containers
 
-To stop and remove the running Docker containers and networks, use:
+To stop the stack:
 
 ```bash
-docker compose -f docker-compose.dev.yaml down
+docker compose -f docker/docker-compose.dev.yaml down
 ```
 
-To remove all volumes associated with the containers (useful for a clean slate):
+To remove the PostgreSQL volume as well (clean slate):
 
 ```bash
-docker compose -f docker-compose.dev.yaml down --volumes
+docker compose -f docker/docker-compose.dev.yaml down --volumes
 ```

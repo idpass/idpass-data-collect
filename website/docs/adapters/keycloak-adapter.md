@@ -112,21 +112,21 @@ When using the IDPass DataCollect admin interface to configure the Keycloak adap
 
 ## Current Capabilities
 
-✅ **OIDC Authentication**: Full OpenID Connect authentication flow support
+**OIDC Authentication**: Full OpenID Connect authentication flow support
 
 - Authorization code flow with PKCE
 - Token validation via Keycloak's userinfo endpoint
 - User profile retrieval with Keycloak-specific claims
 - Role-based access control with Keycloak roles
 
-✅ **Session Management**: Comprehensive session handling
+**Session Management**: Comprehensive session handling
 
 - Secure token storage via storage adapters
 - Session restoration on application restart
 - Proper logout with token cleanup
 - Integration with `SingleAuthStorage` interface
 
-✅ **Security Features**: Enterprise-grade security implementation
+**Security Features**: Enterprise-grade security implementation
 
 - **Dual Validation Mode**: Different token validation for frontend vs backend environments
 - **Role Validation**: Automatic validation of user roles from Keycloak token claims
@@ -134,7 +134,7 @@ When using the IDPass DataCollect admin interface to configure the Keycloak adap
 - **Userinfo Endpoint Validation**: Server-side token validation using Keycloak's `/userinfo` endpoint
 - **Client-side Token Matching**: Frontend validation by comparing stored tokens
 
-✅ **Advanced Configuration**: Flexible configuration handling
+**Advanced Configuration**: Flexible configuration handling
 
 - **Automatic Field Transformation**: Non-standard fields automatically moved to `extraQueryParams`
 - **Field Replacement**: Automatic generation of `extraQueryParams` from non-standard fields
@@ -171,7 +171,7 @@ The adapter implements environment-aware token validation:
 ### Basic Setup
 
 ```typescript
-import { KeycloakAuthAdapter, IndexedDbAuthStorageAdapter } from "@idpass/datacollect";
+import { KeycloakAuthAdapter, IndexedDbAuthStorageAdapter } from "@idpass/data-collect-core";
 
 // Create storage adapter
 const storage = new IndexedDbAuthStorageAdapter();
@@ -362,4 +362,4 @@ For issues specific to the Keycloak adapter, please check:
 
 - Keycloak documentation: https://www.keycloak.org/documentation
 - Keycloak community: https://www.keycloak.org/community
-- [IDPass DataCollect GitHub issues for adapter-specific problems](https://github.com/idpass/idpass-data-collect/issues) 
+- [IDPass DataCollect GitHub issues for adapter-specific problems](https://github.com/idpass/idpass-data-collect/issues)

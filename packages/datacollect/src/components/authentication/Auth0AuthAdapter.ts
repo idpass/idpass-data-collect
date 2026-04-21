@@ -20,6 +20,9 @@
 import { AuthAdapter, AuthConfig, OIDCConfig, SingleAuthStorage } from "../../interfaces/types";
 import OIDCClient from "./OIDCClient";
 import axios from "axios";
+import { createLogger } from "../../utils/logger";
+
+const log = createLogger("Auth0AuthAdapter");
 
 export class Auth0AuthAdapter implements AuthAdapter {
   private oidc: OIDCClient;
@@ -83,10 +86,10 @@ export class Auth0AuthAdapter implements AuthAdapter {
     try {
      
       // Use userinfo validation since crypto module is not available in browsers
-      console.log("Using userinfo validation for Auth0 token");
+      log.debug("Using userinfo validation for Auth0 token");
       return this.checkTokenActive(token);
     } catch (error) {
-      console.error("Auth0 token validation error:", error);
+      log.error({ err: error }, "Auth0 token validation error");
       return false;
     }
   }
@@ -129,7 +132,7 @@ export class Auth0AuthAdapter implements AuthAdapter {
      
       return false;
     } catch (error) {
-      console.error("Error checking token activity:", error);
+      log.error({ err: error }, "Error checking token activity");
       // If userinfo call fails, token might be revoked or invalid
       return false;
     }

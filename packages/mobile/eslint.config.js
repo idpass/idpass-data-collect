@@ -32,12 +32,22 @@ const gitignorePath = path.resolve(__dirname, '.gitignore')
 /** @type {import('eslint').Linter.Config[]} */
 export default [
   { files: ['**/*.{js,mjs,cjs,ts,vue}'] },
-  { languageOptions: { globals: globals.browser } },
+  { languageOptions: { globals: { ...globals.browser, __APP_VERSION__: 'readonly', __GIT_COMMIT_HASH__: 'readonly', __GIT_COMMIT_TITLE__: 'readonly' } } },
   pluginJs.configs.recommended,
   ...tseslint.configs.recommended,
   ...pluginVue.configs['flat/essential'],
   { files: ['**/*.vue'], languageOptions: { parserOptions: { parser: tseslint.parser } } },
   includeIgnoreFile(gitignorePath),
+  {
+    ignores: [
+      'dist/**',
+      'android/**',
+      'ios/**',
+      'node_modules/**',
+      '*.config.js',
+      '*.config.ts',
+    ],
+  },
   {
     rules: {
       '@typescript-eslint/no-unused-vars': [

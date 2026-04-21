@@ -75,10 +75,20 @@ const addItem = () => {
     <div v-for="(item, index) in fieldArray" :key="index">
       <v-row>
         <v-col cols="5">
-          <v-text-field v-model="item.name" label="Name" required></v-text-field>
+          <v-text-field
+            v-model="item.name"
+            label="Name"
+            required
+            v-trim
+          ></v-text-field>
         </v-col>
         <v-col cols="5">
-          <v-text-field v-model="item.value" label="Value" required></v-text-field>
+          <v-text-field
+            v-model="item.value"
+            label="Value"
+            required
+            v-trim
+          ></v-text-field>
         </v-col>
         <v-col cols="2" class="mt-2">
           <v-btn

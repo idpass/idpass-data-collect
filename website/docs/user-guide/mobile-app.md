@@ -64,11 +64,55 @@ You can view the data you have collected for each app.
 2.  You will see a list of records (entities) that have been created.
 3.  Tap on any record to view its details.
 
+### Entity Detail View
+
+The entity detail view shows:
+- **Entity Information**: All form data for the selected record
+- **Dependent Forms**: If the entity has related forms (e.g., household members), you can navigate to them
+- **Event History**: A complete history of changes made to the entity, including:
+  - Event type (create, update, etc.)
+  - Timestamp of each change
+  - Sync status (Local, Synced, External)
+  - Full event data
+- **Sync Status Indicators**: Visual indicators show whether data is:
+  - **Local**: Stored only on your device
+  - **Synced**: Synchronized with the server
+  - **External**: Synchronized with external systems (e.g., OpenSPP)
+
+### Dynamic Entity Views
+
+The app supports dynamic entity views that adapt to your configuration:
+- **Multi-Form Navigation**: Navigate between related forms (e.g., from household to members)
+- **Reverse Data Transformation**: When viewing data synced from external systems, data is automatically transformed back to the form format
+- **Offline Indicators**: Network status indicators show when you're offline and data will sync automatically when connection is restored
+
 ## 5. Synchronization and Authentication
 
 ### Automatic Sync
 
 The mobile app is designed to be offline-first. All data you collect is stored locally on your device. When your device has an internet connection, the app will automatically and securely synchronize your data with the central server in the background. You do not need to manually initiate the sync process.
+
+**Sync Process**:
+1. **Local Storage**: All data is stored locally using IndexedDB for offline access
+2. **Background Sync**: When online, the app automatically syncs in the background
+3. **Conflict Resolution**: The app handles conflicts automatically using version numbers
+4. **External Sync**: If configured, data is also synchronized with external systems (e.g., OpenSPP)
+
+**Network Status**:
+- The app displays network status indicators
+- When offline, you can continue collecting data
+- Data will sync automatically when connection is restored
+- Sync status is shown for each entity (Local, Synced, External)
+
+### Data Transformation
+
+When syncing with external systems (like OpenSPP), the app automatically handles data format conversion:
+- **Date Formats**: Converts dates between form format and external system format
+- **ID Values**: Handles ID mappings for relation fields
+- **Multi-Select**: Converts between arrays and delimited strings
+- **Boolean Values**: Normalizes checkbox values
+
+This transformation happens transparently - you see data in the form format, while the external system receives it in its required format.
 
 ### Authentication
 

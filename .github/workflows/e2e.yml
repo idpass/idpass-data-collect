@@ -1,0 +1,165 @@
+# End-to-end test workflow
+# Runs Playwright-based e2e tests against a live backend + frontend stack.
+# Separate from CI so unit tests remain fast; e2e tests run in parallel.
+
+name: E2E Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HUSKY: 0
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      # Backend configuration
+      VITE_API_URL: http://localhost:3000
+      CORS_ORIGINS: "http://localhost:5173,http://localhost:5174"
+      POSTGRES: postgresql://test:test@localhost:5432/test
+      POSTGRES_TEST: postgresql://test:test@localhost:5432/test
+      JWT_SECRET: e2e_test_secret_that_is_at_least_32_chars_long!
+      ADMIN_EMAIL: admin@datacollect.lan
+      ADMIN_PASSWORD: "Correct horse battery staple 42!"
+      SYNC_SERVER_PORT: 3000
+
+    services:
+      # PostgreSQL 15 service container (mirrors ci.yml)
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      # --- Setup ---
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: HUSKY=0 pnpm run ci:install
+
+      # --- Build ---
+      - name: Build all packages
+        run: pnpm run build
+
+      # --- Backend startup ---
+      - name: Start backend in background
+        run: |
+          node packages/backend/dist/index.js &
+          echo "Backend PID: $!"
+        shell: bash
+
+      - name: Wait for backend to be ready
+        run: |
+          echo "Waiting for backend on port 3000..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/health > /dev/null 2>&1 || curl -sf http://localhost:3000/ > /dev/null 2>&1; then
+              echo "Backend is ready"
+              exit 0
+            fi
+            echo "  attempt $i/30..."
+            sleep 2
+          done
+          echo "Backend failed to start within 60s"
+          exit 1
+        shell: bash
+
+      # --- Seed demo data ---
+      - name: Seed demo data
+        run: pnpm run seed
+
+      # --- Install Playwright browsers ---
+      - name: Install Playwright browsers
+        run: pnpm --filter @idpass/data-collect-admin exec playwright install --with-deps chromium
+
+      # --- Backend e2e tests ---
+      - name: Run backend e2e tests
+        run: pnpm run test:e2e:backend
+
+      # --- Admin e2e tests ---
+      - name: Start admin dev server in background
+        run: |
+          pnpm run dev:admin &
+          echo "Waiting for admin on port 5173..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:5173 > /dev/null 2>&1; then
+              echo "Admin dev server is ready"
+              exit 0
+            fi
+            echo "  attempt $i/30..."
+            sleep 2
+          done
+          echo "Admin dev server failed to start within 60s"
+          exit 1
+        shell: bash
+
+      - name: Run admin e2e tests
+        run: pnpm run test:e2e:admin
+
+      # --- Web e2e tests ---
+      - name: Start web dev server in background
+        run: |
+          pnpm run dev:web &
+          echo "Waiting for web on port 5174..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:5174 > /dev/null 2>&1; then
+              echo "Web dev server is ready"
+              exit 0
+            fi
+            echo "  attempt $i/30..."
+            sleep 2
+          done
+          echo "Web dev server failed to start within 60s"
+          exit 1
+        shell: bash
+
+      - name: Run web e2e tests
+        run: pnpm --filter @idpass/data-collect-web run test:e2e
+
+      # --- Cross-service integration tests ---
+      - name: Run integration e2e tests
+        run: pnpm run test:e2e:integration
+
+      # --- Upload artifacts on failure ---
+      - name: Upload Playwright reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-reports
+          path: |
+            **/playwright-report/
+            **/test-results/
+          retention-days: 7

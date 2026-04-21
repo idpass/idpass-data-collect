@@ -52,7 +52,9 @@ const FILE_PATTERNS = [
   '!packages/**/tsconfig.json',
   '!packages/**/eslint.config.ts',
   '!packages/**/eslint.config.mjs',
-  '!packages/**/nodemon.json'
+  '!packages/**/nodemon.json',
+  '!packages/**/android/**',
+  '!packages/**/ios/**'
 ];
 
 // Expected license header template (ACN format)

@@ -238,9 +238,170 @@
 						}
 					},
 					"response": []
+				},
+				{
+					"name": "Update Individual (res.partner)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const json = pm.response.json();",
+									"if (!json || json.result !== true) {",
+									"  throw new Error('Individual update failed. Check response for details.');",
+									"}",
+									"pm.test('Individual update succeeded', function () {",
+									"  pm.expect(json.result).to.eql(true);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"{{database}}\",\n      {{uid}},\n      \"{{password}}\",\n      \"res.partner\",\n      \"write\",\n      [\n        [{{individualId}}],\n        {\n          \"name\": \"Updated Demo Individual\",\n          \"given_name\": \"John\",\n          \"family_name\": \"Smith\",\n          \"gender\": 1,\n          \"birthdate\": \"1990-05-15\",\n          \"email\": \"john.smith@example.org\",\n          \"phone\": \"+1234567890\"\n        }\n      ]\n    ],\n    \"kwargs\": {}\n  },\n  \"id\": 8\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/jsonrpc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"jsonrpc"
+							]
+						}
+					},
+					"response": []
 				}
 			],
 			"description": "Create households and individuals in OpenSPP like DataCollect would during a push."
+		},
+		{
+			"name": "Field Metadata",
+			"item": [
+				{
+					"name": "Get All Fields (res.partner)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const json = pm.response.json();",
+									"if (!json || typeof json.result !== 'object' || Array.isArray(json.result)) {",
+									"  throw new Error('Fields get failed or returned unexpected payload.');",
+									"}",
+									"pm.test('Received field metadata', function () {",
+									"  pm.expect(json.result).to.be.an('object');",
+									"  pm.expect(Object.keys(json.result).length).to.be.above(0);",
+									"});",
+									"// Log selection fields with their options",
+									"const selectionFields = Object.keys(json.result).filter(field => ",
+									"  json.result[field].type === 'selection' && json.result[field].selection",
+									");",
+									"if (selectionFields.length > 0) {",
+									"  console.log('Selection fields found:', selectionFields);",
+									"  selectionFields.forEach(field => {",
+									"    console.log(`Field: ${field}, Options:`, json.result[field].selection);",
+									"  });",
+									"}"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"{{database}}\",\n      {{uid}},\n      \"{{password}}\",\n      \"res.partner\",\n      \"fields_get\",\n      []\n    ],\n    \"kwargs\": {}\n  },\n  \"id\": 9\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/jsonrpc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"jsonrpc"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Selection Field Options",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const json = pm.response.json();",
+									"if (!json || typeof json.result !== 'object' || Array.isArray(json.result)) {",
+									"  throw new Error('Fields get failed or returned unexpected payload.');",
+									"}",
+									"pm.test('Received field metadata', function () {",
+									"  pm.expect(json.result).to.be.an('object');",
+									"});",
+									"// Extract selection options from the response",
+									"const genderField = json.result.gender;",
+									"if (genderField && genderField.selection) {",
+									"  console.log('Gender field options:', genderField.selection);",
+									"  pm.test('Gender field has selection options', function () {",
+									"    pm.expect(genderField.selection).to.be.an('array');",
+									"    pm.expect(genderField.selection.length).to.be.above(0);",
+									"  });",
+									"}"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"method\": \"call\",\n  \"params\": {\n    \"service\": \"object\",\n    \"method\": \"execute_kw\",\n    \"args\": [\n      \"{{database}}\",\n      {{uid}},\n      \"{{password}}\",\n      \"res.partner\",\n      \"fields_get\",\n      [\n        [\"gender\", \"marital_status\", \"hh_status\"]\n      ]\n    ],\n    \"kwargs\": {\n      \"attributes\": [\"selection\", \"type\", \"string\", \"required\"]\n    }\n  },\n  \"id\": 10\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/jsonrpc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"jsonrpc"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Retrieve field metadata including dropdown options for Selection fields. Similar to SugarCRM's field metadata API, this allows you to see available options for dropdown/selection fields."
 		},
 		{
 			"name": "Pull Data",

@@ -24,7 +24,7 @@ Used by the pre-commit hook to check only staged files.
 One-time setup script to initialize Husky git hooks.
 
 ```bash
-# Run after npm install
+# Run after pnpm install
 ./scripts/setup-husky.sh
 ```
 
@@ -41,5 +41,5 @@ git commit --no-verify -m "Emergency commit"
 
 To add license headers to all files:
 ```bash
-npm run check-licenses:fix
+pnpm check-licenses:fix
 ```

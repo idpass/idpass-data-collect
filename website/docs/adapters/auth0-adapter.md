@@ -111,28 +111,28 @@ When using the IDPass DataCollect admin interface to configure the Auth0 adapter
 
 ## Current Capabilities
 
-✅ **OIDC Authentication**: Full OpenID Connect authentication flow support
+**OIDC Authentication**: Full OpenID Connect authentication flow support
 
 - Authorization code flow with PKCE
 - Token validation via Auth0's userinfo endpoint
 - User profile retrieval
 - Organization-based access control with validation
 
-✅ **Session Management**: Comprehensive session handling
+**Session Management**: Comprehensive session handling
 
 - Secure token storage via storage adapters
 - Session restoration on application restart
 - Proper logout with token cleanup
 - Integration with `SingleAuthStorage` interface
 
-✅ **Security Features**: Enterprise-grade security implementation
+**Security Features**: Enterprise-grade security implementation
 
 - **Dual Validation Mode**: Different token validation for frontend vs backend environments
 - **Organization Validation**: Automatic validation of user's organization membership via `org_id` claim
 - **Userinfo Endpoint Validation**: Server-side token validation using Auth0's `/userinfo` endpoint
 - **Client-side Token Matching**: Frontend validation by comparing stored tokens
 
-✅ **Advanced Configuration**: Flexible configuration handling
+**Advanced Configuration**: Flexible configuration handling
 
 - **Automatic Field Transformation**: Non-standard fields automatically moved to `extraQueryParams`
 - **Field Replacement**: Automatic generation of `extraQueryParams` from non-standard fields
@@ -169,7 +169,7 @@ The adapter implements environment-aware token validation:
 ### Basic Setup
 
 ```typescript
-import { Auth0AuthAdapter, IndexedDbAuthStorageAdapter } from "@idpass/datacollect";
+import { Auth0AuthAdapter, IndexedDbAuthStorageAdapter } from "@idpass/data-collect-core";
 
 // Create storage adapter
 const storage = new IndexedDbAuthStorageAdapter();

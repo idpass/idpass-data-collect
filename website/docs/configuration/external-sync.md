@@ -52,7 +52,7 @@ Here's a complete example of an external sync configuration with detailed field 
 #### `type` (Required)
 - **Purpose**: Specifies which adapter to use for synchronization
 - **Values**: 
-  - `"mock-sync-server"` - For testing and development
+  - `"mock"` - For testing and development
   - `"openfn-adapter"` - For OpenFn workflow integration
   - Custom adapter types as defined in your system
 - **Example**: `"openfn-adapter"`
@@ -76,10 +76,21 @@ Here's a complete example of an external sync configuration with detailed field 
   - `batchSize`: Number of records to process in each batch (default: 100)
   - `timeout`: Request timeout in milliseconds (default: 30000)
 
-  **For Mock Sync Server:**
-  - `batchSize`: Number of events to process per batch
-  - `retryAttempts`: Number of retry attempts for failed requests
-  - `delayBetweenBatches`: Delay in milliseconds between batch processing
+  **For OpenSPP Adapter:**
+  - `database`: OpenSPP/Odoo database name (required)
+  - `username`: Username for authentication (required)
+  - `password`: Password for authentication (required)
+  - `batchSize`: Number of entities per batch (default: 50)
+  - `batchDelayMs`: Delay between batches in milliseconds (default: 1000)
+  - `maxRetries`: Maximum retry attempts for failed entities (default: 2)
+  - `fieldMappings`: JSON array of field mappings with transformers (see Field Mapping section)
+
+  **For Mock Registry Server:**
+  - `clientId`: OAuth2 client ID registered on the mock registry (required)
+  - `clientSecret`: OAuth2 client secret (required)
+  - `identifierScheme`: Identifier scheme URI (default: `urn:mock:vocab:id-type`)
+  - `identifierType`: Identifier type for DC-pushed entities (default: `system_id`)
+  - `timeout`: HTTP request timeout in milliseconds (optional)
 
   **For Custom Adapters:**
   - Any adapter-specific configuration parameters
@@ -89,17 +100,28 @@ Here's a complete example of an external sync configuration with detailed field 
 
 ### Configuration Examples by Adapter Type
 
-#### Mock Sync Server Configuration
+#### Mock Registry Server Configuration
 ```json
 {
-  "type": "mock-sync-server",
-  "url": "http://localhost:3000/mock-sync",
-  "extraFields": [
-    { "name": "batchSize", "value": "25" },
-    { "name": "retryAttempts", "value": "3" }
-  ]
+  "type": "mock",
+  "url": "http://localhost:9999",
+  "adapterConfig": {
+    "clientId": "mock-client",
+    "clientSecret": "mock-secret",
+    "identifierScheme": "urn:mock:vocab:id-type",
+    "identifierType": "system_id"
+  }
 }
 ```
+
+Start the reference server from the monorepo:
+
+```bash
+docker compose -f docker/docker-compose.dev.yaml --profile mock up -d
+pnpm seed   # provisions a 'demo-mock-registry' config wired to http://localhost:9999
+```
+
+The `pnpm seed` script auto-seeds 2 households and 5 persons into the mock server (via `python -m mock_server seed`) and uploads a DC app config with `externalSync.type = "mock"`, ready for the admin UI to trigger.
 
 #### OpenFn Adapter Configuration
 ```json
@@ -137,14 +159,14 @@ Here's a complete example of an external sync configuration with detailed field 
 The External Sync system uses the **Strategy pattern** to handle different external system integrations:
 
 - **Context**: `ExternalSyncManager` acts as the context that manages the synchronization strategy
-- **Strategy**: Each adapter (e.g., `MockSyncServerAdapter`, `OpenFnSyncAdapter`) implements the `ExternalSyncAdapter` interface
+- **Strategy**: Each adapter (e.g., `MockRegistrySyncAdapter`, `OpenFnSyncAdapter`) implements the `ExternalSyncAdapter` interface
 - **Registry**: The `adaptersMapping` object serves as a registry of available strategies
 
 ### Key Components
 
 ```typescript
 const adaptersMapping = {
-  "mock-sync-server": MockSyncServerAdapter,
+  "mock": MockRegistrySyncAdapter,
   "openfn-adapter": OpenFnSyncAdapter,
 };
 ```
@@ -170,25 +192,32 @@ The Admin interface provides a user-friendly way to configure external sync sett
 
 ## Available Adapters
 
-### 1. Mock Sync Server Adapter
+### 1. Mock Registry Server Adapter
 
-**Type**: `mock-sync-server`
+**Type**: `mock`
 
-A testing adapter that simulates external system synchronization:
+OAuth2 HTTP client for the reference [mock registry server](https://github.com/idpass/idpass-datacollect/tree/main/examples/mock-server) (Python + Litestar + SQLite). Used as the canonical reference V2 adapter and for end-to-end sync testing without OpenSPP.
 
-- **Push**: Sends events to a mock server endpoint
-- **Pull**: Retrieves data from the mock server
-- **Batch Processing**: Processes events in configurable batches (default: 100)
-- **Timestamp Tracking**: Maintains sync timestamps for incremental sync
+- **Pull**: `GET /v1/persons` and `GET /v1/groups` with `updated_since` watermark
+- **Push**: `POST`/`PATCH` of individuals and groups, `system_id` identifier for DC-originated entities
+- **Auth**: OAuth2 client credentials (JWT, 1-hour TTL, auto-refresh)
+- **Conflict handling**: maps HTTP 412 Precondition Failed to `ConflictError`
 
 **Configuration**:
 ```json
 {
-  "type": "mock-sync-server",
-  "url": "http://localhost:3000/mock-sync",
-  "extraFields": []
+  "type": "mock",
+  "url": "http://localhost:9999",
+  "adapterConfig": {
+    "clientId": "mock-client",
+    "clientSecret": "mock-secret",
+    "identifierScheme": "urn:mock:vocab:id-type",
+    "identifierType": "system_id"
+  }
 }
 ```
+
+See also: [Building a V2 Adapter](../adapters/building-an-adapter.md) — uses this adapter as the worked example.
 
 ### 2. OpenFn Adapter
 
@@ -211,6 +240,38 @@ Integration with OpenFn workflow automation platform:
 }
 ```
 
+### 3. OpenSPP Adapter
+
+**Type**: `openspp-adapter`
+
+Integration with OpenSPP social protection platform:
+
+- **Push**: Sends entities to OpenSPP with field mapping and transformation
+- **Pull**: Retrieves updates from OpenSPP and applies them locally
+- **Authentication**: Uses basic authentication (username/password)
+- **Field Mapping**: Visual interface for mapping form fields to OpenSPP fields
+- **Data Transformers**: Automatic format conversion (dates, IDs, multi-select, boolean)
+- **Batch Processing**: Configurable batch sizes and delays
+
+**Configuration**:
+```json
+{
+  "type": "openspp-adapter",
+  "url": "https://openspp.example.com",
+  "auth": "basic",
+  "extraFields": [
+    { "name": "database", "value": "openspp" },
+    { "name": "username", "value": "admin" },
+    { "name": "password", "value": "password" },
+    { "name": "batchSize", "value": "50" },
+    { "name": "batchDelayMs", "value": "1000" },
+    { "name": "maxRetries", "value": "2" }
+  ]
+}
+```
+
+For detailed OpenSPP adapter documentation, see the [OpenSPP Adapter Guide](../adapters/openspp-adapter.md).
+
 ## Usage Examples
 
 ### Basic Initialization
@@ -222,7 +283,7 @@ import { EventApplierService } from './services/EventApplierService';
 
 // Configuration
 const config: ExternalSyncConfig = {
-  type: 'mock-sync-server',
+  type: 'mock',
   url: 'http://localhost:3000/sync',
   extraFields: []
 };
@@ -356,6 +417,53 @@ The system maintains separate timestamps for:
 
 This enables incremental synchronization and prevents data loss.
 
+## Field Mapping and Transformers
+
+For adapters that support field mapping (like OpenSPP), you can configure field mappings with data transformers to handle format conversion between form data and external system formats.
+
+### Field Mapping Structure
+
+Field mappings define how form fields map to external system fields, with optional transformers for data conversion:
+
+```json
+{
+  "formField": "first_name",
+  "opensppField": "firstname",
+  "transformer": {
+    "type": "text",
+    "options": {}
+  }
+}
+```
+
+### Transformer Types
+
+The system supports several transformer types:
+
+- **text**: Pass-through or string conversion (default)
+- **date**: Date format conversion with configurable input/output formats
+- **id**: ID value handling for relation fields
+- **multiselect**: Array-to-delimited-string conversion
+- **boolean**: Boolean normalization with configurable truthy/falsy values
+
+For detailed transformer documentation, see the [OpenSPP Adapter Guide](../adapters/openspp-adapter.md#transformer-types).
+
+### Configuring Field Mappings
+
+Field mappings can be configured:
+
+1. **Via Admin UI**: Use the visual field mapping dialog in the configuration editor
+2. **Via JSON Config**: Include mappings in the `fieldMappings` extraField as a JSON string
+
+Example field mappings configuration:
+
+```json
+{
+  "name": "fieldMappings",
+  "value": "[{\"formField\":\"birth_date\",\"opensppField\":\"birthdate\",\"transformer\":{\"type\":\"date\",\"options\":{\"inputFormat\":\"auto\",\"outputFormat\":\"YYYY-MM-DD\"}}},{\"formField\":\"gender\",\"opensppField\":\"gender_id\",\"transformer\":{\"type\":\"id\"}}]"
+}
+```
+
 ## Extending the System
 
 ### Adding New Adapters
@@ -380,8 +488,9 @@ class CustomSyncAdapter implements ExternalSyncAdapter {
 2. **Register in Adapters Mapping**:
 ```typescript
 const adaptersMapping = {
-  "mock-sync-server": MockSyncServerAdapter,
+  "mock": MockRegistrySyncAdapter,
   "openfn-adapter": OpenFnSyncAdapter,
+  "openspp-adapter": OpenSppOdooSyncAdapter,
   "custom-adapter": CustomSyncAdapter, // Add new adapter
 };
 ```
@@ -391,8 +500,9 @@ const adaptersMapping = {
 <v-select
   v-model="form.externalSync.type"
   :items="[
-    { title: 'Mock Sync Server', value: 'mock-sync-server' },
+    { title: 'Mock Registry Server', value: 'mock' },
     { title: 'OpenFn', value: 'openfn-adapter' },
+    { title: 'OpenSPP', value: 'openspp-adapter' },
     { title: 'Custom System', value: 'custom-adapter' }, // Add new option
   ]"
   label="Type"
@@ -436,10 +546,13 @@ interface CustomSyncConfig extends ExternalSyncConfig {
 ## Related Components
 
 - **ConfigCreateView.vue**: Admin UI for configuring external sync
-- **MockSyncServerAdapter**: Testing adapter for development
+- **FieldMappingDialog.vue**: Visual interface for field mapping configuration
+- **MockRegistrySyncAdapter**: V2 OAuth2 HTTP client for the reference mock registry (examples/mock-server)
 - **OpenFnSyncAdapter**: OpenFn platform integration
+- **OpenSppOdooSyncAdapter**: OpenSPP platform integration with field mapping
 - **EventStore**: Event storage and timestamp management
 - **EventApplierService**: Event application to entities
+- **FieldTransformers**: Data transformation utilities (text, date, id, multiselect, boolean)
 
 ## Troubleshooting
 

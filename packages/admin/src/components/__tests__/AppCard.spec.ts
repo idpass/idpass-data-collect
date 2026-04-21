@@ -17,7 +17,7 @@ router.push = mockPush
 vi.mock('@/api', () => ({
   getAppConfigJsonUrl: vi.fn((artifactId) => `http://example.com/config/${artifactId}`),
   getAppQrCodeUrl: vi.fn((artifactId) => `http://example.com/qr/${artifactId}`),
-  deleteApp: vi.fn(),
+  archiveApp: vi.fn(),
   externalSync: vi.fn(),
 }))
 

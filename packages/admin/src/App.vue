@@ -11,7 +11,7 @@ const snackBarStore = useSnackBarStore()
   <v-app>
     <v-app-bar v-if="authStore.isAuthenticated" color="primary">
       <v-container class="d-flex align-center">
-        <v-app-bar-title>Admin</v-app-bar-title>
+        <v-app-bar-title style="cursor: pointer" @click="$router.push('/')">ID PASS DataCollect Admin</v-app-bar-title>
         <v-spacer></v-spacer>
         <v-btn to="/" variant="text" class="mx-2">
           <v-icon start icon="mdi-home"></v-icon>
@@ -20,10 +20,6 @@ const snackBarStore = useSnackBarStore()
         <v-btn to="/users" variant="text" class="mx-2">
           <v-icon start icon="mdi-account-group"></v-icon>
           Users
-        </v-btn>
-        <v-btn to="/create" variant="text" class="mx-2">
-          <v-icon start icon="mdi-plus"></v-icon>
-          Create Config
         </v-btn>
         <v-menu>
           <template v-slot:activator="{ props }">
@@ -42,19 +38,30 @@ const snackBarStore = useSnackBarStore()
     </v-app-bar>
 
     <v-main>
-      <v-container>
-        <RouterView />
-      </v-container>
+      <RouterView />
     </v-main>
   </v-app>
 
   <!-- global snackbar -->
   <v-snackbar
     v-model="snackBarStore.snackbar"
-    :timeout="3000"
+    :timeout="snackBarStore.snackbarColor === 'success' ? 5000 : 3000"
     :color="snackBarStore.snackbarColor"
+    location="top"
+    :elevation="24"
     @update:model-value="snackBarStore.hideSnackbar"
   >
+    <template v-if="snackBarStore.snackbarColor === 'success'">
+      <v-icon start icon="mdi-check-circle" />
+    </template>
+    <template
+      v-else-if="snackBarStore.snackbarColor === 'red' || snackBarStore.snackbarColor === 'error'"
+    >
+      <v-icon start icon="mdi-alert-circle" />
+    </template>
+    <template v-else-if="snackBarStore.snackbarColor === 'warning'">
+      <v-icon start icon="mdi-alert" />
+    </template>
     {{ snackBarStore.snackbarText }}
   </v-snackbar>
 </template>

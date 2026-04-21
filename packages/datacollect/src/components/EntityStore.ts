@@ -228,7 +228,7 @@ export class EntityStoreImpl implements EntityStore {
    * await entityStore.saveEntity(newEntity, modifiedEntity); // Keep original initial state
    * ```
    */
-  async saveEntity(initial: EntityDoc, modified: EntityDoc): Promise<void> {
+  async saveEntity(initial: EntityDoc | null, modified: EntityDoc): Promise<void> {
     await this.entityStorageAdapter.saveEntity({ guid: modified.guid, initial, modified });
   }
 
@@ -273,8 +273,7 @@ export class EntityStoreImpl implements EntityStore {
    * ```
    */
   async getModifiedEntitiesSince(timestamp: string): Promise<EntityPair[]> {
-    const allEntities = await this.entityStorageAdapter.getAllEntities();
-    return allEntities.filter(({ modified }) => modified.lastUpdated > timestamp);
+    return this.entityStorageAdapter.getModifiedEntitiesSince(timestamp);
   }
 
   /**

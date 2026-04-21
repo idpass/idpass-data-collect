@@ -7,37 +7,64 @@ services:
     env_file: ./.env
     volumes:
       - postgres-data-dev:/var/lib/postgresql/data
-      - ./init-reset-dbs.sh:/docker-entrypoint-initdb.d/init-reset-dbs.sh
+      - ./init-reset-dbs.sh:/docker-entrypoint-initdb.d/init-reset-dbs.sh:z
     ports:
       - "5432:5432"
     networks:
       - datacollect-network-dev
     command: ["postgres"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-admin} -d $${POSTGRES_DB:-datacollect}"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
 
-  # pgAdmin for database management (optional)
-  pgadmin:
-    image: dpage/pgadmin4:9
-    env_file: ./.env
-    ports:
-      - "5050:80"
-    depends_on:
-      - postgres
-    networks:
-      - datacollect-network-dev
+  # # pgAdmin for database management (optional)
+  # pgadmin:
+  #   image: dpage/pgadmin4:9
+  #   env_file: ./.env
+  #   ports:
+  #     - "5050:80"
+  #   depends_on:
+  #     - postgres
+  #   networks:
+  #     - datacollect-network-dev
 
   # DataCollect Sync Server - Development mode
   sync-server:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/Dockerfile.dev
       target: backend
+    develop:
+      watch:
+        - action: sync
+          path: ../packages/backend
+          target: /app/packages/backend
+          ignore:
+            - node_modules/
+            - dist/
+        - action: sync
+          path: ../packages/datacollect
+          target: /app/packages/datacollect
+          ignore:
+            - node_modules/
+            - dist/
+        - action: rebuild
+          path: ../package.json
+        - action: rebuild
+          path: ../pnpm-lock.yaml
+    volumes:
+      - ../packages/backend/src:/app/packages/backend/src:z
+      - ../packages/datacollect/src:/app/packages/datacollect/src:z
     env_file: ./.env
     ports:
       - "${SYNC_SERVER_PORT:-3000}:3000"
       - "9229:9229" # Node.js debugger port
     restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
       - datacollect-network-dev
 
@@ -45,11 +72,31 @@ services:
   admin-ui:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/Dockerfile.dev
       target: admin-ui
+    develop:
+      watch:
+        - action: sync
+          path: ../packages/admin
+          target: /app/packages/admin
+          ignore:
+            - node_modules/
+            - dist/
+        - action: rebuild
+          path: ../package.json
+        - action: rebuild
+          path: ../pnpm-lock.yaml
+    volumes:
+      - ../packages/admin/src:/app/packages/admin/src:z
+      - ../packages/admin/index.html:/app/packages/admin/index.html:z
     restart: unless-stopped
     environment:
-      - VITE_API_URL=http://localhost:3000
+      - VITE_API_URL=${ADMIN_API_URL:-http://localhost:3000}
+      # Proxy target for OpenSPP API calls (use host.docker.internal to reach host-exposed services)
+      - OPENSPP_PROXY_TARGET=${OPENSPP_PROXY_TARGET:-http://host.docker.internal:8069}
+    # Required for host.docker.internal to work on Linux
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "5173:5173"
     depends_on:
@@ -61,9 +108,28 @@ services:
   mobile-app:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/Dockerfile.dev
       target: mobile-app
+    develop:
+      watch:
+        - action: sync
+          path: ../packages/mobile
+          target: /app/packages/mobile
+          ignore:
+            - node_modules/
+            - dist/
+        - action: sync
+          path: ../packages/datacollect
+          target: /app/packages/datacollect
+          ignore:
+            - node_modules/
+            - dist/
+        - action: rebuild
+          path: ../package.json
+        - action: rebuild
+          path: ../pnpm-lock.yaml
     environment:
+      - VITE_BACKEND_API_URL=${MOBILE_API_URL:-http://localhost:3000}
       - VITE_DB_ENCRYPTION_PASSWORD=password
       - VITE_DEVELOP=true
       - VITE_DEBUG=true
@@ -75,23 +141,65 @@ services:
     networks:
       - datacollect-network-dev
 
-  # keycloak:
-  #   image: quay.io/keycloak/keycloak:23.0.0
-  #   container_name: keycloak
-  #   environment:
-  #     - KEYCLOAK_ADMIN=admin
-  #     - KEYCLOAK_ADMIN_PASSWORD=admin
-  #   command:
-  #     - start-dev
-  #   ports:
-  #     - "9090:8080"
-  #   depends_on:
-  #     - postgres
-  #   networks:
-  #     - datacollect-network-dev
+  # Web App - Development mode
+  web-ui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dev
+      target: web-ui
+    develop:
+      watch:
+        - action: sync
+          path: ../packages/web
+          target: /app/packages/web
+          ignore:
+            - node_modules/
+            - dist/
+        - action: rebuild
+          path: ../package.json
+        - action: rebuild
+          path: ../pnpm-lock.yaml
+    volumes:
+      - ../packages/web/src:/app/packages/web/src:z
+      - ../packages/web/index.html:/app/packages/web/index.html:z
+    environment:
+      - VITE_API_URL=${WEB_API_URL:-http://localhost:3000}
+    ports:
+      - "5174:5174"
+    depends_on:
+      - sync-server
+    networks:
+      - datacollect-network-dev
+
+  # Mock Registry Server (optional — opt in with `--profile mock`)
+  # PublicSchema-aligned reference registry used by @idpass/adapter-mock for
+  # testing DataCollect external sync without requiring OpenSPP.
+  mock-registry:
+    build:
+      context: ../examples/mock-server
+      dockerfile: Dockerfile
+    environment:
+      - MOCK_PORT=9999
+      - MOCK_DB_PATH=/data/mock_registry.db
+      - MOCK_OAUTH_CLIENT_ID=${MOCK_OAUTH_CLIENT_ID:-mock-client}
+      - MOCK_OAUTH_CLIENT_SECRET=${MOCK_OAUTH_CLIENT_SECRET:-mock-secret}
+      - MOCK_JWT_SECRET=${MOCK_JWT_SECRET:-dev-only-change-me-change-me-change-me}
+      - MOCK_SESSION_SECRET=${MOCK_SESSION_SECRET:-dev-session-only-change-me-change}
+      - MOCK_UI_USERNAME=${MOCK_UI_USERNAME:-admin}
+      - MOCK_UI_PASSWORD=${MOCK_UI_PASSWORD:-admin}
+    volumes:
+      - mock-registry-data:/data
+    ports:
+      - "${MOCK_SERVER_PORT:-9999}:9999"
+    restart: unless-stopped
+    networks:
+      - datacollect-network-dev
+    profiles:
+      - mock
 
 volumes:
   postgres-data-dev:
+  mock-registry-data:
 
 networks:
   datacollect-network-dev:

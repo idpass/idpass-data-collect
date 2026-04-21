@@ -1,0 +1,4553 @@
+openapi: 3.0.3
+info:
+  title: OpenSPP API V2
+  description: |
+    Standards-aligned, consent-respecting REST API for social protection data exchange.
+
+    ## Key Features
+    - External identifiers only (no database IDs exposed)
+    - Consent-based access control (GDPR-compliant)
+    - Extensible for module-specific fields via extensions
+    - G2P Connect / DCI compatible
+    - RFC 9457 error responses
+    - ADR-019 modernized response format
+
+    ## Authentication
+    OAuth 2.0 Client Credentials flow. Obtain a JWT bearer token from `/oauth/token`.
+
+    ## Response Conventions (ADR-019)
+    - Resource type discriminator: `type` (not `resourceType`)
+    - Search results: `SearchResult` envelope with `data[]`, `meta`, `links`
+    - Errors: RFC 9457 `ProblemDetail` schema is defined but most endpoints currently
+      return plain `{"detail": "..."}` via FastAPI HTTPException. Full RFC 9457 error
+      responses are a planned migration target.
+    - Group classification: `groupType` (not `type`, to avoid collision with discriminator)
+    - Batch/transaction: Legacy FHIR `Bundle` format with `resourceType`/`entry`
+    - Advanced search (`_search`): Returns legacy `Bundle` format (not `SearchResult`)
+
+    ## Extension Modules
+    Additional endpoints are provided by auto-install bridge modules:
+    - `spp_api_v2_vocabulary` - Vocabulary/code list management
+    - `spp_api_v2_cycles` - Program cycle operations
+    - `spp_api_v2_entitlements` - Entitlement operations
+    - `spp_api_v2_service_points` - Service point operations
+    - `spp_api_v2_products` - Product catalog
+    - `spp_api_v2_change_request` - Change request workflow
+    - `spp_api_v2_verifiable_credentials` - Verifiable credential issuance
+    - `spp_studio_api_v2` - Studio custom fields and variables
+    - `spp_api_v2_data` - Data push/pull operations
+    - `spp_api_v2_drims` - Disaster response GeoJSON
+  version: 2.0.0
+  contact:
+    name: OpenSPP Team
+    url: https://openspp.org
+  license:
+    name: LGPL-3.0
+    url: https://www.gnu.org/licenses/lgpl-3.0.html
+
+servers:
+  - url: https://api.openspp.org/api/v2/spp
+    description: Production
+  - url: https://staging-api.openspp.org/api/v2/spp
+    description: Staging
+  - url: http://localhost:8069/api/v2/spp
+    description: Development
+
+tags:
+  - name: Metadata
+    description: Server capability discovery and authentication
+  - name: Individual
+    description: Individual registrant operations
+  - name: Group
+    description: Household/group operations and membership management
+  - name: Program
+    description: Program operations (read-only)
+  - name: ProgramMembership
+    description: Program enrollment operations
+  - name: Batch
+    description: Batch and transaction bundle operations
+  - name: Bulk
+    description: Bulk export operations
+  - name: Consent
+    description: GDPR-compliant consent management
+  - name: Filter
+    description: Filter discovery and advanced search
+  - name: ChangeRequest
+    description: Change request workflow operations (spp_api_v2_change_request)
+  - name: Vocabulary
+    description: Vocabulary/code list management (spp_api_v2_vocabulary)
+  - name: Cycle
+    description: Program cycle operations (spp_api_v2_cycles)
+  - name: Entitlement
+    description: Entitlement operations (spp_api_v2_entitlements)
+  - name: ServicePoint
+    description: Service point operations (spp_api_v2_service_points)
+  - name: Product
+    description: Product catalog (spp_api_v2_products)
+  - name: Credential
+    description: Verifiable credential issuance and verification (spp_api_v2_verifiable_credentials)
+  - name: Studio
+    description: Studio custom fields and variables (spp_studio_api_v2)
+  - name: Data
+    description: Data push/pull operations (spp_api_v2_data)
+  - name: DRIMS
+    description: Disaster response GeoJSON endpoints (spp_api_v2_drims)
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ---------------------------------------------------------------------------
+  # Authentication
+  # ---------------------------------------------------------------------------
+  /oauth/token:
+    post:
+      summary: Obtain access token
+      description: |
+        OAuth 2.0 Client Credentials flow. Returns a JWT bearer token.
+
+        Rate limited to 5 requests/minute per IP to prevent brute force.
+      tags: [Metadata]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRequest'
+      responses:
+        '200':
+          description: Token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          description: Unsupported grant type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '429':
+          description: Rate limit exceeded
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Seconds until rate limit resets
+
+  # ---------------------------------------------------------------------------
+  # Metadata
+  # ---------------------------------------------------------------------------
+  /metadata:
+    get:
+      summary: Get server capabilities
+      description: |
+        Returns API metadata with supported resources, operations, search
+        parameters, available extensions, and authentication configuration.
+
+        This endpoint is public (no authentication required).
+      tags: [Metadata]
+      security: []
+      responses:
+        '200':
+          description: API metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiMetadata'
+
+  # ---------------------------------------------------------------------------
+  # Individual
+  # ---------------------------------------------------------------------------
+  /Individual:
+    get:
+      summary: Search individuals
+      description: |
+        Search for individuals with pagination. Returns a `SearchResult` envelope.
+
+        Supports consent-aware pagination: when consent filtering removes records,
+        the API over-fetches to fill the requested page size.
+      tags: [Individual]
+      parameters:
+        - $ref: '#/components/parameters/identifier'
+        - $ref: '#/components/parameters/name'
+        - $ref: '#/components/parameters/birthdate'
+        - $ref: '#/components/parameters/gender'
+        - $ref: '#/components/parameters/address'
+        - name: group
+          in: query
+          description: "Group identifier (system|value) or 'none' for orphan individuals"
+          schema:
+            type: string
+        - name: membership-role
+          in: query
+          description: "Membership role code (e.g., head, spouse, child)"
+          schema:
+            type: string
+        - $ref: '#/components/parameters/_lastUpdated'
+        - $ref: '#/components/parameters/_count'
+        - $ref: '#/components/parameters/_offset'
+        - $ref: '#/components/parameters/_sort'
+        - $ref: '#/components/parameters/_elements'
+        - $ref: '#/components/parameters/_extensions'
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      summary: Create individual
+      description: |
+        Create a new individual registrant.
+
+        Sets `source_system` to `urn:openspp:api-client:{client_id}` for provenance tracking.
+      tags: [Individual]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Individual'
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location:
+              schema:
+                type: string
+              description: URL of created resource
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Individual'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /Individual/{identifier}:
+    parameters:
+      - $ref: '#/components/parameters/pathIdentifier'
+
+    get:
+      summary: Read individual
+      description: |
+        Read an individual by external identifier.
+
+        Security: For clients requiring consent, returns the same error for
+        "not found" and "no consent" to prevent user enumeration.
+      tags: [Individual]
+      parameters:
+        - $ref: '#/components/parameters/_elements'
+        - $ref: '#/components/parameters/_extensions'
+      responses:
+        '200':
+          description: Individual resource
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: Version ID for optimistic locking
+            X-Consent-Status:
+              schema:
+                type: string
+                enum: [active, no_consent, scope_mismatch]
+              description: Consent status for this access
+            X-Consent-Scope:
+              schema:
+                type: string
+              description: Scope of granted consent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Individual'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      summary: Update individual (full replacement)
+      tags: [Individual]
+      parameters:
+        - $ref: '#/components/parameters/ifMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Individual'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Individual'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+    patch:
+      summary: Partial update individual (JSON Merge Patch)
+      description: |
+        Partially update an individual using JSON Merge Patch (RFC 7396).
+
+        Only specified fields are updated. Omitted fields remain unchanged.
+        Set a field to `null` to clear it.
+      tags: [Individual]
+      parameters:
+        - $ref: '#/components/parameters/ifMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IndividualPatch'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Individual'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /Individual/{identifier}/groups:
+    parameters:
+      - $ref: '#/components/parameters/pathIdentifier'
+
+    get:
+      summary: Get group memberships for an individual
+      description: |
+        Reverse lookup: get all groups an individual belongs to.
+      tags: [Individual]
+      parameters:
+        - name: status
+          in: query
+          description: Filter by membership status
+          schema:
+            type: string
+            enum: [active, inactive]
+        - name: _count
+          in: query
+          description: Maximum results (default 100)
+          schema:
+            type: integer
+            default: 100
+            maximum: 100
+      responses:
+        '200':
+          description: Group membership list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupMembershipBundle'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ---------------------------------------------------------------------------
+  # Group
+  # ---------------------------------------------------------------------------
+  /Group:
+    get:
+      summary: Search groups
+      tags: [Group]
+      parameters:
+        - $ref: '#/components/parameters/identifier'
+        - name: name
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          description: Group type filter
+          schema:
+            type: string
+            enum: [household, family, organization, other]
+        - name: member
+          in: query
+          description: Has member (Individual identifier)
+          schema:
+            type: string
+        - $ref: '#/components/parameters/_count'
+        - $ref: '#/components/parameters/_offset'
+        - $ref: '#/components/parameters/_elements'
+        - $ref: '#/components/parameters/_extensions'
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+    post:
+      summary: Create group
+      tags: [Group]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Group'
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /Group/{identifier}:
+    parameters:
+      - $ref: '#/components/parameters/pathIdentifier'
+
+    get:
+      summary: Read group
+      tags: [Group]
+      parameters:
+        - $ref: '#/components/parameters/_elements'
+        - $ref: '#/components/parameters/_extensions'
+      responses:
+        '200':
+          description: Group resource
+          headers:
+            ETag:
+              schema:
+                type: string
+            X-Consent-Status:
+              schema:
+                type: string
+            X-Consent-Scope:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      summary: Update group (full replacement)
+      tags: [Group]
+      parameters:
+        - $ref: '#/components/parameters/ifMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Group'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+    patch:
+      summary: Partial update group (JSON Merge Patch)
+      tags: [Group]
+      parameters:
+        - $ref: '#/components/parameters/ifMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupPatch'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /Group/{identifier}/$add-member:
+    parameters:
+      - $ref: '#/components/parameters/pathIdentifier'
+    post:
+      summary: Add member to group
+      tags: [Group]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddMemberRequest'
+      responses:
+        '201':
+          description: Member added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Member already exists in group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /Group/{identifier}/$remove-member:
+    parameters:
+      - $ref: '#/components/parameters/pathIdentifier'
+    post:
+      summary: Remove member from group
+      tags: [Group]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemoveMemberRequest'
+      responses:
+        '200':
+          description: Member removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /Group/{identifier}/member/{individual_identifier}:
+    parameters:
+      - $ref: '#/components/parameters/pathIdentifier'
+      - name: individual_identifier
+        in: path
+        required: true
+        description: "Individual identifier. Format: {system}|{value}"
+        schema:
+          type: string
+    patch:
+      summary: Update member role or dates
+      tags: [Group]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMemberRequest'
+      responses:
+        '200':
+          description: Member updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembershipResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /Group/$merge:
+    post:
+      summary: Merge two groups
+      description: |
+        Move all members from source group to target group, then deactivate source.
+        Requires `group:update` scope.
+      tags: [Group]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MergeGroupRequest'
+      responses:
+        '200':
+          description: Merged (returns target group)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /Group/{identifier}/$split:
+    parameters:
+      - $ref: '#/components/parameters/pathIdentifier'
+    post:
+      summary: Split group
+      description: |
+        Create a new group with some members from the existing group.
+        Requires both `group:create` and `group:update` scopes.
+      tags: [Group]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SplitGroupRequest'
+      responses:
+        '201':
+          description: New group created
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /Group/{identifier}/membership-history:
+    parameters:
+      - $ref: '#/components/parameters/pathIdentifier'
+    get:
+      summary: Get membership change history
+      description: |
+        Returns a `SearchResult` timeline of all membership additions,
+        removals, and role changes.
+      tags: [Group]
+      parameters:
+        - name: _count
+          in: query
+          description: Maximum results (default 100, max 500)
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+        - $ref: '#/components/parameters/_offset'
+        - name: _since
+          in: query
+          description: Only show events after this datetime (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Membership history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResult'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ---------------------------------------------------------------------------
+  # Program (read-only)
+  # ---------------------------------------------------------------------------
+  /Program:
+    get:
+      summary: Search programs
+      description: |
+        Search for programs. Uses cursor-based pagination (`_lastId`).
+        Programs are read-only via the API (created in admin UI).
+      tags: [Program]
+      parameters:
+        - $ref: '#/components/parameters/identifier'
+        - name: name
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, ended]
+        - name: type
+          in: query
+          description: Program type code
+          schema:
+            type: string
+        - name: targetType
+          in: query
+          description: Target registrant type
+          schema:
+            type: string
+            enum: [individual, group]
+        - $ref: '#/components/parameters/_count'
+        - name: _lastId
+          in: query
+          description: Cursor - ID of last record from previous page
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResult'
+
+  /Program/{identifier}:
+    get:
+      summary: Read program
+      tags: [Program]
+      parameters:
+        - $ref: '#/components/parameters/pathIdentifier'
+      responses:
+        '200':
+          description: Program resource
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Program'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ---------------------------------------------------------------------------
+  # ProgramMembership
+  # ---------------------------------------------------------------------------
+  /ProgramMembership:
+    get:
+      summary: Search program memberships
+      tags: [ProgramMembership]
+      parameters:
+        - name: beneficiary
+          in: query
+          description: "Beneficiary reference (e.g., Individual/{system}|{value})"
+          schema:
+            type: string
+        - name: program
+          in: query
+          description: "Program reference (e.g., Program/{system}|{value})"
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, enrolled, paused, exited, not_eligible, duplicated]
+        - $ref: '#/components/parameters/_count'
+        - $ref: '#/components/parameters/_offset'
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResult'
+
+    post:
+      summary: Create enrollment
+      tags: [ProgramMembership]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProgramMembership'
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramMembership'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /ProgramMembership/{identifier}:
+    parameters:
+      - $ref: '#/components/parameters/pathIdentifier'
+
+    get:
+      summary: Read program membership
+      tags: [ProgramMembership]
+      responses:
+        '200':
+          description: Program membership resource
+          headers:
+            ETag:
+              schema:
+                type: string
+            X-Consent-Status:
+              schema:
+                type: string
+            X-Consent-Scope:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramMembership'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      summary: Update program membership
+      tags: [ProgramMembership]
+      parameters:
+        - $ref: '#/components/parameters/ifMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProgramMembership'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgramMembership'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # ---------------------------------------------------------------------------
+  # Batch
+  # ---------------------------------------------------------------------------
+  /$batch:
+    post:
+      summary: Execute batch or transaction bundle
+      description: |
+        Process multiple operations in a single request.
+
+        - `transaction`: All-or-nothing (rollback on any failure)
+        - `batch`: Independent operations (partial success allowed)
+
+        Supports `urn:uuid:*` placeholder references between entries.
+        The batch endpoint still uses the legacy Bundle format (resourceType/entry)
+        for backward compatibility.
+      tags: [Batch]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Bundle'
+            example:
+              resourceType: Bundle
+              type: transaction
+              entry:
+                - fullUrl: "urn:uuid:ind-1"
+                  request:
+                    method: POST
+                    url: Individual
+                  resource:
+                    type: Individual
+                    identifier:
+                      - system: "urn:gov:ph:psa:national-id"
+                        value: "PH-NEW-001"
+                    name:
+                      given: Maria
+                      family: Santos
+                - fullUrl: "urn:uuid:grp-1"
+                  request:
+                    method: POST
+                    url: Group
+                  resource:
+                    type: Group
+                    identifier:
+                      - system: "urn:openspp:group"
+                        value: "HH-NEW-001"
+                    groupType: household
+                    member:
+                      - entity:
+                          reference: "urn:uuid:ind-1"
+                        role:
+                          coding:
+                            - system: "urn:openspp:vocab:relationship"
+                              code: head
+      responses:
+        '200':
+          description: Bundle response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bundle'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  # ---------------------------------------------------------------------------
+  # Bulk Export
+  # ---------------------------------------------------------------------------
+  /$bulk/export:
+    post:
+      summary: Bulk export resources by identifier
+      description: |
+        Retrieve multiple resources efficiently in a single request.
+        Up to 100 identifiers per request.
+      tags: [Bulk]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkExportRequest'
+      responses:
+        '200':
+          description: Export results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkExportResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ---------------------------------------------------------------------------
+  # Consent
+  # ---------------------------------------------------------------------------
+  /Consent/{consent_id}:
+    parameters:
+      - name: consent_id
+        in: path
+        required: true
+        description: Consent external identifier (UUID)
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get consent status
+      description: Check the current status of a consent record.
+      tags: [Consent]
+      responses:
+        '200':
+          description: Consent status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentStatusResponse'
+
+    delete:
+      summary: Revoke consent (DELETE method)
+      description: Alternative RESTful method to revoke consent.
+      tags: [Consent]
+      parameters:
+        - name: reason
+          in: query
+          description: Reason for revocation
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Consent revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentRevokeResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /Consent/{consent_id}/$revoke:
+    parameters:
+      - name: consent_id
+        in: path
+        required: true
+        description: Consent external identifier (UUID)
+        schema:
+          type: string
+          format: uuid
+    post:
+      summary: Revoke consent
+      description: |
+        Revoke a consent record. Per GDPR Article 7(3), withdrawal must
+        be as easy as giving consent.
+
+        Revocation is immediate, audited, and permanent.
+      tags: [Consent]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsentRevokeRequest'
+      responses:
+        '200':
+          description: Consent revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentRevokeResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /Consent/{consent_id}/$receipt:
+    parameters:
+      - name: consent_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Get consent receipt (ISO 29184)
+      description: |
+        Generate a consent receipt per ISO/IEC 29184 for the data subject.
+        Provides proof of consent with purposes, data categories, and withdrawal URI.
+      tags: [Consent]
+      responses:
+        '200':
+          description: Consent receipt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentReceiptSchema'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /Consent/{consent_id}/$history:
+    parameters:
+      - name: consent_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Get consent version history
+      description: Returns all changes made to the consent record for audit.
+      tags: [Consent]
+      responses:
+        '200':
+          description: Consent history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentHistoryResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /Consent/{consent_id}/$access-summary:
+    parameters:
+      - name: consent_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Get data access summary
+      description: |
+        Summary of all data accesses under this consent (GDPR Article 15).
+      tags: [Consent]
+      parameters:
+        - name: date_from
+          in: query
+          description: Filter from date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          description: Filter to date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Access summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConsentAccessSummarySchema'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ---------------------------------------------------------------------------
+  # Filter Discovery and Advanced Search
+  # ---------------------------------------------------------------------------
+  /Individual/_filters:
+    get:
+      summary: Get Individual filter metadata
+      tags: [Filter]
+      responses:
+        '200':
+          description: Filter metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FilterMetadataResponse'
+
+  /Individual/_search:
+    post:
+      summary: Advanced Individual search
+      description: Search individuals with complex filter conditions, compound AND/OR logic, and presets.
+      tags: [Filter]
+      parameters:
+        - $ref: '#/components/parameters/_extensions'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+      responses:
+        '200':
+          description: Search results (Bundle format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bundle'
+
+  /Group/_filters:
+    get:
+      summary: Get Group filter metadata
+      tags: [Filter]
+      responses:
+        '200':
+          description: Filter metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FilterMetadataResponse'
+
+  /Group/_search:
+    post:
+      summary: Advanced Group search
+      tags: [Filter]
+      parameters:
+        - $ref: '#/components/parameters/_extensions'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+      responses:
+        '200':
+          description: Search results (Bundle format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bundle'
+
+  /Program/_filters:
+    get:
+      summary: Get Program filter metadata
+      tags: [Filter]
+      responses:
+        '200':
+          description: Filter metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FilterMetadataResponse'
+
+  /Program/_search:
+    post:
+      summary: Advanced Program search
+      tags: [Filter]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+      responses:
+        '200':
+          description: Search results (Bundle format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bundle'
+
+  /ProgramMembership/_filters:
+    get:
+      summary: Get ProgramMembership filter metadata
+      tags: [Filter]
+      responses:
+        '200':
+          description: Filter metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FilterMetadataResponse'
+
+  /ProgramMembership/_search:
+    post:
+      summary: Advanced ProgramMembership search
+      tags: [Filter]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+      responses:
+        '200':
+          description: Search results (Bundle format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bundle'
+
+  # ---------------------------------------------------------------------------
+  # Change Request (spp_api_v2_change_request)
+  # ---------------------------------------------------------------------------
+  /ChangeRequest:
+    get:
+      summary: Search change requests
+      tags: [ChangeRequest]
+      parameters:
+        - name: registrant
+          in: query
+          description: "Registrant identifier (system|value)"
+          schema:
+            type: string
+        - name: requestType
+          in: query
+          description: Change request type code
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, pending, revision, approved, rejected, applied]
+        - name: createdAfter
+          in: query
+          description: Filter by creation date (on or after)
+          schema:
+            type: string
+            format: date
+        - name: createdBefore
+          in: query
+          description: Filter by creation date (on or before)
+          schema:
+            type: string
+            format: date
+        - $ref: '#/components/parameters/_count'
+        - $ref: '#/components/parameters/_offset'
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResult'
+
+    post:
+      summary: Create change request
+      description: Creates a change request in draft status.
+      tags: [ChangeRequest]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeRequestCreate'
+      responses:
+        '201':
+          description: Created
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeRequestResponse'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /ChangeRequest/{reference}:
+    parameters:
+      - name: reference
+        in: path
+        required: true
+        description: "Change request reference (e.g., CR/2024/00001)"
+        schema:
+          type: string
+
+    get:
+      summary: Read change request
+      tags: [ChangeRequest]
+      responses:
+        '200':
+          description: Change request resource
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeRequestResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      summary: Update change request detail
+      description: Only draft change requests can be updated.
+      tags: [ChangeRequest]
+      parameters:
+        - $ref: '#/components/parameters/ifMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeRequestUpdate'
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeRequestResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /ChangeRequest/{reference}/$submit:
+    parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Submit change request for approval
+      tags: [ChangeRequest]
+      responses:
+        '200':
+          description: Submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeRequestResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /ChangeRequest/{reference}/$approve:
+    parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Approve change request
+      tags: [ChangeRequest]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment:
+                  type: string
+      responses:
+        '200':
+          description: Approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeRequestResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /ChangeRequest/{reference}/$reject:
+    parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Reject change request
+      tags: [ChangeRequest]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+      responses:
+        '200':
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeRequestResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /ChangeRequest/{reference}/$request-revision:
+    parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Request revision on change request
+      tags: [ChangeRequest]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [notes]
+              properties:
+                notes:
+                  type: string
+                  minLength: 1
+      responses:
+        '200':
+          description: Revision requested
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeRequestResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /ChangeRequest/{reference}/$apply:
+    parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Apply approved change request
+      description: Executes the changes to the registrant.
+      tags: [ChangeRequest]
+      responses:
+        '200':
+          description: Applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeRequestResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /ChangeRequest/{reference}/$reset:
+    parameters:
+      - name: reference
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      summary: Reset rejected/revision CR to draft
+      description: Allows resubmission after making changes.
+      tags: [ChangeRequest]
+      responses:
+        '200':
+          description: Reset to draft
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChangeRequestResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  # ---------------------------------------------------------------------------
+  # Vocabulary (spp_api_v2_vocabulary)
+  # ---------------------------------------------------------------------------
+  /Vocabulary:
+    get:
+      summary: List vocabularies
+      description: Get all available vocabulary code lists.
+      tags: [Vocabulary]
+      parameters:
+        - name: domain
+          in: query
+          description: Filter by domain (core, social_assistance, health, etc.)
+          schema:
+            type: string
+        - name: _count
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+        - $ref: '#/components/parameters/_offset'
+      responses:
+        '200':
+          description: Vocabulary list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VocabularyListResponse'
+
+  /Vocabulary/{namespace_uri}:
+    parameters:
+      - name: namespace_uri
+        in: path
+        required: true
+        description: "Namespace URI of the vocabulary (URL-encoded)"
+        schema:
+          type: string
+    get:
+      summary: Get vocabulary details
+      tags: [Vocabulary]
+      responses:
+        '200':
+          description: Vocabulary details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VocabularyDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /Vocabulary/{namespace_uri}/codes:
+    parameters:
+      - name: namespace_uri
+        in: path
+        required: true
+        description: "Namespace URI of the vocabulary (URL-encoded)"
+        schema:
+          type: string
+    get:
+      summary: List codes in a vocabulary
+      tags: [Vocabulary]
+      parameters:
+        - name: include_deprecated
+          in: query
+          description: Include deprecated codes
+          schema:
+            type: boolean
+            default: false
+        - name: parent_code
+          in: query
+          description: Filter by parent code (hierarchical vocabularies)
+          schema:
+            type: string
+        - name: _count
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+        - $ref: '#/components/parameters/_offset'
+      responses:
+        '200':
+          description: Vocabulary codes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VocabularyCodesResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ---------------------------------------------------------------------------
+  # Cycle (spp_api_v2_cycles)
+  # ---------------------------------------------------------------------------
+  /Cycle:
+    get:
+      summary: Search cycles
+      tags: [Cycle]
+      parameters:
+        - name: program
+          in: query
+          description: Program name
+          schema:
+            type: string
+        - name: state
+          in: query
+          description: Cycle state
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - $ref: '#/components/parameters/_lastUpdated'
+        - $ref: '#/components/parameters/_count'
+        - $ref: '#/components/parameters/_offset'
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResult'
+
+  /Cycle/{identifier}:
+    get:
+      summary: Read cycle
+      tags: [Cycle]
+      parameters:
+        - name: identifier
+          in: path
+          required: true
+          description: Cycle identifier (name)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cycle resource
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CycleResource'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ---------------------------------------------------------------------------
+  # Entitlement (spp_api_v2_entitlements)
+  # ---------------------------------------------------------------------------
+  /Entitlement:
+    get:
+      summary: Search entitlements
+      tags: [Entitlement]
+      parameters:
+        - name: beneficiary
+          in: query
+          description: "Beneficiary identifier (system|value)"
+          schema:
+            type: string
+        - name: program
+          in: query
+          description: Program name
+          schema:
+            type: string
+        - name: cycle
+          in: query
+          description: Cycle name
+          schema:
+            type: string
+        - name: state
+          in: query
+          description: Entitlement state
+          schema:
+            type: string
+        - name: entitlementType
+          in: query
+          schema:
+            type: string
+            enum: [cash, inkind]
+        - $ref: '#/components/parameters/_lastUpdated'
+        - $ref: '#/components/parameters/_count'
+        - $ref: '#/components/parameters/_offset'
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResult'
+
+  /Entitlement/{identifier}:
+    get:
+      summary: Read entitlement
+      tags: [Entitlement]
+      parameters:
+        - name: identifier
+          in: path
+          required: true
+          description: Entitlement code (UUID)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Entitlement resource
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntitlementResource'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ---------------------------------------------------------------------------
+  # ServicePoint (spp_api_v2_service_points)
+  # ---------------------------------------------------------------------------
+  /ServicePoint:
+    get:
+      summary: Search service points
+      tags: [ServicePoint]
+      parameters:
+        - name: name
+          in: query
+          schema:
+            type: string
+        - name: area
+          in: query
+          description: Area name
+          schema:
+            type: string
+        - name: country
+          in: query
+          description: ISO 3166-1 alpha-2 country code
+          schema:
+            type: string
+        - name: contractActive
+          in: query
+          schema:
+            type: boolean
+        - $ref: '#/components/parameters/_lastUpdated'
+        - $ref: '#/components/parameters/_count'
+        - $ref: '#/components/parameters/_offset'
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bundle'
+
+  /ServicePoint/{identifier}:
+    get:
+      summary: Read service point
+      tags: [ServicePoint]
+      parameters:
+        - name: identifier
+          in: path
+          required: true
+          description: Service point identifier (name)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Service point resource
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServicePointResource'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ---------------------------------------------------------------------------
+  # Product (spp_api_v2_products)
+  # ---------------------------------------------------------------------------
+  /Product:
+    get:
+      summary: Search products
+      tags: [Product]
+      parameters:
+        - name: name
+          in: query
+          schema:
+            type: string
+        - name: code
+          in: query
+          description: Product SKU/code
+          schema:
+            type: string
+        - name: category
+          in: query
+          description: Category name
+          schema:
+            type: string
+        - $ref: '#/components/parameters/_lastUpdated'
+        - $ref: '#/components/parameters/_count'
+        - $ref: '#/components/parameters/_offset'
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bundle'
+
+  /Product/{identifier}:
+    get:
+      summary: Read product
+      tags: [Product]
+      parameters:
+        - name: identifier
+          in: path
+          required: true
+          description: Product identifier (default_code or name)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Product resource
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductResource'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /ProductCategory:
+    get:
+      summary: Search product categories
+      tags: [Product]
+      parameters:
+        - name: name
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/_count'
+        - $ref: '#/components/parameters/_offset'
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bundle'
+
+  /ProductCategory/{identifier}:
+    get:
+      summary: Read product category
+      tags: [Product]
+      parameters:
+        - name: identifier
+          in: path
+          required: true
+          description: Category identifier (name)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Product category resource
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductCategoryResource'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /UnitOfMeasure:
+    get:
+      summary: Search units of measure
+      tags: [Product]
+      parameters:
+        - name: name
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+        - $ref: '#/components/parameters/_count'
+        - $ref: '#/components/parameters/_offset'
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bundle'
+
+  /UnitOfMeasure/{identifier}:
+    get:
+      summary: Read unit of measure
+      tags: [Product]
+      parameters:
+        - name: identifier
+          in: path
+          required: true
+          description: UoM identifier (name)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Unit of measure resource
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnitOfMeasureResource'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ---------------------------------------------------------------------------
+  # Credential (spp_api_v2_verifiable_credentials)
+  # ---------------------------------------------------------------------------
+  /Credential/$issue:
+    post:
+      summary: Issue verifiable credential
+      description: |
+        Issue a verifiable credential for a registrant.
+        Returns the signed credential in SD-JWT or JSON-LD format.
+      tags: [Credential]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialIssueRequest'
+      responses:
+        '201':
+          description: Credential issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialIssueResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /Credential/$verify:
+    post:
+      summary: Verify credential
+      description: |
+        Verify a credential presentation. Validates the signature,
+        expiration, and optionally the key binding JWT.
+      tags: [Credential]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialVerifyRequest'
+      responses:
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialVerifyResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /Credential/StatusList/{list_id}:
+    get:
+      summary: Get status list credential
+      description: |
+        Get a Bitstring Status List Credential for revocation checking.
+        This endpoint is public (no authentication required).
+      tags: [Credential]
+      security: []
+      parameters:
+        - name: list_id
+          in: path
+          required: true
+          description: Status list identifier
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Status list credential
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusListCredentialResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /Credential/Subject/{spp_id}:
+    get:
+      summary: List credentials for a subject
+      description: List all credentials issued for a registrant.
+      tags: [Credential]
+      parameters:
+        - name: spp_id
+          in: path
+          required: true
+          description: SPP ID of the subject
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: Filter by status
+          schema:
+            type: string
+            enum: [active, revoked, expired]
+        - $ref: '#/components/parameters/_count'
+        - $ref: '#/components/parameters/_offset'
+      responses:
+        '200':
+          description: Credential list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CredentialListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ---------------------------------------------------------------------------
+  # Studio (spp_studio_api_v2)
+  # ---------------------------------------------------------------------------
+  /Studio/fields:
+    get:
+      summary: List Studio custom fields
+      description: List all active Studio custom fields with their configuration.
+      tags: [Studio]
+      parameters:
+        - name: target_type
+          in: query
+          description: Filter by target registry (individual/group)
+          schema:
+            type: string
+        - name: api_exposed_only
+          in: query
+          description: Only return API-exposed fields
+          schema:
+            type: boolean
+            default: true
+        - name: _count
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+        - name: _lastId
+          in: query
+          description: Cursor - ID of last record from previous page
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Studio fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudioFieldsResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /Studio/fields/{technical_name}/schema:
+    get:
+      summary: Get JSON Schema for a Studio field
+      tags: [Studio]
+      parameters:
+        - name: technical_name
+          in: path
+          required: true
+          description: Technical field name (e.g., x_farm_size)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Field schema
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudioFieldSchema'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /Studio/variables:
+    get:
+      summary: List available CEL variables
+      tags: [Studio]
+      parameters:
+        - name: applies_to
+          in: query
+          description: Filter by context (individual/group/both)
+          schema:
+            type: string
+        - name: source_type
+          in: query
+          description: Filter by source type
+          schema:
+            type: string
+        - name: category
+          in: query
+          description: Filter by category name
+          schema:
+            type: string
+        - name: _count
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+        - name: _lastId
+          in: query
+          description: Cursor - ID of last record from previous page
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Variables list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StudioVariablesResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /Studio/variables/{resource_type}/{identifier}:
+    get:
+      summary: Get variable values for a subject
+      description: Get cached variable values for an Individual or Group.
+      tags: [Studio]
+      parameters:
+        - name: resource_type
+          in: path
+          required: true
+          description: Resource type (Individual/Group)
+          schema:
+            type: string
+        - name: identifier
+          in: path
+          required: true
+          description: "External identifier (system|value)"
+          schema:
+            type: string
+        - name: variables
+          in: query
+          description: Comma-separated variable names, or * for all
+          schema:
+            type: string
+            default: "*"
+        - name: period_key
+          in: query
+          description: "Period key (current, 2024-12, etc.)"
+          schema:
+            type: string
+            default: current
+      responses:
+        '200':
+          description: Subject variable values
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubjectVariablesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ---------------------------------------------------------------------------
+  # Data (spp_api_v2_data)
+  # ---------------------------------------------------------------------------
+  /Data/push:
+    post:
+      summary: Push variable values
+      description: |
+        Push variable values from an external system into the cache.
+        External systems use this endpoint to push computed or collected
+        values into OpenSPP.
+      tags: [Data]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DataPushRequest'
+      responses:
+        '200':
+          description: Push result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPushResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /Data/pull:
+    get:
+      summary: Pull cached variable values
+      description: Returns cached values for the specified variable and subjects.
+      tags: [Data]
+      parameters:
+        - name: variable
+          in: query
+          required: true
+          description: Variable name to pull
+          schema:
+            type: string
+        - name: subject_external_ids
+          in: query
+          required: true
+          description: Comma-separated external IDs
+          schema:
+            type: string
+        - name: period_key
+          in: query
+          description: "Period filter (default: current)"
+          schema:
+            type: string
+            default: current
+        - name: _count
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+      responses:
+        '200':
+          description: Pull result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataPullResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /Data/invalidate:
+    post:
+      summary: Invalidate cached values
+      description: Marks cached values as stale for refresh on next access.
+      tags: [Data]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DataInvalidateRequest'
+      responses:
+        '200':
+          description: Invalidation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataInvalidateResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /Data/variables:
+    get:
+      summary: List available variables
+      description: List variables that can receive external data.
+      tags: [Data]
+      parameters:
+        - name: provider_code
+          in: query
+          description: Filter by provider code
+          schema:
+            type: string
+        - name: source_type
+          in: query
+          description: Filter by source type
+          schema:
+            type: string
+        - name: _count
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 500
+        - name: _lastId
+          in: query
+          description: Cursor - ID of last record from previous page
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Variables list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataVariablesListResponse'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ---------------------------------------------------------------------------
+  # DRIMS (spp_api_v2_drims)
+  # ---------------------------------------------------------------------------
+  /DRIMS/dispatches/geojson:
+    get:
+      summary: Get dispatch locations as GeoJSON
+      description: |
+        Returns a GeoJSON FeatureCollection with Point geometries
+        representing delivery locations.
+      tags: [DRIMS]
+      parameters:
+        - name: incident_code
+          in: query
+          description: Filter by hazard incident code
+          schema:
+            type: string
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: areaCode
+          in: query
+          description: Filter by beneficiary area code
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+            enum: [draft, waiting, confirmed, assigned, done, cancel]
+        - name: _count
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+        - $ref: '#/components/parameters/_offset'
+      responses:
+        '200':
+          description: GeoJSON FeatureCollection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeoJSONFeatureCollection'
+
+  /DRIMS/incidents/geojson:
+    get:
+      summary: Get hazard incidents as GeoJSON
+      description: |
+        Returns a GeoJSON FeatureCollection with Polygon geometries
+        representing incident affected areas.
+      tags: [DRIMS]
+      parameters:
+        - name: hazardType
+          in: query
+          description: Hazard type code (e.g., flood, earthquake)
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [alert, active, recovery, closed]
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: _count
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+        - $ref: '#/components/parameters/_offset'
+      responses:
+        '200':
+          description: GeoJSON FeatureCollection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeoJSONFeatureCollection'
+
+  /DRIMS/requests/geojson:
+    get:
+      summary: Get request aggregates by area as GeoJSON
+      description: |
+        Returns a GeoJSON FeatureCollection with Polygon geometries
+        representing areas and their aggregated request statistics.
+      tags: [DRIMS]
+      parameters:
+        - name: incident_code
+          in: query
+          description: Filter by hazard incident code
+          schema:
+            type: string
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: areaLevel
+          in: query
+          description: Filter by administrative area level
+          schema:
+            type: integer
+        - name: _count
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+        - $ref: '#/components/parameters/_offset'
+      responses:
+        '200':
+          description: GeoJSON FeatureCollection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeoJSONFeatureCollection'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  # ---------------------------------------------------------------------------
+  # Parameters
+  # ---------------------------------------------------------------------------
+  parameters:
+    pathIdentifier:
+      name: identifier
+      in: path
+      required: true
+      description: "External identifier. Format: {system}|{value} (URL-encoded)"
+      schema:
+        type: string
+      example: "urn:gov:ph:psa:national-id|PH-123456789"
+
+    identifier:
+      name: identifier
+      in: query
+      description: "Search by system|value identifier"
+      schema:
+        type: string
+      example: "urn:gov:ph:psa:national-id|PH-123"
+
+    name:
+      name: name
+      in: query
+      description: Name search (contains)
+      schema:
+        type: string
+
+    birthdate:
+      name: birthdate
+      in: query
+      description: "Birth date (supports prefixes: eq, ne, lt, gt, ge, le)"
+      schema:
+        type: string
+      examples:
+        exact:
+          value: "1985-03-15"
+        range:
+          value: "ge1980-01-01"
+
+    gender:
+      name: gender
+      in: query
+      description: "Gender code (system|code)"
+      schema:
+        type: string
+      example: "urn:iso:std:iso:5218|2"
+
+    address:
+      name: address
+      in: query
+      description: Address text search
+      schema:
+        type: string
+
+    _lastUpdated:
+      name: _lastUpdated
+      in: query
+      description: "Filter by modification date (supports prefixes)"
+      schema:
+        type: string
+      example: "ge2024-01-01"
+
+    _count:
+      name: _count
+      in: query
+      description: Page size (max 100)
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
+
+    _offset:
+      name: _offset
+      in: query
+      description: Number of records to skip (offset-based pagination)
+      schema:
+        type: integer
+        default: 0
+        minimum: 0
+
+    _sort:
+      name: _sort
+      in: query
+      description: "Sort field (prefix with - for descending)"
+      schema:
+        type: string
+      example: "-birthDate"
+
+    _elements:
+      name: _elements
+      in: query
+      description: Comma-separated fields to include (sparse fieldsets)
+      schema:
+        type: string
+      example: "identifier,name,birthDate"
+
+    _extensions:
+      name: _extensions
+      in: query
+      description: "Comma-separated extensions to include (or * for all)"
+      schema:
+        type: string
+      example: "farmer,disability"
+
+    ifMatch:
+      name: If-Match
+      in: header
+      description: Version ID for optimistic locking (ETag value)
+      schema:
+        type: string
+
+  # ---------------------------------------------------------------------------
+  # Responses
+  # ---------------------------------------------------------------------------
+  responses:
+    BadRequest:
+      description: Invalid request format or parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    Forbidden:
+      description: Insufficient permissions, missing scope, or consent denied
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    Conflict:
+      description: Version conflict (optimistic locking) or duplicate
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+    ValidationError:
+      description: Request validation failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+  # ---------------------------------------------------------------------------
+  # Schemas
+  # ---------------------------------------------------------------------------
+  schemas:
+    # --- Authentication ---
+    TokenRequest:
+      type: object
+      required: [grant_type, client_id, client_secret]
+      properties:
+        grant_type:
+          type: string
+          enum: [client_credentials]
+        client_id:
+          type: string
+        client_secret:
+          type: string
+
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          example: 3600
+        scope:
+          type: string
+          example: "individual:read individual:create group:read"
+
+    # --- Base Types ---
+    Identifier:
+      type: object
+      required: [system, value]
+      properties:
+        system:
+          type: string
+          description: Namespace URI
+          example: "urn:gov:ph:psa:national-id"
+        value:
+          type: string
+          example: "PH-123456789"
+        period:
+          $ref: '#/components/schemas/Period'
+
+    Period:
+      type: object
+      properties:
+        start:
+          type: string
+          format: date
+        end:
+          type: string
+          format: date
+
+    HumanName:
+      type: object
+      properties:
+        family:
+          type: string
+        given:
+          type: string
+        middle:
+          type: string
+        prefix:
+          type: string
+        suffix:
+          type: string
+        text:
+          type: string
+          description: Full name as text
+
+    Coding:
+      type: object
+      required: [system, code]
+      properties:
+        system:
+          type: string
+          description: Vocabulary namespace URI
+        code:
+          type: string
+        display:
+          type: string
+
+    CodeableConcept:
+      type: object
+      properties:
+        coding:
+          type: array
+          items:
+            $ref: '#/components/schemas/Coding'
+        text:
+          type: string
+
+    Address:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [physical, postal, both]
+        text:
+          type: string
+        line:
+          type: array
+          items:
+            type: string
+        city:
+          type: string
+        district:
+          type: string
+        state:
+          type: string
+        postalCode:
+          type: string
+        country:
+          type: string
+          description: ISO 3166-1 alpha-2
+
+    ContactPoint:
+      type: object
+      required: [system, value]
+      properties:
+        system:
+          type: string
+          enum: [phone, email, fax, url, sms]
+        value:
+          type: string
+        use:
+          type: string
+          enum: [home, work, mobile]
+        rank:
+          type: integer
+          minimum: 1
+
+    Reference:
+      type: object
+      required: [reference]
+      properties:
+        reference:
+          type: string
+          description: "ResourceType/identifier"
+          example: "Individual/urn:gov:ph:psa:national-id|PH-123"
+        display:
+          type: string
+
+    ResourceMeta:
+      type: object
+      properties:
+        versionId:
+          type: string
+        lastUpdated:
+          type: string
+          format: date-time
+        source:
+          type: string
+          description: Source system URI
+
+    # --- Resource Schemas (ADR-019: use `type` not `resourceType`) ---
+    Individual:
+      type: object
+      required: [type, identifier]
+      properties:
+        type:
+          type: string
+          enum: [Individual]
+          description: Resource type discriminator
+        identifier:
+          type: array
+          items:
+            $ref: '#/components/schemas/Identifier'
+          minItems: 1
+        active:
+          type: boolean
+          default: true
+        name:
+          $ref: '#/components/schemas/HumanName'
+        birthDate:
+          type: string
+          format: date
+        birthDateEstimated:
+          type: boolean
+        gender:
+          $ref: '#/components/schemas/CodeableConcept'
+        telecom:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContactPoint'
+        address:
+          type: array
+          items:
+            $ref: '#/components/schemas/Address'
+        photo:
+          type: string
+          description: Base64-encoded image
+        groupMembership:
+          type: array
+          items:
+            type: object
+            properties:
+              group:
+                $ref: '#/components/schemas/Reference'
+              role:
+                $ref: '#/components/schemas/CodeableConcept'
+              period:
+                $ref: '#/components/schemas/Period'
+        extension:
+          type: object
+          additionalProperties: true
+          description: Module-specific extension data
+        meta:
+          $ref: '#/components/schemas/ResourceMeta'
+
+    IndividualPatch:
+      type: object
+      description: "Partial update (JSON Merge Patch RFC 7396). All fields optional."
+      properties:
+        active:
+          type: boolean
+        name:
+          $ref: '#/components/schemas/HumanName'
+        birthDate:
+          type: string
+          format: date
+        birthDateEstimated:
+          type: boolean
+        gender:
+          $ref: '#/components/schemas/CodeableConcept'
+        telecom:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContactPoint'
+        address:
+          type: array
+          items:
+            $ref: '#/components/schemas/Address'
+        photo:
+          type: string
+        extension:
+          type: object
+          additionalProperties: true
+
+    GroupMember:
+      type: object
+      required: [entity]
+      properties:
+        entity:
+          $ref: '#/components/schemas/Reference'
+        role:
+          $ref: '#/components/schemas/CodeableConcept'
+        period:
+          $ref: '#/components/schemas/Period'
+        inactive:
+          type: boolean
+
+    Group:
+      type: object
+      required: [type, identifier]
+      description: |
+        Group resource. Uses `groupType` (not `type`) for group classification
+        to avoid collision with the resource type discriminator.
+      properties:
+        type:
+          type: string
+          enum: [Group]
+          description: Resource type discriminator
+        identifier:
+          type: array
+          items:
+            $ref: '#/components/schemas/Identifier'
+          minItems: 1
+        active:
+          type: boolean
+          default: true
+        groupType:
+          type: string
+          enum: [household, family, organization, other]
+          default: household
+          description: Type of group (uses groupType, not type)
+        name:
+          type: string
+        member:
+          type: array
+          items:
+            $ref: '#/components/schemas/GroupMember'
+        quantity:
+          type: integer
+          description: Number of members
+        address:
+          type: array
+          items:
+            $ref: '#/components/schemas/Address'
+        extension:
+          type: object
+          additionalProperties: true
+        meta:
+          $ref: '#/components/schemas/ResourceMeta'
+
+    GroupPatch:
+      type: object
+      description: "Partial update for Group (JSON Merge Patch RFC 7396)."
+      properties:
+        active:
+          type: boolean
+        name:
+          type: string
+        address:
+          type: array
+          items:
+            $ref: '#/components/schemas/Address'
+        extension:
+          type: object
+          additionalProperties: true
+
+    Program:
+      type: object
+      required: [type, identifier, name, programType, targetType]
+      properties:
+        type:
+          type: string
+          enum: [Program]
+        identifier:
+          type: array
+          items:
+            $ref: '#/components/schemas/Identifier'
+          minItems: 1
+        active:
+          type: boolean
+        name:
+          type: string
+        description:
+          type: string
+        programType:
+          $ref: '#/components/schemas/CodeableConcept'
+          description: Type of program (cash transfer, in-kind, etc.)
+        targetType:
+          type: string
+          enum: [individual, group]
+        eligibilityCriteria:
+          type: string
+        period:
+          $ref: '#/components/schemas/Period'
+        meta:
+          $ref: '#/components/schemas/ResourceMeta'
+
+    ProgramMembership:
+      type: object
+      required: [type, program, beneficiary, status]
+      properties:
+        type:
+          type: string
+          enum: [ProgramMembership]
+        identifier:
+          type: array
+          items:
+            $ref: '#/components/schemas/Identifier'
+        program:
+          $ref: '#/components/schemas/Reference'
+        beneficiary:
+          $ref: '#/components/schemas/Reference'
+        status:
+          type: string
+          enum: [draft, enrolled, paused, exited, not_eligible, duplicated]
+        enrollmentDate:
+          type: string
+          format: date
+        exitDate:
+          type: string
+          format: date
+        exitReason:
+          $ref: '#/components/schemas/CodeableConcept'
+        meta:
+          $ref: '#/components/schemas/ResourceMeta'
+
+    # --- Search Result (ADR-019) ---
+    SearchResultMeta:
+      type: object
+      required: [total, count, offset]
+      properties:
+        total:
+          type: integer
+          minimum: 0
+          description: Total matching resources
+        count:
+          type: integer
+          minimum: 0
+          description: Resources in this response
+        offset:
+          type: integer
+          minimum: 0
+          description: Zero-based offset
+
+    SearchResultLinks:
+      type: object
+      required: [self]
+      properties:
+        self:
+          type: string
+        next:
+          type: string
+          nullable: true
+        prev:
+          type: string
+          nullable: true
+
+    SearchResult:
+      type: object
+      required: [data, meta, links]
+      description: |
+        Envelope for paginated search results (ADR-019).
+        Resources are directly in `data[]` with no wrapper.
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+          description: Array of resources
+        meta:
+          $ref: '#/components/schemas/SearchResultMeta'
+        links:
+          $ref: '#/components/schemas/SearchResultLinks'
+
+    # --- Error Response (RFC 9457) ---
+    FieldError:
+      type: object
+      required: [field, code, message]
+      properties:
+        field:
+          type: string
+          description: Field path with error
+          example: "identifier"
+        code:
+          type: string
+          description: Machine-readable error code
+          example: "not_found"
+        message:
+          type: string
+          description: Human-readable message
+          example: "No individual exists with this identifier"
+
+    ProblemDetail:
+      type: object
+      required: [type, title, status, detail]
+      description: "RFC 9457 Problem Details for HTTP API errors"
+      properties:
+        type:
+          type: string
+          description: "URN identifying error type"
+          pattern: "^urn:openspp:error:[a-z\\-]+$"
+          example: "urn:openspp:error:not-found"
+        title:
+          type: string
+          example: "Not Found"
+        status:
+          type: integer
+          description: HTTP status code
+          example: 404
+        detail:
+          type: string
+          example: "Individual not found with identifier national-id|PH-123"
+        instance:
+          type: string
+          description: URI of the request
+          example: "/api/v2/spp/Individual/national-id|PH-123"
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldError'
+
+    # --- Bundle (for batch operations and legacy advanced search) ---
+    BundleEntry:
+      type: object
+      properties:
+        fullUrl:
+          type: string
+          description: "Placeholder UUID (urn:uuid:xxx) or resource URL"
+        request:
+          type: object
+          properties:
+            method:
+              type: string
+              enum: [GET, POST, PUT, PATCH, DELETE]
+            url:
+              type: string
+        response:
+          type: object
+          properties:
+            status:
+              type: string
+            location:
+              type: string
+            etag:
+              type: string
+        resource:
+          type: object
+        search:
+          type: object
+          properties:
+            mode:
+              type: string
+              enum: [match, include]
+            score:
+              type: number
+
+    Bundle:
+      type: object
+      required: [resourceType, type]
+      description: |
+        Bundle format used for batch/transaction operations and advanced
+        search responses. Uses legacy `resourceType` field.
+      properties:
+        resourceType:
+          type: string
+          enum: [Bundle]
+        type:
+          type: string
+          enum: [transaction, transaction-response, batch, batch-response, searchset]
+        total:
+          type: integer
+        link:
+          type: array
+          items:
+            type: object
+            properties:
+              relation:
+                type: string
+                enum: [self, next, previous, first, last]
+              url:
+                type: string
+        entry:
+          type: array
+          items:
+            $ref: '#/components/schemas/BundleEntry'
+
+    # --- Bulk Export ---
+    BulkExportRequest:
+      type: object
+      required: [type, identifiers]
+      properties:
+        type:
+          type: string
+          enum: [Individual, Group]
+        identifiers:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          maxItems: 100
+          description: "Identifiers in format system|value"
+        _elements:
+          type: string
+          description: Comma-separated fields to include
+        _extensions:
+          type: string
+          description: Comma-separated extensions to include
+
+    BulkExportItem:
+      type: object
+      required: [identifier, status]
+      properties:
+        identifier:
+          type: string
+        status:
+          type: string
+          enum: [success, not_found, access_denied, error]
+        resource:
+          type: object
+          description: Exported resource (if successful)
+        error:
+          type: string
+          description: Error message (if not successful)
+
+    BulkExportResponse:
+      type: object
+      required: [total, successful, failed, items]
+      properties:
+        total:
+          type: integer
+          minimum: 0
+        successful:
+          type: integer
+          minimum: 0
+        failed:
+          type: integer
+          minimum: 0
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BulkExportItem'
+
+    # --- Consent ---
+    ConsentScopeSchema:
+      type: object
+      properties:
+        resource_type:
+          type: string
+        field_access:
+          type: string
+        purpose:
+          type: string
+        include_extensions:
+          type: boolean
+
+    ConsentStatusResponse:
+      type: object
+      required: [consent_id, status]
+      properties:
+        consent_id:
+          type: string
+        status:
+          type: string
+          enum: [requested, given, renewed, refused, withdrawn, expired, invalidated, not_found]
+          description: DPV-aligned consent status
+        grantee:
+          type: string
+        effective_date:
+          type: string
+          format: date
+        expiry_date:
+          type: string
+          format: date
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsentScopeSchema'
+        legal_basis:
+          type: string
+
+    ConsentRevokeRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 1000
+
+    ConsentRevokeResponse:
+      type: object
+      required: [consent_id, status, revoked_at, message]
+      properties:
+        consent_id:
+          type: string
+        status:
+          type: string
+          enum: [withdrawn]
+        revoked_at:
+          type: string
+          format: date-time
+        message:
+          type: string
+
+    ConsentReceiptSchema:
+      type: object
+      required: [receipt_id, version, timestamp, data_subject, data_controller, consent_id, consent_date, purposes, withdrawal_uri]
+      description: Consent receipt per ISO/IEC 29184
+      properties:
+        receipt_id:
+          type: string
+        version:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        data_subject:
+          type: object
+        data_controller:
+          type: object
+        consent_id:
+          type: string
+        consent_date:
+          type: string
+          format: date
+        collection_method:
+          type: string
+        purposes:
+          type: array
+          items:
+            type: object
+        data_categories:
+          type: array
+          items:
+            type: string
+        effective_date:
+          type: string
+          format: date
+        expiry_date:
+          type: string
+          format: date
+        withdrawal_uri:
+          type: string
+        data_subject_rights:
+          type: array
+          items:
+            type: string
+
+    ConsentHistoryEntrySchema:
+      type: object
+      properties:
+        version:
+          type: integer
+        action:
+          type: string
+        changed_date:
+          type: string
+          format: date-time
+        changed_by:
+          type: string
+        changed_fields:
+          type: array
+          items:
+            type: string
+        reason:
+          type: string
+
+    ConsentHistoryResponse:
+      type: object
+      required: [consent_id, current_version, history]
+      properties:
+        consent_id:
+          type: string
+        current_version:
+          type: integer
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsentHistoryEntrySchema'
+
+    ConsentAccessSummarySchema:
+      type: object
+      required: [consent_id, total_accesses, by_action, by_resource_type, by_client, date_range]
+      properties:
+        consent_id:
+          type: string
+        total_accesses:
+          type: integer
+        by_action:
+          type: object
+          additionalProperties:
+            type: integer
+        by_resource_type:
+          type: object
+          additionalProperties:
+            type: integer
+        by_client:
+          type: object
+          additionalProperties:
+            type: integer
+        date_range:
+          type: object
+          properties:
+            from:
+              type: string
+              nullable: true
+            to:
+              type: string
+              nullable: true
+
+    # --- Group Membership Operations ---
+    AddMemberRequest:
+      type: object
+      required: [entity]
+      properties:
+        entity:
+          $ref: '#/components/schemas/Reference'
+        role:
+          $ref: '#/components/schemas/CodeableConcept'
+        startDate:
+          type: string
+          format: date
+
+    RemoveMemberRequest:
+      type: object
+      required: [entity]
+      properties:
+        entity:
+          $ref: '#/components/schemas/Reference'
+        endedDate:
+          type: string
+          format: date
+        reason:
+          type: string
+
+    UpdateMemberRequest:
+      type: object
+      properties:
+        role:
+          $ref: '#/components/schemas/CodeableConcept'
+        startDate:
+          type: string
+          format: date
+        endedDate:
+          type: string
+          format: date
+
+    MembershipResponse:
+      type: object
+      required: [type, group, entity, status]
+      properties:
+        type:
+          type: string
+          enum: [GroupMember]
+        group:
+          $ref: '#/components/schemas/Reference'
+        entity:
+          $ref: '#/components/schemas/Reference'
+        role:
+          $ref: '#/components/schemas/CodeableConcept'
+        startDate:
+          type: string
+          format: date
+        endedDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [active, inactive]
+
+    GroupMembershipBundle:
+      type: object
+      required: [type, total]
+      description: List of group memberships for an individual
+      properties:
+        type:
+          type: string
+          enum: [GroupMembershipList]
+        total:
+          type: integer
+        entry:
+          type: array
+          items:
+            type: object
+            properties:
+              resource:
+                $ref: '#/components/schemas/MembershipResponse'
+
+    MergeGroupRequest:
+      type: object
+      required: [sourceGroup, targetGroup]
+      properties:
+        sourceGroup:
+          $ref: '#/components/schemas/Reference'
+        targetGroup:
+          $ref: '#/components/schemas/Reference'
+        roleMapping:
+          type: object
+          additionalProperties:
+            type: string
+          description: Map source roles to target roles
+
+    SplitGroupRequest:
+      type: object
+      required: [newGroupIdentifier, membersToMove]
+      properties:
+        newGroupIdentifier:
+          type: array
+          items:
+            $ref: '#/components/schemas/Identifier'
+          minItems: 1
+        membersToMove:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reference'
+          minItems: 1
+        newHead:
+          $ref: '#/components/schemas/Reference'
+
+    MembershipHistoryEntry:
+      type: object
+      required: [timestamp, action, member]
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        action:
+          type: string
+          enum: [added, removed, role_changed, status_changed]
+        member:
+          $ref: '#/components/schemas/Reference'
+        oldRole:
+          $ref: '#/components/schemas/CodeableConcept'
+        newRole:
+          $ref: '#/components/schemas/CodeableConcept'
+        changedBy:
+          type: string
+
+    # --- Filter Discovery and Advanced Search ---
+    FilterMetadata:
+      type: object
+      properties:
+        name:
+          type: string
+        field_path:
+          type: string
+        filter_type:
+          type: string
+          enum: [exact, contains, range, in, nin, "null", boolean, fulltext]
+        label:
+          type: string
+        description:
+          type: string
+        allowed_operators:
+          type: array
+          items:
+            type: string
+        required:
+          type: boolean
+        is_indexed:
+          type: boolean
+        max_values:
+          type: integer
+
+    PresetMetadata:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+
+    FilterMetadataResponse:
+      type: object
+      required: [resource]
+      properties:
+        resource:
+          type: string
+        allow_custom_filters:
+          type: boolean
+        max_filter_complexity:
+          type: integer
+        filters:
+          type: array
+          items:
+            $ref: '#/components/schemas/FilterMetadata'
+        presets:
+          type: array
+          items:
+            $ref: '#/components/schemas/PresetMetadata'
+
+    FilterCondition:
+      type: object
+      required: [field, value]
+      properties:
+        field:
+          type: string
+        operator:
+          type: string
+          default: eq
+          enum: [eq, ne, gt, gte, lt, lte, in, nin, like, ilike, "null"]
+        value: {}
+
+    SortField:
+      type: object
+      required: [field]
+      properties:
+        field:
+          type: string
+        direction:
+          type: string
+          default: asc
+          enum: [asc, desc]
+
+    PaginationSpec:
+      type: object
+      properties:
+        count:
+          type: integer
+          default: 20
+          minimum: 1
+          maximum: 100
+        offset:
+          type: integer
+          default: 0
+          minimum: 0
+
+    SearchRequest:
+      type: object
+      description: Request body for advanced search with complex filters
+      properties:
+        filters:
+          type: array
+          items:
+            $ref: '#/components/schemas/FilterCondition'
+        filter_logic:
+          type: string
+          default: AND
+          enum: [AND, OR]
+        preset:
+          type: string
+          description: Named preset to apply
+        additional_filters:
+          type: array
+          items:
+            $ref: '#/components/schemas/FilterCondition'
+          description: Additional filters on top of preset
+        sort:
+          type: array
+          items:
+            $ref: '#/components/schemas/SortField'
+        pagination:
+          $ref: '#/components/schemas/PaginationSpec'
+
+    # --- API Metadata ---
+    ResourceMetadataInfo:
+      type: object
+      properties:
+        operations:
+          type: array
+          items:
+            type: string
+        searchParams:
+          type: array
+          items:
+            type: string
+
+    ExtensionMetadataInfo:
+      type: object
+      properties:
+        url:
+          type: string
+        module:
+          type: string
+        appliesTo:
+          type: array
+          items:
+            type: string
+        fields:
+          type: array
+          items:
+            type: string
+
+    AuthenticationMetadataInfo:
+      type: object
+      properties:
+        type:
+          type: string
+        tokenEndpoint:
+          type: string
+        grantTypes:
+          type: array
+          items:
+            type: string
+
+    ApiMetadata:
+      type: object
+      required: [name, version, resources, authentication, docs]
+      properties:
+        name:
+          type: string
+          example: "OpenSPP API"
+        version:
+          type: string
+          example: "2.0.0"
+        resources:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ResourceMetadataInfo'
+        extensions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExtensionMetadataInfo'
+        authentication:
+          $ref: '#/components/schemas/AuthenticationMetadataInfo'
+        docs:
+          type: string
+          example: "/api/v2/spp/docs"
+
+    # --- Change Request (spp_api_v2_change_request) ---
+    ChangeRequestType:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          description: Type code (e.g., add_member, edit_individual)
+        name:
+          type: string
+
+    RegistrantRef:
+      type: object
+      required: [system, value]
+      properties:
+        system:
+          type: string
+          description: Identifier namespace URI
+        value:
+          type: string
+        display:
+          type: string
+
+    ChangeRequestCreate:
+      type: object
+      required: [type, requestType, registrant]
+      properties:
+        type:
+          type: string
+          enum: [ChangeRequest]
+        requestType:
+          $ref: '#/components/schemas/ChangeRequestType'
+        registrant:
+          $ref: '#/components/schemas/RegistrantRef'
+        applicant:
+          $ref: '#/components/schemas/RegistrantRef'
+        applicantPhone:
+          type: string
+        detail:
+          type: object
+          additionalProperties: true
+        description:
+          type: string
+        notes:
+          type: string
+
+    ChangeRequestUpdate:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          type: object
+          additionalProperties: true
+
+    ChangeRequestResponse:
+      type: object
+      required: [type, reference, requestType, status, registrant]
+      properties:
+        type:
+          type: string
+          enum: [ChangeRequest]
+        reference:
+          type: string
+          description: CR reference number (e.g., CR/2024/00001)
+        requestType:
+          $ref: '#/components/schemas/ChangeRequestType'
+        status:
+          type: string
+          enum: [draft, pending, revision, approved, rejected, applied]
+        registrant:
+          $ref: '#/components/schemas/RegistrantRef'
+        applicant:
+          $ref: '#/components/schemas/RegistrantRef'
+        applicantPhone:
+          type: string
+        detail:
+          type: object
+          additionalProperties: true
+        isApplied:
+          type: boolean
+        appliedDate:
+          type: string
+          format: date-time
+        applyError:
+          type: string
+        submittedDate:
+          type: string
+          format: date-time
+        approvedDate:
+          type: string
+          format: date-time
+        rejectedDate:
+          type: string
+          format: date-time
+        rejectionReason:
+          type: string
+        revisionNotes:
+          type: string
+        description:
+          type: string
+        notes:
+          type: string
+        meta:
+          $ref: '#/components/schemas/ResourceMeta'
+
+    # --- Vocabulary (spp_api_v2_vocabulary) ---
+    VocabularyDetail:
+      type: object
+      required: [namespace_uri, name, domain]
+      properties:
+        namespace_uri:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+        description:
+          type: string
+        reference_url:
+          type: string
+        domain:
+          type: string
+          description: "Domain area (core, social_assistance, health, etc.)"
+        is_hierarchical:
+          type: boolean
+        code_count:
+          type: integer
+
+    VocabularyListResponse:
+      type: object
+      required: [total, items]
+      properties:
+        total:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/VocabularyDetail'
+
+    VocabularyCodeItem:
+      type: object
+      required: [code, display]
+      properties:
+        code:
+          type: string
+        display:
+          type: string
+        definition:
+          type: string
+        deprecated:
+          type: boolean
+          default: false
+        parent_code:
+          type: string
+        level:
+          type: integer
+          default: 0
+
+    VocabularyCodesResponse:
+      type: object
+      required: [namespace_uri, vocabulary_name, total, items]
+      properties:
+        namespace_uri:
+          type: string
+        vocabulary_name:
+          type: string
+        total:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/VocabularyCodeItem'
+
+    # --- Cycle (spp_api_v2_cycles) ---
+    CycleResource:
+      type: object
+      required: [type, identifier, name, program, state]
+      properties:
+        type:
+          type: string
+          enum: [Cycle]
+        identifier:
+          type: string
+        name:
+          type: string
+        sequence:
+          type: integer
+        program:
+          $ref: '#/components/schemas/Reference'
+        period:
+          $ref: '#/components/schemas/Period'
+        state:
+          type: string
+        approvedDate:
+          type: string
+          format: date-time
+        approvedBy:
+          type: string
+        statistics:
+          type: object
+          properties:
+            membersCount:
+              type: integer
+            entitlementsCount:
+              type: integer
+            paymentsCount:
+              type: integer
+            totalAmount:
+              type: number
+            currency:
+              type: string
+        previousCycle:
+          $ref: '#/components/schemas/Reference'
+        nextCycle:
+          $ref: '#/components/schemas/Reference'
+        extension:
+          type: object
+          additionalProperties: true
+        meta:
+          $ref: '#/components/schemas/ResourceMeta'
+
+    # --- Entitlement (spp_api_v2_entitlements) ---
+    MoneyValue:
+      type: object
+      required: [value, currency]
+      properties:
+        value:
+          type: number
+        currency:
+          type: string
+          description: ISO 4217 currency code
+
+    EntitlementResource:
+      type: object
+      required: [type, identifier, entitlementType, state]
+      properties:
+        type:
+          type: string
+          enum: [Entitlement]
+        identifier:
+          type: string
+          description: Entitlement code (UUID)
+        entitlementType:
+          type: string
+          enum: [cash, inkind]
+        state:
+          type: string
+        beneficiary:
+          $ref: '#/components/schemas/Reference'
+        program:
+          $ref: '#/components/schemas/Reference'
+        cycle:
+          $ref: '#/components/schemas/Reference'
+        validPeriod:
+          $ref: '#/components/schemas/Period'
+        initialAmount:
+          $ref: '#/components/schemas/MoneyValue'
+        balance:
+          $ref: '#/components/schemas/MoneyValue'
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              product:
+                $ref: '#/components/schemas/Reference'
+              quantity:
+                type: object
+                properties:
+                  value:
+                    type: number
+                  unit:
+                    type: string
+              unitPrice:
+                $ref: '#/components/schemas/MoneyValue'
+        servicePoint:
+          $ref: '#/components/schemas/Reference'
+        approvedDate:
+          type: string
+          format: date
+        ern:
+          type: string
+          description: Entitlement Reference Number
+        extension:
+          type: object
+          additionalProperties: true
+        meta:
+          $ref: '#/components/schemas/ResourceMeta'
+
+    # --- ServicePoint (spp_api_v2_service_points) ---
+    ServicePointResource:
+      type: object
+      required: [resourceType, identifier, name]
+      properties:
+        resourceType:
+          type: string
+          enum: [ServicePoint]
+        identifier:
+          type: string
+        name:
+          type: string
+        contractActive:
+          type: boolean
+        disabled:
+          type: boolean
+        area:
+          $ref: '#/components/schemas/Reference'
+        country:
+          type: string
+          description: ISO 3166-1 alpha-2
+        address:
+          $ref: '#/components/schemas/Address'
+        telecom:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContactPoint'
+        company:
+          $ref: '#/components/schemas/Reference'
+        serviceType:
+          type: array
+          items:
+            type: string
+        extension:
+          type: object
+          additionalProperties: true
+        meta:
+          $ref: '#/components/schemas/ResourceMeta'
+
+    # --- Product (spp_api_v2_products) ---
+    ProductResource:
+      type: object
+      required: [resourceType, identifier, name]
+      properties:
+        resourceType:
+          type: string
+          enum: [Product]
+        identifier:
+          type: string
+        name:
+          type: string
+        defaultCode:
+          type: string
+          description: Product SKU/code
+        category:
+          $ref: '#/components/schemas/Reference'
+        unitOfMeasure:
+          $ref: '#/components/schemas/Reference'
+        listPrice:
+          type: number
+        currency:
+          type: string
+        active:
+          type: boolean
+        hasImage:
+          type: boolean
+        extension:
+          type: object
+          additionalProperties: true
+        meta:
+          $ref: '#/components/schemas/ResourceMeta'
+
+    ProductCategoryResource:
+      type: object
+      required: [resourceType, identifier, name]
+      properties:
+        resourceType:
+          type: string
+          enum: [ProductCategory]
+        identifier:
+          type: string
+        name:
+          type: string
+        parent:
+          $ref: '#/components/schemas/Reference'
+        meta:
+          $ref: '#/components/schemas/ResourceMeta'
+
+    UnitOfMeasureResource:
+      type: object
+      required: [resourceType, identifier, name]
+      properties:
+        resourceType:
+          type: string
+          enum: [UnitOfMeasure]
+        identifier:
+          type: string
+        name:
+          type: string
+        symbol:
+          type: string
+        category:
+          $ref: '#/components/schemas/Reference'
+        factor:
+          type: number
+        rounding:
+          type: number
+        meta:
+          $ref: '#/components/schemas/ResourceMeta'
+
+    # --- Credential (spp_api_v2_verifiable_credentials) ---
+    CredentialIssueRequest:
+      type: object
+      required: [credential_type_code, subject_spp_id]
+      properties:
+        credential_type_code:
+          type: string
+          maxLength: 100
+        subject_spp_id:
+          type: string
+          maxLength: 100
+        holder_spp_id:
+          type: string
+          maxLength: 100
+        holder_did:
+          type: string
+        holder_key_jwk:
+          type: object
+        valid_from:
+          type: string
+          format: date-time
+        valid_until:
+          type: string
+          format: date-time
+
+    CredentialIssueResponse:
+      type: object
+      required: [credential_id, credential, credential_format]
+      properties:
+        credential_id:
+          type: string
+        credential:
+          description: Signed credential (SD-JWT string or JSON-LD dict)
+        credential_format:
+          type: string
+        valid_from:
+          type: string
+          format: date-time
+        valid_until:
+          type: string
+          format: date-time
+
+    CredentialVerifyRequest:
+      type: object
+      required: [credential]
+      properties:
+        credential:
+          description: Credential to verify (SD-JWT string or JSON-LD dict)
+        expected_audience:
+          type: string
+        expected_nonce:
+          type: string
+
+    CredentialVerifyResponse:
+      type: object
+      required: [valid]
+      properties:
+        valid:
+          type: boolean
+        claims:
+          type: object
+        errors:
+          type: array
+          items:
+            type: string
+        issuer:
+          type: string
+        issued_at:
+          type: string
+          format: date-time
+
+    StatusListCredentialResponse:
+      type: object
+      required: [credential, list_id, purpose]
+      properties:
+        credential:
+          type: object
+          description: Status list credential (JSON-LD format)
+        list_id:
+          type: string
+        purpose:
+          type: string
+
+    CredentialSummary:
+      type: object
+      required: [credential_id, credential_type, credential_type_name, status, issued_at]
+      properties:
+        credential_id:
+          type: string
+        credential_type:
+          type: string
+        credential_type_name:
+          type: string
+        status:
+          type: string
+          enum: [active, revoked, suspended, expired]
+        issued_at:
+          type: string
+          format: date-time
+        valid_from:
+          type: string
+          format: date-time
+        valid_until:
+          type: string
+          format: date-time
+
+    CredentialListResponse:
+      type: object
+      required: [subject_spp_id, total, items]
+      properties:
+        subject_spp_id:
+          type: string
+        total:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CredentialSummary'
+
+    # --- Studio (spp_studio_api_v2) ---
+    StudioFieldInfo:
+      type: object
+      required: [technicalName, label, fieldType, targetType]
+      properties:
+        technicalName:
+          type: string
+        label:
+          type: string
+        fieldType:
+          type: string
+        targetType:
+          type: string
+        helpText:
+          type: string
+        isRequired:
+          type: boolean
+        placementZone:
+          type: string
+        apiExposed:
+          type: boolean
+        selectionOptions:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: string
+              label:
+                type: string
+        isReadonly:
+          type: boolean
+        isSearchable:
+          type: boolean
+        sequence:
+          type: integer
+
+    StudioFieldsResponse:
+      type: object
+      required: [total, items]
+      properties:
+        total:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StudioFieldInfo'
+        nextPageId:
+          type: integer
+          nullable: true
+
+    StudioFieldSchema:
+      type: object
+      required: [technicalName, type]
+      properties:
+        technicalName:
+          type: string
+        type:
+          type: string
+          description: "JSON Schema type (string, number, boolean, object, array)"
+        format:
+          type: string
+        minimum:
+          type: number
+        maximum:
+          type: number
+        maxLength:
+          type: integer
+        enum:
+          type: array
+          items:
+            type: string
+        enumDisplay:
+          type: object
+          additionalProperties:
+            type: string
+        linkModel:
+          type: string
+        linkDomain:
+          type: string
+        description:
+          type: string
+        required:
+          type: boolean
+
+    StudioVariableInfo:
+      type: object
+      required: [name, valueType, sourceType, appliesTo]
+      properties:
+        name:
+          type: string
+        label:
+          type: string
+        description:
+          type: string
+        valueType:
+          type: string
+        sourceType:
+          type: string
+        appliesTo:
+          type: string
+          description: "Context (individual, group, both)"
+        periodGranularity:
+          type: string
+        supportsHistorical:
+          type: boolean
+        unit:
+          type: string
+        category:
+          type: string
+
+    StudioVariablesResponse:
+      type: object
+      required: [total, items]
+      properties:
+        total:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StudioVariableInfo'
+        nextPageId:
+          type: integer
+          nullable: true
+
+    VariableValueDetail:
+      type: object
+      required: [value, periodKey]
+      properties:
+        value: {}
+        periodKey:
+          type: string
+        recordedAt:
+          type: string
+        isStale:
+          type: boolean
+        sourceType:
+          type: string
+
+    SubjectVariablesResponse:
+      type: object
+      required: [subjectId, periodKey, variables]
+      properties:
+        subjectId:
+          type: string
+        periodKey:
+          type: string
+        variables:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/VariableValueDetail'
+
+    # --- Data (spp_api_v2_data) ---
+    DataValueInput:
+      type: object
+      required: [variable, subject_external_id, value]
+      properties:
+        variable:
+          type: string
+        subject_external_id:
+          type: string
+        value: {}
+        periodKey:
+          type: string
+          default: current
+        as_of:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+
+    DataPushRequest:
+      type: object
+      required: [provider_code, values]
+      properties:
+        provider_code:
+          type: string
+        values:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataValueInput'
+          minItems: 1
+          maxItems: 10000
+
+    DataPushError:
+      type: object
+      required: [index, error]
+      properties:
+        index:
+          type: integer
+        subject_external_id:
+          type: string
+        variable:
+          type: string
+        error:
+          type: string
+
+    DataPushResponse:
+      type: object
+      required: [success, processed]
+      properties:
+        success:
+          type: boolean
+        processed:
+          type: integer
+        inserted:
+          type: integer
+        updated:
+          type: integer
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataPushError'
+
+    DataValueOutput:
+      type: object
+      required: [variable, subject_external_id, value, period_key, recorded_at]
+      properties:
+        variable:
+          type: string
+        subject_external_id:
+          type: string
+        value: {}
+        period_key:
+          type: string
+        recorded_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        is_stale:
+          type: boolean
+        source_type:
+          type: string
+
+    DataPullResponse:
+      type: object
+      required: [total, items]
+      properties:
+        total:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataValueOutput'
+
+    DataInvalidateRequest:
+      type: object
+      required: [provider_code, variable]
+      properties:
+        provider_code:
+          type: string
+        variable:
+          type: string
+        subject_external_ids:
+          type: array
+          items:
+            type: string
+        period_key:
+          type: string
+
+    DataInvalidateResponse:
+      type: object
+      required: [success, invalidated]
+      properties:
+        success:
+          type: boolean
+        invalidated:
+          type: integer
+
+    DataVariableInfo:
+      type: object
+      required: [name, cel_accessor, value_type, source_type, cache_strategy]
+      properties:
+        name:
+          type: string
+        cel_accessor:
+          type: string
+        description:
+          type: string
+        value_type:
+          type: string
+        source_type:
+          type: string
+        cache_strategy:
+          type: string
+        period_granularity:
+          type: string
+        provider_code:
+          type: string
+
+    DataVariablesListResponse:
+      type: object
+      required: [total, items]
+      properties:
+        total:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataVariableInfo'
+
+    # --- DRIMS (spp_api_v2_drims) ---
+    GeoJSONFeatureCollection:
+      type: object
+      required: [type, features]
+      description: GeoJSON FeatureCollection
+      properties:
+        type:
+          type: string
+          enum: [FeatureCollection]
+        features:
+          type: array
+          items:
+            type: object
+            required: [type, geometry, properties]
+            properties:
+              type:
+                type: string
+                enum: [Feature]
+              geometry:
+                type: object
+                description: GeoJSON geometry (Point, Polygon, etc.)
+              properties:
+                type: object
+                additionalProperties: true

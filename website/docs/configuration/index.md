@@ -78,13 +78,13 @@ Entity forms define the data collection forms that users will interact with in t
 ### 3. [External Sync Configuration](./external-sync.md)
 Defines how the application synchronizes data with external systems:
 
-- **Type**: Sync adapter type (Mock Sync Server, OpenSPP, OpenFn)
+- **Type**: Sync adapter type (Mock Registry Server, OpenSPP, OpenFn)
 - **URL**: Endpoint URL for the sync service
 - **Auth**: Authentication method (None, Basic)
 - **Extra Fields**: Additional configuration parameters as key-value pairs
 
 **Supported Sync Types:**
-- `mock-sync-server`: For testing and development
+- `mock`: For testing and development
 - `openspp-adapter`: Integration with OpenSPP systems
 - `openfn-adapter`: Integration with OpenFn workflows
 

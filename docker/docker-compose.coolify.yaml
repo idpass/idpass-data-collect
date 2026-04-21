@@ -1,0 +1,135 @@
+name: idpass-datacollect-staging
+services:
+  postgres:
+    image: postgres:15
+    hostname: dc-postgres
+    restart: always
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-admin}
+      - POSTGRES_DB=${POSTGRES_DB:-datacollect}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-reset-dbs.sh:/docker-entrypoint-initdb.d/init-reset-dbs.sh:ro
+    networks:
+      - internal
+    command: ["postgres"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-admin} -d $${POSTGRES_DB:-datacollect}"]
+      interval: 5s
+      timeout: 3s
+      start_period: 30s
+      retries: 10
+
+  sync-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: backend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - POSTGRES=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@dc-postgres:5432/${POSTGRES_DB:-datacollect}
+      - POSTGRES_TEST=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@dc-postgres:5432/${POSTGRES_DB:-datacollect}_test
+      - JWT_SECRET=${JWT_SECRET:-staging-secret-change-me}
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@datacollect.lan}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
+      - EXTERNAL_SYNC_ENABLED=${EXTERNAL_SYNC_ENABLED:-false}
+    ports:
+      - "${SYNC_SERVER_PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+      - coolify
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  admin-ui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: admin-ui
+      args:
+        - VITE_API_URL=${ADMIN_API_URL:-http://localhost:3000}
+    restart: unless-stopped
+    ports:
+      - "4173:80"
+    depends_on:
+      - sync-server
+    networks:
+      - internal
+      - coolify
+
+  web-ui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: web-ui
+      args:
+        - VITE_API_URL=${WEB_API_URL:-http://localhost:3000}
+    restart: unless-stopped
+    ports:
+      - "5174:80"
+    depends_on:
+      - sync-server
+    networks:
+      - internal
+      - coolify
+
+  # PublicSchema-aligned reference registry. Used as the external sync target
+  # for @idpass/adapter-mock so staging can exercise the DC external sync
+  # contract end-to-end without a real OpenSPP instance.
+  mock-registry:
+    build:
+      context: ../examples/mock-server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - MOCK_HOST=0.0.0.0
+      - MOCK_PORT=9999
+      - MOCK_DB_PATH=/data/mock_registry.db
+      - MOCK_OAUTH_CLIENT_ID=${MOCK_OAUTH_CLIENT_ID:-mock-client}
+      - MOCK_OAUTH_CLIENT_SECRET=${MOCK_OAUTH_CLIENT_SECRET:-mock-secret}
+      - MOCK_JWT_SECRET=${MOCK_JWT_SECRET:-staging-mock-jwt-change-me}
+      - MOCK_SESSION_SECRET=${MOCK_SESSION_SECRET:-staging-mock-session-change-me}
+      - MOCK_UI_USERNAME=${MOCK_UI_USERNAME:-admin}
+      - MOCK_UI_PASSWORD=${MOCK_UI_PASSWORD:-admin}
+      - MOCK_SESSION_COOKIE_SECURE=${MOCK_SESSION_COOKIE_SECURE:-true}
+      - MOCK_CORS_ALLOWED_ORIGINS=${MOCK_CORS_ALLOWED_ORIGINS:-*}
+    ports:
+      - "${MOCK_SERVER_PORT:-9999}:9999"
+    volumes:
+      - mock-registry-data:/data
+    networks:
+      - internal
+      - coolify
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request,sys; urllib.request.urlopen('http://127.0.0.1:9999/health', timeout=2).read(); sys.exit(0)",
+        ]
+      interval: 15s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+volumes:
+  postgres-data:
+  mock-registry-data:
+
+networks:
+  internal:
+    driver: bridge
+  coolify:
+    external: true

@@ -12,11 +12,11 @@ DataCollect implements event sourcing and CQRS patterns to create a robust, audi
 
 ### Key Features
 
-- 🗄️ **Offline-First**: Full functionality without internet connectivity using IndexedDB
-- 📝 **Event Sourcing**: Complete audit trail with ability to replay state changes
-- 🔄 **Synchronization**: Bi-directional sync with central server
-- 🔐 **Encryption**: Client-side data encryption support
-- 📱 **Cross-Platform**: Works in browsers, React Native, and Electron apps
+- **Offline-First**: Full functionality without internet connectivity using IndexedDB
+- **Event Sourcing**: Complete audit trail with ability to replay state changes
+- **Synchronization**: Bi-directional sync with central server
+- **Encryption**: Client-side data encryption support
+- **Cross-Platform**: Works in browsers, React Native, and Electron apps
 
 ## Core Components
 
@@ -27,12 +27,106 @@ Central orchestrator for all data operations, providing a clean API for:
 - Synchronization coordination
 
 ### EventStore & EntityStore
-- **EventStore**: Immutable event log with Merkle tree integrity
-- **EntityStore**: Current state of all entities (Groups and Individuals)
+- **EventStore**: Immutable event log with hash chain integrity
+- **EntityStore**: Current state of all entities (Groups, Individuals, and Records)
 
 ### Sync Managers
 - **InternalSyncManager**: Client ↔ Server synchronization
 - **ExternalSyncManager**: Server ↔ External system integration
+
+## Entity Types
+
+DataCollect supports three entity types that map to common beneficiary program concepts:
+
+| Type | `EntityType` | Typical uses |
+| :--- | :--- | :--- |
+| Group | `EntityType.Group` | Households, families, program cohorts |
+| Individual | `EntityType.Individual` | Persons, beneficiaries |
+| Record | `EntityType.Record` | Activities, services, visits, events linked to a group or individual |
+
+### Record Entities (v2.0.0)
+
+A **Record** is an activity or service log attached to an existing group or individual. Unlike groups and individuals — which represent _who_ is in the program — records capture _what happened_: a home visit, a training session, a grievance filing, an assistance disbursement, or any other time-bound interaction.
+
+#### TypeScript interface
+
+```typescript
+interface RecordDoc extends EntityDoc {
+  type: EntityType.Record;
+  /** GUID of the parent entity this record belongs to (optional) */
+  parentEntityGuid?: string;
+}
+```
+
+Records extend `EntityDoc` and therefore carry the same `guid`, `data`, `syncLevel`, and version fields as all other entities. The `parentEntityGuid` field optionally links a record to the group or individual it belongs to.
+
+#### Configuring record forms
+
+Set `entityType: "record"` on a form definition in your app configuration to tell DataCollect that submissions should produce `create-record` / `update-record` events rather than entity-creation events:
+
+```json
+{
+  "entityForms": [
+    {
+      "name": "home-visit",
+      "title": "Home Visit",
+      "entityType": "record",
+      "formio": { }
+    },
+    {
+      "name": "training",
+      "title": "Training Attendance",
+      "entityType": "record",
+      "formio": { }
+    }
+  ]
+}
+```
+
+Forms that have a `dependsOn` relationship with a parent entity form are automatically classified as record forms by the `FormClassifier` service, even without an explicit `entityType` field.
+
+#### Creating records programmatically
+
+```typescript
+await manager.submitForm({
+  guid: crypto.randomUUID(),
+  type: 'create-record',
+  entityGuid: crypto.randomUUID(),   // new record's own GUID
+  data: {
+    visitDate: '2025-03-01',
+    notes: 'Household visited, 4 members present',
+    parentId: householdGuid           // links to the parent entity
+  },
+  timestamp: new Date().toISOString(),
+  userId: currentUserId,
+  syncLevel: SyncLevel.LOCAL
+});
+```
+
+The `EventApplierService` handles `create-record` and `update-record` form types and stores the resulting entity with `type: EntityType.Record`. The `data.parentId` field is automatically promoted to `parentEntityGuid` on the stored document.
+
+#### Querying records
+
+Records are stored in the same `EntityStore` as groups and individuals. Filter by type to retrieve them:
+
+```typescript
+const records = await entityStore.searchEntities([
+  { type: EntityType.Record }
+]);
+
+// Records belonging to a specific parent
+const visitsForHousehold = await entityStore.searchEntities([
+  { type: EntityType.Record },
+  { parentEntityGuid: householdGuid }
+]);
+```
+
+#### How records differ from groups and individuals
+
+- **Groups** contain member references (`memberIds`). Records do not.
+- **Individuals** represent people. Records represent events or services.
+- **Records** are always associated with an activity in time. They have a `parentEntityGuid` pointing to the group or individual they describe.
+- All three types sync with the server in the same way — via the standard internal sync pipeline — and are subject to the same audit trail and conflict resolution mechanisms.
 
 ## Quick Start
 
@@ -40,8 +134,8 @@ Central orchestrator for all data operations, providing a clean API for:
 
 ```bash
 cd ./packages/datacollect
-npm install
-npm run build
+pnpm install
+pnpm build
 ```
 
 ### Basic Usage
@@ -58,7 +152,7 @@ import {
   InternalSyncManager,
   ExternalSyncManager,
   AuthManager
-} from 'idpass-data-collect';
+} from '@idpass/data-collect-core';
 
 // Initialize storage adapters
 const eventStorageAdapter = new IndexedDbEventStorageAdapter('my-events');
@@ -88,7 +182,7 @@ const externalSyncManager = new ExternalSyncManager(
   eventStore,
   eventApplierService,
   {
-    type: 'mock-sync-server',
+    type: 'mock',
     url: 'http://localhost:4000',
     auth: '',
     extraFields: {}
@@ -168,6 +262,6 @@ graph LR
 
 ## Next Steps
 
-- 📖 [Tutorials](../../getting-started/tutorials) - Learn by building
-- 🚀 [Backend Package](../../packages/backend/) - Add server synchronization
-- 👥 [Admin Package](../../packages/admin/) - Complete management solution
+- [Tutorials](../../getting-started/tutorials) - Learn by building
+- [Backend Package](../../packages/backend/) - Add server synchronization
+- [Admin Package](../../packages/admin/) - Complete management solution

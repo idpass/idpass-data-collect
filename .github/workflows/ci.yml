@@ -2,15 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [main, develop, refactorv4]
+    branches: [main, develop]
   pull_request:
-    branches: [main, develop, refactorv4]
+    branches: [main, develop]
 
 jobs:
   license-check:
     runs-on: ubuntu-latest
     env:
       HUSKY: 0
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
 
@@ -46,6 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       HUSKY: 0
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     needs: license-check
 
     strategy:
@@ -95,32 +97,23 @@ jobs:
       - name: Install dependencies
         run: HUSKY=0 pnpm run ci:install
 
-      - name: Run linting
-        run: pnpm run lint
+      - name: Install Playwright browsers
+        run: pnpm --filter @idpass/data-collect-admin exec playwright install --with-deps chromium
 
-      - name: Run type checking
-        run: pnpm run type-check
-
-      - name: Validate OpenAPI specification
-        working-directory: packages/backend
-        run: pnpm run validate-api
-
-      - name: Run tests
+      - name: Run pr-check
         env:
           POSTGRES: postgresql://test:test@localhost:5432/test
           POSTGRES_TEST: postgresql://test:test@localhost:5432/test
-          JWT_SECRET: test_secret
+          JWT_SECRET: ci_test_secret_that_is_at_least_32_chars_long!
           ADMIN_EMAIL: admin@example.com
-          ADMIN_PASSWORD: test_password
-        run: pnpm test
-
-      - name: Build projects
-        run: pnpm run build
+          ADMIN_PASSWORD: "Correct horse battery staple 42!"
+        run: pnpm run pr-check
 
   security:
     runs-on: ubuntu-latest
     env:
       HUSKY: 0
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     needs: license-check
     steps:
       - uses: actions/checkout@v4

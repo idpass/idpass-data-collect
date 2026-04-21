@@ -9,6 +9,26 @@ sidebar_position: 4
 The configuration is to be used together with backend, admin and mobile solution to take advantage of multi-tenants setup.
 The configuration can be set up either manually or using Config creation in admin.
 
+## Environment Variables (v2.0)
+
+The following environment variables are required or recommended for v2.0 deployments:
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `JWT_SECRET` | **Yes** | — | Signing key for JWT tokens. Must be ≥32 characters. Server refuses to start otherwise. |
+| `CORS_ORIGINS` | **Yes** | deny-all | Comma-separated list of allowed origins (e.g., `https://admin.example.com`). |
+| `OTP_HASH_SECRET` | Recommended | — | HMAC-SHA256 key for hashing OTP codes. Required if using citizen self-service. |
+| `DATABASE_URL` | **Yes** | — | PostgreSQL connection string. |
+| `PORT` | No | `3000` | Backend server port. |
+
+```bash
+# Example .env for local development
+JWT_SECRET=your-secret-key-that-is-at-least-32-characters-long
+CORS_ORIGINS=http://localhost:5173,http://localhost:5174,http://localhost:8081
+OTP_HASH_SECRET=your-otp-hash-secret-key
+DATABASE_URL=postgresql://user:pass@localhost:5432/datacollect
+```
+
 ## Getting Started
 
 This guide will walk you through the complete setup process for using the IDPass Data Collect system with configuration management.
@@ -26,11 +46,8 @@ Before starting, ensure you have:
 #### Start Backend Service
 
 ```bash
-# Navigate to your backend directory
-cd packages/backend
-
 # Start the backend service
-npm start
+pnpm --filter @idpass/data-collect-backend dev
 ```
 
 The backend service should be running on the configured port (typically `http://localhost:3000` or similar).
@@ -38,11 +55,8 @@ The backend service should be running on the configured port (typically `http://
 #### Start Admin Interface
 
 ```bash
-# Navigate to your admin directory
-cd packages/admin
-
 # Start the admin interface
-npm start
+pnpm --filter @idpass/data-collect-admin dev
 ```
 
 The admin interface should be accessible at `http://localhost:5173` or your configured URL.
@@ -100,7 +114,7 @@ The admin interface should be accessible at `http://localhost:5173` or your conf
     }
   ],
   "externalSync": {
-    "type": "mock-sync-server",
+    "type": "mock",
     "url": "http://localhost:4000",
     "auth": "",
     "extraFields": {}
@@ -171,7 +185,7 @@ import {
   ExternalSyncManager,
   InternalSyncManager,
   AuthManager
-} from '@idpass/datacollect';
+} from '@idpass/data-collect-core';
 
 // Initialize with your imported configuration
 const initializeDataCollect = async (config) => {
@@ -250,7 +264,7 @@ const formData = {
   },
   timestamp: new Date().toISOString(),
   userId: "user-id",
-  syncLevel: 0 // SyncLevel.LOCAL
+  syncLevel: SyncLevel.LOCAL
 };
 
 const individual = await dataCollect.submitForm(formData);
@@ -289,8 +303,8 @@ await dataCollect.initializeAuthManager();
 ```javascript
 // Login with username/password (for backend authentication)
 await dataCollect.login({
-  username: "admin@hdm.example",
-  password: "admin1@"
+  username: "admin@datacollect.lan",
+  password: "Correct horse battery staple 42!"
 });
 
 // Login with token (for external auth providers like Auth0/Keycloak)
@@ -328,8 +342,8 @@ console.log('User authenticated after logout:', isAuthenticated); // Should be f
 ```javascript
 // Login with backend credentials
 await dataCollect.login({
-  username: "admin@hdm.example", 
-  password: "admin1@"
+  username: "admin@datacollect.lan",
+  password: "Correct horse battery staple 42!"
 });
 ```
 
@@ -345,7 +359,7 @@ await dataCollect.login({
 #### User another client instance to get synced data
 
 ```javascript
-await anotherManager.login("admin@hdm.example", "admin1@");
+await anotherManager.login("admin@datacollect.lan", "Correct horse battery staple 42!");
 await manager.syncWithSyncServer();
 ```
 

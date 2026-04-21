@@ -18,6 +18,9 @@
  */
 
 import { SyncAdapter, FormSubmission, EntityDoc, SyncStatus } from "../interfaces/types";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("SyncAdapter");
 
 export class SyncAdapterImpl implements SyncAdapter {
   private syncStatus: SyncStatus = {
@@ -47,7 +50,7 @@ export class SyncAdapterImpl implements SyncAdapter {
       this.syncStatus.pendingChanges -= events.length;
       this.updateSyncStatus("success");
     } catch (error) {
-      console.error("Error pushing events:", error);
+      log.error({ err: error }, "Error pushing events");
       this.updateSyncStatus("error");
       throw error;
     }
@@ -70,7 +73,7 @@ export class SyncAdapterImpl implements SyncAdapter {
       this.syncStatus.pendingChanges -= entities.length;
       this.updateSyncStatus("success");
     } catch (error) {
-      console.error("Error pushing entities:", error);
+      log.error({ err: error }, "Error pushing entities");
       this.updateSyncStatus("error");
       throw error;
     }
@@ -88,7 +91,7 @@ export class SyncAdapterImpl implements SyncAdapter {
       return;
       // return this.mapResponseToEntities(entities);
     } catch (error) {
-      console.error("Error pulling entities:", error);
+      log.error({ err: error }, "Error pulling entities");
       this.updateSyncStatus("error");
       throw error;
     }
@@ -127,7 +130,7 @@ export class SyncAdapterImpl implements SyncAdapter {
       // You might want to call pushEvents and pullEntities here
       this.updateSyncStatus("success");
     } catch (error) {
-      console.error("Sync error:", error);
+      log.error({ err: error }, "Sync error");
       this.updateSyncStatus("error");
     }
   }
@@ -149,10 +152,10 @@ export class SyncAdapterImpl implements SyncAdapter {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      const timestamp = await response.json();
+      const timestamp = (await response.json()) as string;
       return timestamp;
     } catch (error) {
-      console.error("Error getting server timestamp:", error);
+      log.error({ err: error }, "Error getting server timestamp");
       throw error;
     }
   }

@@ -209,7 +209,7 @@ await userStore.saveUser({
 ### Frontend Authentication
 
 ```typescript
-import { AuthManager } from 'idpass-data-collect';
+import { AuthManager } from '@idpass/data-collect-core';
 
 const authManager = new AuthManager(configs, syncServerUrl, authStorage);
 await authManager.initialize();

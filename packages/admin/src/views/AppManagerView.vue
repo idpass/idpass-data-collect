@@ -7,12 +7,16 @@ import {
   type AppListParams,
 } from '@/api'
 import AppCard from '@/components/AppCard.vue'
+import OverviewPanel from '@/components/OverviewPanel.vue'
+import RecentActivity, { type ActivityItem } from '@/components/RecentActivity.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useSnackBarStore } from '@/stores/snackBar'
 import { AxiosError } from 'axios'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 const authStore = useAuthStore()
+const snackBarStore = useSnackBarStore()
 const router = useRouter()
 
 const apps = ref<AppListItem[]>([])
@@ -31,10 +35,9 @@ const pageSize = ref(12)
 const sortBy = ref<AppListParams['sortBy']>('name')
 const sortOrder = ref<AppListParams['sortOrder']>('asc')
 const searchTerm = ref('')
+const showArchived = ref(false)
 const isLoading = ref(false)
-
-const selectedFile = ref<File | null>(null)
-const fileError = ref<string | null>(null)
+const isRefreshing = ref(false)
 
 const sortByOptions = [
   { title: 'Name', value: 'name' },
@@ -47,11 +50,6 @@ const sortOrderOptions = [
   { title: 'Descending', value: 'desc' },
 ]
 
-const pageSizeOptions = [6, 12, 24, 48].map((value) => ({
-  title: `${value} per page`,
-  value,
-}))
-
 const hasNoResults = computed(() => !isLoading.value && apps.value.length === 0)
 const totalApps = computed(() => meta.value.total)
 const syncEnabledCount = computed(
@@ -62,10 +60,28 @@ const totalEntities = computed(() =>
 )
 const localOnlyCount = computed(() => Math.max(totalApps.value - syncEnabledCount.value, 0))
 
+// Generate recent activity from apps data
+const recentActivities = computed<ActivityItem[]>(() => {
+  // Create activity items from apps - this is a simplified version
+  // In a full implementation, this would come from a dedicated API endpoint
+  return apps.value.slice(0, 10).map((app, index) => ({
+    id: `activity-${app.id}-${index}`,
+    programId: app.id,
+    programName: app.name,
+    type: 'entity_created' as const,
+    description: `${app.entitiesCount || 0} entities in ${app.name}`,
+    timestamp: new Date(Date.now() - index * 3600000).toISOString(),
+  }))
+})
+
 let searchDebounce: ReturnType<typeof setTimeout> | undefined
 
-const fetchApps = async () => {
-  isLoading.value = true
+const fetchApps = async (isRefresh = false) => {
+  if (isRefresh) {
+    isRefreshing.value = true
+  } else {
+    isLoading.value = true
+  }
   try {
     const response = await getAppsApi({
       page: page.value,
@@ -73,6 +89,7 @@ const fetchApps = async () => {
       sortBy: sortBy.value,
       sortOrder: sortOrder.value,
       search: searchTerm.value.trim() || undefined,
+      includeArchived: showArchived.value || undefined,
     })
     apps.value = response.data
     meta.value = response.meta
@@ -90,6 +107,7 @@ const fetchApps = async () => {
     console.error('Error fetching apps:', error)
   } finally {
     isLoading.value = false
+    isRefreshing.value = false
   }
 }
 
@@ -112,70 +130,113 @@ watch(sortOrder, () => {
   fetchApps()
 })
 
-watch(
-  searchTerm,
-  () => {
-    if (searchDebounce) {
-      clearTimeout(searchDebounce)
-    }
-    searchDebounce = setTimeout(() => {
-      page.value = 1
-      fetchApps()
-    }, 300)
-  },
-)
+watch(showArchived, () => {
+  page.value = 1
+  fetchApps()
+})
 
-const uploadAppConfig = async () => {
-  if (!selectedFile.value) return
-
-  try {
-    const fileReader = new FileReader()
-    fileReader.onload = async (event: ProgressEvent<FileReader>) => {
-      try {
-        const json = JSON.parse(event.target?.result as string)
-
-        if (!json || typeof json !== 'object') {
-          throw new Error('Invalid app configuration format')
-        }
-
-        const formData = new FormData()
-        formData.append(
-          'config',
-          new Blob([JSON.stringify(json)], {
-            type: 'application/json',
-          }),
-          'config.json',
-        )
-
-        await createAppApi(formData)
-        selectedFile.value = null
-        fileError.value = null
-        await fetchApps()
-      } catch (error) {
-        if (error instanceof AxiosError && error.response?.status === 401) {
-          authStore.logout()
-          return
-        }
-        console.error('Error uploading configuration:', error)
-        fileError.value =
-          error instanceof Error ? error.message : 'Error uploading app configuration'
-      }
-    }
-
-    fileReader.onerror = () => {
-      console.error('Error reading file')
-      fileError.value = 'Failed to read the configuration file'
-    }
-
-    fileReader.readAsText(selectedFile.value)
-  } catch (error) {
-    console.error('Error:', error)
-    fileError.value = 'Error uploading app configuration'
+watch(searchTerm, (newVal) => {
+  if (searchDebounce) {
+    clearTimeout(searchDebounce)
   }
-}
+  if (newVal === null) {
+    searchTerm.value = ''
+    page.value = 1
+    fetchApps()
+    return
+  }
+  searchDebounce = setTimeout(() => {
+    page.value = 1
+    fetchApps()
+  }, 300)
+})
 
 const goToCreate = () => {
   router.push({ name: 'create' })
+}
+
+// JSON Config Import
+const showImportDialog = ref(false)
+const jsonFile = ref<File | null>(null)
+const jsonFileError = ref<string | null>(null)
+const isUploadingJson = ref(false)
+const showDuplicateConfirm = ref(false)
+const pendingImportJson = ref<Record<string, unknown> | null>(null)
+const pendingDuplicateId = ref('')
+
+const uploadJsonConfig = async (force = false) => {
+  if (!jsonFile.value) return
+
+  isUploadingJson.value = true
+  jsonFileError.value = null
+
+  try {
+    let json: Record<string, unknown>
+    if (force && pendingImportJson.value) {
+      json = pendingImportJson.value
+    } else {
+      const text = await jsonFile.value.text()
+      json = JSON.parse(text)
+
+      if (!json || typeof json !== 'object') {
+        throw new Error('Invalid configuration format')
+      }
+    }
+
+    if (!force && json.id) {
+      const existingApps = await getAppsApi({ search: json.id as string, pageSize: 1 })
+      if (existingApps.data.some((app) => app.id === json.id)) {
+        pendingImportJson.value = json
+        pendingDuplicateId.value = json.id as string
+        isUploadingJson.value = false
+        showDuplicateConfirm.value = true
+        return
+      }
+    }
+
+    const formData = new FormData()
+    formData.append(
+      'config',
+      new Blob([JSON.stringify(json)], { type: 'application/json' }),
+      'config.json',
+    )
+
+    await createAppApi(formData)
+    showImportDialog.value = false
+    showDuplicateConfirm.value = false
+    jsonFile.value = null
+    jsonFileError.value = null
+    pendingImportJson.value = null
+    snackBarStore.showSnackbar('Collection program imported successfully', 'success')
+    fetchApps()
+  } catch (error) {
+    if (error instanceof AxiosError && error.response?.status === 401) {
+      authStore.logout()
+      return
+    }
+    if (error instanceof AxiosError && error.response?.status === 409) {
+      jsonFileError.value = 'A collection program with this ID already exists.'
+    } else {
+      jsonFileError.value =
+        error instanceof Error ? error.message : 'Error uploading configuration'
+    }
+  } finally {
+    isUploadingJson.value = false
+  }
+}
+
+const confirmImportOverwrite = () => {
+  showDuplicateConfirm.value = false
+  uploadJsonConfig(true)
+}
+
+const cancelDuplicateConfirm = () => {
+  showDuplicateConfirm.value = false
+  pendingImportJson.value = null
+}
+
+const handleActivityClick = (activity: ActivityItem) => {
+  router.push({ name: 'app-details', params: { id: activity.programId } })
 }
 
 onMounted(() => {
@@ -191,358 +252,335 @@ onBeforeUnmount(() => {
 
 <template>
   <v-container class="app-dashboard" fluid>
-    <div class="dashboard-header">
-      <div class="dashboard-header__text">
-        <h1 class="dashboard-title">Collection Programs</h1>
-        <p class="dashboard-subtitle">Manage and monitor your form applications</p>
-      </div>
-      <div class="dashboard-header__actions">
-        <v-btn
-          class="dashboard-header__action"
-          variant="tonal"
-          color="primary"
-          prepend-icon="mdi-refresh"
-          @click="fetchApps"
-        >
-          Refresh
-        </v-btn>
-        <v-btn
-          class="dashboard-header__action"
-          color="primary"
-          prepend-icon="mdi-plus"
-          @click="goToCreate"
-        >
-          New Collection Program
-        </v-btn>
-      </div>
-    </div>
-
-    <v-row class="mt-6" dense>
-      <v-col cols="12" sm="6" md="4">
-        <v-card class="stat-card" border="md" elevation="0">
-          <v-card-text>
-            <div class="stat-card__icon stat-card__icon--primary">
-              <v-icon icon="mdi-view-dashboard-outline" size="26" />
-            </div>
-            <div class="stat-card__content">
-              <p class="stat-card__label">Total Collection Programs</p>
-              <p class="stat-card__value">{{ totalApps }}</p>
-              <p class="stat-card__hint">Active records across all apps</p>
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" sm="6" md="4">
-        <v-card class="stat-card" border="md" elevation="0">
-          <v-card-text>
-            <div class="stat-card__icon stat-card__icon--secondary">
-              <v-icon icon="mdi-database-outline" size="26" />
-            </div>
-            <div class="stat-card__content">
-              <p class="stat-card__label">Total Captured Entities</p>
-              <p class="stat-card__value">{{ totalEntities }}</p>
-              <p class="stat-card__hint">Summed across every program</p>
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" sm="6" md="4">
-        <v-card class="stat-card" border="md" elevation="0">
-          <v-card-text>
-            <div class="stat-card__icon stat-card__icon--accent">
-              <v-icon icon="mdi-sync-circle" size="26" />
-            </div>
-            <div class="stat-card__content">
-              <p class="stat-card__label">External Sync Enabled</p>
-              <p class="stat-card__value">{{ syncEnabledCount }}</p>
-              <p class="stat-card__hint">{{ localOnlyCount }} local-only configurations</p>
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
-
-    <v-card class="filters-card" border="md" elevation="0">
-      <v-card-text>
-        <div class="filters-card__header">
-          <div>
-            <p class="filters-card__eyebrow">Filters</p>
-            <h2 class="filters-card__title">Refine collection programs</h2>
+    <div class="dashboard-grid">
+      <!-- Main Content -->
+      <div class="dashboard-main">
+        <!-- Header with title and icon buttons -->
+        <div class="page-header">
+          <div class="page-header__text">
+            <h1 class="page-header__title">Collection Programs</h1>
+            <p class="page-header__subtitle">Manage and monitor your form applications</p>
           </div>
-          <p class="filters-card__meta">Showing {{ apps.length }} of {{ totalApps }} programs</p>
+          <div class="page-header__actions">
+            <v-tooltip text="Refresh" location="bottom">
+              <template v-slot:activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon
+                  variant="tonal"
+                  color="primary"
+                  :loading="isRefreshing"
+                  :disabled="isRefreshing"
+                  @click="fetchApps(true)"
+                >
+                  <v-icon icon="mdi-refresh" />
+                </v-btn>
+              </template>
+            </v-tooltip>
+            <v-tooltip text="Import JSON Configuration" location="bottom">
+              <template v-slot:activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon
+                  variant="tonal"
+                  color="primary"
+                  @click="showImportDialog = true"
+                >
+                  <v-icon icon="mdi-upload" />
+                </v-btn>
+              </template>
+            </v-tooltip>
+            <v-tooltip text="New Collection Program" location="bottom">
+              <template v-slot:activator="{ props }">
+                <v-btn v-bind="props" icon color="primary" @click="goToCreate">
+                  <v-icon icon="mdi-plus" />
+                </v-btn>
+              </template>
+            </v-tooltip>
+          </div>
         </div>
 
-        <v-row class="mt-4" dense>
-          <v-col cols="12" md="5">
-            <v-text-field
-              v-model="searchTerm"
-              label="Search collection programs"
-              prepend-inner-icon="mdi-magnify"
-              clearable
-              variant="outlined"
-              hint="Filter by name or ID"
-            />
-          </v-col>
-          <v-col cols="12" sm="6" md="2">
-            <v-select
-              v-model="sortBy"
-              :items="sortByOptions"
-              label="Sort by"
-              item-title="title"
-              item-value="value"
-              variant="outlined"
-              density="comfortable"
-            />
-          </v-col>
-          <v-col cols="12" sm="6" md="2">
-            <v-select
-              v-model="sortOrder"
-              :items="sortOrderOptions"
-              label="Order"
-              item-title="title"
-              item-value="value"
-              variant="outlined"
-              density="comfortable"
-            />
-          </v-col>
-          <v-col cols="12" sm="6" md="2">
-            <v-select
-              v-model="pageSize"
-              :items="pageSizeOptions"
-              label="Page size"
-              item-title="title"
-              item-value="value"
-              variant="outlined"
-              density="comfortable"
-            />
-          </v-col>
-          <v-col cols="12" sm="6" md="1" class="d-flex align-end">
-            <v-btn variant="text" color="primary" prepend-icon="mdi-close-circle" @click="searchTerm = ''">
-              Clear
-            </v-btn>
-          </v-col>
-        </v-row>
-      </v-card-text>
-    </v-card>
+        <!-- Search and Filter Controls -->
+        <v-card class="filters-card" border="md" elevation="0">
+          <v-card-text class="pa-4">
+            <v-row dense align="center">
+              <v-col cols="12" sm="6">
+                <v-text-field
+                  v-model="searchTerm"
+                  placeholder="Search programs..."
+                  prepend-inner-icon="mdi-magnify"
+                  clearable
+                  variant="outlined"
+                  density="compact"
+                  hide-details
+                />
+              </v-col>
+              <v-col cols="6" sm="3">
+                <v-select
+                  v-model="sortBy"
+                  :items="sortByOptions"
+                  label="Sort by"
+                  item-title="title"
+                  item-value="value"
+                  variant="outlined"
+                  density="compact"
+                  hide-details
+                />
+              </v-col>
+              <v-col cols="6" sm="3">
+                <v-select
+                  v-model="sortOrder"
+                  :items="sortOrderOptions"
+                  label="Order"
+                  item-title="title"
+                  item-value="value"
+                  variant="outlined"
+                  density="compact"
+                  hide-details
+                />
+              </v-col>
+            </v-row>
+            <div class="filters-card__footer mt-3">
+              <p class="filters-card__meta">
+                Showing {{ apps.length }} of {{ totalApps }} programs
+              </p>
+              <v-btn
+                variant="text"
+                size="small"
+                :prepend-icon="showArchived ? 'mdi-archive-off' : 'mdi-archive'"
+                @click="showArchived = !showArchived"
+              >
+                {{ showArchived ? 'Hide archived' : 'Show archived' }}
+              </v-btn>
+            </div>
+          </v-card-text>
+        </v-card>
 
-    <v-progress-linear v-if="isLoading" class="mt-6" color="primary" indeterminate />
+        <!-- Loading state -->
+        <v-progress-linear v-if="isLoading" class="mt-6" color="primary" indeterminate />
 
-    <v-alert v-else-if="hasNoResults" class="mt-8" border="start" variant="tonal" type="info">
-      No collection programs match your filters. Try adjusting your search.
-    </v-alert>
-
-    <v-row v-else class="apps-grid" dense>
-      <v-col v-for="app in apps" :key="app.id" cols="12" md="6" xl="4">
-        <AppCard :app="app" @app-deleted="fetchApps" />
-      </v-col>
-    </v-row>
-
-    <div v-if="meta.totalPages > 1" class="pagination">
-      <v-pagination v-model="page" :length="meta.totalPages" total-visible="7" rounded="circle" />
-    </div>
-
-    <v-card class="upload-card" border="md" elevation="0">
-      <v-card-text>
-        <div class="upload-card__header">
-          <div>
-            <p class="upload-card__eyebrow">Add new configuration</p>
-            <h2 class="upload-card__title">Upload JSON configuration</h2>
-            <p class="upload-card__subtitle">
-              Import an exported JSON file to create a new collection program or update an existing one.
+        <!-- Empty state -->
+        <div v-else-if="hasNoResults" class="empty-state">
+          <div class="empty-state__icon">
+            <v-icon icon="mdi-clipboard-text-outline" size="48" color="primary" />
+          </div>
+          <template v-if="searchTerm">
+            <h3 class="empty-state__title">No programs found</h3>
+            <p class="empty-state__description">
+              No collection programs match "<strong>{{ searchTerm }}</strong>".
+              Try a different search term.
             </p>
-          </div>
+          </template>
+          <template v-else>
+            <h3 class="empty-state__title">Create your first collection program</h3>
+            <p class="empty-state__description">
+              Collection programs define how field data is captured — the forms, entity types,
+              and sync configuration. Create one to start collecting data.
+            </p>
+            <div class="empty-state__actions">
+              <v-btn color="primary" size="large" prepend-icon="mdi-plus" @click="goToCreate">
+                New Program
+              </v-btn>
+              <v-btn variant="tonal" size="large" prepend-icon="mdi-upload" @click="showImportDialog = true">
+                Import JSON
+              </v-btn>
+            </div>
+          </template>
         </div>
-        <v-file-input
-          v-model="selectedFile"
-          class="mt-4"
-          accept=".json"
-          label="Choose configuration file"
-          prepend-icon="mdi-upload"
-          variant="outlined"
-          :error-messages="fileError"
-          @change="uploadAppConfig"
+
+        <!-- Programs Grid -->
+        <div v-else class="apps-grid">
+          <AppCard v-for="app in apps" :key="app.id" :app="app" @app-deleted="fetchApps" />
+        </div>
+
+        <!-- Pagination -->
+        <div v-if="meta.totalPages > 1" class="pagination">
+          <v-pagination
+            v-model="page"
+            :length="meta.totalPages"
+            total-visible="5"
+            rounded="circle"
+            density="comfortable"
+          />
+        </div>
+      </div>
+
+      <!-- Sidebar -->
+      <aside class="dashboard-sidebar">
+        <OverviewPanel
+          :total-programs="totalApps"
+          :total-entities="totalEntities"
+          :sync-enabled-count="syncEnabledCount"
+          :local-only-count="localOnlyCount"
+          :is-loading="isLoading"
         />
-      </v-card-text>
-    </v-card>
+
+        <RecentActivity
+          :activities="recentActivities"
+          :is-loading="isLoading"
+          @activity-click="handleActivityClick"
+        />
+      </aside>
+    </div>
+
+    <!-- Import JSON Dialog -->
+    <v-dialog v-model="showImportDialog" :max-width="540">
+      <v-card>
+        <v-card-title class="d-flex align-center gap-2">
+          <v-icon icon="mdi-upload" color="primary" />
+          Import JSON Configuration
+        </v-card-title>
+        <v-card-text>
+          <p class="text-body-2 text-medium-emphasis mb-4">
+            Upload an exported JSON configuration file to create a new collection program.
+          </p>
+          <v-file-input
+            v-model="jsonFile"
+            accept=".json"
+            label="Choose JSON file"
+            prepend-icon="mdi-file-document"
+            variant="outlined"
+            :error-messages="jsonFileError ?? undefined"
+            :loading="isUploadingJson"
+            :disabled="isUploadingJson"
+          />
+        </v-card-text>
+        <v-card-actions>
+          <v-btn
+            variant="text"
+            @click="showImportDialog = false; jsonFile = null; jsonFileError = null"
+          >
+            Cancel
+          </v-btn>
+          <v-spacer />
+          <v-btn
+            color="primary"
+            :loading="isUploadingJson"
+            :disabled="!jsonFile || isUploadingJson"
+            @click="uploadJsonConfig()"
+          >
+            Import
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Duplicate Program Confirmation Dialog -->
+    <v-dialog v-model="showDuplicateConfirm" :max-width="480">
+      <v-card>
+        <v-card-title class="text-h6">Program Already Exists</v-card-title>
+        <v-card-text>
+          <p>
+            A program with this name already exists (ID: <strong>{{ pendingDuplicateId }}</strong>).
+            Continuing will overwrite the existing program. Do you want to proceed?
+          </p>
+        </v-card-text>
+        <v-card-actions>
+          <v-spacer />
+          <v-btn variant="text" @click="cancelDuplicateConfirm">Cancel</v-btn>
+          <v-btn color="warning" variant="tonal" @click="confirmImportOverwrite">Overwrite</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
 <style scoped>
 .app-dashboard {
-  padding-bottom: 64px;
+  padding-bottom: var(--spacing-2xl);
 }
 
-.dashboard-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 16px;
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: var(--spacing-xl);
+  align-items: start;
 }
 
-.dashboard-header__text {
+.dashboard-sidebar {
+  position: sticky;
+  top: 80px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-
-.dashboard-title {
-  font-size: clamp(1.75rem, 1.6rem + 0.5vw, 2.25rem);
-  font-weight: 600;
-  margin: 0;
-}
-
-.dashboard-subtitle {
-  margin: 0;
-  color: rgba(0, 0, 0, 0.6);
-}
-
-.dashboard-header__actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.dashboard-header__action {
-  min-width: 0;
-}
-
-.stat-card {
-  height: 100%;
-  border-radius: 16px;
-  background: var(--v-theme-surface);
-}
-
-.stat-card__icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 12px;
-}
-
-.stat-card__icon--primary {
-  background: rgba(33, 150, 243, 0.12);
-  color: rgb(25, 118, 210);
-}
-
-.stat-card__icon--secondary {
-  background: rgba(103, 58, 183, 0.12);
-  color: rgb(81, 45, 168);
-}
-
-.stat-card__icon--accent {
-  background: rgba(0, 150, 136, 0.12);
-  color: rgb(0, 121, 107);
-}
-
-.stat-card__icon--neutral {
-  background: rgba(96, 125, 139, 0.12);
-  color: rgb(55, 71, 79);
-}
-
-.stat-card__icon--informational {
-  background: rgba(30, 136, 229, 0.12);
-  color: rgb(21, 101, 192);
-}
-
-.stat-card__label {
-  font-size: 0.875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: rgba(0, 0, 0, 0.45);
-  margin: 0 0 4px;
-}
-
-.stat-card__value {
-  font-size: 2.25rem;
-  font-weight: 600;
-  margin: 0;
-}
-
-.stat-card__hint {
-  font-size: 0.875rem;
-  color: rgba(0, 0, 0, 0.55);
-  margin: 4px 0 0;
+  gap: var(--spacing-md);
 }
 
 .filters-card {
-  border-radius: 18px;
-  margin-top: 32px;
+  border-radius: var(--radius-xl);
+  background: var(--surface);
 }
 
-.filters-card__header {
+.filters-card__footer {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.filters-card__eyebrow {
-  font-size: 0.75rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.45);
-  margin: 0 0 4px;
-}
-
-.filters-card__title {
-  font-size: 1.25rem;
-  margin: 0;
-  font-weight: 600;
 }
 
 .filters-card__meta {
-  font-size: 0.875rem;
-  color: rgba(0, 0, 0, 0.6);
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
   margin: 0;
 }
 
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--spacing-2xl) var(--spacing-lg);
+  margin-top: var(--spacing-xl);
+}
+
+.empty-state__icon {
+  width: 80px;
+  height: 80px;
+  border-radius: var(--radius-full);
+  background: var(--brand-100);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--spacing-lg);
+}
+
+.empty-state__title {
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  margin: 0 0 var(--spacing-sm);
+  color: var(--text-main);
+}
+
+.empty-state__description {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  max-width: 420px;
+  line-height: var(--line-height-relaxed);
+  margin: 0 0 var(--spacing-lg);
+}
+
+.empty-state__actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
 .apps-grid {
-  margin-top: 24px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
 }
 
 .pagination {
   display: flex;
   justify-content: center;
-  margin-top: 24px;
+  margin-top: var(--spacing-lg);
 }
 
-.upload-card {
-  margin-top: 40px;
-  border-radius: 18px;
-}
-
-.upload-card__eyebrow {
-  font-size: 0.75rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.45);
-  margin: 0;
-}
-
-.upload-card__title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin: 6px 0 4px;
-}
-
-.upload-card__subtitle {
-  margin: 0;
-  color: rgba(0, 0, 0, 0.6);
-}
-
-@media (max-width: 960px) {
-  .dashboard-header {
-    align-items: flex-start;
+@media (max-width: 1280px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
   }
-  .dashboard-header__actions {
-    width: 100%;
-    justify-content: flex-start;
-    flex-wrap: wrap;
+  .dashboard-sidebar {
+    position: static;
   }
 }
 </style>

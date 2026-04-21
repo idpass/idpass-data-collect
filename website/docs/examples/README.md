@@ -4,14 +4,7 @@ This directory contains examples for using ID PASS DataCollect.
 
 ## Configuration Examples
 
-### sample_config.json
-A comprehensive configuration example showing all available options for the sync server, including:
-- Entity forms configuration
-- Field definitions
-- External sync adapter settings
-
-### sample_config_2.json
-An alternative configuration example with a different structure, useful for reference when setting up your own configuration.
+TODO
 
 ## Usage Examples
 

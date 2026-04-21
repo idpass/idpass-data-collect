@@ -18,6 +18,9 @@
  */
 
 import { ExportImportManager, ImportResult, EntityStore, EventStore } from "../interfaces/types";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("ExportImportManager");
 
 export class ExportImportManagerImpl implements ExportImportManager {
   constructor(
@@ -53,7 +56,7 @@ export class ExportImportManagerImpl implements ExportImportManager {
       }
       return { status: "success", importedEntities };
     } catch (error) {
-      console.error("Error importing data:", error);
+      log.error({ err: error }, "Error importing data");
       return { status: "error", importedEntities: 0 };
     }
   }

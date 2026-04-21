@@ -116,7 +116,7 @@ This approach provides flexibility to add additional configuration parameters wi
 
 ## Current Capabilities
 
-✅ **Push Sync**: Data is successfully pushed from IDPass DataCollect to OpenFn webhooks
+**Push Sync**: Data is successfully pushed from IDPass DataCollect to OpenFn webhooks
 
 - Batched processing (configurable batch size, default: 100 records per batch)
 - Automatic timestamp tracking for incremental sync
@@ -125,7 +125,7 @@ This approach provides flexibility to add additional configuration parameters wi
 
 ## Work in Progress
 
-⏳ **Pull Sync**: Pulling data from OpenFn back to IDPass DataCollect is currently under development
+**Pull Sync**: Pulling data from OpenFn back to IDPass DataCollect is currently under development
 
 - Will use callback endpoints with token authentication
 - Planned to trigger OpenFn workflows that can push data back to the system

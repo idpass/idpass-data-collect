@@ -67,6 +67,34 @@ export function is401Error(error: unknown): boolean {
 }
 
 /**
+ * Check if an error is a 403 Forbidden error
+ * @param error - The error to check
+ * @returns boolean - true if it's a 403 error
+ */
+export function is403Error(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+
+  const err = error as Record<string, unknown>
+  const response = err.response as Record<string, unknown> | undefined
+
+  return response?.status === 403 || err.status === 403
+}
+
+/**
+ * Check if an error is a 429 Too Many Requests error
+ * @param error - The error to check
+ * @returns boolean - true if it's a 429 error
+ */
+export function is429Error(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+
+  const err = error as Record<string, unknown>
+  const response = err.response as Record<string, unknown> | undefined
+
+  return response?.status === 429 || err.status === 429
+}
+
+/**
  * Check if an error is a network-related error
  * @param error - The error to check
  * @returns boolean - true if it's a network error

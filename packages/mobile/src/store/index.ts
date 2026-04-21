@@ -30,10 +30,29 @@ import {
   InternalSyncManager,
   IndexedDbAuthStorageAdapter
 } from '@idpass/data-collect-core'
+import { SecureStorageService } from '@/services/SecureStorageService'
+
+const REFRESH_TOKEN_KEY_PREFIX = 'sync_refresh_'
 
 export let store: EntityDataManager
 
 const storeCache = new Map<string, EntityDataManager>()
+
+/**
+ * Store refresh token in secure storage for silent re-authentication.
+ * Encrypted at rest via iOS Keychain / Android Keystore.
+ * Uses a long-lived refresh token (30d) instead of raw credentials.
+ */
+export async function saveRefreshTokenForReauth(appId: string, refreshToken: string): Promise<void> {
+  await SecureStorageService.set(`${REFRESH_TOKEN_KEY_PREFIX}${appId}`, refreshToken)
+}
+
+/**
+ * Remove stored refresh token (called on explicit logout).
+ */
+export async function clearRefreshTokenForReauth(appId: string): Promise<void> {
+  await SecureStorageService.remove(`${REFRESH_TOKEN_KEY_PREFIX}${appId}`)
+}
 
 export const initStore = async (
   appId: string = 'default',
@@ -57,6 +76,27 @@ export const initStore = async (
     authStorage.initialize()
   ])
 
+  // Silent re-authentication callback: uses refresh token stored in SecureStorage
+  // to obtain a fresh access token when the JWT has expired during sync.
+  const reauthenticate = async () => {
+    const refreshToken = await SecureStorageService.get(`${REFRESH_TOKEN_KEY_PREFIX}${appId}`)
+    if (!refreshToken) {
+      throw new Error('No stored refresh token available for re-authentication')
+    }
+    const response = await fetch(`${syncServerUrl}/api/users/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    })
+    if (!response.ok) {
+      await clearRefreshTokenForReauth(appId)
+      throw new Error('Refresh token expired or invalid — re-login required')
+    }
+    const data = await response.json() as { token: string; refreshToken: string }
+    await authStorage.setToken('default', data.token)
+    await saveRefreshTokenForReauth(appId, data.refreshToken)
+  }
+
   const eventApplierService = new EventApplierService(eventStore, entityStore)
   const internalSyncManager = new InternalSyncManager(
     eventStore,
@@ -64,11 +104,10 @@ export const initStore = async (
     eventApplierService,
     syncServerUrl,
     authStorage,
-    appId
+    appId,
+    reauthenticate
   )
 
-  // External sync adapter is not used in the client
-  // const syncAdapter = new SyncAdapterImpl('')
   store = new EntityDataManager(
     eventStore,
     entityStore,

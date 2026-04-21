@@ -63,7 +63,7 @@ Auth0 integration provides enterprise-grade authentication with features like or
 ### Basic Setup
 
 ```typescript
-import { Auth0AuthAdapter, IndexedDbAuthStorageAdapter } from "@idpass/datacollect";
+import { Auth0AuthAdapter, IndexedDbAuthStorageAdapter } from "@idpass/data-collect-core";
 
 // Create storage adapter
 const storage = new IndexedDbAuthStorageAdapter();

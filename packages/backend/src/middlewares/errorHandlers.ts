@@ -18,6 +18,9 @@
  */
 
 import { NextFunction, Request, Response } from "express";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("errorHandlers");
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AsyncRequestHandler = (req: Request, res: Response, next: NextFunction) => Promise<any>;
@@ -34,8 +37,9 @@ export const asyncHandler = (fn: AsyncRequestHandler) => {
   };
 };
 
-export const errorHandler = (err: CustomError, req: Request, res: Response): void => {
-  console.error("Error:", err);
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export const errorHandler = (err: CustomError, req: Request, res: Response, _next: NextFunction): void => {
+  log.error({ err }, "Request error");
 
   const statusCode = err.statusCode || 500;
 
@@ -51,15 +55,20 @@ export const errorHandler = (err: CustomError, req: Request, res: Response): voi
   res.status(statusCode).json(errorResponse);
 };
 
+let uncaughtHandlersRegistered = false;
+
 export const setupUncaughtHandlers = (): void => {
+  if (uncaughtHandlersRegistered) return;
+  uncaughtHandlersRegistered = true;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   process.on("unhandledRejection", (reason: any, promise: Promise<any>) => {
-    console.error("Unhandled Rejection at:", promise, "reason:", reason);
+    log.error({ reason, promise }, "Unhandled rejection");
     throw reason;
   });
 
   process.on("uncaughtException", (error: Error) => {
-    console.error("Uncaught Exception:", error);
+    log.error({ err: error }, "Uncaught exception");
     process.exit(1);
   });
 };

@@ -2,25 +2,42 @@ openapi: 3.0.3
 info:
   title: ID PASS DataCollect Backend API
   description: |
-    REST API for ID PASS DataCollect backend server, providing synchronization, user management, and application configuration endpoints.
-    
+    REST API for the ID PASS DataCollect backend server. The server is the central
+    sync hub for offline-first DataCollect clients (mobile, web, admin UI) and
+    coordinates external integrations via the adapter registry.
+
     ## Authentication
-    
-    Most endpoints require JWT authentication. Include the token in the Authorization header:
+
+    Most endpoints require a JWT access token in the `Authorization` header:
+
     ```
-    Authorization: Bearer <your-jwt-token>
+    Authorization: Bearer <token>
     ```
-    
-    ## Multi-tenant Support
-    
-    The API supports multiple application configurations identified by `configId`. Each configuration can have its own entity forms, data, and external sync settings.
-    
+
+    Access tokens are issued by `POST /api/users/login` and expire after one hour.
+    Use `POST /api/users/refresh` to get a new access token (and rotated refresh token)
+    without re-prompting for credentials — field agents use this to stay signed in
+    while offline. Self-service endpoints (`/api/auth/**`) issue separate scoped
+    tokens via OTP, national ID, or OIDC exchange.
+
+    ## Multi-tenant (multi-program) support
+
+    All tenant-scoped endpoints accept a `configId` query parameter (or field in
+    the request body). Each configuration has its own entity forms, entity data,
+    auth providers, and external-sync settings. Non-admin users can only access
+    configurations listed in their `tenantIds` claim — the `validateTenantAccess`
+    middleware enforces this on every tenant-scoped route.
+
     ## Synchronization
-    
-    The sync endpoints support bidirectional synchronization between clients and server, as well as external system integration. Events are synchronized with pagination for efficient data transfer.
-  version: 1.0.0
+
+    The sync endpoints support bidirectional synchronization between clients and
+    server, as well as external system integration. Internal sync uses cursor-based
+    pagination (`nextCursor` is a composite `timestamp|eventGuid`) to prevent event
+    skipping. External sync push runs as a background job with progress updates
+    persisted to `sync_events`.
+  version: 2.0.0
   contact:
-    name: OpenSPP
+    name: ID PASS DataCollect
     url: https://github.com/idpass/idpass-data-collect
   license:
     name: Apache 2.0
@@ -28,591 +45,36 @@ info:
 
 servers:
   - url: http://localhost:3000
-    description: Development server
-  - url: https://your-sync-server.com
-    description: Production server
+    description: Local development server
+  - url: https://{host}
+    description: Deployed server
+    variables:
+      host:
+        default: example.com
 
-security:
-  - BearerAuth: []
-
-paths:
-  # Authentication & User Management
-  /users/login:
-    post:
-      tags:
-        - Authentication
-      summary: User login
-      description: Authenticate user with email and password, returns JWT token
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - email
-                - password
-              properties:
-                email:
-                  type: string
-                  format: email
-                  example: admin@example.com
-                password:
-                  type: string
-                  format: password
-                  example: password123
-      responses:
-        '200':
-          description: Login successful
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  token:
-                    type: string
-                    description: JWT authentication token
-                    example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-                  userId:
-                    type: integer
-                    description: User ID
-                    example: 1
-        '401':
-          description: Invalid credentials
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /users/check-token:
-    get:
-      tags:
-        - Authentication
-      summary: Validate JWT token
-      description: Check if the provided JWT token is valid
-      responses:
-        '200':
-          description: Token is valid
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: Token is valid
-        '401':
-          description: Invalid or expired token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /users:
-    get:
-      tags:
-        - User Management
-      summary: Get all users
-      description: Retrieve all users (Admin only)
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: List of users
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/User'
-        '403':
-          description: Admin access required
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-    post:
-      tags:
-        - User Management
-      summary: Create new user
-      description: Create a new user account (Admin only)
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - email
-                - password
-                - role
-              properties:
-                email:
-                  type: string
-                  format: email
-                  example: user@example.com
-                password:
-                  type: string
-                  format: password
-                  example: password123
-                role:
-                  $ref: '#/components/schemas/Role'
-      responses:
-        '201':
-          description: User created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: User created successfully
-        '403':
-          description: Admin access required
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /users/{id}:
-    put:
-      tags:
-        - User Management
-      summary: Update user
-      description: Update an existing user (Admin only)
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-          example: 1
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - email
-                - password
-                - role
-              properties:
-                email:
-                  type: string
-                  format: email
-                password:
-                  type: string
-                  format: password
-                role:
-                  $ref: '#/components/schemas/Role'
-      responses:
-        '200':
-          description: User updated successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: User updated successfully
-        '404':
-          description: User not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /users/{email}:
-    delete:
-      tags:
-        - User Management
-      summary: Delete user
-      description: Delete a user by email (Admin only)
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: email
-          in: path
-          required: true
-          schema:
-            type: string
-            format: email
-          example: user@example.com
-      responses:
-        '200':
-          description: User deleted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: User deleted successfully
-
-  /users/me:
-    get:
-      tags:
-        - User Management
-      summary: Get current user
-      description: Get the current authenticated user's information
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Current user information
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/User'
-        '404':
-          description: User not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  # Synchronization
-  /sync/count-entities:
-    get:
-      tags:
-        - Synchronization
-      summary: Count entities
-      description: Get the total count of entities for a specific app configuration
-      parameters:
-        - name: configId
-          in: query
-          schema:
-            type: string
-            default: default
-          description: Application configuration ID
-      responses:
-        '200':
-          description: Entity count
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  count:
-                    type: integer
-                    example: 42
-
-  /sync/pull:
-    get:
-      tags:
-        - Synchronization
-      summary: Pull events from server
-      description: Retrieve events from server since a specific timestamp with pagination
-      parameters:
-        - name: since
-          in: query
-          schema:
-            type: string
-            format: date-time
-          description: Timestamp to pull events since
-          example: "2024-01-01T00:00:00.000Z"
-        - name: configId
-          in: query
-          schema:
-            type: string
-            default: default
-          description: Application configuration ID
-      responses:
-        '200':
-          description: Events retrieved successfully
-          content:
-            application/json:
-              schema:
-                oneOf:
-                  - type: object
-                    properties:
-                      events:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/FormSubmission'
-                      nextCursor:
-                        type: string
-                        nullable: true
-                        description: Cursor for next page of results
-                  - type: object
-                    properties:
-                      events:
-                        type: array
-                        items: {}
-                        maxItems: 0
-                      nextCursor:
-                        type: string
-                        nullable: true
-                        description: Cursor for next page of results
-                      error:
-                        type: string
-                        example: "Duplicates exist! Please resolve them on admin page."
-
-  /sync/push:
-    post:
-      tags:
-        - Synchronization
-      summary: Push events to server
-      description: Send form submission events to the server for processing
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                events:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/FormSubmission'
-                configId:
-                  type: string
-                  example: default
-      responses:
-        '200':
-          description: Events processed successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuccessResponse'
-
-  /sync/push/audit-logs:
-    post:
-      tags:
-        - Synchronization
-      summary: Push audit logs to server
-      description: Send audit log entries to the server
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                auditLogs:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/AuditLogEntry'
-                configId:
-                  type: string
-                  example: default
-      responses:
-        '200':
-          description: Audit logs processed successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuccessResponse'
-
-  /sync/pull/audit-logs:
-    get:
-      tags:
-        - Synchronization
-      summary: Pull audit logs from server
-      description: Retrieve audit log entries since a specific timestamp
-      parameters:
-        - name: since
-          in: query
-          schema:
-            type: string
-            format: date-time
-          description: Timestamp to pull audit logs since
-          example: "2024-01-01T00:00:00.000Z"
-        - name: configId
-          in: query
-          schema:
-            type: string
-            default: default
-          description: Application configuration ID
-      responses:
-        '200':
-          description: Audit logs retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/AuditLogEntry'
-
-  /sync/external:
-    post:
-      tags:
-        - Synchronization
-      summary: Trigger external sync
-      description: Synchronize data with external systems using configured adapters
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                configId:
-                  type: string
-                  default: default
-                credentials:
-                  $ref: '#/components/schemas/ExternalSyncCredentials'
-      responses:
-        '200':
-          description: External sync completed
-          content:
-            application/json:
-              schema:
-                oneOf:
-                  - $ref: '#/components/schemas/SuccessResponse'
-                  - type: object
-                    properties:
-                      status:
-                        type: string
-                        example: error
-                      message:
-                        type: string
-                        example: Failed to sync with external system
-                      details:
-                        type: object
-
-  # App Configuration
-  /app-configs:
-    get:
-      tags:
-        - App Configuration
-      summary: Get all app configurations
-      description: Retrieve all application configurations
-      responses:
-        '200':
-          description: List of app configurations
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/AppConfig'
-
-    post:
-      tags:
-        - App Configuration
-      summary: Upload app configuration
-      description: Upload a new application configuration as JSON file
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              properties:
-                config:
-                  type: string
-                  format: binary
-                  description: JSON file containing app configuration
-      responses:
-        '200':
-          description: Configuration uploaded successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuccessResponse'
-        '400':
-          description: No JSON file uploaded or invalid file
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /app-configs/{id}:
-    delete:
-      tags:
-        - App Configuration
-      summary: Delete app configuration
-      description: Delete an application configuration and associated data
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-          example: my-app-config
-      responses:
-        '200':
-          description: Configuration deleted successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuccessResponse'
-
-  # Potential Duplicates
-  /potential-duplicates:
-    get:
-      tags:
-        - Data Management
-      summary: Get potential duplicates
-      description: Retrieve list of potential duplicate entities that need resolution
-      parameters:
-        - name: configId
-          in: query
-          schema:
-            type: string
-          description: Application configuration ID
-      responses:
-        '200':
-          description: List of potential duplicates
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/PotentialDuplicate'
-
-  /potential-duplicates/resolve:
-    post:
-      tags:
-        - Data Management
-      summary: Resolve duplicate entities
-      description: Resolve potential duplicate entities by merging or deleting
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - newItem
-                - existingItem
-                - shouldDeleteNewItem
-                - configId
-              properties:
-                newItem:
-                  type: string
-                  description: GUID of the new entity
-                  example: "550e8400-e29b-41d4-a716-446655440000"
-                existingItem:
-                  type: string
-                  description: GUID of the existing entity
-                  example: "550e8400-e29b-41d4-a716-446655440001"
-                shouldDeleteNewItem:
-                  type: boolean
-                  description: Whether to delete the new item
-                  example: true
-                configId:
-                  type: string
-                  description: Application configuration ID
-                  example: default
-      responses:
-        '200':
-          description: Duplicate resolved successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuccessResponse'
+tags:
+  - name: Meta
+    description: Health checks and server metadata
+  - name: Authentication
+    description: User login, token refresh, and current-user lookup
+  - name: User Management
+    description: Admin-only user CRUD and role assignment
+  - name: App Configuration
+    description: Multi-tenant program configuration (entity forms, adapters, auth)
+  - name: Entities
+    description: Query entities (groups, individuals, records) and their events
+  - name: Synchronization
+    description: Pull and push events between clients and the sync server
+  - name: External Sync Jobs
+    description: Background jobs that synchronize with external systems (OpenSPP, OpenFn, Mock)
+  - name: Attachments
+    description: Upload, download, list, and delete binary attachments linked to entities
+  - name: Self-Service
+    description: Citizen-facing authentication (OTP, national ID, OIDC) and change requests
+  - name: Potential Duplicates
+    description: Review and resolve entities flagged as potential duplicates
+  - name: OpenSPP Fields
+    description: Discover field metadata from OpenSPP V1 (Odoo) and V2 (REST) registries
 
 components:
   securitySchemes:
@@ -620,255 +82,1848 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: Admin and user JWT issued by `/api/users/login` or `/api/users/refresh`
+    SelfServiceAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Self-service JWT issued by `/api/auth/otp/verify`, `/api/auth/id/verify`, or `/api/auth/oidc/exchange`
+
+  parameters:
+    ConfigIdQuery:
+      name: configId
+      in: query
+      required: false
+      schema:
+        type: string
+        default: default
+      description: Program (tenant) identifier. Defaults to `default`.
 
   schemas:
-    User:
-      type: object
-      properties:
-        id:
-          type: integer
-          example: 1
-        email:
-          type: string
-          format: email
-          example: user@example.com
-        role:
-          $ref: '#/components/schemas/Role'
-
-    Role:
-      type: string
-      enum:
-        - ADMIN
-        - USER
-      example: USER
-
-    FormSubmission:
-      type: object
-      properties:
-        guid:
-          type: string
-          format: uuid
-          description: Unique identifier for the form submission
-          example: "550e8400-e29b-41d4-a716-446655440000"
-        type:
-          type: string
-          description: Type of form submission event
-          example: "create-group"
-        entityGuid:
-          type: string
-          format: uuid
-          description: GUID of the entity being modified
-          example: "550e8400-e29b-41d4-a716-446655440001"
-        data:
-          type: object
-          description: Form data payload
-          additionalProperties: true
-        timestamp:
-          type: string
-          format: date-time
-          description: When the event occurred
-          example: "2024-01-15T10:30:00.000Z"
-        userId:
-          type: string
-          description: ID of user who created the event
-          example: "1"
-        syncLevel:
-          type: integer
-          description: Synchronization level (0=LOCAL, 1=SYNCED)
-          example: 1
-
-    AuditLogEntry:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-          example: "550e8400-e29b-41d4-a716-446655440000"
-        action:
-          type: string
-          description: Action performed
-          example: "entity_created"
-        entityId:
-          type: string
-          description: ID of affected entity
-          example: "entity-123"
-        entityType:
-          type: string
-          description: Type of entity
-          example: "group"
-        userId:
-          type: string
-          description: User who performed the action
-          example: "1"
-        timestamp:
-          type: string
-          format: date-time
-          example: "2024-01-15T10:30:00.000Z"
-        details:
-          type: object
-          description: Additional details about the action
-          additionalProperties: true
-
-    ExternalSyncCredentials:
-      type: object
-      properties:
-        username:
-          type: string
-          example: "api_user"
-        password:
-          type: string
-          format: password
-          example: "api_password"
-        url:
-          type: string
-          format: uri
-          example: "https://external-system.com/api"
-
-    AppConfig:
-      type: object
-      properties:
-        id:
-          type: string
-          description: Unique identifier for the app configuration
-          example: "my-app-config"
-        name:
-          type: string
-          description: Human-readable name
-          example: "My Application"
-        description:
-          type: string
-          description: Description of the application
-          example: "DataCollection for rural communities"
-        version:
-          type: string
-          description: Version of the configuration
-          example: "1.0.0"
-        url:
-          type: string
-          format: uri
-          description: Application URL
-          example: "https://my-app.com"
-        entityForms:
-          type: array
-          description: Form definitions for entities
-          items:
-            $ref: '#/components/schemas/EntityForm'
-        entityData:
-          type: array
-          description: Pre-loaded entity data
-          items:
-            $ref: '#/components/schemas/EntityData'
-        externalSync:
-          $ref: '#/components/schemas/ExternalSyncConfig'
-
-    EntityForm:
-      type: object
-      properties:
-        id:
-          type: string
-          example: "group-form"
-        name:
-          type: string
-          example: "Group Registration"
-        title:
-          type: string
-          example: "Register New Group"
-        dependsOn:
-          type: string
-          description: ID of parent form if this form depends on another
-          example: "individual-form"
-        formio:
-          type: object
-          description: Form.io form definition
-          additionalProperties: true
-
-    EntityData:
-      type: object
-      properties:
-        name:
-          type: string
-          description: Name of the entity type
-          example: "regions"
-        data:
-          type: array
-          description: Array of entity data items
-          items:
-            $ref: '#/components/schemas/EntityDataItem'
-
-    EntityDataItem:
-      type: object
-      properties:
-        id:
-          type: string
-          example: "region-001"
-        name:
-          type: string
-          example: "Central Region"
-        parentId:
-          type: string
-          description: ID of parent entity if hierarchical
-          example: "country-001"
-
-    ExternalSyncConfig:
-      type: object
-      properties:
-        type:
-          type: string
-          description: Type of external sync adapter
-          example: "openspp"
-        auth:
-          type: string
-          description: Authentication method
-          example: "basic"
-        url:
-          type: string
-          format: uri
-          description: External system URL
-          example: "https://openspp.org/api"
-      additionalProperties: true
-
-    PotentialDuplicate:
-      type: object
-      properties:
-        newEntity:
-          type: object
-          description: The newly submitted entity
-          additionalProperties: true
-        existingEntity:
-          type: object
-          description: The existing entity that might be a duplicate
-          additionalProperties: true
-        similarity:
-          type: number
-          format: float
-          description: Similarity score between entities
-          example: 0.85
-
-    SuccessResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          example: success
-
-    ErrorResponse:
+    Error:
       type: object
       properties:
         error:
           type: string
-          example: "Error description"
-        message:
-          type: string
-          example: "Detailed error message"
+      required: [error]
 
-tags:
-  - name: Authentication
-    description: User authentication endpoints
-  - name: User Management
-    description: User account management (Admin only)
-  - name: Synchronization
-    description: Data synchronization between clients and server
-  - name: App Configuration
-    description: Application configuration management
-  - name: Data Management
-    description: Entity data management and duplicate resolution
+    ValidationError:
+      type: object
+      properties:
+        error:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            description: Zod issue object
+      required: [error]
+
+    Event:
+      type: object
+      required: [guid, entityGuid, type, data, timestamp, userId, syncLevel]
+      properties:
+        guid:
+          type: string
+          format: uuid
+        entityGuid:
+          type: string
+          description: Target entity GUID (UUID or human-readable ID such as `hh-001`)
+        type:
+          type: string
+          description: Event type (e.g. `create-group`, `update-individual`, `add-member`)
+        data:
+          type: object
+          additionalProperties: true
+        timestamp:
+          type: string
+          format: date-time
+        userId:
+          type: string
+        syncLevel:
+          type: integer
+          enum: [0, 1]
+          description: 0 = LOCAL, 1 = SYNCED
+        schemaVersion:
+          type: integer
+
+    AuditLog:
+      type: object
+      required: [guid, timestamp, action, eventGuid, entityGuid, changes, signature]
+      properties:
+        guid:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        userId:
+          type: string
+        action:
+          type: string
+        eventGuid:
+          type: string
+        entityGuid:
+          type: string
+        changes:
+          type: object
+          additionalProperties: true
+        signature:
+          type: string
+          description: Hash-chain signature for tamper detection
+
+    EntitySummary:
+      type: object
+      properties:
+        guid:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        entityName:
+          type: string
+        type:
+          type: string
+          enum: [group, individual, record]
+        data:
+          type: object
+          additionalProperties: true
+        memberIds:
+          type: array
+          items:
+            type: string
+          description: Present only when `type = group`
+        lastUpdated:
+          type: string
+          format: date-time
+
+    AppConfig:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          description: "Alphanumeric, may contain `_` or `-`. Pattern: `^[A-Za-z0-9][A-Za-z0-9_-]*$`"
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        version:
+          type: string
+          nullable: true
+        url:
+          type: string
+          nullable: true
+        entityForms:
+          type: array
+          items:
+            type: object
+            required: [id, name, title]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              title: { type: string }
+              dependsOn: { type: string, nullable: true }
+              entityType:
+                type: string
+                enum: [group, individual, record]
+              nameField: { type: string, nullable: true }
+              formio:
+                type: object
+                description: Form.io schema
+                additionalProperties: true
+        entityData:
+          type: array
+          items:
+            type: object
+        externalSync:
+          type: object
+          description: Adapter configuration (shape depends on `type`)
+          additionalProperties: true
+        authConfigs:
+          type: array
+          items:
+            type: object
+            properties:
+              type: { type: string }
+              fields:
+                type: object
+                additionalProperties: { type: string }
+        selfService:
+          type: object
+          properties:
+            enabled: { type: boolean }
+            authMethods:
+              type: array
+              items:
+                type: string
+                enum: [otp, id, qr, oidc]
+            allowedForms:
+              type: array
+              items: { type: string }
+            languages:
+              type: array
+              items: { type: string }
+            requireReview: { type: boolean }
+            oidcConfig:
+              type: object
+              properties:
+                authority: { type: string, format: uri }
+                clientId: { type: string }
+                redirectUri: { type: string, format: uri }
+                scope: { type: string }
+                acrValues: { type: string, nullable: true }
+                entityMapping:
+                  type: object
+
+    AppConfigListItem:
+      type: object
+      properties:
+        id: { type: string }
+        artifactId: { type: string, nullable: true }
+        name: { type: string }
+        version: { type: string }
+        externalSync:
+          type: object
+          additionalProperties: true
+        entitiesCount: { type: integer }
+        description: { type: string }
+        archivedAt: { type: string, format: date-time, nullable: true }
+
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        email: { type: string, format: email }
+        role:
+          type: string
+          enum: [ADMIN, USER]
+        tenantIds:
+          type: array
+          items: { type: string }
+        roleAssignments:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleAssignment'
+
+    RoleAssignment:
+      type: object
+      required: [tenantId, role]
+      properties:
+        tenantId: { type: string }
+        role: { type: string }
+        areaId: { type: string }
+
+    SyncJob:
+      type: object
+      properties:
+        jobId: { type: string, format: uuid }
+        configId: { type: string }
+        status:
+          type: string
+          enum: [pending, success, partial, failed]
+        phase:
+          type: string
+          enum: [pending, pushing, pulling, completed, failed, cancelled]
+        pushed: { type: integer }
+        pulled: { type: integer }
+        failed: { type: integer }
+        skipped: { type: integer }
+        durationMs: { type: integer }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time, nullable: true }
+        triggeredBy: { type: string }
+        errorMessage: { type: string, nullable: true }
+        errors:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              entityGuid: { type: string }
+              code: { type: string }
+              message: { type: string }
+
+    AttachmentMetadata:
+      type: object
+      properties:
+        guid: { type: string, format: uuid }
+        entityGuid: { type: string }
+        filename: { type: string }
+        mimeType: { type: string }
+        sizeBytes: { type: integer }
+        createdAt: { type: string, format: date-time }
+
+    OpenSppField:
+      type: object
+      properties:
+        name: { type: string }
+        type:
+          type: string
+          enum: [text, date, relation, selection]
+        label: { type: string }
+        required: { type: boolean }
+        options:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {}
+              label: { type: string }
+
+    PotentialDuplicate:
+      type: object
+      properties:
+        entityGuid: { type: string }
+        duplicateGuid: { type: string }
+        detectedAt: { type: string, format: date-time }
+
+paths:
+  /health:
+    get:
+      tags: [Meta]
+      summary: Health check
+      description: Returns server status and verifies database connectivity. Returns 503 if the database is unreachable.
+      security: []
+      responses:
+        '200':
+          description: Server healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  database: { type: string, example: connected }
+                  timestamp: { type: string, format: date-time }
+        '503':
+          description: Database unreachable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: degraded }
+                  database: { type: string, example: disconnected }
+                  timestamp: { type: string, format: date-time }
+
+  /api-docs/openapi.json:
+    get:
+      tags: [Meta]
+      summary: OpenAPI specification
+      description: Returns this specification as JSON.
+      security: []
+      responses:
+        '200':
+          description: OpenAPI spec
+          content:
+            application/json:
+              schema: { type: object }
+
+  /artifacts/{artifactId}.json:
+    get:
+      tags: [Meta]
+      summary: Download program config artifact (JSON)
+      description: Public endpoint returning a scoped, signed version of an app config. Used when enrolling a mobile client via QR code.
+      security: []
+      parameters:
+        - name: artifactId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: App config JSON
+          content:
+            application/json:
+              schema: { type: object }
+        '404':
+          description: Artifact not found
+
+  /artifacts/{artifactId}.png:
+    get:
+      tags: [Meta]
+      summary: Download program QR code (PNG)
+      description: Public endpoint returning a QR code pointing at the JSON artifact.
+      security: []
+      parameters:
+        - name: artifactId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: QR code PNG
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Artifact not found
+
+  /api/users/login:
+    post:
+      tags: [Authentication]
+      summary: Log in
+      description: Authenticates a user and returns a short-lived access token plus a long-lived refresh token.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string, description: Access token (1h TTL) }
+                  refreshToken: { type: string, description: Refresh token (30d TTL) }
+                  userId: { type: integer }
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429':
+          description: Rate limit exceeded (15 attempts per 15 minutes per IP)
+
+  /api/users/refresh:
+    post:
+      tags: [Authentication]
+      summary: Refresh access token
+      description: |
+        Issues a new access token and refresh token. Accepts either a refresh token in the body
+        or an access token in the `Authorization` header. Returns 401 if no token is provided or
+        the token is expired/invalid.
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: Tokens rotated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  refreshToken: { type: string }
+                  userId: { type: integer }
+        '401':
+          description: No or invalid token
+
+  /api/users/check-token:
+    get:
+      tags: [Authentication]
+      summary: Validate access token
+      description: Returns 200 if the bearer token is valid. Returns 401 otherwise.
+      responses:
+        '200':
+          description: Token valid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: Token is valid }
+        '401':
+          description: Token invalid or expired
+
+  /api/users/me:
+    get:
+      tags: [Authentication]
+      summary: Get current user
+      description: Returns the profile of the user associated with the bearer token (password hash redacted).
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '401':
+          description: Unauthenticated
+        '404':
+          description: User not found
+
+  /api/users:
+    get:
+      tags: [User Management]
+      summary: List all users
+      description: Admin-only. Returns every user in the system (password hash redacted).
+      responses:
+        '200':
+          description: Array of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/User' }
+        '401':
+          description: Unauthenticated
+        '403':
+          description: Requires admin role
+    post:
+      tags: [User Management]
+      summary: Create a user
+      description: Admin-only. Password must be at least 8 characters and contain upper, lower, digit, and special character.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, role]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, description: "Must satisfy password rules (see description)" }
+                role:
+                  type: string
+                  enum: [ADMIN, USER]
+                tenantIds:
+                  type: array
+                  items: { type: string }
+                roleAssignments:
+                  type: array
+                  items: { $ref: '#/components/schemas/RoleAssignment' }
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ValidationError' }
+        '403':
+          description: Requires admin role
+
+  /api/users/{id}:
+    put:
+      tags: [User Management]
+      summary: Update a user
+      description: Admin-only. Password is optional — omit to keep the existing hash.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, role]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+                role:
+                  type: string
+                  enum: [ADMIN, USER]
+                tenantIds:
+                  type: array
+                  items: { type: string }
+                roleAssignments:
+                  type: array
+                  items: { $ref: '#/components/schemas/RoleAssignment' }
+      responses:
+        '200':
+          description: User updated
+        '400':
+          description: Invalid payload or user ID
+        '403':
+          description: Requires admin role
+        '404':
+          description: User not found
+
+  /api/users/{email}:
+    delete:
+      tags: [User Management]
+      summary: Delete a user
+      description: Admin-only.
+      parameters:
+        - name: email
+          in: path
+          required: true
+          schema: { type: string, format: email }
+      responses:
+        '200':
+          description: User deleted
+        '403':
+          description: Requires admin role
+
+  /api/apps:
+    get:
+      tags: [App Configuration]
+      summary: List app configurations
+      description: |
+        Returns paginated, sortable, searchable app configs. Non-admin users only see configs
+        listed in their `tenantIds` claim. Each item includes the entity count for that config.
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 1, minimum: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, default: 12, minimum: 1, maximum: 100 }
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            enum: [name, id, entitiesCount]
+            default: name
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: includeArchived
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Paginated list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AppConfigListItem' }
+                  meta:
+                    type: object
+                    properties:
+                      total: { type: integer }
+                      page: { type: integer }
+                      pageSize: { type: integer }
+                      totalPages: { type: integer }
+                      sortBy: { type: string }
+                      sortOrder: { type: string }
+                      search: { type: string }
+    post:
+      tags: [App Configuration]
+      summary: Upload a new app configuration
+      description: Admin-only. Upload a JSON file with `multipart/form-data`; max 10 MB.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [config]
+              properties:
+                config:
+                  type: string
+                  format: binary
+                  description: JSON file matching the AppConfig schema
+      responses:
+        '200':
+          description: Configuration uploaded and app instance created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  artifactId: { type: string }
+        '400':
+          description: Missing file or invalid config schema
+        '403':
+          description: Requires admin role
+
+  /api/apps/{id}:
+    get:
+      tags: [App Configuration]
+      summary: Get app configuration by ID
+      description: Returns the full config. Non-admin users can only access configs in their `tenantIds`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: App config
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AppConfig' }
+        '403':
+          description: Not permitted to view this program
+    put:
+      tags: [App Configuration]
+      summary: Replace app configuration
+      description: Admin-only. Upload JSON file; `id` in payload must match URL.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [config]
+              properties:
+                config:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Replaced
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  artifactId: { type: string }
+        '400':
+          description: Missing file, ID mismatch, or invalid schema
+        '403':
+          description: Requires admin role
+    delete:
+      tags: [App Configuration]
+      summary: Archive app configuration
+      description: Admin-only. Soft-delete — the config is marked archived and hidden from default listings but can be restored.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Archived
+        '403':
+          description: Requires admin role
+
+  /api/apps/{id}/public:
+    get:
+      tags: [App Configuration]
+      summary: Public config metadata
+      description: |
+        Unauthenticated. Returns only safe-to-expose fields (name, description, self-service methods,
+        auth providers). Used by mobile/web apps before login. Rate limited to 60/15m per IP.
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Public metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name: { type: string }
+                  description: { type: string }
+                  selfService: { type: object }
+                  authConfigs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type: { type: string }
+        '404':
+          description: Configuration not found
+        '429':
+          description: Rate limit exceeded
+
+  /api/apps/{id}/restore:
+    post:
+      tags: [App Configuration]
+      summary: Restore archived configuration
+      description: Admin-only. Un-archives a previously deleted config.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Restored
+        '403':
+          description: Requires admin role
+
+  /api/apps/{id}/purge:
+    delete:
+      tags: [App Configuration]
+      summary: Permanently delete configuration (non-production only)
+      description: Admin-only. Hard-deletes the config, its entities, and its artifacts. Disabled when `NODE_ENV=production`.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Permanently deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  warning: { type: string }
+        '403':
+          description: Requires admin role
+        '404':
+          description: Route disabled in production
+
+  /api/entities:
+    get:
+      tags: [Entities]
+      summary: List entities
+      description: Returns entity summaries sorted by `lastUpdated` descending. `limit` is capped at 1000.
+      parameters:
+        - $ref: '#/components/parameters/ConfigIdQuery'
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100, maximum: 1000 }
+      responses:
+        '200':
+          description: Entity list
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/EntitySummary' }
+        '404':
+          description: Tenant not found
+
+  /api/entities/count:
+    get:
+      tags: [Entities]
+      summary: Count entities
+      parameters:
+        - $ref: '#/components/parameters/ConfigIdQuery'
+      responses:
+        '200':
+          description: Count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  count: { type: integer }
+        '404':
+          description: Tenant not found
+
+  /api/entities/count-by-form:
+    get:
+      tags: [Entities]
+      summary: Count entities grouped by form
+      description: Groups entities by `data.entityName`. Entities without an `entityName` are bucketed under `Unknown`.
+      parameters:
+        - $ref: '#/components/parameters/ConfigIdQuery'
+      responses:
+        '200':
+          description: Map of form name to count
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: { type: integer }
+
+  /api/entities/search:
+    post:
+      tags: [Entities]
+      summary: Search entities
+      description: |
+        Accepts an array of criteria (max 10) where each criterion is an object whose fields are
+        AND'd. String values are capped at 200 characters. `limit` is capped at 500.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                configId: { type: string, default: default }
+                criteria:
+                  type: array
+                  maxItems: 10
+                  items: { type: object, additionalProperties: true }
+                limit:
+                  type: integer
+                  default: 50
+                  maximum: 500
+      responses:
+        '200':
+          description: Matching entities
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/EntitySummary' }
+        '400':
+          description: Invalid criteria
+        '404':
+          description: Tenant not found
+
+  /api/entities/{guid}:
+    get:
+      tags: [Entities]
+      summary: Get entity by GUID
+      parameters:
+        - name: guid
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/ConfigIdQuery'
+      responses:
+        '200':
+          description: Entity
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EntitySummary' }
+        '404':
+          description: Entity or tenant not found
+
+  /api/entities/{guid}/members:
+    get:
+      tags: [Entities]
+      summary: List members of a group
+      description: Returns an empty array if the GUID is not a group or has no members. 404 if the GUID does not exist.
+      parameters:
+        - name: guid
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/ConfigIdQuery'
+      responses:
+        '200':
+          description: Members
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/EntitySummary' }
+        '404':
+          description: Entity not found or not a group
+
+  /api/entities/{guid}/events:
+    get:
+      tags: [Entities]
+      summary: List events for an entity
+      description: Returns all events for the entity, sorted by timestamp ascending.
+      parameters:
+        - name: guid
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/ConfigIdQuery'
+      responses:
+        '200':
+          description: Events
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Event' }
+        '404':
+          description: Tenant not found
+
+  /api/sync/pull:
+    get:
+      tags: [Synchronization]
+      summary: Pull events from server
+      description: |
+        Returns events updated after `since`, paginated with a composite cursor. Pages are 10
+        events by default (100 when `areaIds` is provided). When `areaIds` is set, events are
+        server-side filtered to only those targeting entities in the listed areas.
+
+        Unresolved potential duplicates do not block delivery but are surfaced as a `warnings`
+        array in the response.
+      parameters:
+        - $ref: '#/components/parameters/ConfigIdQuery'
+        - name: since
+          in: query
+          schema: { type: string }
+          description: Composite cursor `timestamp|eventGuid` or ISO timestamp. Defaults to epoch when absent.
+        - name: areaIds
+          in: query
+          schema: { type: string }
+          description: Comma-separated area IDs for selective sync
+      responses:
+        '200':
+          description: Page of events
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items: { $ref: '#/components/schemas/Event' }
+                  nextCursor: { type: string, nullable: true }
+                  warnings:
+                    type: array
+                    items: { type: string }
+        '404':
+          description: Tenant not found
+
+  /api/sync/pull/callback:
+    get:
+      tags: [Synchronization]
+      summary: External pull callback (reserved)
+      description: Placeholder for async external-pull callbacks. Currently returns `not implemented`.
+      parameters:
+        - $ref: '#/components/parameters/ConfigIdQuery'
+      responses:
+        '200':
+          description: Placeholder response
+
+  /api/sync/push:
+    post:
+      tags: [Synchronization]
+      summary: Push events to server
+      description: |
+        Submits a batch of events for the tenant. When a direct postgres URL is available, the
+        batch runs transactionally — all events commit or none are applied.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [events]
+              properties:
+                configId: { type: string, default: default }
+                events:
+                  type: array
+                  items: { $ref: '#/components/schemas/Event' }
+      responses:
+        '200':
+          description: Batch applied
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  applied: { type: integer }
+                  failed: { type: integer }
+                  errors:
+                    type: array
+                    items: { type: object, additionalProperties: true }
+        '400':
+          description: Invalid payload
+        '404':
+          description: Tenant not found
+        '422':
+          description: Batch rolled back; no events applied
+
+  /api/sync/pull/audit-logs:
+    get:
+      tags: [Synchronization]
+      summary: Pull audit logs
+      description: Returns all audit log entries created after `since`.
+      parameters:
+        - $ref: '#/components/parameters/ConfigIdQuery'
+        - name: since
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Audit logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AuditLog' }
+        '404':
+          description: Tenant not found
+
+  /api/sync/push/audit-logs:
+    post:
+      tags: [Synchronization]
+      summary: Push audit logs
+      description: |
+        Upload audit log entries for hash-chain integrity tracking. Each entry must carry a
+        signature produced by the client.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [auditLogs]
+              properties:
+                configId: { type: string, default: default }
+                auditLogs:
+                  type: array
+                  items: { $ref: '#/components/schemas/AuditLog' }
+      responses:
+        '200':
+          description: Saved
+        '400':
+          description: Invalid payload
+        '404':
+          description: Tenant not found
+        '500':
+          description: Failed to save audit logs
+
+  /api/sync/status:
+    get:
+      tags: [External Sync Jobs]
+      summary: Get latest external sync status
+      description: Returns `isSyncing`, the last completed job, and the currently active job (if any) for the given config.
+      parameters:
+        - name: configId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  isSyncing: { type: boolean }
+                  lastEvent:
+                    type: object
+                    nullable: true
+                    allOf:
+                      - $ref: '#/components/schemas/SyncJob'
+                  activeJob:
+                    type: object
+                    nullable: true
+                    allOf:
+                      - $ref: '#/components/schemas/SyncJob'
+        '400':
+          description: Missing configId
+
+  /api/sync/events:
+    get:
+      tags: [External Sync Jobs]
+      summary: List recent sync jobs
+      description: Returns the 20 most recent sync events for the given config, newest first.
+      parameters:
+        - name: configId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Recent jobs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items: { $ref: '#/components/schemas/SyncJob' }
+        '400':
+          description: Missing configId
+
+  /api/sync/external:
+    post:
+      tags: [External Sync Jobs]
+      summary: Trigger external sync
+      description: |
+        Starts a background sync job against the configured external system. Returns 202 with a
+        `jobId` immediately — poll `/api/sync/external/{jobId}` or `/api/sync/status` for
+        progress. Returns 409 if a job is already in progress for the same config.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                configId: { type: string, default: default }
+                credentials:
+                  type: object
+                  properties:
+                    username: { type: string }
+                    password: { type: string }
+                  description: Optional — only adapters that use basic auth require this
+      responses:
+        '202':
+          description: Job scheduled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId: { type: string, format: uuid }
+                  status: { type: string, example: pending }
+        '400':
+          description: Invalid payload
+        '404':
+          description: Tenant not found
+        '409':
+          description: Sync already in progress
+        '503':
+          description: Sync event store unavailable
+
+  /api/sync/external/{jobId}:
+    get:
+      tags: [External Sync Jobs]
+      summary: Get sync job by ID
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Job
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncJob' }
+        '403':
+          description: No access to the job's tenant
+        '404':
+          description: Job not found
+        '503':
+          description: Sync event store unavailable
+
+  /api/sync/external/{jobId}/cancel:
+    post:
+      tags: [External Sync Jobs]
+      summary: Cancel a running sync job
+      description: Signals the running job's abort controller. The job transitions to `cancelled` phase.
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Cancellation requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: cancelling }
+        '403':
+          description: No access to the job's tenant
+        '404':
+          description: No active job with that ID
+
+  /api/sync/external/{jobId}/retry:
+    post:
+      tags: [External Sync Jobs]
+      summary: Retry a completed sync job
+      description: Creates a new job using the same `configId` as the original. Returns 409 if another job is already running.
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '202':
+          description: New job scheduled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobId: { type: string, format: uuid }
+                  status: { type: string, example: pending }
+        '404':
+          description: Original job not found or tenant not found
+        '409':
+          description: A sync is already in progress
+        '503':
+          description: Sync event store unavailable
+
+  /api/attachments/upload:
+    post:
+      tags: [Attachments]
+      summary: Upload an attachment
+      description: |
+        Attaches a binary file to an entity. Max size 50 MB. The filename is sanitized on
+        ingestion (null bytes, path separators, and header-injection sequences are replaced
+        with `_`).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, entityGuid]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                entityGuid:
+                  type: string
+                configId:
+                  type: string
+                  default: default
+      responses:
+        '201':
+          description: Attachment stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  attachment: { $ref: '#/components/schemas/AttachmentMetadata' }
+        '400':
+          description: Missing file, missing entityGuid, or tenant not found
+
+  /api/attachments/{guid}:
+    get:
+      tags: [Attachments]
+      summary: Download an attachment
+      parameters:
+        - name: guid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/ConfigIdQuery'
+      responses:
+        '200':
+          description: Binary content with `Content-Type`, `Content-Disposition`, `Content-Length` headers
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Attachment not found
+    delete:
+      tags: [Attachments]
+      summary: Delete an attachment
+      parameters:
+        - name: guid
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/ConfigIdQuery'
+      responses:
+        '200':
+          description: Deleted
+        '404':
+          description: Attachment not found
+
+  /api/attachments/entity/{entityGuid}:
+    get:
+      tags: [Attachments]
+      summary: List attachment metadata for an entity
+      parameters:
+        - name: entityGuid
+          in: path
+          required: true
+          schema: { type: string }
+        - $ref: '#/components/parameters/ConfigIdQuery'
+      responses:
+        '200':
+          description: List
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  attachments:
+                    type: array
+                    items: { $ref: '#/components/schemas/AttachmentMetadata' }
+
+  /api/auth/otp/request:
+    post:
+      tags: [Self-Service]
+      summary: Request OTP
+      description: |
+        Sends a one-time password to the given identifier (phone or email). In production this
+        integrates with an SMS or email gateway. Rate limits: 5 requests per 15 min per IP and
+        per identifier. In non-production environments the plaintext code is returned as `devCode`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, tenantId]
+              properties:
+                identifier: { type: string, description: Phone or email }
+                tenantId: { type: string }
+      responses:
+        '200':
+          description: OTP generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  expiresIn: { type: integer, example: 300 }
+                  devCode:
+                    type: string
+                    description: Only present when `NODE_ENV != production`
+        '400':
+          description: Invalid request
+        '429':
+          description: Rate limit exceeded
+
+  /api/auth/otp/verify:
+    post:
+      tags: [Self-Service]
+      summary: Verify OTP
+      description: Verifies a one-time password and returns a self-service JWT scoped to the associated entity.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, otp, tenantId]
+              properties:
+                identifier: { type: string }
+                otp: { type: string, minLength: 6, maxLength: 6 }
+                tenantId: { type: string }
+      responses:
+        '200':
+          description: OTP verified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  username: { type: string }
+                  token: { type: string }
+        '400':
+          description: Invalid request
+        '401':
+          description: Invalid OTP
+
+  /api/auth/id/verify:
+    post:
+      tags: [Self-Service]
+      summary: Verify national ID + date of birth
+      description: Returns a self-service JWT if the supplied national ID and date of birth match a beneficiary in the tenant.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nationalId, dateOfBirth, tenantId]
+              properties:
+                nationalId: { type: string }
+                dateOfBirth: { type: string, description: "ISO date (YYYY-MM-DD)" }
+                tenantId: { type: string }
+      responses:
+        '200':
+          description: Verified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  username: { type: string }
+                  token: { type: string }
+        '401':
+          description: Verification failed
+
+  /api/auth/oidc/exchange:
+    post:
+      tags: [Self-Service]
+      summary: Exchange OIDC token for self-service JWT
+      description: |
+        Validates an ID token from the tenant's configured OIDC provider (e.g. eSignet) and
+        returns a self-service JWT bound to the matching entity. Token issuer is pre-validated
+        against the tenant config before any JWKS fetch (SSRF mitigation). JWKS origin must
+        match the configured authority.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [idToken, accessToken, tenantId]
+              properties:
+                idToken: { type: string }
+                accessToken: { type: string }
+                tenantId: { type: string }
+                nonce: { type: string }
+      responses:
+        '200':
+          description: Exchanged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  username: { type: string }
+                  token: { type: string }
+        '400':
+          description: Invalid token format or OIDC not configured
+        '401':
+          description: Token verification failed or no matching record
+        '404':
+          description: No matching beneficiary
+        '502':
+          description: Failed to fetch OIDC discovery or JWKS origin mismatch
+
+  /api/auth/self-service/entity:
+    get:
+      tags: [Self-Service]
+      summary: Get citizen's own entity and available forms
+      description: Requires a self-service token. Returns the token's entity plus the forms the citizen may submit.
+      security:
+        - SelfServiceAuth: []
+      responses:
+        '200':
+          description: Entity and forms
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entity:
+                    type: object
+                    properties:
+                      guid: { type: string }
+                      data: { type: object, additionalProperties: true }
+                      lastUpdated: { type: string, format: date-time }
+                  availableForms:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type: { type: string }
+                        label: { type: string }
+                        formio: { type: object, additionalProperties: true }
+        '400':
+          description: Token missing entityGuid
+        '403':
+          description: Cross-entity access forbidden
+        '404':
+          description: Tenant or entity not found
+
+  /api/auth/self-service/submit:
+    post:
+      tags: [Self-Service]
+      summary: Submit self-service change request
+      description: |
+        Submits a change request from the beneficiary. Standalone forms (life_event, grievance)
+        are stored for review without entity side-effects. Entity update forms go through the
+        review pipeline when `requireReview` is enabled; otherwise they are applied directly.
+      security:
+        - SelfServiceAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [formType, formData]
+              properties:
+                formType: { type: string }
+                formData: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Submitted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [success, pending_review]
+                  submissionGuid: { type: string, format: uuid }
+                  reviewId: { type: string, nullable: true }
+        '400':
+          description: Invalid request or token missing entityGuid
+        '403':
+          description: Form type not allowed for this program
+        '404':
+          description: Tenant not found
+
+  /api/auth/self-service/submissions:
+    get:
+      tags: [Self-Service]
+      summary: List citizen's submission history
+      description: Returns both applied events (from the audit trail) and pending/rejected reviews, newest first.
+      security:
+        - SelfServiceAuth: []
+      responses:
+        '200':
+          description: History
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  submissions:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        submissionGuid: { type: string }
+                        tenantId: { type: string }
+                        status: { type: string }
+                        eventType: { type: string }
+                        entityGuid: { type: string }
+                        createdAt: { type: string, format: date-time }
+        '400':
+          description: Token missing entityGuid
+        '404':
+          description: Tenant not found
+
+  /api/potential-duplicates:
+    get:
+      tags: [Potential Duplicates]
+      summary: List potential duplicates
+      parameters:
+        - $ref: '#/components/parameters/ConfigIdQuery'
+      responses:
+        '200':
+          description: Potential duplicates for the tenant
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PotentialDuplicate' }
+
+  /api/potential-duplicates/resolve:
+    post:
+      tags: [Potential Duplicates]
+      summary: Resolve a potential duplicate
+      description: |
+        Submits a `resolve-duplicate` event. If `shouldDeleteNewItem` is `true`, the new entity
+        is deleted and the existing one is retained; otherwise both entities are kept and the
+        pair is marked reviewed.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newItem, existingItem]
+              properties:
+                configId: { type: string, default: default }
+                newItem: { type: string, description: GUID of the newly detected entity }
+                existingItem: { type: string, description: GUID of the existing entity }
+                shouldDeleteNewItem: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Resolved
+
+  /api/openspp-fields/parse-file:
+    post:
+      tags: [OpenSPP Fields]
+      summary: Parse OpenSPP fields from uploaded JSON file
+      description: Upload a JSON file; the server infers field types and returns the schema. Max 10 MB.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [payload]
+              properties:
+                payload:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Parsed fields
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fields:
+                    type: array
+                    items: { $ref: '#/components/schemas/OpenSppField' }
+        '400':
+          description: Invalid JSON or missing file
+
+  /api/openspp-fields/parse:
+    post:
+      tags: [OpenSPP Fields]
+      summary: Parse OpenSPP fields from JSON payload
+      description: Inline JSON variant of `/parse-file`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Parsed fields
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fields:
+                    type: array
+                    items: { $ref: '#/components/schemas/OpenSppField' }
+
+  /api/openspp-fields/fetch:
+    post:
+      tags: [OpenSPP Fields]
+      summary: Fetch fields from OpenSPP V1 (Odoo)
+      description: |
+        Authenticates to Odoo via JSON-RPC and returns the field metadata for the given model.
+        Blocks requests to private IP ranges and cloud metadata endpoints (SSRF mitigation).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, database, username, password]
+              properties:
+                url: { type: string, format: uri }
+                database: { type: string }
+                username: { type: string }
+                password: { type: string }
+                model: { type: string, default: res.partner }
+                fields:
+                  type: array
+                  items: { type: string }
+                attributes:
+                  type: array
+                  items: { type: string }
+      responses:
+        '200':
+          description: Fields
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fields:
+                    type: array
+                    items: { $ref: '#/components/schemas/OpenSppField' }
+        '400':
+          description: Missing credentials or URL points at a private/internal range
+        '500':
+          description: Failed to fetch from Odoo
+
+  /api/openspp-fields/v2/test-connection:
+    post:
+      tags: [OpenSPP Fields]
+      summary: Test OpenSPP V2 OAuth2 connection
+      description: Server-side OAuth2 client credentials test (avoids browser CORS issues).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [baseUrl, clientId, clientSecret]
+              properties:
+                baseUrl: { type: string, format: uri }
+                clientId: { type: string }
+                clientSecret: { type: string }
+      responses:
+        '200':
+          description: Connection result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  scopes:
+                    type: array
+                    items: { type: string }
+                  error: { type: string }
+        '400':
+          description: Missing parameters or URL points at a private/internal range
+
+  /api/openspp-fields/v2/fields:
+    post:
+      tags: [OpenSPP Fields]
+      summary: Fetch OpenSPP V2 Studio fields
+      description: Authenticates server-side to OpenSPP V2, paginates `/api/v2/spp/Studio/fields`, and returns combined field metadata.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [baseUrl, clientId, clientSecret]
+              properties:
+                baseUrl: { type: string, format: uri }
+                clientId: { type: string }
+                clientSecret: { type: string }
+      responses:
+        '200':
+          description: Studio fields
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fields:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string }
+                        label: { type: string }
+                        type: { type: string }
+                        targetType:
+                          type: string
+                          enum: [individual, group]
+                        required: { type: boolean }
+                        source: { type: string, example: studio }
+                        selectionOptions:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              value: { type: string }
+                              label: { type: string }
+        '400':
+          description: Missing parameters or URL points at a private/internal range
+        '401':
+          description: Authentication failed
+        '502':
+          description: Authentication request failed
+
+security:
+  - BearerAuth: []

@@ -156,25 +156,6 @@ describeIfPostgres("PostgresEventStorageAdapter", () => {
     expect(savedAuditLog).toEqual(expectedAuditLogEntries);
   });
 
-  test("saveMerkleRoot and getMerkleRoot should work correctly", async () => {
-    const merkleRoot = "abc123";
-
-    await adapter.saveMerkleRoot(merkleRoot);
-
-    const savedMerkleRoot = await adapter.getMerkleRoot();
-    expect(savedMerkleRoot).toBe(merkleRoot);
-
-    const updatedRoot = "updated-root";
-    await adapter.saveMerkleRoot(updatedRoot);
-
-    const refreshedRoot = await adapter.getMerkleRoot();
-    expect(refreshedRoot).toBe(updatedRoot);
-
-    await adapter.saveMerkleRoot("");
-    const clearedRoot = await adapter.getMerkleRoot();
-    expect(clearedRoot).toBe("");
-  });
-
   test("getLastRemoteSyncTimestamp and setLastRemoteSyncTimestamp should work correctly", async () => {
     const timestamp = new Date().toISOString();
 
@@ -339,7 +320,7 @@ describeIfPostgres("PostgresEventStorageAdapter", () => {
         data: { name: "Jane" },
         entityGuid: "456",
         syncLevel: 0,
-        timestamp: new Date("2023-05-02T12:00:00.000Z"),
+        timestamp: "2023-05-02T12:00:00.000Z",
         type: "",
         userId: "",
       },
@@ -348,7 +329,7 @@ describeIfPostgres("PostgresEventStorageAdapter", () => {
         data: { name: "Bob" },
         entityGuid: "789",
         syncLevel: 0,
-        timestamp: new Date("2023-05-03T14:00:00.000Z"),
+        timestamp: "2023-05-03T14:00:00.000Z",
         type: "",
         userId: "",
       },
@@ -402,7 +383,7 @@ describeIfPostgres("PostgresEventStorageAdapter", () => {
         userId: "",
       },
     ]);
-    expect(nextCursor).toBe("2023-05-02T12:00:00.000Z");
+    expect(nextCursor).toBe("2023-05-02T12:00:00.000Z|def456");
 
     const { events: eventsAfterWithCursor, nextCursor: nextCursorWithCursor } = await adapter.getEventsSincePagination(
       nextCursor as string,
@@ -421,7 +402,7 @@ describeIfPostgres("PostgresEventStorageAdapter", () => {
         userId: "",
       },
     ]);
-    expect(nextCursorWithCursor).toBe("2023-05-03T14:00:00.000Z");
+    expect(nextCursorWithCursor).toBe("2023-05-03T14:00:00.000Z|ghi789");
   });
 });
 
@@ -536,22 +517,6 @@ describeTenantTests("PostgresEventStorageAdapter - Tenant Tests", () => {
     expect(tenant2RetrievedAuditLogs).toHaveLength(1);
     expect(tenant2RetrievedAuditLogs[0].guid).toBe("audit2");
     expect(tenant2RetrievedAuditLogs[0].changes).toEqual({ tenant: "tenant2" });
-  });
-
-  test("merkle roots should be isolated between tenants", async () => {
-    const tenant1MerkleRoot = "tenant1-merkle-root-abc123";
-    const tenant2MerkleRoot = "tenant2-merkle-root-def456";
-
-    // Save merkle roots for both tenants
-    await tenant1Adapter.saveMerkleRoot(tenant1MerkleRoot);
-    await tenant2Adapter.saveMerkleRoot(tenant2MerkleRoot);
-
-    // Verify tenant isolation
-    const tenant1RetrievedMerkleRoot = await tenant1Adapter.getMerkleRoot();
-    const tenant2RetrievedMerkleRoot = await tenant2Adapter.getMerkleRoot();
-
-    expect(tenant1RetrievedMerkleRoot).toBe(tenant1MerkleRoot);
-    expect(tenant2RetrievedMerkleRoot).toBe(tenant2MerkleRoot);
   });
 
   test("sync timestamps should be isolated between tenants", async () => {

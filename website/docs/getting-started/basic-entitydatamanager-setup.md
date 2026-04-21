@@ -35,7 +35,7 @@ import {
   AuthConfig,
   PasswordCredentials,
   TokenCredentials
-} from 'idpass-data-collect';
+} from '@idpass/data-collect-core';
 ```
 
 ### Step 2: Initialize Storage Components
@@ -161,7 +161,7 @@ const internalSyncManager = new InternalSyncManager(
 
 // External sync manager for external system integration
 const externalSyncManager = new ExternalSyncManager(eventStore, eventApplierService, {
-  type: "mock-sync-server", // or your external system type
+  type: "mock", // or your external system type
   url: externalUrl,
   extraFields: [],
 });

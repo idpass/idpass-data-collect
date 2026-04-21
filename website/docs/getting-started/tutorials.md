@@ -10,12 +10,12 @@ Welcome to the comprehensive DataCollect tutorials! Whether you're building a da
 
 ## What You'll Learn
 
-- 🏗️ **Complete Setup**: Build a fully functional EntityDataManager with authentication from scratch
-- 🔐 **Authentication**: Configure multi-provider authentication (Auth0, Keycloak, custom)
-- 📝 **Form Management**: Create, update, and manage entities through forms
-- 🔍 **Data Retrieval**: Search and filter your data efficiently
-- 🔄 **Synchronization**: Keep your data in sync across devices and servers with authenticated operations
-- 🚀 **Advanced Features**: Handle duplicates, complex operations, and error scenarios
+- **Complete Setup**: Build a fully functional EntityDataManager with authentication from scratch
+- **Authentication**: Configure multi-provider authentication (Auth0, Keycloak, custom)
+- **Form Management**: Create, update, and manage entities through forms
+- **Data Retrieval**: Search and filter your data efficiently
+- **Synchronization**: Keep your data in sync across devices and servers with authenticated operations
+- **Advanced Features**: Handle duplicates, complex operations, and error scenarios
 
 ## Prerequisites
 
@@ -40,16 +40,16 @@ Before starting these tutorials, make sure you have:
 
 Ready to take your DataCollect knowledge further? Explore these resources:
 
-- 📖 [Configuration Guide](./configuration.md) - Customize DataCollect and authentication for your specific needs
-- 🚀 [Backend Package](../../packages/backend/) - Add server synchronization and authentication capabilities
-- 👥 [Admin Package](../../packages/admin/) - Build a complete management solution with user authentication
-- 🔧 [API Reference](../../packages/datacollect/) - Dive deep into the technical details
-- 🏗️ [Architecture Guide](../../architecture/) - Understand the system design and authentication patterns
+- [Configuration Guide](./configuration.md) - Customize DataCollect and authentication for your specific needs
+- [Backend Package](../../packages/backend/) - Add server synchronization and authentication capabilities
+- [Admin Package](../../packages/admin/) - Build a complete management solution with user authentication
+- [API Reference](../../packages/datacollect/) - Dive deep into the technical details
+- [Architecture Guide](../../architecture/) - Understand the system design and authentication patterns
 
 ## Need Help?
 
-- 📚 Check out the [examples folder](../../../examples/basic-usage/) for complete working implementations
-- 🐛 Report issues on our [GitHub repository](https://github.com/idpass/idpass-data-collect/issues)
-- 🤝 Join our community discussions
+- Check out the [examples folder](../../../examples/basic-usage/) for complete working implementations
+- Report issues on our [GitHub repository](https://github.com/idpass/idpass-data-collect/issues)
+- Join our community discussions
 
-Happy coding! 🚀
+Happy coding!

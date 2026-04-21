@@ -18,26 +18,26 @@
  */
 
 import { AuditLogEntry, EventStorageAdapter, FormSubmission, SyncLevel } from "../interfaces/types";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("IndexedDbEventStorageAdapter");
 
 /**
  * IndexedDB implementation of the EventStorageAdapter for browser-based event persistence.
  *
  * This adapter provides tamper-evident event storage using the browser's IndexedDB API.
- * It ensures the integrity of the event log through cryptographic methods (e.g., Merkle trees)
- * and supports various event sourcing operations like audit trails, sync timestamp management,
+ * It supports various event sourcing operations like audit trails, sync timestamp management,
  * and efficient event retrieval.
  *
  * Key features:
  * - **Immutable Event Storage**: All events are stored as immutable records.
- * - **Merkle Tree Integrity**: Cryptographic verification of event integrity using SHA256.
  * - **Audit Trail Management**: Complete audit logging for compliance and debugging.
  * - **Sync Coordination**: Timestamp tracking for multiple sync operations (local, remote, external).
- * - **Event Verification**: Merkle proof generation and verification (though Merkle proof generation/verification logic is handled by EventStore, this adapter provides the storage for Merkle roots).
  * - **Pagination Support**: Efficient handling of large event datasets.
- * - **Tamper Detection**: Cryptographic detection of unauthorized modifications.
+ * - **Tamper Detection**: Cryptographic detection of unauthorized modifications via hash chains.
  *
  * Architecture:
- * - Uses IndexedDB object stores for events, audit logs, Merkle roots, and sync timestamps.
+ * - Uses IndexedDB object stores for events, audit logs, and sync timestamps.
  * - Employs multiple indexes for efficient querying of events and audit logs by GUID, entity GUID, and timestamp.
  * - Provides ACID transaction support for data consistency.
  * - Supports both single and multi-tenant deployments by prefixing database names with the tenant ID.
@@ -45,7 +45,7 @@ import { AuditLogEntry, EventStorageAdapter, FormSubmission, SyncLevel } from ".
  * @example
  * Basic usage:
  * ```typescript
- * import { IndexedDbEventStorageAdapter } from '@idpass/idpass-data-collect';
+ * import { IndexedDbEventStorageAdapter } from '@idpass/data-collect-core';
  *
  * const adapter = new IndexedDbEventStorageAdapter('tenant-123');
  * await adapter.initialize();
@@ -94,7 +94,7 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
       const request = window.indexedDB.open(this.dbName, 1);
 
       request.onerror = (event) => {
-        console.error("Error opening IndexedDB:", event);
+        log.error({ event }, "Error opening IndexedDB");
         reject(event);
       };
 
@@ -110,8 +110,6 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
         eventsStore.createIndex("timestamp", "timestamp", { unique: false });
         eventsStore.createIndex("entityGuId_timestamp", ["entityGuId", "timestamp"], { unique: false });
         eventsStore.createIndex("syncLevel", "syncLevel", { unique: false });
-
-        db.createObjectStore("merkleRoot", { keyPath: "id", autoIncrement: true });
 
         const auditLogStore = db.createObjectStore("auditLog", { keyPath: "id", autoIncrement: true });
         auditLogStore.createIndex("guid", "guid", { unique: true });
@@ -147,7 +145,16 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
           guids.push(event.guid);
           resolve();
         };
-        request.onerror = () => reject(request.error);
+        request.onerror = (e) => {
+          // Silently skip duplicates (unique guid index constraint),
+          // matching Postgres onConflictDoNothing behavior.
+          if (request.error?.name === "ConstraintError") {
+            e.preventDefault(); // prevent transaction abort
+            resolve();
+            return;
+          }
+          reject(request.error);
+        };
       });
     }
     return guids;
@@ -242,62 +249,7 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
   }
 
   /**
-   * Saves the Merkle root to the Merkle root store.
-   *
-   * @param root The Merkle root string to save.
-   * @returns A Promise that resolves when the Merkle root is successfully saved.
-   * @throws {Error} If IndexedDB is not initialized or the save operation fails.
-   */
-  async saveMerkleRoot(root: string): Promise<void> {
-    if (!this.db) {
-      throw new Error("IndexedDB is not initialized");
-    }
-
-    const transaction = this.db.transaction(["merkleRoot"], "readwrite");
-    const objectStore = transaction.objectStore("merkleRoot");
-
-    if (!root) {
-      await new Promise<void>((resolve, reject) => {
-        const request = objectStore.delete(1);
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-      });
-      return;
-    }
-
-    await new Promise<void>((resolve, reject) => {
-      const request = objectStore.put({ id: 1, root });
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  /**
-   * Retrieves the stored Merkle root.
-   *
-   * @returns A Promise that resolves with the Merkle root string, or an empty string if no root exists.
-   * @throws {Error} If IndexedDB is not initialized or the retrieval operation fails.
-   */
-  async getMerkleRoot(): Promise<string> {
-    if (!this.db) {
-      throw new Error("IndexedDB is not initialized");
-    }
-
-    const transaction = this.db.transaction(["merkleRoot"], "readonly");
-    const objectStore = transaction.objectStore("merkleRoot");
-    const request = objectStore.get(1);
-
-    return await new Promise<string>((resolve, reject) => {
-      request.onsuccess = (event) => {
-        const result = (event.target as IDBRequest<{ root: string }>).result;
-        resolve(result ? result.root : "");
-      };
-      request.onerror = () => reject(request.error);
-    });
-  }
-
-  /**
-   * Clears all data from the events, audit log, and Merkle root stores.
+   * Clears all data from the events and audit log stores.
    *
    * @returns A Promise that resolves when all stores are cleared.
    * @throws {Error} If IndexedDB is not initialized or the clear operation fails.
@@ -318,12 +270,6 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
       clearAuditLog.onsuccess = () => resolve();
       clearAuditLog.onerror = () => reject(clearAuditLog.error);
     });
-
-    const clearMerkleRoot = this.db.transaction(["merkleRoot"], "readwrite").objectStore("merkleRoot").clear();
-    await new Promise<void>((resolve, reject) => {
-      clearMerkleRoot.onsuccess = () => resolve();
-      clearMerkleRoot.onerror = () => reject(clearMerkleRoot.error);
-    });
   }
 
   /**
@@ -342,7 +288,7 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
 
       const transaction = this.db.transaction(["events"], "readwrite");
       const store = transaction.objectStore("events");
-      const index = store.index("entityGuId");
+      const index = store.index("entityGuid");
       const request = index.openCursor(IDBKeyRange.only(id));
 
       request.onerror = () => reject(new Error("Failed to retrieve events"));
@@ -378,7 +324,7 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
 
       const transaction = this.db.transaction(["auditLog"], "readwrite");
       const store = transaction.objectStore("auditLog");
-      const index = store.index("entityGuId");
+      const index = store.index("entityGuid");
       const request = index.openCursor(IDBKeyRange.only(entityGuId));
 
       request.onerror = () => reject(new Error("Failed to retrieve events"));
@@ -443,7 +389,7 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
    * @throws {Error} If IndexedDB is not initialized or the retrieval operation fails.
    */
   async getEventsSincePagination(
-    timestamp: string | Date,
+    cursor: string | Date,
     pageSize: number = 10,
   ): Promise<{ events: FormSubmission[]; nextCursor: string | Date | null }> {
     return new Promise((resolve, reject) => {
@@ -451,10 +397,26 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
         throw new Error("IndexedDB is not initialized");
       }
 
+      const cursorString = cursor ? String(cursor) : new Date(0).toISOString();
+
+      // Parse composite cursor (timestamp|guid) or plain timestamp
+      let timestampBound: string;
+      let afterGuid: string | null = null;
+      if (cursorString.includes("|")) {
+        const [ts, guid] = cursorString.split("|");
+        timestampBound = ts;
+        afterGuid = guid;
+      } else {
+        timestampBound = cursorString;
+      }
+
       const transaction = this.db.transaction(["events"], "readonly");
       const store = transaction.objectStore("events");
       const index = store.index("timestamp");
-      const request = index.openCursor(IDBKeyRange.lowerBound(timestamp, true));
+      // When using a composite cursor, we need events >= timestamp (not strictly >)
+      // because we still need to pick up events with the same timestamp but higher guid
+      const exclusive = afterGuid === null;
+      const request = index.openCursor(IDBKeyRange.lowerBound(timestampBound, exclusive));
 
       const events: FormSubmission[] = [];
       let count = 0;
@@ -462,18 +424,33 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
       request.onerror = () => reject(new Error("Failed to retrieve events"));
 
       request.onsuccess = (event) => {
-        const cursor = (event.target as IDBRequest).result;
+        const idbCursor = (event.target as IDBRequest).result;
 
-        if (cursor && count < pageSize) {
-          events.push(cursor.value);
+        if (idbCursor && count < pageSize) {
+          const entry = idbCursor.value as FormSubmission;
+
+          // For composite cursors, skip events at the same timestamp with guid <= afterGuid
+          if (afterGuid !== null && entry.timestamp === timestampBound && entry.guid <= afterGuid) {
+            idbCursor.continue();
+            return;
+          }
+
+          events.push(entry);
           count++;
-          cursor.continue();
+          idbCursor.continue();
         } else {
-          // Sort the events by timestamp in ascending order (oldest first)
-          events.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+          // Sort the events by timestamp then guid in ascending order
+          events.sort((a, b) => {
+            const timestampCompare = a.timestamp.localeCompare(b.timestamp);
+            if (timestampCompare !== 0) return timestampCompare;
+            return a.guid.localeCompare(b.guid);
+          });
 
-          // Get the last timestamp as the next cursor
-          const nextCursor = events.length > 0 ? events[events.length - 1].timestamp : null;
+          // Build composite cursor from last event
+          const nextCursor =
+            events.length === pageSize
+              ? `${events[events.length - 1].timestamp}|${events[events.length - 1].guid}`
+              : null;
 
           resolve({
             events,
@@ -763,6 +740,49 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
       request.onerror = () => {
         reject(request.error);
       };
+    });
+  }
+
+  /**
+   * Persists the latest hash anchor for tamper detection on restart.
+   *
+   * @param hash The hash string to persist.
+   * @returns A Promise that resolves when the hash is persisted.
+   */
+  async persistHashAnchor(hash: string): Promise<void> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+
+    const transaction = this.db.transaction(["syncTimestamp"], "readwrite");
+    const objectStore = transaction.objectStore("syncTimestamp");
+    const request = objectStore.put({ id: "hashAnchor", value: hash });
+
+    return new Promise<void>((resolve, reject) => {
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  }
+
+  /**
+   * Retrieves the previously persisted hash anchor, or null if none exists.
+   *
+   * @returns The persisted hash string, or null if no anchor has been saved.
+   */
+  async getPersistedHashAnchor(): Promise<string | null> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+
+    const transaction = this.db.transaction(["syncTimestamp"], "readonly");
+    const objectStore = transaction.objectStore("syncTimestamp");
+    const request = objectStore.get("hashAnchor");
+
+    return new Promise<string | null>((resolve, reject) => {
+      request.onsuccess = () => {
+        resolve(request.result ? request.result.value : null);
+      };
+      request.onerror = () => reject(request.error);
     });
   }
 

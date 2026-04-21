@@ -20,7 +20,7 @@ graph LR
     D --> E[Entity Store]
     E --> F[Current State]
     C --> G[Audit Trail]
-    C --> H[Merkle Tree]
+    C --> H[Hash Chain]
 ```
 
 ## Core Concepts
@@ -57,16 +57,11 @@ The EventStore manages immutable event storage with cryptographic integrity:
 
 ```typescript
 class EventStoreImpl implements EventStore {
-  private merkleRoot: MerkleNode | null = null;
   private storageAdapter: EventStorageAdapter;
 
   async saveEvent(form: FormSubmission): Promise<string> {
-    // Store event immutably
+    // Store event immutably, appending to the hash chain
     const guids = await this.storageAdapter.saveEvents([form]);
-    
-    // Update Merkle tree for integrity
-    await this.loadMerkleTree();
-    
     return guids[0];
   }
 }
@@ -123,25 +118,19 @@ const customApplier: EventApplier = {
 eventApplierService.registerEventApplier(customApplier);
 ```
 
-### Merkle Tree Integrity
+### Hash Chain Integrity
 
-Every event is included in a Merkle tree for tamper-evident storage:
+Every event is linked to the previous event via an incremental hash chain for tamper-evident storage. This replaces the Merkle tree used in v1.x and provides O(1) append performance:
 
 ```typescript
-class MerkleNode {
-  left: MerkleNode | null = null;
-  right: MerkleNode | null = null;
-  hash: string;
-
-  constructor(data: string) {
-    this.hash = this.calculateHash(data);
-  }
-
-  private calculateHash(data: string): string {
-    return CryptoJS.SHA256(data).toString(CryptoJS.enc.Hex);
-  }
-}
+// Each event's hash includes the previous event's hash
+const eventHash = sha256(previousHash + eventGuid + eventData + timestamp);
 ```
+
+The hash chain enables:
+- **Tamper detection** — any modification to a past event breaks the chain
+- **Efficient append** — O(1) vs O(log n) for Merkle trees
+- **Incremental verification** — verify from any point in the chain forward
 
 ## Event Sourcing Benefits
 
@@ -202,17 +191,14 @@ async function rebuildFromEvents(): Promise<void> {
 
 ### 4. Cryptographic Verification
 
-Verify data integrity using Merkle proofs:
+Verify data integrity using the hash chain:
 
 ```typescript
-// Get proof for an event
-const proof = await eventStore.getProof(suspiciousEvent);
-
-// Verify the event hasn't been tampered with
-const isValid = eventStore.verifyEvent(suspiciousEvent, proof);
+// Verify the hash chain from a starting point
+const isValid = await eventStore.verifyHashChain(startEventGuid);
 
 if (!isValid) {
-  throw new Error('Data integrity compromised!');
+  throw new Error('Data integrity compromised — hash chain broken!');
 }
 ```
 
@@ -284,6 +270,17 @@ function migrateEvent(event: VersionedEvent): VersionedEvent {
   }
 }
 ```
+
+### Schema Versioning and Upcasting
+
+The `EventUpcaster` service handles schema evolution by transforming events from older versions to the current schema during replay or projection rebuild:
+
+```typescript
+// Events are automatically upcasted when read from the store
+const events = await eventStore.getEvents(); // v1 events are upcasted to v2
+```
+
+This ensures backward compatibility — old events remain valid and are transparently migrated at read time.
 
 ## Performance Considerations
 
@@ -508,7 +505,7 @@ interface EventMetrics {
   averageEventSize: number;
   eventTypeDistribution: Record<string, number>;
   failedEvents: number;
-  merkleTreeDepth: number;
+  hashChainLength: number;
 }
 ```
 
@@ -519,11 +516,8 @@ interface EventMetrics {
 async function inspectEvent(eventId: string): Promise<void> {
   const event = await eventStore.getEvent(eventId);
   console.log('Event:', event);
-  
-  const proof = await eventStore.getProof(event);
-  console.log('Merkle Proof:', proof);
-  
-  const isValid = eventStore.verifyEvent(event, proof);
+
+  const isValid = await eventStore.verifyHashChain(eventId);
   console.log('Integrity Valid:', isValid);
 }
 

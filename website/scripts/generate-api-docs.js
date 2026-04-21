@@ -322,15 +322,11 @@ ${Object.entries(spec.tags || {}).map(([tag, info]) =>
   `- **${tag}** - ${info.description || ''}`
 ).join('\n')}
 
-## Interactive Documentation
-
-For live API testing, start the backend server and visit:
-\`http://localhost:3000/api-docs\`
-
 ## OpenAPI Specification
 
 - **Download:** [openapi.yaml](${CONFIG.githubUrl})
-- **Interactive:** [Swagger UI](http://localhost:3000/api-docs) (when server is running)
+- **JSON Endpoint:** [openapi.json](http://localhost:3000/api-docs/openapi.json) (when server is running)
+- **Import into tools:** Postman, Insomnia, or any OpenAPI-compatible client
 
 ---
 

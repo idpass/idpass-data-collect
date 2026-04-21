@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} — Mock Registry{% endblock %}
+{% block content %}
+<nav class="crumbs">
+  <a href="/">Home</a> <span class="sep">/</span>
+  <a href="/ui/clients">Clients</a> <span class="sep">/</span>
+  <span>{{ title }}</span>
+</nav>
+
+<div class="page-head">
+  <div>
+    <p class="eyebrow">OAuth2 client credentials</p>
+    <h2>{{ title }}.</h2>
+    <p class="lede">The server generates the secret for you. You will see it exactly once — copy it somewhere safe before you leave the page.</p>
+  </div>
+</div>
+
+{% if error %}
+<div class="alert error">{{ error }}</div>
+{% endif %}
+
+<form class="form" method="post" action="{{ action }}">
+  <div class="field">
+    <label for="name">Name <span class="hint">human-readable label, e.g. "Staging adapter"</span></label>
+    <input id="name" name="name" value="{{ form.name if form else '' }}" autofocus>
+  </div>
+
+  <div class="field">
+    <label for="client_id">Client ID <span class="hint">optional · leave blank to auto-generate (<code>mc_…</code>)</span></label>
+    <input id="client_id" name="client_id" value="{{ form.client_id if form else '' }}" placeholder="mc_AbCdEf12">
+  </div>
+
+  <fieldset class="field scopes-field">
+    <legend>Scopes <span class="hint">optional · what this client may do</span></legend>
+    <label class="scope-option">
+      <input type="checkbox" name="scope_read" value="true"
+             {% if form and form.get('scope_read') %}checked{% endif %}>
+      <span class="scope-label"><strong>read</strong><span class="hint">browse and pull registry data</span></span>
+    </label>
+    <label class="scope-option">
+      <input type="checkbox" name="scope_write" value="true"
+             {% if form and form.get('scope_write') %}checked{% endif %}>
+      <span class="scope-label"><strong>write</strong><span class="hint">create, update, and delete records</span></span>
+    </label>
+  </fieldset>
+
+  <div class="field">
+    <label for="description">Description <span class="hint">optional · notes about intended use</span></label>
+    <textarea id="description" name="description" rows="3">{{ form.description if form else '' }}</textarea>
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn primary">Create client</button>
+    <a href="/ui/clients" class="btn ghost">Cancel</a>
+  </div>
+</form>
+{% endblock %}

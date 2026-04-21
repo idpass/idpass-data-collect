@@ -1,0 +1,192 @@
+name: Publish Package
+
+on:
+  push:
+    tags:
+      - 'core@*'
+      - 'backend@*'
+      - 'adapter-openspp@*'
+      - 'adapter-openfn@*'
+      - 'adapter-mock@*'
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to publish'
+        required: true
+        type: choice
+        options:
+          - '@idpass/data-collect-core'
+          - '@idpass/data-collect-backend'
+          - '@idpass/adapter-openspp'
+          - '@idpass/adapter-openfn'
+          - '@idpass/adapter-mock'
+      version:
+        description: 'Version to publish (leave empty to use package.json version)'
+        required: false
+        type: string
+      dry-run:
+        description: 'Dry run (do not actually publish)'
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      package_name: ${{ steps.resolve.outputs.package_name }}
+      package_dir: ${{ steps.resolve.outputs.package_dir }}
+      version: ${{ steps.resolve.outputs.version }}
+      dry_run: ${{ steps.resolve.outputs.dry_run }}
+    steps:
+      - name: Resolve package from tag or input
+        id: resolve
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+            SHORT_NAME="${TAG%%@*}"
+            VERSION=""
+            DRY_RUN="false"
+          else
+            case "${{ inputs.package }}" in
+              "@idpass/data-collect-core") SHORT_NAME="core" ;;
+              "@idpass/data-collect-backend") SHORT_NAME="backend" ;;
+              "@idpass/adapter-openspp") SHORT_NAME="adapter-openspp" ;;
+              "@idpass/adapter-openfn") SHORT_NAME="adapter-openfn" ;;
+              "@idpass/adapter-mock") SHORT_NAME="adapter-mock" ;;
+            esac
+            VERSION="${{ inputs.version }}"
+            DRY_RUN="${{ inputs.dry-run }}"
+          fi
+
+          case "$SHORT_NAME" in
+            core) PKG_NAME="@idpass/data-collect-core"; PKG_DIR="packages/datacollect" ;;
+            backend) PKG_NAME="@idpass/data-collect-backend"; PKG_DIR="packages/backend" ;;
+            adapter-openspp) PKG_NAME="@idpass/adapter-openspp"; PKG_DIR="packages/adapter-openspp" ;;
+            adapter-openfn) PKG_NAME="@idpass/adapter-openfn"; PKG_DIR="packages/adapter-openfn" ;;
+            adapter-mock) PKG_NAME="@idpass/adapter-mock"; PKG_DIR="packages/adapter-mock" ;;
+            *) echo "::error::Unknown package: $SHORT_NAME"; exit 1 ;;
+          esac
+
+          echo "package_name=$PKG_NAME" >> "$GITHUB_OUTPUT"
+          echo "package_dir=$PKG_DIR" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "dry_run=$DRY_RUN" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: resolve
+    runs-on: ubuntu-latest
+    env:
+      HUSKY: 0
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: HUSKY=0 pnpm run ci:install
+
+      - name: Build all packages
+        run: pnpm run build
+
+      - name: Run tests for target package
+        env:
+          POSTGRES: postgresql://test:test@localhost:5432/test
+          POSTGRES_TEST: postgresql://test:test@localhost:5432/test
+          JWT_SECRET: ci_test_secret_that_is_at_least_32_chars_long!
+          ADMIN_EMAIL: admin@example.com
+          ADMIN_PASSWORD: "Correct horse battery staple 42!"
+        run: pnpm --filter ${{ needs.resolve.outputs.package_name }} test
+
+  publish:
+    needs: [resolve, test]
+    runs-on: ubuntu-latest
+    env:
+      HUSKY: 0
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@idpass'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: HUSKY=0 pnpm run ci:install
+
+      - name: Build all packages
+        run: pnpm run build
+
+      - name: Set version (if provided)
+        if: needs.resolve.outputs.version != ''
+        working-directory: ${{ needs.resolve.outputs.package_dir }}
+        run: npm version ${{ needs.resolve.outputs.version }} --no-git-tag-version
+
+      - name: Publish (dry run)
+        if: needs.resolve.outputs.dry_run == 'true'
+        working-directory: ${{ needs.resolve.outputs.package_dir }}
+        run: pnpm publish --no-git-checks --dry-run
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish
+        if: needs.resolve.outputs.dry_run != 'true'
+        working-directory: ${{ needs.resolve.outputs.package_dir }}
+        run: pnpm publish --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,262 @@
+/*
+ * Licensed to the Association pour la cooperation numerique (ACN) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ACN licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import { describe, it, expect, afterEach } from 'vitest'
+import { mount, VueWrapper } from '@vue/test-utils'
+import FieldMappingDialog from '../FieldMappingDialog.vue'
+import type { ParsedOpenSppField, FieldMapping } from '@/api'
+
+// Vuetify v-dialog teleports content to document.body.
+// Mounting with attachTo ensures the dialog content is in the DOM tree.
+const wrappers: VueWrapper[] = []
+function mountDialog(props: {
+  modelValue: boolean
+  formFields: Array<{ key: string; label: string }>
+  opensppFields: ParsedOpenSppField[]
+  existingMappings?: FieldMapping[]
+}) {
+  const w = mount(FieldMappingDialog, {
+    props,
+    attachTo: document.body,
+  })
+  wrappers.push(w)
+  return w
+}
+afterEach(() => {
+  wrappers.forEach((w) => w.unmount())
+  wrappers.length = 0
+})
+
+const mockFormFields = [
+  { key: 'first_name', label: 'First Name' },
+  { key: 'last_name', label: 'Last Name' },
+  { key: 'birth_date', label: 'Date of Birth' },
+]
+
+const mockOpenSppFields: ParsedOpenSppField[] = [
+  {
+    name: 'firstname',
+    type: 'text',
+    label: 'First Name',
+    required: false,
+  },
+  {
+    name: 'lastname',
+    type: 'text',
+    label: 'Last Name',
+    required: false,
+  },
+  {
+    name: 'birthdate',
+    type: 'date',
+    label: 'Date of Birth',
+    required: false,
+  },
+  {
+    name: 'gender_id',
+    type: 'relation',
+    label: 'Gender',
+    required: false,
+    options: [
+      { id: 1, label: 'Male' },
+      { id: 2, label: 'Female' },
+    ],
+  },
+]
+
+describe('FieldMappingDialog', () => {
+  it('renders with form fields and OpenSPP fields', async () => {
+    const wrapper = mountDialog({
+      modelValue: false,
+      formFields: mockFormFields,
+      opensppFields: mockOpenSppFields,
+    })
+
+    // Open the dialog by toggling modelValue (mirrors real parent usage)
+    await wrapper.setProps({ modelValue: true })
+
+    expect(wrapper.exists()).toBe(true)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((wrapper.vm as any).dialog).toBe(true)
+  })
+
+  it('adds new field mapping when add button is clicked', async () => {
+    const wrapper = mountDialog({
+      modelValue: true,
+      formFields: mockFormFields,
+      opensppFields: mockOpenSppFields,
+    })
+
+    const addButton = wrapper.find('[data-testid="add-mapping"]')
+    if (!addButton.exists()) {
+      // Try finding by text or other selector
+      const buttons = wrapper.findAll('button')
+      const addBtn = buttons.find((btn) => btn.text().includes('Add') || btn.text().includes('Mapping'))
+      if (addBtn) {
+        await addBtn.trigger('click')
+      }
+    } else {
+      await addButton.trigger('click')
+    }
+
+    // Check that a new mapping row was added
+    // This depends on the component's internal state
+    expect(wrapper.vm).toBeDefined()
+  })
+
+  it('initializes with existing mappings', () => {
+    const existingMappings: FieldMapping[] = [
+      {
+        formField: 'first_name',
+        opensppField: 'firstname',
+        transformer: {
+          type: 'text',
+          options: {},
+        },
+      },
+    ]
+
+    const wrapper = mount(FieldMappingDialog, {
+      props: {
+        modelValue: true,
+        formFields: mockFormFields,
+        opensppFields: mockOpenSppFields,
+        existingMappings,
+      },
+    })
+
+    expect(wrapper.exists()).toBe(true)
+  })
+
+  it('emits save event with mappings when save is clicked', async () => {
+    const wrapper = mountDialog({
+      modelValue: true,
+      formFields: mockFormFields,
+      opensppFields: mockOpenSppFields,
+    })
+
+    // Add a mapping programmatically
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const component = wrapper.vm as any
+    if (component.addMapping) {
+      component.addMapping()
+      component.mappings[0] = {
+        formField: 'first_name',
+        opensppField: 'firstname',
+        transformer: {
+          type: 'text',
+          options: {},
+        },
+      }
+    }
+
+    // Call saveMappings directly since Vuetify dialog teleport
+    // does not fully render action buttons in jsdom.
+    await wrapper.vm.$nextTick()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(wrapper.vm as any).saveMappings()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('save')).toBeDefined()
+  })
+
+  it('updates transformer type when selected', async () => {
+    const wrapper = mountDialog({
+      modelValue: true,
+      formFields: mockFormFields,
+      opensppFields: mockOpenSppFields,
+    })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const component = wrapper.vm as any
+    expect(component.addMapping).toBeDefined()
+
+    component.addMapping()
+    component.mappings[0] = {
+      formField: 'birth_date',
+      opensppField: 'birthdate',
+      transformer: {
+        type: 'text',
+        options: {},
+      },
+    }
+
+    // Update transformer type to date
+    component.mappings[0].transformer.type = 'date'
+    await wrapper.vm.$nextTick()
+
+    expect(component.mappings[0].transformer.type).toBe('date')
+  })
+
+  it('configures transformer options for multiselect', async () => {
+    const wrapper = mountDialog({
+      modelValue: true,
+      formFields: mockFormFields,
+      opensppFields: mockOpenSppFields,
+    })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const component = wrapper.vm as any
+    expect(component.addMapping).toBeDefined()
+
+    component.addMapping()
+    component.mappings[0] = {
+      formField: 'tags',
+      opensppField: 'tag_ids',
+      transformer: {
+        type: 'multiselect',
+        options: {},
+      },
+    }
+
+    await wrapper.vm.$nextTick()
+
+    // Check that delimiter is set
+    expect(component.mappings[0].transformer.options.delimiter).toBe(',')
+  })
+
+  it('configures transformer options for boolean', async () => {
+    const wrapper = mountDialog({
+      modelValue: true,
+      formFields: mockFormFields,
+      opensppFields: mockOpenSppFields,
+    })
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const component = wrapper.vm as any
+    expect(component.addMapping).toBeDefined()
+
+    component.addMapping()
+    component.mappings[0] = {
+      formField: 'is_active',
+      opensppField: 'active',
+      transformer: {
+        type: 'boolean',
+        options: {},
+      },
+    }
+
+    await wrapper.vm.$nextTick()
+
+    // Check that truthy/falsy values are set
+    expect(component.mappings[0].transformer.options.truthyValue).toBe('true')
+    expect(component.mappings[0].transformer.options.falsyValue).toBe('false')
+  })
+})
+

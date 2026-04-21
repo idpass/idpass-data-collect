@@ -109,5 +109,107 @@ describe('parseOpenSppProgramSpecification', () => {
       /does not contain any entities/i,
     )
   })
+
+  it('throws when YAML is invalid', () => {
+    expect(() => parseOpenSppProgramSpecification('invalid: yaml: content: [')).toThrow()
+  })
+
+  it('throws when YAML is not an object', () => {
+    expect(() => parseOpenSppProgramSpecification('just a string')).toThrow(
+      /expected a YAML object/i,
+    )
+  })
+
+  it('handles boolean fields', () => {
+    const yaml = `
+entities:
+  - name: TestEntity
+    fields:
+      - id: is_active
+        label: Is Active
+        type: boolean
+`
+    const result = parseOpenSppProgramSpecification(yaml)
+    const entity = result.entityForms[0]
+    const formio = entity.formio as { components?: Record<string, unknown>[] }
+    const booleanComponent = formio?.components?.find((c) => c?.['key'] === 'is_active')
+    expect(booleanComponent).toMatchObject({
+      type: 'checkbox',
+      key: 'is_active',
+    })
+  })
+
+  it('handles number fields', () => {
+    const yaml = `
+entities:
+  - name: TestEntity
+    fields:
+      - id: age
+        label: Age
+        type: integer
+      - id: weight
+        label: Weight
+        type: number
+`
+    const result = parseOpenSppProgramSpecification(yaml)
+    const entity = result.entityForms[0]
+    const formio = entity.formio as { components?: Record<string, unknown>[] }
+    const ageComponent = formio?.components?.find((c) => c?.['key'] === 'age')
+    const weightComponent = formio?.components?.find((c) => c?.['key'] === 'weight')
+    expect(ageComponent).toMatchObject({
+      type: 'number',
+      key: 'age',
+      validate: { integer: true },
+    })
+    expect(weightComponent).toMatchObject({
+      type: 'number',
+      key: 'weight',
+    })
+  })
+
+  it('handles missing field labels by using field id', () => {
+    const yaml = `
+entities:
+  - name: TestEntity
+    fields:
+      - id: field_without_label
+        type: string
+`
+    const result = parseOpenSppProgramSpecification(yaml)
+    const entity = result.entityForms[0]
+    const formio = entity.formio as { components?: Record<string, unknown>[] }
+    const component = formio?.components?.find((c) => c?.['key'] === 'field_without_label')
+    expect(component).toBeDefined()
+    expect(component?.['label']).toBe('Field Without Label')
+  })
+
+  it('handles enum values as objects', () => {
+    const yaml = `
+entities:
+  - name: TestEntity
+    fields:
+      - id: status
+        label: Status
+        type: enum
+        values:
+          - value: active
+            label: Active
+          - value: inactive
+            label: Inactive
+`
+    const result = parseOpenSppProgramSpecification(yaml)
+    const entity = result.entityForms[0]
+    const formio = entity.formio as { components?: Record<string, unknown>[] }
+    const statusComponent = formio?.components?.find((c) => c?.['key'] === 'status')
+    expect(statusComponent).toMatchObject({
+      type: 'select',
+      data: {
+        values: [
+          { label: 'Active', value: 'active' },
+          { label: 'Inactive', value: 'inactive' },
+        ],
+      },
+    })
+  })
 })
 

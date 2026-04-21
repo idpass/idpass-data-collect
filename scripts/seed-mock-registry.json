@@ -1,0 +1,95 @@
+{
+  "id": "demo-mock-registry",
+  "name": "Demo Mock Registry Sync",
+  "description": "Demo config that pulls/pushes against the mock registry reference server (examples/mock-server). Shows the DC external sync contract end-to-end without requiring OpenSPP.",
+  "version": "1.0.0",
+  "entityForms": [
+    {
+      "id": "group",
+      "name": "group",
+      "title": "Household",
+      "entityType": "group",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "name",
+            "type": "textfield",
+            "input": true,
+            "label": "Household Name",
+            "validate": { "required": true }
+          },
+          {
+            "key": "group_type",
+            "type": "select",
+            "input": true,
+            "label": "Group Type",
+            "defaultValue": "household",
+            "data": {
+              "values": [
+                { "label": "Household", "value": "household" },
+                { "label": "Cooperative", "value": "cooperative" }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "individual",
+      "name": "individual",
+      "title": "Individual",
+      "entityType": "individual",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "given_name",
+            "type": "textfield",
+            "input": true,
+            "label": "Given Name",
+            "validate": { "required": true }
+          },
+          {
+            "key": "family_name",
+            "type": "textfield",
+            "input": true,
+            "label": "Family Name"
+          },
+          {
+            "key": "date_of_birth",
+            "type": "datetime",
+            "input": true,
+            "label": "Date of Birth",
+            "format": "yyyy-MM-dd",
+            "enableTime": false
+          },
+          {
+            "key": "gender",
+            "type": "select",
+            "input": true,
+            "label": "Gender (ISO 5218)",
+            "data": {
+              "values": [
+                { "label": "0 — Not known", "value": "0" },
+                { "label": "1 — Male", "value": "1" },
+                { "label": "2 — Female", "value": "2" },
+                { "label": "9 — Not applicable", "value": "9" }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "externalSync": {
+    "type": "mock",
+    "url": "http://localhost:9999",
+    "adapterConfig": {
+      "clientId": "mock-client",
+      "clientSecret": "mock-secret",
+      "identifierScheme": "urn:mock:vocab:id-type",
+      "identifierType": "system_id"
+    }
+  }
+}

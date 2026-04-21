@@ -4,168 +4,168 @@ title: Quick Start
 sidebar_position: 1
 ---
 
+Get a complete ID PASS DataCollect stack running locally in a few minutes using Docker Compose. This is the fastest way to see the full system — sync server, admin UI, web app, and mobile app — without installing PostgreSQL or running anything on the host other than Docker.
+
 ### Prerequisites
 
-- Node.js 22+
-- PNPM 10+
-- PostgreSQL 15+ (for backend)
+- **Docker** 24+ (or **Podman** 5+ with the `docker compose` alias) — used for the turnkey stack
+- **Node.js 22+** and **pnpm 10+** — only if you plan to run packages on the host outside the container
 - Modern web browser with [IndexedDB](../../glossary#indexeddb) support
 
-### 5-Minute Setup
+### 5-Minute Setup (Docker Compose)
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/idpass/idpass-data-collect.git
    cd idpass-data-collect
    ```
 
-2. **Build the DataCollect library**
+2. **Prepare the environment file**
+
    ```bash
-   cd packages/datacollect
-   npm install
-   npm run build
+   cp docker/.env.example docker/.env
    ```
 
-3. **Set up the backend** (optional, for sync functionality)
+   The defaults work out of the box for local development. `ADMIN_PASSWORD` in the example already meets the strength requirements (≥8 chars, mixed case, digit, special char) and `JWT_SECRET` is ≥32 characters — change both before any real deployment.
+
+3. **Start the stack**
+
    ```bash
-   cd packages/backend
-   npm install
-   cp .env.example .env
-   # Edit .env with your database settings
-   npm run dev
+   docker compose -f docker/docker-compose.dev.yaml up -d
    ```
 
-4. **Try the admin interface** (optional)
+   First run builds the images and takes a few minutes. After that it brings up five services:
+
+   | Service | URL | Notes |
+   |---------|-----|-------|
+   | Sync server (backend) | http://localhost:3000 | REST API; health at `/health` |
+   | Admin UI | http://localhost:5173 | Sign in with `ADMIN_EMAIL`/`ADMIN_PASSWORD` from `.env` |
+   | Web app (self-service) | http://localhost:5174 | Citizen-facing portal |
+   | Mobile app (browser preview) | http://localhost:8081 | Runs the mobile app in the browser for development |
+   | PostgreSQL | localhost:5432 | `admin` / password from `.env` |
+
+4. **Verify the backend**
+
    ```bash
-   cd packages/admin
-   npm install
-   npm run dev
+   curl http://localhost:3000/health
+   # → {"status":"ok","database":"connected","timestamp":"..."}
    ```
 
-5. **Try the mobile app** (optional)
+5. **Sign in to the admin UI** at http://localhost:5173 with the email and password from `docker/.env`. From there you can create an app configuration, upload entity forms, and trigger syncs.
+
+6. **(Optional) Seed demo data**
+
    ```bash
-   cd packages/mobile
-   npm install
-   npm run dev
+   pnpm install
+   pnpm seed
    ```
+
+   Creates a "Demo Household Registry" tenant with 4 households, 9 individuals, and a field-worker user.
+
+   If the mock registry server is running (`docker compose -f docker/docker-compose.dev.yaml --profile mock up -d`), the seed also provisions a `demo-mock-registry` tenant wired to `http://localhost:9999` and populates the mock with 2 households + 5 persons so you can trigger external sync from the admin UI immediately.
+
+### Stopping the stack
+
+```bash
+docker compose -f docker/docker-compose.dev.yaml down          # stop
+docker compose -f docker/docker-compose.dev.yaml down -v       # stop and wipe the database
+```
 
 ### Your First Application
 
-Create a simple client application:
+Install the core library in your own project:
+
+```bash
+pnpm add @idpass/data-collect-core
+```
+
+Create a minimal offline-first client:
 
 ```typescript
 import {
-  [EntityDataManager](../../glossary#entitydatamanager),
+  EntityDataManager,
   IndexedDbEntityStorageAdapter,
   IndexedDbEventStorageAdapter,
   IndexedDbAuthStorageAdapter,
-  [EventStoreImpl](../../glossary#eventstore),
-  [EntityStoreImpl](../../glossary#entitystore),
+  EventStoreImpl,
+  EntityStoreImpl,
   EventApplierService,
   InternalSyncManager,
-  ExternalSyncManager,
   AuthManager,
-  SyncLevel
-} from "idpass-data-collect";
+  SyncLevel,
+} from "@idpass/data-collect-core";
 
-// Initialize the data manager with authentication
 async function initializeDataManager() {
-  // Initialize storage adapters
-  const eventStorageAdapter = new IndexedDbEventStorageAdapter('my-events');
-  const entityStorageAdapter = new IndexedDbEntityStorageAdapter('my-entities');
-  const authStorageAdapter = new IndexedDbAuthStorageAdapter('my-auth');
+  const eventStorage = new IndexedDbEventStorageAdapter("my-events");
+  const entityStorage = new IndexedDbEntityStorageAdapter("my-entities");
+  const authStorage = new IndexedDbAuthStorageAdapter("my-auth");
 
-  // Initialize stores
-  const eventStore = new EventStoreImpl(eventStorageAdapter);
-  const entityStore = new EntityStoreImpl(entityStorageAdapter);
+  const eventStore = new EventStoreImpl(eventStorage);
+  const entityStore = new EntityStoreImpl(entityStorage);
   await eventStore.initialize();
   await entityStore.initialize();
-  await authStorageAdapter.initialize();
+  await authStorage.initialize();
 
-  // Set up services
-  const eventApplierService = new EventApplierService(eventStore, entityStore);
+  const eventApplier = new EventApplierService(eventStore, entityStore);
 
-  // Create sync managers
-  const internalSyncManager = new InternalSyncManager(
+  const internalSync = new InternalSyncManager(
     eventStore,
     entityStore,
-    eventApplierService,
-    'http://localhost:3000',
-    authStorageAdapter
+    eventApplier,
+    "http://localhost:3000",
+    authStorage,
   );
 
-  const externalSyncManager = new ExternalSyncManager(
-    eventStore,
-    eventApplierService,
-    {
-      type: 'mock-sync-server',
-      url: 'http://localhost:4000',
-      auth: '',
-      extraFields: {}
-    }
-  );
+  const authManager = new AuthManager([], "http://localhost:3000", authStorage);
 
-  // Create authentication manager
-  const authManager = new AuthManager(
-    [], // No auth configs for this simple example
-    'http://localhost:3000',
-    authStorageAdapter
-  );
-
-  // Create the main manager
   return new EntityDataManager(
     eventStore,
     entityStore,
-    eventApplierService,
-    externalSyncManager,
-    internalSyncManager,
-    authManager
+    eventApplier,
+    null, // no external sync for this example
+    internalSync,
+    authManager,
   );
 }
 
-// Initialize the data manager
 const manager = await initializeDataManager();
 
-// Create a household group
-const groupData = {
+const group = await manager.submitForm({
   guid: "group-001",
-  type: "create-group",
   entityGuid: "group-001",
+  type: "create-group",
   data: { name: "Smith Family" },
   timestamp: new Date().toISOString(),
   userId: "user-1",
   syncLevel: SyncLevel.LOCAL,
-};
-
-const group = await manager.submitForm(groupData);
+});
 console.log("Created group:", group);
 
-// Add a family member
-const memberData = {
+const member = await manager.submitForm({
   guid: "member-001",
   entityGuid: "individual-001",
-  type: "create-individual", 
-  data: { 
-    name: "John Smith",
-    dateOfBirth: "1980-01-01",
-    relationship: "Head"
-  },
+  type: "create-individual",
+  data: { name: "John Smith", dateOfBirth: "1980-01-01", relationship: "Head" },
   timestamp: new Date().toISOString(),
   userId: "user-1",
   syncLevel: SyncLevel.LOCAL,
-};
-
-const member = await manager.submitForm(memberData);
+});
 console.log("Created member:", member);
 ```
 
+### Running packages on the host
+
+If you want to run individual packages directly (for example to attach a debugger to the backend), see the [Installation Guide](./installation.md) — it covers running each workspace package without Docker.
+
 ## What's Next?
 
-- [Installation Guide](./installation.md) - Detailed installation instructions
-- [Configuration](./configuration.md) - Configure for your environment  
-- [API Reference](../../packages/datacollect/api/) - Complete API documentation
+- [Installation Guide](./installation.md) — alternative setups (host PostgreSQL, bare-metal Node.js)
+- [Configuration](./configuration.md) — tenant configs, forms, auth, external sync
+- [Architecture](../architecture/) — event sourcing, sync model, auth
+- [API Reference](../../packages/datacollect/api/) — `@idpass/data-collect-core` complete API
 
 ## Need Help?
 
 - Open an issue on [GitHub](https://github.com/idpass/idpass-data-collect/issues)
-- Join our [Community Discussions](https://github.com/idpass/idpass-data-collect/discussions)
+- Join the [Community Discussions](https://github.com/idpass/idpass-data-collect/discussions)

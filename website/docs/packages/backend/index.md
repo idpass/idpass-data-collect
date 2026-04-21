@@ -16,12 +16,12 @@ Built with Node.js, Express.js, and PostgreSQL, the Backend serves as the centra
 
 ### Key Features
 
-- 🗃️ **PostgreSQL Storage**: Reliable, ACID-compliant data persistence
-- 🔄 **Multi-Client Sync**: Coordinate data across multiple DataCollect clients
-- 👥 **User Management**: Authentication, authorization, and role-based access
-- 🏢 **Multi-Tenant**: Support multiple organizations with isolated configurations
-- 🔌 **External Integration**: Connect with OpenSPP, OpenFn, and custom systems
-- 🔐 **Security**: [JWT](../../glossary#jwt-json-web-token) authentication with configurable session management
+- **PostgreSQL Storage**: Reliable, ACID-compliant data persistence
+- **Multi-Client Sync**: Coordinate data across multiple DataCollect clients
+- **User Management**: Authentication, authorization, and role-based access
+- **Multi-Tenant**: Support multiple organizations with isolated configurations
+- **External Integration**: Connect with OpenSPP, OpenFn, and custom systems
+- **Security**: [JWT](../../glossary#jwt-json-web-token) authentication with configurable session management
 
 ## Architecture
 
@@ -72,7 +72,7 @@ Isolated environments for different organizations:
 
 ```bash
 cd backend
-npm install
+pnpm install
 ```
 
 ### Environment Setup
@@ -89,23 +89,37 @@ ADMIN_EMAIL=admin@hdm.example
 ADMIN_PASSWORD=your-secure-password
 JWT_SECRET=your-jwt-secret
 
-
-
 # Server Configuration
 PORT=3000
 ```
 
+#### Password requirements
+
+The `ADMIN_PASSWORD` value (and all passwords set through the user management API) must satisfy the following rules. The server will refuse to start if `ADMIN_PASSWORD` does not meet these requirements.
+
+| Rule | Requirement |
+| :--- | :--- |
+| Minimum length | 8 characters |
+| Uppercase letters | At least one (A–Z) |
+| Lowercase letters | At least one (a–z) |
+| Numbers | At least one (0–9) |
+| Special characters | At least one (any character that is not A–Z, a–z, or 0–9) |
+
+Example of a valid password: `S3cur3!Pass`
+
+The same rules apply when creating or updating users via the `POST /api/users` and `PUT /api/users/:id` endpoints.
+
 ### Development
 
 ```bash
-npm run dev
+pnpm --filter @idpass/data-collect-backend dev
 ```
 
 ### Production
 
 ```bash
-npm run build
-npm start
+pnpm --filter @idpass/data-collect-backend build
+node packages/backend/dist/index.js
 ```
 
 ## Configuration
@@ -168,13 +182,13 @@ Define tenant-specific settings using JSON configuration:
 
 The Backend provides a comprehensive REST API with full OpenAPI 3.0 documentation:
 
-### 📚 [Complete API Reference](./api-reference-overview.md)
+### [Complete API Reference](./api-reference-overview.md)
 Detailed documentation of all endpoints, request/response schemas, and examples.
 
-### 🌐 [Interactive API Documentation](http://localhost:3000/api-docs)
-Live Swagger UI for testing endpoints directly (available when server is running).
+### [OpenAPI Specification](http://localhost:3000/api-docs/openapi.json)
+OpenAPI spec available as JSON (when server is running). Import into Postman, Insomnia, or other API clients.
 
-### 📄 [OpenAPI Specification](./api-reference-generated/idpass-data-collect-backend-api.md)
+### [OpenAPI Specification](./api-reference-generated/idpass-data-collect-backend-api.md)
 Complete OpenAPI 3.0 YAML specification for client generation and tooling.
 
 ### Quick API Overview
@@ -214,11 +228,12 @@ Integration with OpenFn workflow automation:
 - Custom workflow triggers
 - Multi-system orchestration
 
-#### Mock Sync Server
-Development and testing adapter:
-- Simulates external system behavior
-- Configurable response patterns
-- Testing synchronization logic
+#### Mock Registry Server
+Reference V2 adapter against the [mock registry server](https://github.com/idpass/idpass-datacollect/tree/main/examples/mock-server):
+- OAuth2 client credentials over HTTP
+- PublicSchema-aligned Person / Group / Identifier / IdentityDocument model
+- End-to-end sync testing without OpenSPP
+- `pnpm seed` provisions a ready-to-use `demo-mock-registry` config
 
 ### Custom Adapter Development
 

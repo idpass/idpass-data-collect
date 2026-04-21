@@ -4,157 +4,164 @@ title: Installation Guide
 sidebar_position: 2
 ---
 
-This guide provides detailed installation instructions for ID PASS DataCollect based on the actual implementation and tested deployment scenarios.
+This guide covers three ways to set up ID PASS DataCollect: the all-Docker stack, running packages on the host, and embedding the core library in your own app.
+
+If you just want a running instance as quickly as possible, follow the [Quick Start](./index.md) and come back here only when you need something it doesn't cover.
 
 ## System Requirements
 
 ### Client Applications
 - **Node.js**: 22.x or higher
 - **Browser**: Modern browser with IndexedDB support (Chrome 58+, Firefox 55+, Safari 10+)
-- **Memory**: Minimum 512MB available for IndexedDB storage
+- **Memory**: Minimum 512 MB available for IndexedDB storage
 
 ### Backend Server
 - **Node.js**: 22.x or higher
 - **PostgreSQL**: 15.x or higher
-- **Memory**: Minimum 2GB RAM for production
+- **Memory**: Minimum 2 GB RAM for production
 - **Storage**: SSD recommended for database performance
 
-## Installation Methods
+### Secrets
 
-### Method 1: Development Setup
+- `ADMIN_PASSWORD` must be at least 8 characters and include an uppercase letter, lowercase letter, digit, and special character. The backend refuses to start otherwise.
+- `JWT_SECRET` must be at least 32 characters long. The backend refuses to start otherwise.
 
-For development and testing purposes.
+## Method 1: Docker Deployment (recommended)
 
-#### 1. Clone the Repository
+For a production-like local environment.
+
+### 1. Clone the repository
+
 ```bash
 git clone https://github.com/idpass/idpass-data-collect.git
 cd idpass-data-collect
 ```
 
-#### 2. Install DataCollect Core Library
+### 2. Configure the environment
+
 ```bash
-cd packages/datacollect
-npm install
-npm run build
+cp docker/.env.example docker/.env
+# Edit docker/.env if you want to change admin credentials, JWT secret, or CORS origins.
 ```
 
-**Verify installation:**
+The example file is pre-configured with values that pass validation. **Change `ADMIN_PASSWORD`, `JWT_SECRET`, and `POSTGRES_PASSWORD` before any non-local deployment.**
+
+### 3. Start the stack
+
 ```bash
-npm test
-# Should pass all tests with fake-indexeddb
+docker compose -f docker/docker-compose.dev.yaml up -d
 ```
 
-#### 3. Set Up Backend (Optional)
+Services available after startup:
+
+| Service | Host URL | Container port |
+|---------|----------|----------------|
+| Sync server | http://localhost:3000 | 3000 |
+| Admin UI | http://localhost:5173 | 5173 |
+| Web app | http://localhost:5174 | 5174 |
+| Mobile app (browser) | http://localhost:8081 | 8081 |
+| PostgreSQL | localhost:5432 | 5432 |
+| Node debugger | localhost:9229 | 9229 |
+
+### 4. Verify
+
 ```bash
-cd packages/backend
-npm install
-
-# Create environment file from the docker directory
-cp ../../docker/.env.example .env
+curl http://localhost:3000/health
+# → {"status":"ok","database":"connected","timestamp":"..."}
 ```
 
-**Edit `.env` file:**
-```env
-POSTGRES=postgresql://admin:admin@localhost:5432/postgres
-POSTGRES_TEST=postgresql://admin:admin@localhost:5432/test
-ADMIN_EMAIL=admin@hdm.example
-ADMIN_PASSWORD=your-secure-password
-JWT_SECRET=your-jwt-secret-key
-PORT=3000
+Sign in at http://localhost:5173 with the email and password from `docker/.env`.
+
+### 5. Stop
+
+```bash
+docker compose -f docker/docker-compose.dev.yaml down        # keeps the database volume
+docker compose -f docker/docker-compose.dev.yaml down -v     # wipes the database volume
 ```
 
-**Start PostgreSQL** (using Docker):
+## Method 2: Host Development
+
+Run each package directly on the host. Useful for attaching a debugger, iterating quickly without rebuilding images, or targeting an existing PostgreSQL instance.
+
+### 1. Clone and install
+
+```bash
+git clone https://github.com/idpass/idpass-data-collect.git
+cd idpass-data-collect
+pnpm install
+pnpm --filter @idpass/data-collect-core build
+```
+
+Verify the core library:
+
+```bash
+pnpm --filter @idpass/data-collect-core test
+```
+
+### 2. Start PostgreSQL
+
+The fastest way is Docker:
+
 ```bash
 docker run --name postgres-datacollect \
   -e POSTGRES_USER=admin \
-  -e POSTGRES_PASSWORD=admin \
-  -e POSTGRES_DB=postgres \
+  -e POSTGRES_PASSWORD='Correct horse battery staple 42!' \
+  -e POSTGRES_DB=datacollect \
   -p 5432:5432 \
-  -d postgres:14
+  -d postgres:15
 ```
 
-**Start backend:**
+Or install PostgreSQL 15+ locally and create a `datacollect` database owned by `admin`.
+
+### 3. Configure and run the backend
+
+The backend reads its environment file from `docker/.env`:
+
 ```bash
-npm run dev
-# Server starts on http://localhost:3000
+cp docker/.env.example docker/.env
+# Optional: change POSTGRES_HOST=postgres to POSTGRES_HOST=localhost if running PostgreSQL on the host
+pnpm --filter @idpass/data-collect-backend dev
+# → Sync server is running on http://localhost:3000
 ```
 
-#### 4. Set Up Admin Interface (Optional)
+### 4. Run the admin UI
+
 ```bash
-cd packages/admin
-npm install
-
-# Create environment file
-cp .env.example .env
+cp packages/admin/.env.example packages/admin/.env   # if the example exists; otherwise skip
+pnpm --filter @idpass/data-collect-admin dev
+# → http://localhost:5173
 ```
 
-**Edit `.env` file:**
-```env
-VITE_API_URL=http://localhost:3000
-```
+Set `VITE_API_URL=http://localhost:3000` if you need to point the admin UI at a non-default backend.
 
-**Start admin interface:**
+### 5. Run the web app
+
 ```bash
-npm run dev
-# Interface available at http://localhost:5173
+pnpm --filter @idpass/data-collect-web dev
+# → http://localhost:5174
 ```
 
-#### 5. Set Up Mobile App (Optional)
+### 6. Run the mobile app (browser preview)
+
 ```bash
-cd packages/mobile
-npm install
+pnpm --filter @idpass/data-collect-mobile dev
+# → http://localhost:8081
 ```
 
-**Start Mobile app (in dev mode):**
+For native builds see the mobile package README (`pnpm build:ios`, `pnpm build:android`, etc.).
+
+## Method 3: Package installation (embedding the library)
+
+Use this when you want offline-first storage in your own app and don't need the sync server.
+
+### 1. Install
+
 ```bash
-npm run dev
-# Available at http://localhost:8081
+pnpm add @idpass/data-collect-core
 ```
 
-### Method 2: Docker Deployment
+### 2. Basic usage
 
-For production-like environments.
-
-#### 1. Clone Repository
-```bash
-git clone https://github.com/idpass/idpass-data-collect.git
-cd idpass-data-collect
-```
-
-#### 2. Configure Environment
-```bash
-cd docker
-
-cp .env.example .env
-cp .env.example .env
-
-# Edit .env and postgresql.env with your configuration
-nano .env
-nano postgresql.env
-```
-
-#### 3. Build and Start Services
-```bash
-docker compose -f docker-compose.dev.yaml up -d
-```
-
-**Services will be available at:**
-- **Sync Server** on port 3000
-- **PostgreSQL** on port 5432
-- **Admin UI** on port 5173
-- **Mobile App** on port 8081
-- **PgAdmin** on port 5050
-
-### Method 3: npm Package Installation
-
-For integrating DataCollect into existing applications.
-
-#### 1. Install Package
-```bash
-npm install idpass-data-collect
-```
-
-#### 2. Basic Usage
 ```typescript
 import {
   EntityDataManager,
@@ -166,184 +173,141 @@ import {
   EventApplierService,
   AuthManager,
   InternalSyncManager,
-  EntityType,
-  SyncLevel
-} from 'idpass-data-collect';
+  SyncLevel,
+} from "@idpass/data-collect-core";
 
-// Initialize storage adapters
-const eventStorageAdapter = new IndexedDbEventStorageAdapter();
-const entityStorageAdapter = new IndexedDbEntityStorageAdapter();
-const authStorageAdapter = new IndexedDbAuthStorageAdapter();
+const eventStorage = new IndexedDbEventStorageAdapter();
+const entityStorage = new IndexedDbEntityStorageAdapter();
+const authStorage = new IndexedDbAuthStorageAdapter();
 
-// Initialize stores
-const eventStore = new EventStoreImpl(eventStorageAdapter);
+const eventStore = new EventStoreImpl(eventStorage);
 await eventStore.initialize();
 
-const entityStore = new EntityStoreImpl(entityStorageAdapter);
+const entityStore = new EntityStoreImpl(entityStorage);
 await entityStore.initialize();
 
-await authStorageAdapter.initialize();
+await authStorage.initialize();
 
-// Initialize services
-const eventApplierService = new EventApplierService(eventStore, entityStore);
+const eventApplier = new EventApplierService(eventStore, entityStore);
 
-// Configure authentication
 const authConfigs = [
   { type: "auth0", fields: { domain: "your-domain.auth0.com", clientId: "your-client-id" } },
-  { type: "keycloak", fields: { realm: "your-realm", clientId: "your-client-id" } }
+  { type: "keycloak", fields: { realm: "your-realm", clientId: "your-client-id" } },
 ];
 
-const authManager = new AuthManager(
-  authConfigs,
-  "http://localhost:3000", // sync server URL
-  authStorageAdapter
-);
+const authManager = new AuthManager(authConfigs, "http://localhost:3000", authStorage);
 await authManager.initialize();
 
-// Initialize sync manager
-const internalSyncManager = new InternalSyncManager(
+const internalSync = new InternalSyncManager(
   eventStore,
   entityStore,
-  eventApplierService,
+  eventApplier,
   "http://localhost:3000",
-  authStorageAdapter
+  authStorage,
 );
 
-// Create entity data manager with authentication
 const manager = new EntityDataManager(
   eventStore,
   entityStore,
-  eventApplierService,
-  null, // No external sync adapter for offline-only
-  internalSyncManager,
-  authManager
+  eventApplier,
+  null, // no external sync adapter for offline-only usage
+  internalSync,
+  authManager,
 );
-
-console.log('DataCollect initialized successfully with authentication');
 ```
 
 ## Verification
 
-### Test DataCollect Library with Authentication
+### Test the core library with authentication
+
 ```typescript
-// Initialize authentication first
 await manager.initializeAuthManager();
 
-// Login
-await manager.login({
-  username: "admin@example.com",
-  password: "password123"
+await manager.login({ username: "admin@datacollect.lan", password: "Correct horse battery staple 42!" });
+
+const result = await manager.submitForm({
+  guid: "test-group-001",
+  type: "create-group",
+  entityGuid: "test-group-001",
+  data: { name: "Test Family" },
+  timestamp: new Date().toISOString(),
+  userId: "test-user",
+  syncLevel: SyncLevel.LOCAL,
 });
 
-// Verify authentication
-const authenticated = await manager.isAuthenticated();
-console.log('Authentication status:', authenticated);
-
-// Create a test group
-const groupForm = {
-  guid: 'test-group-001',
-  type: 'create-group',
-  entityGuid: 'test-group-001',
-  data: { name: 'Test Family' },
-  timestamp: new Date().toISOString(),
-  userId: 'test-user',
-  syncLevel: SyncLevel.LOCAL
-};
-
-const result = await manager.submitForm(groupForm);
-console.log('Created group:', result);
-
-// Verify the group was saved
-const savedGroup = await manager.getEntity(result.id);
-console.log('Retrieved group:', savedGroup);
-
-// Sync with server (requires authentication)
+const saved = await manager.getEntity(result.id);
 await manager.syncWithSyncServer();
 ```
 
-### Test Backend API
+### Test the backend API
 
-You can use the Postman collection to test the backend API. Download it here: [IDPASS DataCollect Backend Postman Collection](/api/idpass-backend.postman_collection.json).
+You can exercise every endpoint from the Postman collection: [IDPASS DataCollect Backend Postman Collection](/api/idpass-backend.postman_collection.json).
 
 ```bash
-# Test health endpoint
-curl http://localhost:3000/api/health
+# Health
+curl http://localhost:3000/health
 
-# Test authentication
+# Login
 curl -X POST http://localhost:3000/api/users/login \
   -H "Content-Type: application/json" \
-  -d '{"email": "admin@hdm.example", "password": "your-password"}'
+  -d '{"email": "admin@datacollect.lan", "password": "Correct horse battery staple 42!"}'
 ```
 
-### Test Admin Interface
+### Test the admin interface
+
 1. Open http://localhost:5173
-2. Login with admin credentials
-3. Navigate to Users section
-4. Verify user management interface loads
+2. Log in with the email and password from `docker/.env`
+3. Navigate to the **Users** section and verify the management UI loads
 
 ## Common Installation Issues
 
-### IndexedDB Errors
-**Problem**: IndexedDB not available in environment
-**Solution**: Ensure running in browser context or use fake-indexeddb for testing
+### Backend crashes with `ADMIN_PASSWORD does not meet strength requirements`
+Ensure the password in `docker/.env` has an uppercase letter, a lowercase letter, a digit, and a special character, and is at least 8 characters long.
+
+### Backend crashes with `JWT_SECRET must be at least 32 characters long`
+Pick a longer secret. In production, use a cryptographically random value (e.g. `openssl rand -base64 48`).
+
+### PostgreSQL connection errors
+1. Verify PostgreSQL is running (`docker ps` or `systemctl status postgresql`)
+2. Check `POSTGRES_HOST` — inside Docker the hostname is `postgres`, on the host it's `localhost`
+3. Confirm the password in `docker/.env` matches what PostgreSQL was initialized with; if you changed it, you may need `docker compose down -v` to wipe the existing volume
+
+### IndexedDB errors in tests
 ```typescript
-// For testing environments
-import 'fake-indexeddb/auto';
+// Use fake-indexeddb in Node-side tests
+import "fake-indexeddb/auto";
 ```
 
-### Authentication Errors
-**Problem**: Authentication fails or tokens not persisting
-**Solutions**:
-1. Verify AuthManager initialization: `await manager.initializeAuthManager()`
-2. Check auth storage adapter is properly configured
-3. Ensure sync server URL is correct and accessible
-4. Verify authentication provider configuration
+### Port conflicts
+Defaults: 3000 (backend), 5173 (admin), 5174 (web), 8081 (mobile), 5432 (postgres). Override the host port mappings via `SYNC_SERVER_PORT`, or by editing the compose file.
 
-### PostgreSQL Connection Errors
-**Problem**: Cannot connect to PostgreSQL
-**Solutions**:
-1. Verify PostgreSQL is running: `docker ps`
-2. Check connection string in `.env`
-3. Ensure database exists: `createdb postgres`
-
-### Port Conflicts
-**Problem**: Port 3000 or 5173 already in use
-**Solutions**:
-1. Change PORT in backend `.env` file
-2. Update VITE_API_URL in admin `.env` file
-3. Kill existing processes: `lsof -ti:3000 | xargs kill`
-
-### Build Failures
-**Problem**: TypeScript compilation errors
-**Solutions**:
-1. Ensure Node.js version 18+: `node --version`
-2. Clear node_modules and reinstall: `rm -rf node_modules && npm install`
-3. Check for peer dependency conflicts: `npm ls`
+### Build failures
+1. Ensure Node.js version 22+: `node --version`
+2. Clear and reinstall: `rm -rf node_modules && pnpm install`
+3. Check for peer dependency conflicts: `pnpm ls`
 
 ## Production Considerations
 
 ### Security
-- Use strong passwords for `ADMIN_PASSWORD`, `ADMIN_EMAIL` and `JWT_SECRET`
-- Configure proper authentication providers (Auth0, Keycloak)
-- Enable HTTPS in production
-- Configure PostgreSQL with proper authentication
+- Strong, unique `ADMIN_PASSWORD`, `POSTGRES_PASSWORD`, and `JWT_SECRET` (≥32 chars)
+- Configure an identity provider (Auth0, Keycloak) for end users — avoid shared backend accounts
+- Serve everything over HTTPS and restrict `CORS_ORIGINS` to known front-ends
 - Regularly update dependencies
 
 ### Performance
 - Use SSD storage for PostgreSQL
-- Configure appropriate PostgreSQL memory settings
-- Enable gzip compression in reverse proxy
-- Monitor IndexedDB storage limits in browsers
+- Tune PostgreSQL memory settings for your workload
+- Enable gzip compression in the reverse proxy
+- Monitor IndexedDB quota usage on the client
 
 ### Monitoring
-- Set up logging for Express.js backend
-- Monitor PostgreSQL performance
+- Collect Express/pino logs from the backend
+- Monitor PostgreSQL performance and replication lag if applicable
 - Track API response times
-- Set up health checks for Docker containers
+- Wire health checks to `/health` for the orchestrator
 
 ## Next Steps
 
-<!-- - [First App Tutorial](../getting-started/#your-first-application) - Build your first application -->
-- [Configuration Guide](configuration.md) - Configure for your environment
-- [API Documentation](../../packages/datacollect/api/) - Explore the APIs
-- [Deployment Guide](../../deployment/) - Production deployment
+- [Configuration Guide](./configuration.md) — tenants, forms, auth, external sync
+- [API Documentation](../../packages/datacollect/api/) — core library API
+- [Deployment Guide](../deployment/) — production deployment (Docker and bare-metal)
