@@ -229,10 +229,11 @@ Integration with OpenFn workflow automation:
 - Multi-system orchestration
 
 #### Mock Registry Server
-Development and testing adapter:
-- Simulates external system behavior
-- Configurable response patterns
-- Testing synchronization logic
+Reference V2 adapter against the [mock registry server](https://github.com/idpass/idpass-datacollect/tree/main/examples/mock-server):
+- OAuth2 client credentials over HTTP
+- PublicSchema-aligned Person / Group / Identifier / IdentityDocument model
+- End-to-end sync testing without OpenSPP
+- `pnpm seed` provisions a ready-to-use `demo-mock-registry` config
 
 ### Custom Adapter Development
 

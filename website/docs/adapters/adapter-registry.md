@@ -34,7 +34,7 @@ AdapterRegistry.register('openfn', OpenFnAdapter);
 |---------|---------|-------------|
 | `@idpass/adapter-openspp` | OpenSPP V1 & V2 | Sync with OpenSPP beneficiary registry |
 | `@idpass/adapter-openfn` | OpenFn | Sync via OpenFn integration platform |
-| `@idpass/adapter-mock` | Mock | Testing adapter with in-memory storage |
+| `@idpass/adapter-mock` | Mock | OAuth2 HTTP client for the reference [mock registry server](https://github.com/idpass/idpass-datacollect/tree/main/examples/mock-server) |
 
 ## Creating a Custom Adapter
 

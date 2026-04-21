@@ -86,9 +86,11 @@ Here's a complete example of an external sync configuration with detailed field 
   - `fieldMappings`: JSON array of field mappings with transformers (see Field Mapping section)
 
   **For Mock Registry Server:**
-  - `batchSize`: Number of events to process per batch
-  - `retryAttempts`: Number of retry attempts for failed requests
-  - `delayBetweenBatches`: Delay in milliseconds between batch processing
+  - `clientId`: OAuth2 client ID registered on the mock registry (required)
+  - `clientSecret`: OAuth2 client secret (required)
+  - `identifierScheme`: Identifier scheme URI (default: `urn:mock:vocab:id-type`)
+  - `identifierType`: Identifier type for DC-pushed entities (default: `system_id`)
+  - `timeout`: HTTP request timeout in milliseconds (optional)
 
   **For Custom Adapters:**
   - Any adapter-specific configuration parameters
@@ -102,13 +104,24 @@ Here's a complete example of an external sync configuration with detailed field 
 ```json
 {
   "type": "mock",
-  "url": "http://localhost:3000/mock-sync",
-  "extraFields": [
-    { "name": "batchSize", "value": "25" },
-    { "name": "retryAttempts", "value": "3" }
-  ]
+  "url": "http://localhost:9999",
+  "adapterConfig": {
+    "clientId": "mock-client",
+    "clientSecret": "mock-secret",
+    "identifierScheme": "urn:mock:vocab:id-type",
+    "identifierType": "system_id"
+  }
 }
 ```
+
+Start the reference server from the monorepo:
+
+```bash
+docker compose -f docker/docker-compose.dev.yaml --profile mock up -d
+pnpm seed   # provisions a 'demo-mock-registry' config wired to http://localhost:9999
+```
+
+The `pnpm seed` script auto-seeds 2 households and 5 persons into the mock server (via `python -m mock_server seed`) and uploads a DC app config with `externalSync.type = "mock"`, ready for the admin UI to trigger.
 
 #### OpenFn Adapter Configuration
 ```json
@@ -183,21 +196,28 @@ The Admin interface provides a user-friendly way to configure external sync sett
 
 **Type**: `mock`
 
-A testing adapter that simulates external system synchronization:
+OAuth2 HTTP client for the reference [mock registry server](https://github.com/idpass/idpass-datacollect/tree/main/examples/mock-server) (Python + Litestar + SQLite). Used as the canonical reference V2 adapter and for end-to-end sync testing without OpenSPP.
 
-- **Push**: Sends events to a mock server endpoint
-- **Pull**: Retrieves data from the mock server
-- **Batch Processing**: Processes events in configurable batches (default: 100)
-- **Timestamp Tracking**: Maintains sync timestamps for incremental sync
+- **Pull**: `GET /v1/persons` and `GET /v1/groups` with `updated_since` watermark
+- **Push**: `POST`/`PATCH` of individuals and groups, `system_id` identifier for DC-originated entities
+- **Auth**: OAuth2 client credentials (JWT, 1-hour TTL, auto-refresh)
+- **Conflict handling**: maps HTTP 412 Precondition Failed to `ConflictError`
 
 **Configuration**:
 ```json
 {
   "type": "mock",
-  "url": "http://localhost:3000/mock-sync",
-  "extraFields": []
+  "url": "http://localhost:9999",
+  "adapterConfig": {
+    "clientId": "mock-client",
+    "clientSecret": "mock-secret",
+    "identifierScheme": "urn:mock:vocab:id-type",
+    "identifierType": "system_id"
+  }
 }
 ```
+
+See also: [Building a V2 Adapter](../adapters/building-an-adapter.md) — uses this adapter as the worked example.
 
 ### 2. OpenFn Adapter
 
@@ -527,7 +547,7 @@ interface CustomSyncConfig extends ExternalSyncConfig {
 
 - **ConfigCreateView.vue**: Admin UI for configuring external sync
 - **FieldMappingDialog.vue**: Visual interface for field mapping configuration
-- **MockRegistrySyncAdapter**: Testing adapter for development
+- **MockRegistrySyncAdapter**: V2 OAuth2 HTTP client for the reference mock registry (examples/mock-server)
 - **OpenFnSyncAdapter**: OpenFn platform integration
 - **OpenSppOdooSyncAdapter**: OpenSPP platform integration with field mapping
 - **EventStore**: Event storage and timestamp management

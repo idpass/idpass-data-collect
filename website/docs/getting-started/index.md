@@ -63,6 +63,8 @@ Get a complete ID PASS DataCollect stack running locally in a few minutes using 
 
    Creates a "Demo Household Registry" tenant with 4 households, 9 individuals, and a field-worker user.
 
+   If the mock registry server is running (`docker compose -f docker/docker-compose.dev.yaml --profile mock up -d`), the seed also provisions a `demo-mock-registry` tenant wired to `http://localhost:9999` and populates the mock with 2 households + 5 persons so you can trigger external sync from the admin UI immediately.
+
 ### Stopping the stack
 
 ```bash
