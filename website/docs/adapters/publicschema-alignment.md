@@ -11,6 +11,12 @@ description: How ID PASS DataCollect entity concepts map to the PublicSchema.org
 
 ID PASS DataCollect aligns its entity model with PublicSchema concepts so adapters and third-party integrations can reason about the data in a standardised way. This page documents the mapping and design decisions.
 
+## Form generator
+
+The `@idpass/publicschema` workspace package vendors a narrow mirror of PublicSchema v0.2.0 (Person, Group, Identifier + six vocabularies) and exposes a JSON Schema → Form.io generator. The admin wizard surfaces this as a **Generate from PublicSchema…** button in the Entity Forms step — operators produce forms that line up with the registry schema by construction, ready to edit or save as-is. Generated forms carry `generatedFrom` provenance metadata so future upstream versions can offer a structured refresh.
+
+See [Generate Entity Forms from PublicSchema](../how-to/generate-forms-from-publicschema.md) for the operator walkthrough.
+
 ## Why align with PublicSchema
 
 - **Standard vocabulary** — third-party systems that speak PublicSchema can exchange data with DataCollect without custom mapping exercises

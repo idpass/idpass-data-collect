@@ -92,6 +92,18 @@ On Person/Group creation the server auto-assigns an `Identifier` with
 - The API **rejects** (`403 FORBIDDEN`) attempts to create or modify
   `system_id` identifiers manually — they are server-assigned only.
 
+## Attributes round-trip
+
+Person and Group each carry an `attributes: JSON` column alongside the typed core
+fields (`given_name`, `family_name`, `date_of_birth`, `gender` on Person; `name`,
+`group_type` on Group). The server stores what clients send and returns it verbatim
+— PublicSchema conformance is enforced upstream by the DataCollect form generator,
+not re-validated here. The Person and Group detail pages render the attributes
+as a simple two-column table.
+
+Companion docs: [@idpass/adapter-mock](https://github.com/idpass/idpass-data-collect/tree/main/packages/adapter-mock),
+[@idpass/publicschema](https://github.com/idpass/idpass-data-collect/tree/main/packages/publicschema).
+
 ## Authentication
 
 | Surface | Method                                                            |

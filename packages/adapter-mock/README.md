@@ -59,6 +59,20 @@ The adapter is registered under the type `"mock"`:
 - **Push** — reads `getModifiedEntitiesSince`, filters out entities whose only change was an external pull (`externalId && initial.version === modified.version`), then POSTs new entities or PATCHes existing ones. `PATCH` uses `If-Match: <updated_at>` for optimistic concurrency; 412 responses are surfaced as non-retryable skips.
 - **Watermark** — `lastPushExternalSyncTimestamp` advances only when every entity pushed cleanly, so failed entities remain eligible on the next sync.
 
+## Field handling
+
+The adapter preserves the four core PublicSchema Person fields as typed columns
+(`given_name`, `family_name`, `date_of_birth`, `gender`) and the two core Group
+fields (`name`, `group_type`). Anything else on the DC entity that is not an
+internal DC field (`_`-prefixed names, `entityName`, `_displayName`, `externalId`,
+`identifiers`, `identity_documents`, `memberships`) is forwarded to the server
+under the `attributes` object.
+
+On pull, the adapter unpacks `attributes` back into the flat DC `data` shape
+without shadowing any core field the pull transformer has already set. This
+produces end-to-end round-trip parity: whatever the admin form collected arrives
+back on the mobile side verbatim.
+
 ## Running against the mock server
 
 ```bash

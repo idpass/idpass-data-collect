@@ -378,6 +378,10 @@ const developerSidebarItems = [
             type: "doc",
             id: "how-to/create-custom-auth-adapter",
           },
+          {
+            type: "doc",
+            id: "how-to/generate-forms-from-publicschema",
+          },
         ],
       },
       {
