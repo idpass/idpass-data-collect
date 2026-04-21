@@ -563,3 +563,59 @@ html[data-theme='dark'] .header-github-link:before {
 html[data-theme='dark'] .mermaid-container {
   background: transparent;
 }
+/* ── Content links ────────────────────────────────────────────────────
+   Body copy links use the brand orange with a persistent underline so
+   affordance is obvious at a glance (not only on hover). Scoped to the
+   markdown content region — nav, sidebar, and footer links keep their
+   theme-native styling. */
+.markdown a:not(.card):not(.menu__link):not(.pagination-nav__link):not(.navbar__link) {
+  color: var(--ifm-color-brand);
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  text-decoration-skip-ink: auto;
+  font-weight: 500;
+  transition: color 120ms ease, text-decoration-thickness 120ms ease;
+}
+
+.markdown a:not(.card):not(.menu__link):not(.pagination-nav__link):not(.navbar__link):hover {
+  color: var(--ifm-color-brand-dark);
+  text-decoration-thickness: 2.5px;
+}
+
+.markdown a:not(.card):not(.menu__link):not(.pagination-nav__link):not(.navbar__link):focus-visible {
+  outline: 2px solid var(--ifm-color-brand);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+[data-theme='dark'] .markdown a:not(.card):not(.menu__link):not(.pagination-nav__link):not(.navbar__link) {
+  color: var(--ifm-color-brand-light);
+}
+
+[data-theme='dark'] .markdown a:not(.card):not(.menu__link):not(.pagination-nav__link):not(.navbar__link):hover {
+  color: var(--ifm-color-brand);
+}
+
+/* Headings that are also links (auto-anchors) should not pick up link
+   color — keep them the heading color and drop the underline. */
+.markdown h1 a,
+.markdown h2 a,
+.markdown h3 a,
+.markdown h4 a,
+.markdown h5 a,
+.markdown h6 a {
+  color: inherit;
+  text-decoration: none;
+  font-weight: inherit;
+}
+
+.markdown h1 a:hover,
+.markdown h2 a:hover,
+.markdown h3 a:hover,
+.markdown h4 a:hover,
+.markdown h5 a:hover,
+.markdown h6 a:hover {
+  color: inherit;
+  text-decoration: none;
+}
