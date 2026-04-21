@@ -1215,13 +1215,15 @@ paths:
                 properties:
                   isSyncing: { type: boolean }
                   lastEvent:
+                    type: object
+                    nullable: true
                     allOf:
                       - $ref: '#/components/schemas/SyncJob'
-                    nullable: true
                   activeJob:
+                    type: object
+                    nullable: true
                     allOf:
                       - $ref: '#/components/schemas/SyncJob'
-                    nullable: true
         '400':
           description: Missing configId
 
