@@ -68,6 +68,15 @@ export function groupToFormSubmission(
     data.memberships = group.memberships;
   }
 
+  // Unpack server-side attributes into the flat DC `data` shape. Server fields
+  // never override DC core fields we've already set.
+  if (group.attributes && typeof group.attributes === "object") {
+    for (const [key, value] of Object.entries(group.attributes)) {
+      if (key in data) continue;
+      data[key] = value;
+    }
+  }
+
   data.externalId = externalId;
 
   const entityGuid = existingEntityGuid ?? uuidv4();

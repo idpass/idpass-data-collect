@@ -94,6 +94,15 @@ export function personToFormSubmission(
     data.identifiers = realIdentifiers;
   }
 
+  // Unpack server-side attributes into the flat DC `data` shape. Server fields
+  // never override DC core fields we've already set.
+  if (person.attributes && typeof person.attributes === "object") {
+    for (const [key, value] of Object.entries(person.attributes)) {
+      if (key in data) continue;
+      data[key] = value;
+    }
+  }
+
   data.externalId = externalId;
 
   // Stable DC entity guid. If the entity already exists locally, reuse its
