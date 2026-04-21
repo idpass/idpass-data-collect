@@ -78,6 +78,7 @@ class PersonService:
             family_name=payload.family_name,
             date_of_birth=payload.date_of_birth,
             gender=payload.gender,
+            attributes=payload.attributes,
         )
         self.session.add(person)
         await self.session.flush()  # ensures person.uuid is set

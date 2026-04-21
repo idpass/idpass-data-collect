@@ -62,7 +62,7 @@ class GroupService:
 
     async def create(self, payload: CreateGroup) -> Group:
         """Create a Group and auto-assign a system_id identifier."""
-        group = Group(name=payload.name, group_type=payload.group_type)
+        group = Group(name=payload.name, group_type=payload.group_type, attributes=payload.attributes)
         self.session.add(group)
         await self.session.flush()
         await self.identifiers.auto_assign_system_id(group=group)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -31,6 +32,7 @@ class PersonOut(BaseModel):
     family_name: str | None = None
     date_of_birth: date | None = None
     gender: str | None = Field(default=None, description="ISO 5218 numeric code.")
+    attributes: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 
@@ -46,6 +48,7 @@ class CreatePerson(BaseModel):
     family_name: str | None = None
     date_of_birth: date | None = None
     gender: str | None = None
+    attributes: dict[str, Any] = Field(default_factory=dict)
 
 
 class UpdatePerson(BaseModel):
@@ -59,3 +62,4 @@ class UpdatePerson(BaseModel):
     family_name: str | None = None
     date_of_birth: date | None = None
     gender: str | None = None
+    attributes: dict[str, Any] | None = None

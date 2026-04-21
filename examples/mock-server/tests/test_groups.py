@@ -75,3 +75,15 @@ async def test_group_if_match_mismatch(client: AsyncClient, auth_headers: dict[s
         headers={**auth_headers, "If-Match": bad},
     )
     assert r.status_code == 412
+
+
+async def test_group_attributes_roundtrip(client: AsyncClient, auth_headers: dict[str, str]) -> None:
+    """PublicSchema fields beyond the typed core survive create on a Group."""
+    payload = {
+        "name": "Lovelace Household",
+        "group_type": "household",
+        "attributes": {"geo_area_id": "area-42", "head_count": 3},
+    }
+    create_resp = await client.post("/v1/groups", json=payload, headers=auth_headers)
+    assert create_resp.status_code == 201, create_resp.text
+    assert create_resp.json()["attributes"] == payload["attributes"]

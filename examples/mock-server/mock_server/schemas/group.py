@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -28,6 +29,7 @@ class GroupOut(BaseModel):
     uuid: str
     name: str
     group_type: str
+    attributes: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 
@@ -40,6 +42,7 @@ class CreateGroup(BaseModel):
 
     name: str = Field(min_length=1, max_length=255)
     group_type: str = Field(default="household", min_length=1, max_length=64)
+    attributes: dict[str, Any] = Field(default_factory=dict)
 
 
 class UpdateGroup(BaseModel):
@@ -47,6 +50,7 @@ class UpdateGroup(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=255)
     group_type: str | None = Field(default=None, min_length=1, max_length=64)
+    attributes: dict[str, Any] | None = None
 
 
 class MemberAdd(BaseModel):
