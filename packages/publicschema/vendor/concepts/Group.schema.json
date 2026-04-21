@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://publicschema.org/Group.schema.json",
+  "title": "Group",
+  "description": "An abstract collection of persons that serves as the base for concrete group types such as Household, Family, and Farm. Groups are linked to their members via membership links. In native PublicSchema modeling, the concrete subtype carries the authoritative semantics; group_type is kept as an interoperability classifier for systems that exchange groups through a flatter category field.",
+  "type": "object",
+  "properties": {
+    "identifiers": {
+      "type": "array",
+      "title": "Identifiers",
+      "description": "Identifiers carried by this entity, such as national ID numbers, program IDs, or identifiers asserted by an identity document.",
+      "items": {
+        "$ref": "./Identifier.schema.json"
+      }
+    },
+    "identity_documents": {
+      "type": "array",
+      "title": "Identity documents",
+      "description": "Identity documents held by this party, such as passports, national identity cards, civil registration certificates, and program-issued beneficiary cards.",
+      "items": {
+        "type": "object"
+      }
+    },
+    "name": {
+      "type": "string",
+      "title": "Name",
+      "description": "The full display name of the record. Depending on the concept, this is a person's or group's name, or the title of a program, instrument, scoring rule, or software product."
+    },
+    "formation_date": {
+      "type": "string",
+      "format": "date",
+      "title": "Formation date",
+      "description": "The date on which this group was formed or registered."
+    },
+    "group_type": {
+      "type": "string",
+      "title": "Group type",
+      "description": "An interoperability classifier for the category of group record being exchanged or exported. In native PublicSchema modeling, the concrete Group subtype is the authoritative signal when known.",
+      "x-vocabulary": "group-type"
+    },
+    "member_count": {
+      "type": "integer",
+      "title": "Member count",
+      "description": "The total number of members in this household or group."
+    },
+    "memberships": {
+      "type": "array",
+      "title": "Memberships",
+      "description": "The membership links connecting persons to this group, each carrying role and lifecycle dates.",
+      "items": {
+        "type": "object"
+      }
+    }
+  }
+}

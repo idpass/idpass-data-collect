@@ -1,0 +1,82 @@
+[
+  {
+    "value": "birth_registration_number",
+    "label": "Birth registration number"
+  },
+  {
+    "value": "country_code",
+    "label": "Country code"
+  },
+  {
+    "value": "death_registration_number",
+    "label": "Death registration number"
+  },
+  {
+    "value": "drivers_license_number",
+    "label": "Driver's license number"
+  },
+  {
+    "value": "fips_code",
+    "label": "FIPS code"
+  },
+  {
+    "value": "hasc_code",
+    "label": "HASC code"
+  },
+  {
+    "value": "household_id_number",
+    "label": "Household ID number"
+  },
+  {
+    "value": "marriage_registration_number",
+    "label": "Marriage registration number"
+  },
+  {
+    "value": "national_id_number",
+    "label": "National ID number"
+  },
+  {
+    "value": "other",
+    "label": "Other"
+  },
+  {
+    "value": "p_code",
+    "label": "P-code"
+  },
+  {
+    "value": "passport_number",
+    "label": "Passport number"
+  },
+  {
+    "value": "postal_code",
+    "label": "Postal code"
+  },
+  {
+    "value": "program_id_number",
+    "label": "Program ID number"
+  },
+  {
+    "value": "social_security_number",
+    "label": "Social security number"
+  },
+  {
+    "value": "subdivision_code",
+    "label": "Subdivision code"
+  },
+  {
+    "value": "tax_id_number",
+    "label": "Tax ID number"
+  },
+  {
+    "value": "transaction_reference",
+    "label": "Transaction reference"
+  },
+  {
+    "value": "un_locode",
+    "label": "UN/LOCODE"
+  },
+  {
+    "value": "voter_id_number",
+    "label": "Voter ID number"
+  }
+]

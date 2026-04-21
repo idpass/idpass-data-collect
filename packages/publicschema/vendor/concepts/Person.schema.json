@@ -1,0 +1,218 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://publicschema.org/Person.schema.json",
+  "title": "Person",
+  "description": "The unique individual human being who is a subject of record within a social protection system. Person is the persistent, indivisible unit of identity in registries; operational statuses such as Registrant, Applicant, or Beneficiary are transient roles defined by the person’s relationship to a specific Program, not properties of the person themselves.",
+  "type": "object",
+  "properties": {
+    "identifiers": {
+      "type": "array",
+      "title": "Identifiers",
+      "description": "Identifiers carried by this entity, such as national ID numbers, program IDs, or identifiers asserted by an identity document.",
+      "items": {
+        "$ref": "./Identifier.schema.json"
+      }
+    },
+    "identity_documents": {
+      "type": "array",
+      "title": "Identity documents",
+      "description": "Identity documents held by this party, such as passports, national identity cards, civil registration certificates, and program-issued beneficiary cards.",
+      "items": {
+        "type": "object"
+      }
+    },
+    "name": {
+      "type": "string",
+      "title": "Name",
+      "description": "The full display name of the record. Depending on the concept, this is a person's or group's name, or the title of a program, instrument, scoring rule, or software product."
+    },
+    "biometric_samples": {
+      "type": "array",
+      "title": "Biometric samples",
+      "description": "Biometric samples associated with this person, linking to fingerprint, iris, face, and other biometric records.",
+      "items": {
+        "type": "object"
+      }
+    },
+    "country_of_birth": {
+      "type": "string",
+      "title": "Country of birth",
+      "description": "The country where the person was born, expressed as an ISO 3166-1 code.",
+      "x-vocabulary": "country"
+    },
+    "date_of_birth": {
+      "type": "string",
+      "format": "date",
+      "title": "Date of birth",
+      "description": "The date on which the person was born."
+    },
+    "date_of_death": {
+      "type": "string",
+      "format": "date",
+      "title": "Date of death",
+      "description": "The date on which the person died."
+    },
+    "displacement_status": {
+      "type": "string",
+      "title": "Displacement status",
+      "description": "The legal, administrative, or protection status of the person with respect to displacement and migration.",
+      "x-vocabulary": "displacement-status"
+    },
+    "domicile": {
+      "type": "object",
+      "title": "Domicile",
+      "description": "The place that the person treats as their permanent home, which may differ from the address of their current household."
+    },
+    "education_level": {
+      "type": "string",
+      "title": "Education level",
+      "description": "The highest level of formal education completed by a person.",
+      "x-vocabulary": "education-level"
+    },
+    "email_address": {
+      "type": "string",
+      "title": "Email address",
+      "description": "An email address through which the person can be contacted."
+    },
+    "employment_status": {
+      "type": "string",
+      "title": "Employment status",
+      "description": "The labour force participation status of the person: whether they are employed, unemployed, or outside the labour force.",
+      "x-vocabulary": "employment-status"
+    },
+    "ethnic_group": {
+      "type": "string",
+      "title": "Ethnic group",
+      "description": "The ethnic or cultural group of the person, as self-identified. The UNSD recommends nationally defined categories based on self-identification; no international classification exists."
+    },
+    "family_name": {
+      "type": "string",
+      "title": "Family name",
+      "description": "The family (last) name or surname of the person."
+    },
+    "family_name_at_birth": {
+      "type": "string",
+      "title": "Family name at birth",
+      "description": "The family name of the person at the time of birth, before any change due to marriage or other legal event."
+    },
+    "functioning_status": {
+      "type": "string",
+      "title": "Functioning status",
+      "description": "A coarse current-state summary of the person's functioning difficulty, used by operational systems for targeting and eligibility queries. This is NOT a Washington Group or Child Functioning Module classification of the person: WG and CFM items are measured at the point of administration through a FunctioningProfile, and deriving a disability identifier requires applying a documented cutoff rule. Populate functioning_status from a FunctioningProfile only by citing the cutoff rule alongside; otherwise treat it as a self-declared or enumerator-judged summary.",
+      "x-vocabulary": "functional-difficulty-severity"
+    },
+    "gender": {
+      "type": "string",
+      "title": "Gender",
+      "description": "The gender of the person as recorded in a social protection registry or identity document.",
+      "x-vocabulary": "gender-type"
+    },
+    "given_name": {
+      "type": "string",
+      "title": "Given name",
+      "description": "The given (first) name of the person."
+    },
+    "given_name_at_birth": {
+      "type": "string",
+      "title": "Given name at birth",
+      "description": "The given name of the person at the time of birth, before any legal name change."
+    },
+    "group_memberships": {
+      "type": "array",
+      "title": "Group memberships",
+      "description": "Group memberships held by this person, linking them to households, families, or other groups.",
+      "items": {
+        "type": "object"
+      }
+    },
+    "industry": {
+      "type": "string",
+      "title": "Industry",
+      "description": "The branch of economic activity in which the person works, classified according to the International Standard Industrial Classification (ISIC Rev.4). Too large to enumerate; countries use national adaptations."
+    },
+    "literacy": {
+      "type": "string",
+      "title": "Literacy",
+      "description": "Whether the person can, with understanding, both read and write a short simple statement on everyday life.",
+      "x-vocabulary": "literacy"
+    },
+    "marital_status": {
+      "type": "string",
+      "title": "Marital status",
+      "description": "The marital or civil status of a person as recorded in an administrative system.",
+      "x-vocabulary": "marital-status"
+    },
+    "matronymic_name": {
+      "type": "string",
+      "title": "Matronymic name",
+      "description": "A name derived from the given name of the person's mother."
+    },
+    "nationality": {
+      "type": "string",
+      "title": "Nationality",
+      "description": "The country of citizenship or nationality, expressed as an ISO 3166-1 alpha-2 code where possible.",
+      "x-vocabulary": "country"
+    },
+    "number_of_spouses": {
+      "type": "integer",
+      "title": "Number of spouses",
+      "description": "The number of current spouses the person has. Captures polygamous or polyandrous union type separately from marital status, following the UN census framework and DHS approach."
+    },
+    "nutrition_status": {
+      "type": "string",
+      "title": "Nutrition status",
+      "description": "A coarse current-state summary of the person's acute malnutrition status, used by operational systems for targeting and referral queries. This is NOT a z-score classification on a specific measurement: band classifications depend on a growth reference, an age at measurement, and oedema status captured on a dedicated anthropometric profile published in a sibling schema (see ADR-011). Populate nutrition_status from an anthropometric profile only by citing the cutoff rule alongside.",
+      "x-vocabulary": "acute-malnutrition-severity"
+    },
+    "occupation": {
+      "type": "string",
+      "title": "Occupation",
+      "description": "The person's primary occupation, classified according to the ISCO-08 sub-major groups.",
+      "x-vocabulary": "occupation"
+    },
+    "patronymic_name": {
+      "type": "string",
+      "title": "Patronymic name",
+      "description": "A name derived from the given name of the person's father or a paternal ancestor, used in naming conventions where patronymics are a distinct component of a person's full name."
+    },
+    "phone_number": {
+      "type": "string",
+      "title": "Phone number",
+      "description": "A contact phone number for the person, including country code."
+    },
+    "preferred_language": {
+      "type": "string",
+      "title": "Preferred language",
+      "description": "The preferred language of communication for a person, using ISO 639-3 codes.",
+      "x-vocabulary": "language"
+    },
+    "preferred_name": {
+      "type": "string",
+      "title": "Preferred name",
+      "description": "The name a person is commonly known by, when it differs from their legal name. Covers chosen names, professional names, and naming conventions where given name plus family name is insufficient."
+    },
+    "pregnancy_status": {
+      "type": "string",
+      "title": "Pregnancy status",
+      "description": "The current pregnancy status of the person.",
+      "x-vocabulary": "pregnancy-status"
+    },
+    "religion": {
+      "type": "string",
+      "title": "Religion",
+      "description": "The religion, religious denomination, or sect of the person, as self-identified. No international classification exists; countries define their own value sets."
+    },
+    "sex": {
+      "type": "string",
+      "title": "Sex",
+      "description": "The biological sex of a person as recorded in an official register or identity document.",
+      "x-vocabulary": "sex"
+    },
+    "status_in_employment": {
+      "type": "string",
+      "title": "Status in employment",
+      "description": "The type of employment relationship: whether the person is an employee, employer, own-account worker, contributing family worker, or cooperative member.",
+      "x-vocabulary": "status-in-employment"
+    }
+  }
+}

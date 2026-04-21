@@ -1,0 +1,18 @@
+[
+  {
+    "value": "female",
+    "label": "Female"
+  },
+  {
+    "value": "male",
+    "label": "Male"
+  },
+  {
+    "value": "not_stated",
+    "label": "Not stated"
+  },
+  {
+    "value": "other",
+    "label": "Other"
+  }
+]

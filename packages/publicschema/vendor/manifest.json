@@ -1,0 +1,18 @@
+{
+  "name": "PublicSchema (narrow mirror)",
+  "version": "0.2.0",
+  "maturity": "draft",
+  "base_uri": "https://publicschema.org/",
+  "concepts": {
+    "Person": { "schema": "/Person.schema.json", "jsonld": "/Person.jsonld" },
+    "Group": { "schema": "/Group.schema.json", "jsonld": "/Group.jsonld" },
+    "Identifier": { "schema": "/Identifier.schema.json", "jsonld": "/Identifier.jsonld" }
+  },
+  "vocabularies": {
+    "gender-type": { "source": "/vocab/gender-type" },
+    "identifier-type": { "source": "/vocab/identifier-type" },
+    "country": { "source": "/vocab/country" },
+    "language": { "source": "/vocab/language" },
+    "relationship-type": { "source": "/vocab/relationship-type" }
+  }
+}

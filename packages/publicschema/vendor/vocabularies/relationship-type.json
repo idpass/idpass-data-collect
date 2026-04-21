@@ -1,0 +1,62 @@
+[
+  {
+    "value": "caregiver",
+    "label": "Caregiver"
+  },
+  {
+    "value": "child",
+    "label": "Child"
+  },
+  {
+    "value": "dependent",
+    "label": "Dependent"
+  },
+  {
+    "value": "extended_family",
+    "label": "Extended family"
+  },
+  {
+    "value": "grandchild",
+    "label": "Grandchild"
+  },
+  {
+    "value": "grandparent",
+    "label": "Grandparent"
+  },
+  {
+    "value": "guardian",
+    "label": "Guardian"
+  },
+  {
+    "value": "in_law",
+    "label": "In-law"
+  },
+  {
+    "value": "non_relative",
+    "label": "Non-relative"
+  },
+  {
+    "value": "other",
+    "label": "Other"
+  },
+  {
+    "value": "parent",
+    "label": "Parent"
+  },
+  {
+    "value": "payment_proxy",
+    "label": "Payment proxy"
+  },
+  {
+    "value": "sibling",
+    "label": "Sibling"
+  },
+  {
+    "value": "spouse",
+    "label": "Spouse"
+  },
+  {
+    "value": "survivor",
+    "label": "Survivor"
+  }
+]

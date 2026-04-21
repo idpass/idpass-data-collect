@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://publicschema.org/Identifier.schema.json",
+  "title": "Identifier",
+  "description": "A coded value assigned to an entity within an identification scheme. Identifiers disambiguate entities such as persons, groups, locations, administrative areas, or records within a specific registry or catalog. The identifier is the value and its scheme; documents that carry identifiers (passports, national ID cards, beneficiary cards) are modeled separately as IdentityDocument.",
+  "type": "object",
+  "properties": {
+    "identifier_scheme_id": {
+      "type": "string",
+      "title": "Identifier scheme ID",
+      "description": "A URI or code that identifies the scheme or system under which the identifier was assigned."
+    },
+    "identifier_scheme_name": {
+      "type": "string",
+      "title": "Identifier scheme name",
+      "description": "The human-readable name of the identifier scheme, such as 'National Identity Number' or 'Social Security Number'."
+    },
+    "identifier_type": {
+      "type": "string",
+      "title": "Identifier type",
+      "description": "The category of identifier value (for example, national ID number, passport number, P-code).",
+      "x-vocabulary": "identifier-type"
+    },
+    "identifier_value": {
+      "type": "string",
+      "title": "Identifier value",
+      "description": "The alphanumeric value of the identifier as issued or recorded."
+    }
+  }
+}
