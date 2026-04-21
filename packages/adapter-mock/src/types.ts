@@ -76,6 +76,7 @@ export interface Person {
   family_name?: string | null;
   date_of_birth?: string | null;
   gender?: string | null;
+  attributes?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   identifiers?: Identifier[];
@@ -90,6 +91,7 @@ export interface Group {
   uuid: string;
   name: string;
   group_type?: string;
+  attributes?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   identifiers?: Identifier[];
@@ -115,6 +117,7 @@ export interface PersonCreate {
   family_name?: string | null;
   date_of_birth?: string | null;
   gender?: string | null;
+  attributes?: Record<string, unknown>;
   identifiers?: Identifier[];
 }
 
@@ -129,6 +132,7 @@ export type PersonUpdate = Partial<PersonCreate>;
 export interface GroupCreate {
   name: string;
   group_type?: string;
+  attributes?: Record<string, unknown>;
   identifiers?: Identifier[];
 }
 
