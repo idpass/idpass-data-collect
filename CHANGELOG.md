@@ -91,9 +91,9 @@ Release candidate for v2.0.0. Includes all beta.3 fixes plus documentation overh
 - Scope Playwright browser install to admin package
 - Update workflow passwords and JWT secret to meet strength requirements
 
-## [2.0.0] - 2026-04-14
+## [2.0.0] - 2026-04-21
 
-Major release introducing offline-first web and mobile applications with event sourcing, multi-tenant sync, and comprehensive security hardening across four packages: `datacollect` (core), `backend` (Express sync server), `admin` (Vue.js dashboard), and `web` (self-service/agent portal). 355 commits since v1.0.0.
+Major release introducing offline-first web and mobile applications with event sourcing, multi-tenant sync, and comprehensive security hardening across four packages: `datacollect` (core), `backend` (Express sync server), `admin` (Vue.js dashboard), and `web` (self-service/agent portal). 410 commits since v1.0.0.
 
 See pre-release changelogs for per-change detail: [rc.2](#200-rc2---2026-04-14), [rc.1](#200-rc1---2026-03-30), [beta.3](#200-beta3---2026-03-29), [beta.2](#200-beta2---2026-03-26), [beta.1](#200-beta1---2026-03-18).
 
@@ -127,6 +127,10 @@ See pre-release changelogs for per-change detail: [rc.2](#200-rc2---2026-04-14),
 - **Package publishing** — `.npmrc` with `@idpass` scope, `publishConfig` on all 5 publishable packages, `publish-packages.yml` CI workflow with tag-driven and manual triggers
 - **41+ Playwright E2E tests** across admin, backend, mobile, and cross-service integration
 - **Drizzle ORM** schema definitions alongside raw SQL migrations
+- **Mock registry reference server** (`examples/mock-server`) — Python + Litestar + SQLite, PublicSchema-aligned Person/Group/Identifier/IdentityDocument model, OAuth2 client credentials with JWT, Swagger UI, editorial UI with client management, auto-seed fixture (2 households + 5 persons)
+- **`@idpass/adapter-mock` V2 rewrite** — OAuth2 HTTP client against the reference mock registry (replaces the in-process V1 mock). Serves as the canonical reference adapter for third-party integrators
+- **Building-an-adapter guide** — step-by-step walkthrough using the mock registry as the worked example, plus a PublicSchema alignment note
+- **`pnpm seed` mock-registry integration** — provisions a `demo-mock-registry` tenant and best-effort seeds the mock server (auto-detects `docker`/`podman compose`), enabling end-to-end external sync demo without OpenSPP
 
 ### Security
 - JWT 1-hour expiry with token refresh endpoint
@@ -143,6 +147,8 @@ See pre-release changelogs for per-change detail: [rc.2](#200-rc2---2026-04-14),
 - HTTPS-only in production mobile builds
 - Non-root Docker containers
 - Cross-origin resource policy on static artifact files
+- Post-rc.2 code review sweep: resolved 1 critical (C2), 2 high (H1/H2), and 2 low (L1/L2) severity findings in sync and adapter paths
+- Mock registry server: bcrypt-hashed OAuth2 client secrets, rotatable without redeploy; session cookies `httponly` + `samesite=strict`
 
 ### Documentation
 - Complete documentation audit: Merkle tree → hash chain, updated adapter class names, added OTP and National ID auth adapters to architecture docs
@@ -150,6 +156,11 @@ See pre-release changelogs for per-change detail: [rc.2](#200-rc2---2026-04-14),
 - DPGA compliance documentation: PRIVACY.md, GOVERNANCE.md, DO_NO_HARM.md, ACCESSIBILITY.md, and data export user guide
 - Mobile docs rewritten for Vuetify 3 / Material Design 3 (removed RxDB and Bootstrap references)
 - Added docs for biometric app lock, record entity type, duplicate detection, and strong password validation
+- Final v2.0.0 docs pass: corrected `@idpass/data-collect-core` package name across all docs and JSDoc sources, password/JWT strength requirements in `.env.example`, repeatable Docker + host + embed installation paths verified end-to-end
+- All docs migrated from `npm` to `pnpm` commands; fixed broken markdown links in code blocks
+- Mock registry + adapter documented across `external-sync.md`, `adapter-registry.md`, `packages/backend/index.md`, getting-started, and the new `building-an-adapter.md`
+- Review workflow doc unlisted from sidebar (matches hidden UI state)
+- Sync testing requirements and production pitfalls added to `CLAUDE.md` from the sync hardening post-mortem
 
 ### Website
 - Redesigned theme with ID PASS slate blue (#2C3E50) and orange (#ff6d37) palette
@@ -180,12 +191,31 @@ See pre-release changelogs for per-change detail: [rc.2](#200-rc2---2026-04-14),
 - Config schema validation and duplicate check reliability
 - FormIO component initialization error in production builds
 - SecureStorage initialization on Android (eager import shim)
+- Sync round 2 hardening: push identifier mismatch, area cursor advancement, IndexedDB writes now wait on `transaction.oncomplete` (not `IDBRequest`), conflict retry on concurrent modification
+- OpenSPP: only advance push watermark on zero failures (prevents silent entity loss on partial push)
+- OpenSPP: skip push-back of pull-only entities (prevents stale overwrite of external source-of-truth)
+- OpenSPP: `_lastUpdated` pull filter uses `ge` prefix and date-only format (matches Odoo query semantics)
+- OpenSPP: null-safety on identifier extraction for groups and individuals with missing records
+- OpenSPP: default push identifier type changed from `national_id` to `system_id` (avoids cross-tenant collisions when DC entities lack real identifiers)
+- Admin: `entityType` required on form config wizard (Auto-inference removed); backend Zod schema includes `entityType` to prevent silent strip on save
+- Mobile: `FLAG_SECURE` applied only in release builds so QA can screen-mirror debug APKs
+- Mobile: `ApplicationInfo.FLAG_DEBUGGABLE` replaces `BuildConfig.DEBUG` for runtime debug check
+- Mobile: QR scanning uses `BarcodeScanner.requestPermissions` (Camera plugin path was broken on Android 14+)
+- Mobile: externally-pulled entities now match by type when `entityName` doesn't match form name
+- Adapter-mock: server UUIDs used as `externalId`, cross-env base64 encoding, HTTP 409 maps to `skipped` (not error)
+- Adapter-mock: OAuth2 token request is form-encoded per RFC 6749
+- Mock server: `MOCK_CORS_ALLOWED_ORIGINS` parsed as comma-separated string
+- Mock server: autocommit on 3xx so UI-form create redirects persist the new row
+- Mock server: Dockerfile compatible with podman (dropped optional-file glob)
+- CI: `adapter-mock` Jest alias wired, `uv.lock` committed for reproducible Python builds
 
 ### Changed
 - `OpenSppSyncAdapterV2` renamed to `OpenSppOdooSyncAdapter`; legacy `OpenSppSyncAdapter` removed
 - `useBarcodeScan` composable extracted from duplicated scanner logic
-- Review workflow and granular role assignments hidden from admin UI (backend code preserved for post-2.0.0)
+- Review workflow and granular role assignments hidden from admin UI and documentation (backend code preserved for post-2.0.0)
 - `requireAction()` RBAC middleware removed from sync routes — access controlled by tenant membership
+- V1 adapter infrastructure (`LegacyAdapterWrapper`) extracted from `ExternalSyncManager` into `legacyAdapterSupport.ts`; built-in `MockSyncServerAdapter` removed from core
+- `@idpass/adapter-mock` no longer ships an in-process mock — HTTP-only against the reference mock registry
 
 ### Improved
 - Pino-based structured logging replaces console.log throughout backend and core
@@ -204,6 +234,8 @@ See pre-release changelogs for per-change detail: [rc.2](#200-rc2---2026-04-14),
 5. Audit all `entityPair.initial` access for null checks
 6. Replace `OpenSppSyncAdapter` with `OpenSppOdooSyncAdapter`
 7. Coolify deployments: services must join the `coolify` external network; use unique Postgres hostname (`dc-postgres`) to avoid DNS collision
+8. Existing mock-adapter deployments: update external sync config from in-process shape to HTTP shape (`type: "mock"`, `url`, `adapterConfig: { clientId, clientSecret, identifierScheme, identifierType }`); the in-process V1 mock is no longer registered
+9. Optional: enable the mock registry service in staging/demo with `docker compose -f docker/docker-compose.dev.yaml --profile mock up -d` and run `pnpm seed` to provision the `demo-mock-registry` tenant
 
 ## [2.0.0-beta.2] - 2026-03-26
 
