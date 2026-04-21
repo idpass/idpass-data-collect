@@ -111,6 +111,82 @@ if [ -f "$INDIVIDUAL_CONFIG_FILE" ]; then
   fi
 fi
 
+# --- Step 3c: Upload mock registry demo config (if mock server is reachable) ---
+#
+# Demonstrates DC external sync end-to-end against the reference mock registry
+# server in examples/mock-server. Skipped if the mock server is not running.
+# Override the mock URL with MOCK_REGISTRY_URL=http://host:port.
+
+MOCK_REGISTRY_URL="${MOCK_REGISTRY_URL:-http://localhost:9999}"
+MOCK_REGISTRY_CONFIG_FILE="$SCRIPT_DIR/seed-mock-registry.json"
+MOCK_REGISTRY_CONFIG_ID="demo-mock-registry"
+MOCK_REGISTRY_COMPOSE_SERVICE="${MOCK_REGISTRY_COMPOSE_SERVICE:-mock-registry}"
+
+MOCK_HEALTH_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 \
+  "$MOCK_REGISTRY_URL/health" 2>/dev/null || echo "000")
+
+if [ "$MOCK_HEALTH_CODE" = "200" ] && [ -f "$MOCK_REGISTRY_CONFIG_FILE" ]; then
+  log "Mock registry reachable at $MOCK_REGISTRY_URL — configuring external sync demo."
+
+  # Best-effort: seed mock registry fixture data (2 households, 5 persons) via
+  # the compose CLI. Falls through with a hint if we can't detect a compose runtime.
+  COMPOSE_CMD=""
+  if command -v docker &>/dev/null && docker compose ps --services 2>/dev/null | grep -qx "$MOCK_REGISTRY_COMPOSE_SERVICE"; then
+    COMPOSE_CMD="docker compose"
+  elif command -v podman &>/dev/null && podman compose ps --services 2>/dev/null | grep -qx "$MOCK_REGISTRY_COMPOSE_SERVICE"; then
+    COMPOSE_CMD="podman compose"
+  fi
+
+  if [ -n "$COMPOSE_CMD" ]; then
+    log "  Seeding mock registry: $COMPOSE_CMD exec $MOCK_REGISTRY_COMPOSE_SERVICE python -m mock_server seed"
+    if $COMPOSE_CMD exec -T "$MOCK_REGISTRY_COMPOSE_SERVICE" python -m mock_server seed >/dev/null 2>&1; then
+      log "  Mock registry seeded (idempotent — skips if data already present)."
+    else
+      log "  WARNING: Mock registry seed command failed. Data may already exist."
+      log "  Manual seed: $COMPOSE_CMD exec $MOCK_REGISTRY_COMPOSE_SERVICE python -m mock_server seed"
+    fi
+  else
+    log "  Mock registry reachable but compose runtime not detected — cannot auto-seed."
+    log "  Manual seed: docker compose -f docker/docker-compose.dev.yaml --profile mock exec mock-registry python -m mock_server seed"
+  fi
+
+  # Replace existing config if present (idempotent)
+  MOCK_CONFIG_CHECK=$(curl -s -o /dev/null -w "%{http_code}" "$BACKEND_URL/api/apps/$MOCK_REGISTRY_CONFIG_ID" \
+    -H "Authorization: Bearer $TOKEN")
+  if [ "$MOCK_CONFIG_CHECK" = "200" ]; then
+    log "  Config '$MOCK_REGISTRY_CONFIG_ID' exists — replacing."
+    curl -s -o /dev/null -X DELETE "$BACKEND_URL/api/apps/$MOCK_REGISTRY_CONFIG_ID" \
+      -H "Authorization: Bearer $TOKEN"
+  fi
+
+  # If caller overrode MOCK_REGISTRY_URL, rewrite the embedded url before upload.
+  MOCK_UPLOAD_FILE="$MOCK_REGISTRY_CONFIG_FILE"
+  if [ "$MOCK_REGISTRY_URL" != "http://localhost:9999" ]; then
+    if command -v jq &>/dev/null; then
+      MOCK_UPLOAD_FILE="$(mktemp --suffix=.json)"
+      jq --arg url "$MOCK_REGISTRY_URL" '.externalSync.url = $url' \
+        "$MOCK_REGISTRY_CONFIG_FILE" > "$MOCK_UPLOAD_FILE"
+    else
+      log "  WARNING: MOCK_REGISTRY_URL overridden but jq not installed — uploading config with default URL."
+    fi
+  fi
+
+  MOCK_UPLOAD_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BACKEND_URL/api/apps" \
+    -H "Authorization: Bearer $TOKEN" \
+    -F "config=@$MOCK_UPLOAD_FILE;type=application/json")
+
+  if [ "$MOCK_UPLOAD_CODE" = "200" ] || [ "$MOCK_UPLOAD_CODE" = "201" ]; then
+    log "  Mock registry demo config uploaded ($MOCK_REGISTRY_CONFIG_ID)."
+  else
+    log "  WARNING: Mock registry config upload failed (HTTP $MOCK_UPLOAD_CODE)."
+  fi
+
+  [ "$MOCK_UPLOAD_FILE" != "$MOCK_REGISTRY_CONFIG_FILE" ] && rm -f "$MOCK_UPLOAD_FILE"
+else
+  log "Mock registry not reachable at $MOCK_REGISTRY_URL (HTTP $MOCK_HEALTH_CODE). Skipping external sync demo."
+  log "  Start it with: docker compose -f docker/docker-compose.dev.yaml --profile mock up -d"
+fi
+
 # --- Step 4: Create field worker user ---
 
 log "Creating field worker user ($FIELDWORKER_EMAIL) ..."
@@ -575,3 +651,9 @@ log "    4 review configs"
 log "  Data (individual registry):"
 log "    3 standalone individuals (entityType override)"
 log "    Assessment + referral forms (dependent on person)"
+if [ "$MOCK_HEALTH_CODE" = "200" ] && [ "${MOCK_UPLOAD_CODE:-}" = "200" -o "${MOCK_UPLOAD_CODE:-}" = "201" ]; then
+  log "  Data (mock registry sync):"
+  log "    Config '$MOCK_REGISTRY_CONFIG_ID' wired to $MOCK_REGISTRY_URL"
+  log "    Mock fixture: 2 households, 5 persons (3 with identifiers, 2 system_id-only)"
+  log "    Trigger external sync from Admin UI to pull mock data into DC"
+fi
