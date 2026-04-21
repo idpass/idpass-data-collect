@@ -12,11 +12,11 @@ DataCollect implements event sourcing and CQRS patterns to create a robust, audi
 
 ### Key Features
 
-- 🗄️ **Offline-First**: Full functionality without internet connectivity using IndexedDB
-- 📝 **Event Sourcing**: Complete audit trail with ability to replay state changes
-- 🔄 **Synchronization**: Bi-directional sync with central server
-- 🔐 **Encryption**: Client-side data encryption support
-- 📱 **Cross-Platform**: Works in browsers, React Native, and Electron apps
+- **Offline-First**: Full functionality without internet connectivity using IndexedDB
+- **Event Sourcing**: Complete audit trail with ability to replay state changes
+- **Synchronization**: Bi-directional sync with central server
+- **Encryption**: Client-side data encryption support
+- **Cross-Platform**: Works in browsers, React Native, and Electron apps
 
 ## Core Components
 
@@ -262,6 +262,6 @@ graph LR
 
 ## Next Steps
 
-- 📖 [Tutorials](../../getting-started/tutorials) - Learn by building
-- 🚀 [Backend Package](../../packages/backend/) - Add server synchronization
-- 👥 [Admin Package](../../packages/admin/) - Complete management solution
+- [Tutorials](../../getting-started/tutorials) - Learn by building
+- [Backend Package](../../packages/backend/) - Add server synchronization
+- [Admin Package](../../packages/admin/) - Complete management solution

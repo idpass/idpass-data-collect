@@ -8,7 +8,7 @@ sidebar_position: 1
 
 The ID PASS DataCollect Backend provides a comprehensive REST API automatically documented from the OpenAPI 3.0 specification.
 
-## 🔄 **Auto-Generated Documentation**
+## **Auto-Generated Documentation**
 
 The API documentation below is **automatically generated** from the backend's `openapi.yaml` specification file. This ensures:
 
@@ -17,7 +17,7 @@ The API documentation below is **automatically generated** from the backend's `o
 - **Interactive**: Test endpoints directly from the documentation
 - **Complete**: All endpoints, schemas, and examples included
 
-## 📚 **API Documentation Structure**
+## **API Documentation Structure**
 
 The generated documentation is organized by **API tags**:
 
@@ -28,7 +28,7 @@ The generated documentation is organized by **API tags**:
 - **Data Management** - Entity management and duplicate resolution
 - **OpenSPP Fields** - Field metadata parsing and fetching for OpenSPP integration
 
-## 🌐 **OpenAPI Specification**
+## **OpenAPI Specification**
 
 The complete OpenAPI specification is available at:
 - **JSON Endpoint**: `http://localhost:3000/api-docs/openapi.json` (when server is running)
@@ -36,7 +36,7 @@ The complete OpenAPI specification is available at:
 
 You can import this specification into tools like Postman, Insomnia, or any OpenAPI-compatible client for interactive testing.
 
-## 🔧 **Authentication**
+## **Authentication**
 
 Most endpoints require JWT authentication. Include the token in requests:
 

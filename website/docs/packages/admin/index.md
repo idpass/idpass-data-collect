@@ -15,12 +15,12 @@ Built with Vue 3, TypeScript, and modern web technologies, the Admin interface o
 
 ### Key Features
 
-- 👥 **User Management**: Create, update, and manage user accounts and roles
-- ⚙️ **Configuration Management**: Multi-tenant app configuration with form builders
-- 📊 **Data Visualization**: View and analyze collected data with charts and tables
-- 🎨 **Customizable Interface**: Theming and branding options
-- 📱 **Responsive Design**: Works on desktop, tablet, and mobile devices
-- 🔐 **Secure Access**: Role-based access control with JWT authentication
+- **User Management**: Create, update, and manage user accounts and roles
+- **Configuration Management**: Multi-tenant app configuration with form builders
+- **Data Visualization**: View and analyze collected data with charts and tables
+- **Customizable Interface**: Theming and branding options
+- **Responsive Design**: Works on desktop, tablet, and mobile devices
+- **Secure Access**: Role-based access control with JWT authentication
 
 ## Architecture
 
@@ -371,5 +371,5 @@ pnpm build:prod
 
 ## Next Steps
 
-- 📖 [User Guide](../../user-guide/) - How to use the admin interface
-- 🚀 [Deployment Guide](../../deployment/) - Production deployment
+- [User Guide](../../user-guide/) - How to use the admin interface
+- [Deployment Guide](../../deployment/) - Production deployment

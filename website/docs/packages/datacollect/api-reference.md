@@ -382,7 +382,7 @@ const individuals = await manager.searchEntities({
 ## Working Examples
 
 For complete working examples, see:
-- 📁 [API Examples](./index.md) - Complete code examples from the API documentation
+- [API Examples](./index.md) - Complete code examples from the API documentation
 
 ## TypeScript Support
 

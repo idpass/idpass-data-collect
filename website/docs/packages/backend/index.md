@@ -16,12 +16,12 @@ Built with Node.js, Express.js, and PostgreSQL, the Backend serves as the centra
 
 ### Key Features
 
-- 🗃️ **PostgreSQL Storage**: Reliable, ACID-compliant data persistence
-- 🔄 **Multi-Client Sync**: Coordinate data across multiple DataCollect clients
-- 👥 **User Management**: Authentication, authorization, and role-based access
-- 🏢 **Multi-Tenant**: Support multiple organizations with isolated configurations
-- 🔌 **External Integration**: Connect with OpenSPP, OpenFn, and custom systems
-- 🔐 **Security**: [JWT](../../glossary#jwt-json-web-token) authentication with configurable session management
+- **PostgreSQL Storage**: Reliable, ACID-compliant data persistence
+- **Multi-Client Sync**: Coordinate data across multiple DataCollect clients
+- **User Management**: Authentication, authorization, and role-based access
+- **Multi-Tenant**: Support multiple organizations with isolated configurations
+- **External Integration**: Connect with OpenSPP, OpenFn, and custom systems
+- **Security**: [JWT](../../glossary#jwt-json-web-token) authentication with configurable session management
 
 ## Architecture
 
@@ -182,13 +182,13 @@ Define tenant-specific settings using JSON configuration:
 
 The Backend provides a comprehensive REST API with full OpenAPI 3.0 documentation:
 
-### 📚 [Complete API Reference](./api-reference-overview.md)
+### [Complete API Reference](./api-reference-overview.md)
 Detailed documentation of all endpoints, request/response schemas, and examples.
 
-### 🌐 [OpenAPI Specification](http://localhost:3000/api-docs/openapi.json)
+### [OpenAPI Specification](http://localhost:3000/api-docs/openapi.json)
 OpenAPI spec available as JSON (when server is running). Import into Postman, Insomnia, or other API clients.
 
-### 📄 [OpenAPI Specification](./api-reference-generated/idpass-data-collect-backend-api.md)
+### [OpenAPI Specification](./api-reference-generated/idpass-data-collect-backend-api.md)
 Complete OpenAPI 3.0 YAML specification for client generation and tooling.
 
 ### Quick API Overview
