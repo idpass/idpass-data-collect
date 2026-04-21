@@ -107,4 +107,5 @@ playwright-report/
 *storybook.log
 .worktrees/
 docs/superpowers/
+docs/proposals/
 .superpowers/
