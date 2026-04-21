@@ -1,6 +1,6 @@
 {
   "name": "@idpass/adapter-mock",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Reference V2 HTTP sync adapter for the mock registry server",
   "engines": {
     "node": ">=22.0.0"

@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **PublicSchema form generator** — new `@idpass/publicschema` workspace package vendors PublicSchema v0.2.0 narrow mirror (Person, Group, Identifier concepts + six vocabularies: gender-type, identifier-type, country, language, relationship-type, group-type) and exposes a JSON Schema → Form.io generator. The admin wizard's Entity Forms step gains an inline **Generate from PublicSchema…** button; generated forms carry `generatedFrom` provenance metadata rendered as a `PS 0.2.0` chip.
+- **Mock registry `attributes` round-trip** — Person and Group gain an `attributes: JSON` column surfaced through Pydantic schemas and the detail-page UI. `@idpass/adapter-mock` forwards every non-core DC data field into `attributes` on push and unpacks them back into `data` on pull, preserving full PublicSchema-plus-custom payloads end-to-end.
+
+### Changed
+- `@idpass/adapter-mock` bumped to `2.1.0`.
+- `examples/mock-server` bumped to `2.1.0`.
+
 ## [2.0.0-rc.2] - 2026-04-14
 
 Second release candidate for v2.0.0. Major additions: async external sync with progress tracking, sync status panel in admin UI, access control hardening, and DPGA compliance documentation.

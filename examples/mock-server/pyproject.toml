@@ -1,6 +1,6 @@
 [project]
 name = "mock-server"
-version = "0.1.0"
+version = "2.1.0"
 description = "Mock registry server for DataCollect external sync adapter development (PublicSchema-aligned)."
 readme = "README.md"
 requires-python = ">=3.12"
