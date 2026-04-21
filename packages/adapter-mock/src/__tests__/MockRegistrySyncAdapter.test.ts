@@ -1028,6 +1028,112 @@ describe("MockRegistrySyncAdapter", () => {
     });
   });
 
+  describe("round-trip attributes", () => {
+    it("pushes non-core DC fields via attributes and unpacks them back on pull", async () => {
+      // --- PUSH leg: DC entity with core + non-core fields ---------------
+      const pushPair: EntityPair = {
+        guid: "dc-guid-ada",
+        initial: {
+          id: "e1",
+          guid: "dc-guid-ada",
+          type: EntityType.Individual,
+          version: 1,
+          data: { entityName: "individual" },
+          lastUpdated: "2026-04-21T00:00:00Z",
+        },
+        modified: {
+          id: "e1",
+          guid: "dc-guid-ada",
+          type: EntityType.Individual,
+          version: 2,
+          data: {
+            entityName: "individual",
+            given_name: "Ada",
+            family_name: "Lovelace",
+            date_of_birth: "1815-12-10",
+            gender: "female",
+            preferred_language: "en",
+            nationality: "GB",
+          },
+          lastUpdated: "2026-04-21T00:00:00Z",
+        },
+      };
+
+      const saveEntity = jest.fn();
+      const { eventApplierService: pushEas } = createEventApplierServiceMock({
+        getAllEntities: jest.fn().mockResolvedValue([pushPair]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([pushPair]),
+        getEntity: jest.fn().mockResolvedValue(pushPair),
+        saveEntity,
+      });
+
+      const pushAdapter = new MockRegistrySyncAdapter(createEventStoreMock(), pushEas);
+      await pushAdapter.initialize(VALID_CONFIG);
+
+      clientMock.createPerson.mockResolvedValueOnce({
+        uuid: "server-uuid-ada",
+        created_at: "2026-04-21T00:00:01Z",
+        updated_at: "2026-04-21T00:00:01Z",
+      } as Person);
+
+      const pushResult = await pushAdapter.push([]);
+      expect(pushResult.success).toBe(true);
+      expect(pushResult.pushed).toBe(1);
+
+      // Assert the posted PersonCreate carries attributes with exactly the
+      // non-core fields (core fields stay typed at the top level).
+      const postedPayload = clientMock.createPerson.mock.calls[0][0];
+      expect(postedPayload.given_name).toBe("Ada");
+      expect(postedPayload.family_name).toBe("Lovelace");
+      expect(postedPayload.gender).toBe("2");
+      expect(postedPayload.attributes).toEqual({
+        preferred_language: "en",
+        nationality: "GB",
+      });
+
+      // --- PULL leg: server returns a Person whose attributes matches -----
+      const { eventApplierService: pullEas, submitForm } = createEventApplierServiceMock();
+      const pullAdapter = new MockRegistrySyncAdapter(createEventStoreMock(), pullEas);
+      await pullAdapter.initialize(VALID_CONFIG);
+
+      clientMock.listPersons.mockResolvedValueOnce({
+        items: [
+          {
+            uuid: "server-uuid-ada",
+            given_name: "Ada",
+            family_name: "Lovelace",
+            date_of_birth: "1815-12-10",
+            gender: "2",
+            attributes: {
+              preferred_language: "en",
+              nationality: "GB",
+            },
+            created_at: "2026-04-21T00:00:01Z",
+            updated_at: "2026-04-21T00:00:02Z",
+            identifiers: [],
+          },
+        ],
+        total: 1,
+        limit: 100,
+        offset: 0,
+        next_offset: null,
+      });
+
+      const pullResult = await pullAdapter.pull();
+      expect(pullResult.success).toBe(true);
+      expect(pullResult.pulled).toBe(1);
+      expect(submitForm).toHaveBeenCalledTimes(1);
+
+      const submittedData = submitForm.mock.calls[0][0].data;
+      expect(submittedData.firstName).toBe("Ada");
+      expect(submittedData.lastName).toBe("Lovelace");
+      expect(submittedData.preferred_language).toBe("en");
+      expect(submittedData.nationality).toBe("GB");
+      // Raw attributes key must never be forwarded as-is
+      expect(submittedData.attributes).toBeUndefined();
+    });
+  });
+
   describe("disconnect", () => {
     it("clears token and config", async () => {
       const adapter = new MockRegistrySyncAdapter(
