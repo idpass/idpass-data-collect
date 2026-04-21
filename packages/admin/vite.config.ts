@@ -14,6 +14,7 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
       '@idpass/data-collect-core': resolve(__dirname, '../datacollect/src/browser.ts'),
+      '@idpass/publicschema': resolve(__dirname, '../publicschema/src/index.ts'),
     },
   },
   // Remove the global Bootstrap SCSS import

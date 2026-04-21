@@ -17,9 +17,6 @@
  * under the License.
  */
 
-import fs from "fs";
-import path from "path";
-
 import { PUBLICSCHEMA_VERSION } from "./version";
 import type {
   FormioComponent,
@@ -29,7 +26,10 @@ import type {
 } from "./types";
 import { getVocabulary } from "./vocabulary";
 
-const CONCEPTS_DIR = path.resolve(__dirname, "..", "vendor", "concepts");
+import PersonSchema from "../vendor/concepts/Person.schema.json";
+import GroupSchema from "../vendor/concepts/Group.schema.json";
+import IdentifierSchema from "../vendor/concepts/Identifier.schema.json";
+
 const CONCEPTS: PublicSchemaConcept[] = ["Person", "Group", "Identifier"];
 
 interface JsonSchemaProperty {
@@ -54,21 +54,30 @@ interface JsonSchema {
   required?: string[];
 }
 
+const CONCEPT_SCHEMAS: Record<PublicSchemaConcept, JsonSchema> = {
+  Person: PersonSchema as JsonSchema,
+  Group: GroupSchema as JsonSchema,
+  Identifier: IdentifierSchema as JsonSchema,
+};
+
 /** The three concepts surfaced by this narrow mirror. */
 export function listConcepts(): PublicSchemaConcept[] {
   return [...CONCEPTS];
 }
 
 function readConceptSchema(concept: PublicSchemaConcept): JsonSchema {
-  const file = path.join(CONCEPTS_DIR, `${concept}.schema.json`);
-  return JSON.parse(fs.readFileSync(file, "utf8")) as JsonSchema;
+  return CONCEPT_SCHEMAS[concept];
 }
 
 function readRefSchema(ref: string): JsonSchema {
   // Only relative sibling refs like "./Identifier.schema.json" are supported.
-  const basename = path.basename(ref);
-  const file = path.join(CONCEPTS_DIR, basename);
-  return JSON.parse(fs.readFileSync(file, "utf8")) as JsonSchema;
+  const basename = ref.replace(/^.*[\\/]/, "").replace(/\.schema\.json$/, "");
+  const concept = basename as PublicSchemaConcept;
+  const schema = CONCEPT_SCHEMAS[concept];
+  if (!schema) {
+    throw new Error(`Unknown $ref target: ${ref}`);
+  }
+  return schema;
 }
 
 function humanize(key: string): string {

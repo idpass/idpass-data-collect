@@ -17,24 +17,26 @@
  * under the License.
  */
 
-import fs from "fs";
-import path from "path";
-
-const VOCAB_DIR = path.resolve(__dirname, "..", "vendor", "vocabularies");
-
-const KNOWN = new Set([
-  "gender-type",
-  "identifier-type",
-  "country",
-  "language",
-  "relationship-type",
-  "group-type",
-]);
+import genderType from "../vendor/vocabularies/gender-type.json";
+import identifierType from "../vendor/vocabularies/identifier-type.json";
+import country from "../vendor/vocabularies/country.json";
+import language from "../vendor/vocabularies/language.json";
+import relationshipType from "../vendor/vocabularies/relationship-type.json";
+import groupType from "../vendor/vocabularies/group-type.json";
 
 export interface VocabularyEntry {
   value: string;
   label: string;
 }
+
+const VOCABULARIES: Record<string, VocabularyEntry[]> = {
+  "gender-type": genderType as VocabularyEntry[],
+  "identifier-type": identifierType as VocabularyEntry[],
+  country: country as VocabularyEntry[],
+  language: language as VocabularyEntry[],
+  "relationship-type": relationshipType as VocabularyEntry[],
+  "group-type": groupType as VocabularyEntry[],
+};
 
 /**
  * Load a SKOS vocabulary as a flat array of Form.io select options.
@@ -42,10 +44,9 @@ export interface VocabularyEntry {
  * supported — others throw `Unknown vocabulary`.
  */
 export function getVocabulary(name: string): VocabularyEntry[] {
-  if (!KNOWN.has(name)) {
+  const entries = VOCABULARIES[name];
+  if (!entries) {
     throw new Error(`Unknown vocabulary: ${name}`);
   }
-  const file = path.join(VOCAB_DIR, `${name}.json`);
-  const raw = fs.readFileSync(file, "utf8");
-  return JSON.parse(raw) as VocabularyEntry[];
+  return entries;
 }
