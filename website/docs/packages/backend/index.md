@@ -112,14 +112,14 @@ The same rules apply when creating or updating users via the `POST /api/users` a
 ### Development
 
 ```bash
-pnpm dev
+pnpm --filter @idpass/data-collect-backend dev
 ```
 
 ### Production
 
 ```bash
-pnpm build
-pnpm start
+pnpm --filter @idpass/data-collect-backend build
+node packages/backend/dist/index.js
 ```
 
 ## Configuration

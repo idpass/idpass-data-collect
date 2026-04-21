@@ -45,7 +45,7 @@ const log = createLogger("IndexedDbEventStorageAdapter");
  * @example
  * Basic usage:
  * ```typescript
- * import { IndexedDbEventStorageAdapter } from '@idpass/idpass-data-collect';
+ * import { IndexedDbEventStorageAdapter } from '@idpass/data-collect-core';
  *
  * const adapter = new IndexedDbEventStorageAdapter('tenant-123');
  * await adapter.initialize();

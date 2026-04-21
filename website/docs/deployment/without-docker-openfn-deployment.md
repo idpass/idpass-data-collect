@@ -97,28 +97,20 @@ _Screenshot Placeholder: A screenshot of the terminal output after `pnpm build` 
 
 ## Step 5: Run the Backend Server
 
-Navigate to the `packages/backend` directory and start the server:
+Start the backend server:
 
 ```bash
-cd packages/backend
-```
-
-```bash
-pnpm start
+pnpm --filter @idpass/data-collect-backend dev
 ```
 
 _Screenshot Placeholder: A screenshot of the terminal output showing the backend server starting and listening on a port._
 
 ## Step 6: Run the Frontend (Admin Panel)
 
-In a new terminal, navigate to the `packages/admin` directory and start the admin panel:
+In a new terminal, start the admin panel:
 
 ```bash
-cd packages/admin
-```
-
-```bash
-pnpm start
+pnpm --filter @idpass/data-collect-admin dev
 ```
 
 _Screenshot Placeholder: A screenshot of the terminal output showing the frontend development server starting._
@@ -127,7 +119,7 @@ _Screenshot Placeholder: A screenshot of the terminal output showing the fronten
 
 Once both the backend and frontend are running, you can access the application:
 
-*   **Backend API:** `http://localhost:3000` (or the port configured in `packages/backend/.env`)
-*   **Admin Panel:** `http://localhost:5173` (or the port shown when running `pnpm start` in `packages/admin`)
+*   **Backend API:** `http://localhost:3000` (health check at `/health`)
+*   **Admin Panel:** `http://localhost:5173`
 
 _Screenshot Placeholder: A screenshot showing the application's login page in a web browser._

@@ -63,7 +63,7 @@ export interface ReadAuditOptions {
  * @example
  * Basic usage:
  * ```typescript
- * import { EntityDataManager, EntityType, SyncLevel } from 'idpass-data-collect';
+ * import { EntityDataManager, EntityType, SyncLevel } from '@idpass/data-collect-core';
  *
  * // Initialize the manager (typically done once)
  * const manager = new EntityDataManager(

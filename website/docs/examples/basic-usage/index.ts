@@ -43,7 +43,7 @@ import {
   InternalSyncManager,
   FormSubmission,
   SyncLevel,
-} from "idpass-data-collect";
+} from "@idpass/data-collect-core";
 import { v4 as uuidv4 } from "uuid";
 
 async function main() {

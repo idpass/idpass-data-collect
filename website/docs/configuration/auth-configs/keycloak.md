@@ -64,7 +64,7 @@ Keycloak integration offers enterprise identity and access management with featu
 ### Basic Setup
 
 ```typescript
-import { KeycloakAuthAdapter, IndexedDbAuthStorageAdapter } from "@idpass/datacollect";
+import { KeycloakAuthAdapter, IndexedDbAuthStorageAdapter } from "@idpass/data-collect-core";
 
 // Create storage adapter
 const storage = new IndexedDbAuthStorageAdapter();

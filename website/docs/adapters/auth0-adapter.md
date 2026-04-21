@@ -169,7 +169,7 @@ The adapter implements environment-aware token validation:
 ### Basic Setup
 
 ```typescript
-import { Auth0AuthAdapter, IndexedDbAuthStorageAdapter } from "@idpass/datacollect";
+import { Auth0AuthAdapter, IndexedDbAuthStorageAdapter } from "@idpass/data-collect-core";
 
 // Create storage adapter
 const storage = new IndexedDbAuthStorageAdapter();

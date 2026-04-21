@@ -152,7 +152,7 @@ import {
   InternalSyncManager,
   ExternalSyncManager,
   AuthManager
-} from 'idpass-data-collect';
+} from '@idpass/data-collect-core';
 
 // Initialize storage adapters
 const eventStorageAdapter = new IndexedDbEventStorageAdapter('my-events');

@@ -136,7 +136,7 @@ Integration with Keycloak authentication services:
 ### Basic Initialization
 
 ```typescript
-import { AuthManager, IndexedDbAuthStorageAdapter } from '@idpass/datacollect';
+import { AuthManager, IndexedDbAuthStorageAdapter } from '@idpass/data-collect-core';
 
 // Configuration
 const config = {

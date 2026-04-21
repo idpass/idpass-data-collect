@@ -46,11 +46,8 @@ Before starting, ensure you have:
 #### Start Backend Service
 
 ```bash
-# Navigate to your backend directory
-cd packages/backend
-
 # Start the backend service
-pnpm start
+pnpm --filter @idpass/data-collect-backend dev
 ```
 
 The backend service should be running on the configured port (typically `http://localhost:3000` or similar).
@@ -58,11 +55,8 @@ The backend service should be running on the configured port (typically `http://
 #### Start Admin Interface
 
 ```bash
-# Navigate to your admin directory
-cd packages/admin
-
 # Start the admin interface
-pnpm start
+pnpm --filter @idpass/data-collect-admin dev
 ```
 
 The admin interface should be accessible at `http://localhost:5173` or your configured URL.
@@ -191,7 +185,7 @@ import {
   ExternalSyncManager,
   InternalSyncManager,
   AuthManager
-} from '@idpass/datacollect';
+} from '@idpass/data-collect-core';
 
 // Initialize with your imported configuration
 const initializeDataCollect = async (config) => {
@@ -270,7 +264,7 @@ const formData = {
   },
   timestamp: new Date().toISOString(),
   userId: "user-id",
-  syncLevel: 0 // SyncLevel.LOCAL
+  syncLevel: SyncLevel.LOCAL
 };
 
 const individual = await dataCollect.submitForm(formData);
@@ -309,8 +303,8 @@ await dataCollect.initializeAuthManager();
 ```javascript
 // Login with username/password (for backend authentication)
 await dataCollect.login({
-  username: "admin@hdm.example",
-  password: "admin1@"
+  username: "admin@datacollect.lan",
+  password: "Correct horse battery staple 42!"
 });
 
 // Login with token (for external auth providers like Auth0/Keycloak)
@@ -348,8 +342,8 @@ console.log('User authenticated after logout:', isAuthenticated); // Should be f
 ```javascript
 // Login with backend credentials
 await dataCollect.login({
-  username: "admin@hdm.example", 
-  password: "admin1@"
+  username: "admin@datacollect.lan",
+  password: "Correct horse battery staple 42!"
 });
 ```
 
@@ -365,7 +359,7 @@ await dataCollect.login({
 #### User another client instance to get synced data
 
 ```javascript
-await anotherManager.login("admin@hdm.example", "admin1@");
+await anotherManager.login("admin@datacollect.lan", "Correct horse battery staple 42!");
 await manager.syncWithSyncServer();
 ```
 

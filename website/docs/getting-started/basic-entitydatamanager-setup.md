@@ -35,7 +35,7 @@ import {
   AuthConfig,
   PasswordCredentials,
   TokenCredentials
-} from 'idpass-data-collect';
+} from '@idpass/data-collect-core';
 ```
 
 ### Step 2: Initialize Storage Components

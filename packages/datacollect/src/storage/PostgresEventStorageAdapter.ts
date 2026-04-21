@@ -55,7 +55,7 @@ const log = createLogger("PostgresEventStorageAdapter");
  * @example
  * Basic server setup:
  * ```typescript
- * import { PostgresEventStorageAdapter } from '@idpass/idpass-data-collect';
+ * import { PostgresEventStorageAdapter } from '@idpass/data-collect-core';
  *
  * const adapter = new PostgresEventStorageAdapter(
  *   'postgresql://user:pass@localhost:5432/datacollect',

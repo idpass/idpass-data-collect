@@ -171,7 +171,7 @@ The adapter implements environment-aware token validation:
 ### Basic Setup
 
 ```typescript
-import { KeycloakAuthAdapter, IndexedDbAuthStorageAdapter } from "@idpass/datacollect";
+import { KeycloakAuthAdapter, IndexedDbAuthStorageAdapter } from "@idpass/data-collect-core";
 
 // Create storage adapter
 const storage = new IndexedDbAuthStorageAdapter();
