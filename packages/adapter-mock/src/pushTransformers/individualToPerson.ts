@@ -20,103 +20,111 @@
 import type { EntityDoc } from "@idpass/data-collect-core";
 import type { Identifier, PersonCreate, PersonUpdate } from "../types";
 
-/** DC gender → ISO 5218 numeric code. */
 const GENDER_TO_CODE: Record<string, string> = {
-  male: "1",
-  m: "1",
-  female: "2",
-  f: "2",
-  other: "9",
-  unknown: "0",
+  male: "1", m: "1",
+  female: "2", f: "2",
+  other: "9", unknown: "0",
 };
 
-/**
- * Map a DC gender value (text) to the ISO 5218 code the mock server expects.
- * Unknown values are passed through unchanged so adapters don't lose data.
- */
+const CORE_PERSON_FIELDS = new Set([
+  "given_name",
+  "family_name",
+  "date_of_birth",
+  "gender",
+]);
+
+const INTERNAL_FIELDS = new Set([
+  "entityName",
+  "_displayName",
+  "externalId",
+  "identifiers",
+  "identity_documents",
+  "memberships",
+  "attributes",
+]);
+
 function mapGender(gender: unknown): string | undefined {
   if (typeof gender !== "string" || gender === "") return undefined;
   return GENDER_TO_CODE[gender.toLowerCase()] ?? gender;
 }
 
-/**
- * Transform a DC individual entity into the payload shape for
- * `POST /v1/persons`. Attaches a `system_id` identifier holding the DC entity
- * guid so the server can round-trip the record back to the same DC entity.
- */
-export function individualToPersonCreate(
+function buildIdentifiers(
   entity: EntityDoc,
   identifierScheme: string,
   identifierType: string,
-): PersonCreate {
+): Identifier[] {
   const data = entity.data ?? {};
-
-  const identifiers: Identifier[] = [];
-
-  // Always include a system_id so the server can locate this DC entity later.
-  identifiers.push({
-    identifier_type: identifierType,
-    identifier_value: entity.guid,
-    identifier_scheme_id: identifierScheme,
-    identifier_scheme_name: "Mock ID Type",
-  });
-
-  // Forward any real identifiers the user attached on the DC side
-  const userIdentifiers = Array.isArray(data.identifiers)
-    ? (data.identifiers as Identifier[])
-    : [];
-  for (const id of userIdentifiers) {
+  const out: Identifier[] = [
+    {
+      identifier_type: identifierType,
+      identifier_value: entity.guid,
+      identifier_scheme_id: identifierScheme,
+      identifier_scheme_name: "Mock ID Type",
+    },
+  ];
+  const user = Array.isArray(data.identifiers) ? (data.identifiers as Identifier[]) : [];
+  for (const id of user) {
     if (!id || !id.identifier_type || !id.identifier_value) continue;
-    if (id.identifier_type === identifierType) continue; // already included
-    identifiers.push({
+    if (id.identifier_type === identifierType) continue;
+    out.push({
       identifier_type: id.identifier_type,
       identifier_value: id.identifier_value,
       identifier_scheme_id: id.identifier_scheme_id ?? identifierScheme,
       identifier_scheme_name: id.identifier_scheme_name,
     });
   }
+  return out;
+}
 
+function collectAttributes(data: Record<string, unknown>): Record<string, unknown> | undefined {
+  const attrs: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (CORE_PERSON_FIELDS.has(key) || INTERNAL_FIELDS.has(key)) continue;
+    if (key.startsWith("_")) continue;
+    // Legacy camelCase aliases handled in core mapping below; don't re-include
+    if (key === "firstName" || key === "first_name" || key === "lastName" || key === "last_name" || key === "dateOfBirth") continue;
+    attrs[key] = value;
+  }
+  if (data.attributes && typeof data.attributes === "object" && !Array.isArray(data.attributes)) {
+    Object.assign(attrs, data.attributes as Record<string, unknown>);
+  }
+  return Object.keys(attrs).length ? attrs : undefined;
+}
+
+export function individualToPersonCreate(
+  entity: EntityDoc,
+  identifierScheme: string,
+  identifierType: string,
+): PersonCreate {
+  const data = entity.data ?? {};
+  const attributes = collectAttributes(data);
   return {
-    given_name: (data.firstName ?? data.first_name ?? data.given_name ?? null) as
-      | string
-      | null,
-    family_name: (data.lastName ?? data.last_name ?? data.family_name ?? null) as
-      | string
-      | null,
-    date_of_birth: (data.dateOfBirth ?? data.date_of_birth ?? null) as string | null,
+    given_name: (data.given_name ?? data.firstName ?? data.first_name ?? null) as string | null,
+    family_name: (data.family_name ?? data.lastName ?? data.last_name ?? null) as string | null,
+    date_of_birth: (data.date_of_birth ?? data.dateOfBirth ?? null) as string | null,
     gender: mapGender(data.gender) ?? null,
-    identifiers,
+    identifiers: buildIdentifiers(entity, identifierScheme, identifierType),
+    ...(attributes ? { attributes } : {}),
   };
 }
 
-/**
- * Transform a DC individual entity into the payload shape for
- * `PATCH /v1/persons/{uuid}`. Only mutable fields are returned; identifiers
- * are managed via dedicated endpoints.
- */
 export function individualToPersonUpdate(entity: EntityDoc): PersonUpdate {
   const data = entity.data ?? {};
   const patch: PersonUpdate = {};
-
-  if (data.firstName !== undefined || data.first_name !== undefined || data.given_name !== undefined) {
-    patch.given_name = (data.firstName ?? data.first_name ?? data.given_name) as
-      | string
-      | null;
+  if (data.given_name !== undefined || data.firstName !== undefined || data.first_name !== undefined) {
+    patch.given_name = (data.given_name ?? data.firstName ?? data.first_name) as string | null;
   }
-  if (data.lastName !== undefined || data.last_name !== undefined || data.family_name !== undefined) {
-    patch.family_name = (data.lastName ?? data.last_name ?? data.family_name) as
-      | string
-      | null;
+  if (data.family_name !== undefined || data.lastName !== undefined || data.last_name !== undefined) {
+    patch.family_name = (data.family_name ?? data.lastName ?? data.last_name) as string | null;
   }
-  if (data.dateOfBirth !== undefined || data.date_of_birth !== undefined) {
-    patch.date_of_birth = (data.dateOfBirth ?? data.date_of_birth) as string | null;
+  if (data.date_of_birth !== undefined || data.dateOfBirth !== undefined) {
+    patch.date_of_birth = (data.date_of_birth ?? data.dateOfBirth) as string | null;
   }
   if (data.gender !== undefined) {
     const mapped = mapGender(data.gender);
-    if (mapped !== undefined) {
-      patch.gender = mapped;
-    }
+    if (mapped !== undefined) patch.gender = mapped;
   }
-
+  const attributes = collectAttributes(data);
+  if (attributes) patch.attributes = attributes;
   return patch;
 }
