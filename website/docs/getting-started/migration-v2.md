@@ -100,7 +100,7 @@ New tables are required. Run migrations before starting the server:
 - `users`, `areas`, `userAssignments`
 - `entityOverrides`, `entitySnapshots`
 - `attachments`, `attachmentData`
-- `otp_codes`, `submission_reviews`, `review_configs`
+- `otp_codes`
 - `verifications`
 
 ## Checklist

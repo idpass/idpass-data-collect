@@ -2,7 +2,16 @@
 id: review-workflow
 title: Review Workflow
 sidebar_position: 4
+draft: true
 ---
+
+<!--
+  Review workflow is hidden from the v2.0.0 documentation.
+  The backend/core code remains in place but the admin UI wiring
+  was removed before release. Re-enable when the feature is completed
+  post-2.0.0 (see commits 0e98a81, dabb139, 7492259).
+-->
+
 
 # Review Workflow
 

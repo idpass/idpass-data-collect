@@ -496,16 +496,6 @@ const userSidebarItems = [
     ],
   },
   {
-    type: "category",
-    label: "Workflows",
-    items: [
-      {
-        type: "doc",
-        id: "user-guide/review-workflow",
-      },
-    ],
-  },
-  {
     type: "doc",
     id: "glossary",
   },
