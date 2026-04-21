@@ -144,3 +144,39 @@ async def test_add_identity_document(client: AsyncClient, auth_headers: dict[str
     fetched = (await client.get(f"/v1/persons/{person['uuid']}", headers=auth_headers)).json()
     assert len(fetched["identity_documents"]) == 1
     assert fetched["identity_documents"][0]["identifier"]["identifier_value"] == "PP-ABC-123"
+
+
+async def test_person_attributes_roundtrip(client: AsyncClient, auth_headers: dict[str, str]) -> None:
+    """PublicSchema fields beyond the typed core survive create/get/patch."""
+    payload = {
+        "given_name": "Ada",
+        "family_name": "Lovelace",
+        "attributes": {
+            "preferred_language": "en",
+            "nationality": "GB",
+            "notes": "first programmer",
+        },
+    }
+    create_resp = await client.post("/v1/persons", json=payload, headers=auth_headers)
+    assert create_resp.status_code == 201, create_resp.text
+    created = create_resp.json()
+    assert created["attributes"] == payload["attributes"]
+
+    get_resp = await client.get(f"/v1/persons/{created['uuid']}", headers=auth_headers)
+    assert get_resp.status_code == 200
+    fetched = get_resp.json()
+    assert fetched["attributes"] == payload["attributes"]
+
+    patch_resp = await client.patch(
+        f"/v1/persons/{created['uuid']}",
+        json={
+            "attributes": {
+                "preferred_language": "fr",
+                "nationality": "GB",
+                "notes": "first programmer",
+            }
+        },
+        headers=auth_headers,
+    )
+    assert patch_resp.status_code == 200
+    assert patch_resp.json()["attributes"]["preferred_language"] == "fr"

@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from sqlalchemy import ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy import JSON, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from mock_server.db import Base, utc_now
@@ -28,6 +28,12 @@ class Group(Base):
     uuid: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     group_type: Mapped[str] = mapped_column(String(64), default="household", nullable=False)
+    attributes: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=dict,
+        doc="PublicSchema fields beyond the typed core. Stored verbatim.",
+    )
 
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now, nullable=False)

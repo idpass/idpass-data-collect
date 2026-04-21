@@ -6,7 +6,7 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from sqlalchemy import Date, Index, String
+from sqlalchemy import JSON, Date, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from mock_server.db import Base, utc_now
@@ -37,6 +37,12 @@ class Person(Base):
     family_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
     gender: Mapped[str | None] = mapped_column(String(8), nullable=True, doc="ISO 5218 numeric code.")
+    attributes: Mapped[dict | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=dict,
+        doc="PublicSchema fields beyond the typed core. Stored verbatim.",
+    )
 
     created_at: Mapped[datetime] = mapped_column(default=utc_now, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(default=utc_now, onupdate=utc_now, nullable=False)
