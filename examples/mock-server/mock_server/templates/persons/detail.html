@@ -46,6 +46,30 @@
       </dl>
     </section>
 
+    {% if person.attributes %}
+    <section class="card" aria-labelledby="attrs-heading">
+      <div class="card-head">
+        <h3 id="attrs-heading">Attributes</h3>
+        <span class="meta">PublicSchema extras</span>
+      </div>
+      <div class="table-wrap" style="box-shadow:none;border-color:var(--rule-soft);">
+        <table class="data">
+          <thead>
+            <tr><th>Field</th><th>Value</th></tr>
+          </thead>
+          <tbody>
+            {% for key, value in person.attributes.items() %}
+            <tr>
+              <td><code>{{ key }}</code></td>
+              <td>{{ value }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
+
     <section class="card">
       <div class="card-head">
         <h3>Identifiers</h3>
