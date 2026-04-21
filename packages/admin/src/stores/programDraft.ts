@@ -22,6 +22,7 @@ import { ref, computed, watch } from 'vue'
 import { getApp, getApps as getAppsApi, createApp as createAppApi, updateApp as updateAppApi, type FieldMapping } from '@/api'
 import type { OpenSppV2Field } from '@/api/opensppV2'
 import type { ExternalSyncField } from '@idpass/data-collect-core'
+import type { GeneratedForm } from '@idpass/publicschema'
 
 // Types
 export interface EntityForm {
@@ -31,6 +32,12 @@ export interface EntityForm {
   entityType: '' | 'group' | 'individual' | 'record'
   nameField: string
   formio: unknown
+  generatedFrom?: {
+    source: 'publicschema'
+    publicSchemaVersion: string
+    concept: 'Person' | 'Group' | 'Identifier'
+    generatedAt: string
+  }
 }
 
 export interface ExternalSync {
@@ -547,6 +554,28 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
     })
   }
 
+  const addEntityFormFromGenerated = (form: GeneratedForm) => {
+    const existing = new Set(draft.value.entityForms.map((f) => f.name))
+    let uniqueName = form.name
+    let suffix = 2
+    while (existing.has(uniqueName)) {
+      uniqueName = `${form.name}-${suffix}`
+      suffix += 1
+    }
+    draft.value.entityForms.push({
+      name: uniqueName,
+      title: form.title,
+      dependsOn: '',
+      entityType: form.entityType,
+      nameField: '',
+      formio: form.formio,
+      generatedFrom: {
+        source: 'publicschema',
+        ...form.metadata,
+      },
+    })
+  }
+
   const removeEntityForm = (index: number) => {
     draft.value.entityForms.splice(index, 1)
   }
@@ -720,6 +749,7 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
 
     // Entity Form Actions
     addEntityForm,
+    addEntityFormFromGenerated,
     removeEntityForm,
     updateEntityForm,
     getDependsOnOptions,

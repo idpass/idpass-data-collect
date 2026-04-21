@@ -5,6 +5,8 @@ import { useProgramDraftStore, type EntityForm } from '@/stores/programDraft'
 import { parseOpenSppProgramSpecification } from '@/utils/openSppImport'
 import { getFormFields } from '@/utils/formioFields'
 import { useSnackBarStore } from '@/stores/snackBar'
+import PublicSchemaGenerateDialog from '@/components/PublicSchemaGenerateDialog.vue'
+import type { GeneratedForm } from '@idpass/publicschema'
 
 const router = useRouter()
 const draftStore = useProgramDraftStore()
@@ -15,6 +17,16 @@ const hasCircularDep = computed(() => draftStore.checkCircularDependencies())
 
 const addForm = () => {
   draftStore.addEntityForm()
+}
+
+const showGenerateDialog = ref(false)
+
+const onGenerated = (form: GeneratedForm) => {
+  draftStore.addEntityFormFromGenerated(form)
+  snackBarStore.showSnackbar(
+    `Generated ${form.title} from PublicSchema ${form.metadata.publicSchemaVersion}`,
+    'success',
+  )
 }
 
 const removeForm = (index: number) => {
@@ -160,10 +172,16 @@ const onSpecFileSelection = async (value: File[] | File | null) => {
       <v-icon icon="mdi-form-select" size="64" color="grey-lighten-1" />
       <h3>No Entity Forms</h3>
       <p>Add your first entity form to start defining your data collection structure.</p>
-      <v-btn color="primary" size="large" @click="addForm">
-        <v-icon start icon="mdi-plus" />
-        Add Entity Form
-      </v-btn>
+      <div class="empty-state__actions">
+        <v-btn color="primary" size="large" @click="addForm">
+          <v-icon start icon="mdi-plus" />
+          Add Entity Form
+        </v-btn>
+        <v-btn variant="outlined" size="large" @click="showGenerateDialog = true">
+          <v-icon start icon="mdi-auto-fix" />
+          Generate from PublicSchema…
+        </v-btn>
+      </div>
     </div>
 
     <!-- Forms List -->
@@ -186,6 +204,15 @@ const onSpecFileSelection = async (value: File[] | File | null) => {
               variant="flat"
             >
               {{ getStatusText(getFormStatus(form)) }}
+            </v-chip>
+            <v-chip
+              v-if="form.generatedFrom"
+              size="x-small"
+              color="secondary"
+              class="ml-2"
+              :title="`Generated from PublicSchema ${form.generatedFrom.publicSchemaVersion} ${form.generatedFrom.concept} on ${form.generatedFrom.generatedAt}`"
+            >
+              PS {{ form.generatedFrom.publicSchemaVersion }}
             </v-chip>
           </div>
           <v-btn
@@ -296,11 +323,19 @@ const onSpecFileSelection = async (value: File[] | File | null) => {
         </div>
       </v-card>
 
-      <v-btn color="primary" variant="tonal" class="add-form-btn" @click="addForm">
-        <v-icon start icon="mdi-plus" />
-        Add Another Form
-      </v-btn>
+      <div class="forms-list__actions">
+        <v-btn color="primary" variant="tonal" @click="addForm">
+          <v-icon start icon="mdi-plus" />
+          Add Another Form
+        </v-btn>
+        <v-btn variant="outlined" @click="showGenerateDialog = true">
+          <v-icon start icon="mdi-auto-fix" />
+          Generate from PublicSchema…
+        </v-btn>
+      </div>
     </div>
+
+    <PublicSchemaGenerateDialog v-model="showGenerateDialog" @generated="onGenerated" />
   </div>
 </template>
 
@@ -402,6 +437,20 @@ const onSpecFileSelection = async (value: File[] | File | null) => {
 
 .add-form-btn {
   align-self: flex-start;
+}
+
+.forms-list__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  align-self: flex-start;
+}
+
+.empty-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  justify-content: center;
 }
 
 .yaml-import-input {
