@@ -568,7 +568,7 @@ html[data-theme='dark'] .mermaid-container {
    affordance is obvious at a glance (not only on hover). Scoped to the
    markdown content region — nav, sidebar, and footer links keep their
    theme-native styling. */
-.markdown a:not(.card):not(.menu__link):not(.pagination-nav__link):not(.navbar__link) {
+.markdown a:not(.button):not(.card):not(.menu__link):not(.pagination-nav__link):not(.navbar__link) {
   color: var(--ifm-color-brand);
   text-decoration: underline;
   text-decoration-thickness: 1.5px;
@@ -578,22 +578,22 @@ html[data-theme='dark'] .mermaid-container {
   transition: color 120ms ease, text-decoration-thickness 120ms ease;
 }
 
-.markdown a:not(.card):not(.menu__link):not(.pagination-nav__link):not(.navbar__link):hover {
+.markdown a:not(.button):not(.card):not(.menu__link):not(.pagination-nav__link):not(.navbar__link):hover {
   color: var(--ifm-color-brand-dark);
   text-decoration-thickness: 2.5px;
 }
 
-.markdown a:not(.card):not(.menu__link):not(.pagination-nav__link):not(.navbar__link):focus-visible {
+.markdown a:not(.button):not(.card):not(.menu__link):not(.pagination-nav__link):not(.navbar__link):focus-visible {
   outline: 2px solid var(--ifm-color-brand);
   outline-offset: 2px;
   border-radius: 2px;
 }
 
-[data-theme='dark'] .markdown a:not(.card):not(.menu__link):not(.pagination-nav__link):not(.navbar__link) {
+[data-theme='dark'] .markdown a:not(.button):not(.card):not(.menu__link):not(.pagination-nav__link):not(.navbar__link) {
   color: var(--ifm-color-brand-light);
 }
 
-[data-theme='dark'] .markdown a:not(.card):not(.menu__link):not(.pagination-nav__link):not(.navbar__link):hover {
+[data-theme='dark'] .markdown a:not(.button):not(.card):not(.menu__link):not(.pagination-nav__link):not(.navbar__link):hover {
   color: var(--ifm-color-brand);
 }
 
