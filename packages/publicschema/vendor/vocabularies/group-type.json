@@ -1,0 +1,18 @@
+[
+  {
+    "value": "family",
+    "label": "Family"
+  },
+  {
+    "value": "farm",
+    "label": "Farm"
+  },
+  {
+    "value": "household",
+    "label": "Household"
+  },
+  {
+    "value": "other",
+    "label": "Other"
+  }
+]

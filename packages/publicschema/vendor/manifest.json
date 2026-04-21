@@ -12,6 +12,7 @@
     "gender-type": { "source": "/vocab/gender-type" },
     "identifier-type": { "source": "/vocab/identifier-type" },
     "country": { "source": "/vocab/country" },
+    "group-type": { "source": "/vocab/group-type" },
     "language": { "source": "/vocab/language" },
     "relationship-type": { "source": "/vocab/relationship-type" }
   }

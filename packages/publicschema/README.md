@@ -5,7 +5,7 @@ A narrow vendored mirror of [PublicSchema](https://publicschema.org) v0.2.0 and 
 ## Scope (v0.1.0)
 
 - Concepts: Person, Group, Identifier
-- Vocabularies: gender-type, identifier-type, country, language, relationship-type
+- Vocabularies: gender-type, identifier-type, country, language, relationship-type, group-type
 
 ## Usage
 
