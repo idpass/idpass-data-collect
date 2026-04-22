@@ -84,7 +84,7 @@
   ],
   "externalSync": {
     "type": "mock",
-    "url": "http://localhost:9999",
+    "url": "http://mock-registry:9999",
     "adapterConfig": {
       "clientId": "mock-client",
       "clientSecret": "mock-secret",
