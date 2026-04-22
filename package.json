@@ -21,6 +21,8 @@
     "test:adapter-openfn": "pnpm --filter @idpass/adapter-openfn test",
     "build": "pnpm -r --if-present run build",
     "build:datacollect": "pnpm --filter @idpass/data-collect-core build",
+    "build:publicschema": "pnpm --filter @idpass/publicschema build",
+    "build:libs": "pnpm run build:datacollect && pnpm run build:publicschema",
     "build:backend": "pnpm --filter @idpass/data-collect-backend build",
     "build:admin": "pnpm --filter @idpass/data-collect-admin build",
     "build:docs": "pnpm --filter @idpass/data-collect-docs build",

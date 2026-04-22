@@ -58,7 +58,7 @@ export JWT_SECRET="${JWT_SECRET:-test-secret}"
 echo "Running pr-check with POSTGRES_TEST=$POSTGRES_TEST"
 cd "$REPO_ROOT"
 
-pnpm run build:datacollect || EXITCODE=$?
+pnpm run build:libs || EXITCODE=$?
 [ "$EXITCODE" -eq 0 ] && pnpm run type-check || EXITCODE=$?
 [ "$EXITCODE" -eq 0 ] && pnpm run lint || EXITCODE=$?
 [ "$EXITCODE" -eq 0 ] && pnpm --filter @idpass/data-collect-backend run validate-api || EXITCODE=$?
