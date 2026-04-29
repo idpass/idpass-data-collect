@@ -223,6 +223,7 @@ export { ProjectionRebuildService } from "./services/ProjectionRebuildService";
 export type { RebuildResult } from "./services/ProjectionRebuildService";
 export * from "./services/RbacService";
 export * from "./services/ReviewService";
+export { DeviceIdentity } from "./services/DeviceIdentity";
 
 // Phase 3: Area Management, Data Assignment, and Snapshot Services
 export { AreaService } from "./services/AreaService";
