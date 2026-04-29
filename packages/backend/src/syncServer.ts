@@ -35,6 +35,7 @@ import { createOpenSppFieldRoutes } from "./routes/opensppFieldRoutes";
 import { createPotentialDuplicatesRoute } from "./routes/potentialDuplicatesRoute";
 import { createSyncRouter } from "./routes/syncRoute";
 import { createUserRoutes } from "./routes/userRoutes";
+import { createAdminDevicesRouter } from "./routes/adminDevicesRoute";
 import { createSelfServiceRouter } from "./routes/selfServiceRoutes";
 import { createReviewRoutes, clearReviewState } from "./routes/reviewRoutes";
 import { createAttachmentRoutes } from "./routes/attachmentRoutes";
@@ -204,6 +205,9 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   app.use("/api/auth", createSelfServiceRouter(otpStore, appInstanceStore, reviewStore));
   app.use("/api/reviews", createReviewRoutes(appInstanceStore, reviewStore, userStore));
   app.use("/api/attachments", createAttachmentRoutes(appInstanceStore, config.postgresUrl));
+  if (telemetryStore) {
+    app.use("/api/admin/devices", createAdminDevicesRouter(userStore, telemetryStore));
+  }
 
   app.get("/artifacts/:artifactId.json", async (req, res, next) => {
     try {
