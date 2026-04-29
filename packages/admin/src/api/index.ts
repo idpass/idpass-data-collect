@@ -558,3 +558,23 @@ export const getCurrentUser = async (): Promise<{
     ),
   }
 }
+
+// --- Admin — devices ---
+
+const ADMIN_DEVICES_URL = '/api/admin/devices'
+
+export interface DeviceSyncSummary {
+  tenantId: string
+  userId: string
+  deviceId: string
+  lastPullAt: string | null
+  lastPushAt: string | null
+  totalPulled: number
+  totalPushed: number
+  lastScopeHash: string | null
+}
+
+export const getDevices = async (configId: string): Promise<DeviceSyncSummary[]> => {
+  const response = await api().get(ADMIN_DEVICES_URL, { params: { configId } })
+  return response.data
+}
