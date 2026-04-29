@@ -17,7 +17,7 @@
  * under the License.
  */
 
-import axios from "axios";
+import axios, { type AxiosInstance } from "axios";
 import { createActor, type AnyActorRef } from "xstate";
 import {
   EventStore,
@@ -53,6 +53,9 @@ export class InternalSyncManager {
   /** Entity store reference for checkIfDuplicatesExist */
   private entityStore: EntityStore;
 
+  /** Internal axios instance — exposed at TS-level for test inspection only. */
+  private axiosInstance: AxiosInstance;
+
   /**
    * Whether a sync operation is currently running (read-only accessor).
    */
@@ -69,6 +72,7 @@ export class InternalSyncManager {
     authStorage: AuthStorageAdapter,
     configId: string = "default",
     reauthenticate?: ReauthenticateCallback,
+    deviceId?: string,
   ) {
     this.eventStore = eventStore;
     this.entityStore = entityStore;
@@ -79,6 +83,16 @@ export class InternalSyncManager {
         "Content-Type": "application/json",
       },
     });
+
+    if (deviceId) {
+      axiosInstance.interceptors.request.use((config) => {
+        config.headers = config.headers ?? {};
+        (config.headers as Record<string, string>)["X-Device-Id"] = deviceId;
+        return config;
+      });
+    }
+
+    this.axiosInstance = axiosInstance;
 
     const machine = createSyncMachine(
       (syncId: string) => {
