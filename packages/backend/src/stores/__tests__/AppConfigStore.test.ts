@@ -233,6 +233,36 @@ describeIfPostgres("AppConfigStore", () => {
     }, 10000);
   });
 
+  describe("syncScope round-trip", () => {
+    it("round-trips syncScope policy", async () => {
+      const policy = {
+        areaIds: ["DIST-001"],
+        entityTypes: ["individual" as const, "group" as const],
+        timeWindow: { type: "rolling" as const, days: 90 },
+      };
+      await adapter.saveConfig({
+        id: "tenant-syncscope-test",
+        name: "Test",
+        entityForms: [],
+        entityData: [],
+        syncScope: policy,
+      });
+      const loaded = await adapter.getConfig("tenant-syncscope-test");
+      expect(loaded.syncScope).toEqual(policy);
+    });
+
+    it("getConfig returns syncScope=undefined for tenants without the policy", async () => {
+      await adapter.saveConfig({
+        id: "tenant-no-syncscope",
+        name: "Test",
+        entityForms: [],
+        entityData: [],
+      });
+      const loaded = await adapter.getConfig("tenant-no-syncscope");
+      expect(loaded.syncScope).toBeUndefined();
+    });
+  });
+
   describe("initialization", () => {
     it("should create table if it doesn't exist", async () => {
       // Drop the table if it exists
