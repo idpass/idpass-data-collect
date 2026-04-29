@@ -21,6 +21,7 @@
 import {
   AuthConfig,
   AuthManager,
+  DeviceIdentity,
   EntityDataManager,
   EntityStoreImpl,
   EventStoreImpl,
@@ -98,6 +99,8 @@ export const initStore = async (
   }
 
   const eventApplierService = new EventApplierService(eventStore, entityStore)
+  const deviceIdentity = new DeviceIdentity()
+  const deviceId = await deviceIdentity.getOrCreateDeviceId()
   const internalSyncManager = new InternalSyncManager(
     eventStore,
     entityStore,
@@ -105,7 +108,8 @@ export const initStore = async (
     syncServerUrl,
     authStorage,
     appId,
-    reauthenticate
+    reauthenticate,
+    deviceId,
   )
 
   store = new EntityDataManager(
