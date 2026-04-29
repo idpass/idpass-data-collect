@@ -300,6 +300,24 @@ export function createSyncRouter(
       const sorted = events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
       const batchEvents = sorted.map((event) => ({ ...event, syncLevel: 1 }));
 
+      const recordPushTelemetry = () => {
+        const deviceId = req.header("X-Device-Id");
+        if (telemetryStore && deviceId) {
+          const userId = String((req as AuthenticatedRequest).user?.id ?? "");
+          void telemetryStore
+            .recordPush({
+              tenantId,
+              userId,
+              deviceId,
+              eventCount: events.length,
+              scopeHash: null,
+            })
+            .catch((err) => {
+              log.warn({ err, deviceId, tenantId }, "Failed to record push telemetry; ignoring");
+            });
+        }
+      };
+
       if (txPool) {
         // Transactional path: all events succeed or none are applied
         const result = await processTransactionalBatch(txPool, tenantId, batchEvents);
@@ -311,6 +329,7 @@ export function createSyncRouter(
             failed: result.failed,
           });
         }
+        recordPushTelemetry();
         return res.json({ status: "success", applied: result.applied, failed: result.failed, errors: [] });
       }
 
@@ -318,6 +337,7 @@ export function createSyncRouter(
       // that don't pass the URL through). Uses the non-transactional path.
       try {
         const result = await appInstance.edm.submitFormBatch(batchEvents);
+        recordPushTelemetry();
         res.json({ status: "success", applied: result.applied, failed: result.failed, errors: result.errors });
       } catch (error) {
         log.error({ err: error }, "Batch push failed");

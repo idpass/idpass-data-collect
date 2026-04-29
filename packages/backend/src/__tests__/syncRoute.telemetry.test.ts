@@ -226,4 +226,65 @@ describeIfPostgres("Sync route — telemetry", () => {
     // bigint comes back as string from raw pg
     expect(summaries.rows[0].total_pulled).toBe("3");
   });
+
+  test("POST /push records telemetry when X-Device-Id present", async () => {
+    const currentApp = requireApp();
+    const events: FormSubmission[] = [
+      {
+        guid: uuidv4(),
+        entityGuid: uuidv4(),
+        type: "create-individual",
+        data: { name: "Push-Alpha", age: 11, email: "pa@example.com" },
+        timestamp: "2023-01-04T00:00:00.000Z",
+        userId: "user-1",
+        syncLevel: SyncLevel.LOCAL,
+      },
+      {
+        guid: uuidv4(),
+        entityGuid: uuidv4(),
+        type: "create-individual",
+        data: { name: "Push-Bravo", age: 22, email: "pb@example.com" },
+        timestamp: "2023-01-05T00:00:00.000Z",
+        userId: "user-1",
+        syncLevel: SyncLevel.LOCAL,
+      },
+    ];
+
+    const res = await request(currentApp.httpServer)
+      .post(`/api/sync/push`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .set("X-Device-Id", "device-abc")
+      .send({ events, configId: mockConfig.id });
+
+    expect(res.status).toBe(200);
+    await currentApp.telemetryStore?.whenIdle();
+
+    const summaries = await telemetryPool.query(
+      "SELECT * FROM device_sync_summary WHERE tenant_id = $1",
+      [mockConfig.id],
+    );
+    expect(summaries.rows).toHaveLength(1);
+    expect(summaries.rows[0].total_pushed).toBe("2"); // bigint as string
+
+    const activity = await telemetryPool.query(
+      "SELECT * FROM sync_activity WHERE tenant_id = $1",
+      [mockConfig.id],
+    );
+    expect(activity.rows).toHaveLength(1);
+    expect(activity.rows[0].route).toBe("push");
+  });
+
+  test("POST /push without X-Device-Id does not record telemetry", async () => {
+    const currentApp = requireApp();
+    const res = await request(currentApp.httpServer)
+      .post(`/api/sync/push`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ events: [], configId: mockConfig.id });
+
+    expect(res.status).toBe(200);
+    await currentApp.telemetryStore?.whenIdle();
+
+    const summaries = await telemetryPool.query("SELECT * FROM device_sync_summary");
+    expect(summaries.rows).toHaveLength(0);
+  });
 });
