@@ -252,6 +252,7 @@ export * from "./components/AdapterRegistry";
 // Type Definitions and Interfaces
 export * from "./interfaces/types";
 export * from "./interfaces/adapter-configs";
+export * from "./interfaces/scope";
 
 // Self-Service Components
 export { SelfServiceManager } from "./services/SelfServiceManager";
