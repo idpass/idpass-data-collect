@@ -135,6 +135,12 @@ describeIfPostgres("Sync Server", () => {
           },
         ],
         nextCursor: null,
+        scope: {
+          areaIds: null,
+          entityTypes: null,
+          timeWindow: null,
+          hash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+        },
       });
     });
 
@@ -178,6 +184,12 @@ describeIfPostgres("Sync Server", () => {
           },
         ],
         nextCursor: null,
+        scope: {
+          areaIds: null,
+          entityTypes: null,
+          timeWindow: null,
+          hash: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+        },
       });
 
       const formData2: FormSubmission = {

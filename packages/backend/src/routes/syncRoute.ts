@@ -25,6 +25,7 @@ import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
 import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware, validateTenantAccess } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
+import { createScopeContextMiddleware, type ScopeAwareRequest } from "../middlewares/scopeContext";
 import { AppInstanceStore, Role } from "../types";
 import { createLogger } from "../utils/logger";
 import { processTransactionalBatch } from "../utils/transactionalEdm";
@@ -190,6 +191,7 @@ export function createSyncRouter(
     "/pull",
     createDynamicAuthMiddleware(appInstanceStore),
     validateTenantAccess,
+    createScopeContextMiddleware(appInstanceStore),
     asyncHandler(async (req, res) => {
       // get param timestamp
       const { since, configId = "default", areaIds } = req.query;
@@ -210,49 +212,61 @@ export function createSyncRouter(
         warnings.push("Unresolved potential duplicates exist. Please review them on the admin page.");
       }
 
-      const hasAreaFilter = areaIds && typeof areaIds === "string" && areaIds.length > 0;
+      const scope = (req as ScopeAwareRequest).scope!.effective;
+      const queryAreaIdHint = typeof areaIds === "string" && areaIds.length > 0
+        ? areaIds.split(",").filter(Boolean)
+        : null;
+
+      // Effective area filter = scope.areaIds (server-authoritative) ∩ queryAreaIdHint
+      let effectiveAreaIds: string[] | null = scope.areaIds;
+      if (queryAreaIdHint) {
+        if (effectiveAreaIds === null) {
+          effectiveAreaIds = queryAreaIdHint;
+        } else {
+          const tenantSet = new Set(effectiveAreaIds);
+          effectiveAreaIds = queryAreaIdHint.filter((a) => tenantSet.has(a));
+        }
+      }
+      const hasAreaFilter = effectiveAreaIds !== null && effectiveAreaIds.length > 0;
+      // Time-window enforcement is intentionally NOT wired in Phase 2 (no PM use
+      // case yet). The dimension is advertised in scope.timeWindow but does not
+      // filter events. Wire alongside the area filter when a customer asks.
+
       // Use larger pages when area filtering to reduce empty-page round-trips
       const pageSize = hasAreaFilter ? 100 : 10;
       const result = await edm.getEventsSincePagination(sinceValue, pageSize);
 
-      // Apply server-side area filtering when areaIds are provided.
+      // Apply server-side area filtering when an effective area list is set.
       // This enables selective sync: clients only receive events for entities
       // in their assigned geographic areas.
       if (hasAreaFilter) {
-        const areaIdList = (areaIds as string).split(",").filter(Boolean);
-        if (areaIdList.length > 0) {
-          // Query entity store per area ID to build the allowed set without
-          // loading every entity into memory.
-          const allowedEntityGuids = new Set<string>();
+        const allowedEntityGuids = new Set<string>();
 
-          const searchResults = await Promise.all(
-            areaIdList.map((areaId) =>
-              edm.searchEntities([{ area_id: areaId }]),
-            ),
-          );
+        const searchResults = await Promise.all(
+          effectiveAreaIds!.map((areaId) =>
+            edm.searchEntities([{ area_id: areaId }]),
+          ),
+        );
 
-          for (const matches of searchResults) {
-            for (const entityPair of matches) {
-              allowedEntityGuids.add(entityPair.guid);
-            }
+        for (const matches of searchResults) {
+          for (const entityPair of matches) {
+            allowedEntityGuids.add(entityPair.guid);
           }
+        }
 
-          // Filter events to only those targeting allowed entities
-          result.events = result.events.filter(
-            (event) => allowedEntityGuids.has(event.entityGuid),
-          );
+        // Filter events to only those targeting allowed entities
+        result.events = result.events.filter(
+          (event) => allowedEntityGuids.has(event.entityGuid),
+        );
 
-          // Recompute nextCursor from the last *delivered* event so the client
-          // doesn't skip events it never received. If all events were filtered
-          // out but the raw page was full, use the original cursor to let the
-          // client fetch the next page.
-          if (result.events.length > 0) {
-            const lastDelivered = result.events[result.events.length - 1];
-            result.nextCursor = `${lastDelivered.timestamp}|${lastDelivered.guid}`;
-          } else if (result.nextCursor) {
-            // All events filtered — keep nextCursor so client advances through
-            // pages that don't match its area until it reaches the end.
-          }
+        // Recompute nextCursor from the last *delivered* event so the client
+        // doesn't skip events it never received. If all events were filtered
+        // out but the raw page was full, keep the original nextCursor so the
+        // client advances through pages that don't match until it reaches the
+        // end.
+        if (result.events.length > 0) {
+          const lastDelivered = result.events[result.events.length - 1];
+          result.nextCursor = `${lastDelivered.timestamp}|${lastDelivered.guid}`;
         }
       }
 
@@ -272,7 +286,17 @@ export function createSyncRouter(
           });
       }
 
-      res.json(warnings.length > 0 ? { ...result, warnings } : result);
+      const scopeBody = {
+        areaIds: scope.areaIds,
+        entityTypes: scope.entityTypes,
+        timeWindow: scope.timeWindow,
+        hash: (req as ScopeAwareRequest).scope!.hash,
+      };
+      res.setHeader("X-Sync-Scope-Hash", scopeBody.hash);
+      const responseBody: Record<string, unknown> = warnings.length > 0
+        ? { ...result, warnings, scope: scopeBody }
+        : { ...result, scope: scopeBody };
+      res.json(responseBody);
     }),
   );
 
