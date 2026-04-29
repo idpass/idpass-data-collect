@@ -34,6 +34,18 @@ import { SyncTelemetryStore } from "../stores/SyncTelemetryStore";
 
 const log = createLogger("syncRoute");
 
+/**
+ * Validate the client-supplied X-Device-Id header. Returns the value if it
+ * looks like a UUID-shaped identifier, null otherwise. Telemetry must not be
+ * recorded for malformed values — clients can otherwise inflate the audit
+ * tables with unbounded unique device ids.
+ */
+function readDeviceIdHeader(req: { header(name: string): string | undefined }): string | null {
+  const raw = req.header("X-Device-Id");
+  if (!raw || raw.length > 64) return null;
+  return /^[A-Za-z0-9_-]+$/.test(raw) ? raw : null;
+}
+
 const SyncPushPayloadSchema = z.object({
   events: z.array(z.object({
     guid: z.string().uuid(),
@@ -244,7 +256,7 @@ export function createSyncRouter(
         }
       }
 
-      const deviceId = req.header("X-Device-Id");
+      const deviceId = readDeviceIdHeader(req);
       if (telemetryStore && deviceId) {
         const userId = String((req as AuthenticatedRequest).user?.id ?? "");
         void telemetryStore
@@ -301,7 +313,7 @@ export function createSyncRouter(
       const batchEvents = sorted.map((event) => ({ ...event, syncLevel: 1 }));
 
       const recordPushTelemetry = () => {
-        const deviceId = req.header("X-Device-Id");
+        const deviceId = readDeviceIdHeader(req);
         if (telemetryStore && deviceId) {
           const userId = String((req as AuthenticatedRequest).user?.id ?? "");
           void telemetryStore

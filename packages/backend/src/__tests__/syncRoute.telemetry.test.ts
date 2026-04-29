@@ -287,4 +287,27 @@ describeIfPostgres("Sync route — telemetry", () => {
     const summaries = await telemetryPool.query("SELECT * FROM device_sync_summary");
     expect(summaries.rows).toHaveLength(0);
   });
+
+  test("malformed X-Device-Id is dropped (no row written)", async () => {
+    const currentApp = requireApp();
+
+    // Oversized value
+    await request(currentApp.httpServer)
+      .get(`/api/sync/pull?configId=${mockConfig.id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .set("X-Device-Id", "x".repeat(200));
+
+    // Disallowed characters (CRLF, slash, space)
+    await request(currentApp.httpServer)
+      .get(`/api/sync/pull?configId=${mockConfig.id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .set("X-Device-Id", "device id with spaces");
+
+    await currentApp.telemetryStore?.whenIdle();
+
+    const summaries = await telemetryPool.query("SELECT * FROM device_sync_summary");
+    expect(summaries.rows).toHaveLength(0);
+    const activity = await telemetryPool.query("SELECT * FROM sync_activity");
+    expect(activity.rows).toHaveLength(0);
+  });
 });
