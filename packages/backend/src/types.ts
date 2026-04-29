@@ -18,7 +18,7 @@
  */
 
 import { EntityDataManager, ExternalSyncConfig } from "@idpass/data-collect-core";
-import type { SyncScopePolicy } from "@idpass/data-collect-core";
+import type { SyncScopeOverride, SyncScopePolicy } from "@idpass/data-collect-core";
 import { Server } from "http";
 import type { SyncTelemetryStore } from "./stores/SyncTelemetryStore";
 export interface SyncServerConfig {
@@ -48,6 +48,7 @@ export interface RoleAssignment {
   tenantId: string;
   role: string;
   areaId?: string;
+  syncScopeOverride?: SyncScopeOverride;
 }
 
 export interface User {
