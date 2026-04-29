@@ -57,6 +57,13 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/devices/:configId',
+      name: 'devices',
+      component: () => import('../views/DevicesView.vue'),
+      props: true,
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('../views/LoginView.vue'),
