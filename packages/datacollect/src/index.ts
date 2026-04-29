@@ -253,6 +253,7 @@ export * from "./components/AdapterRegistry";
 export * from "./interfaces/types";
 export * from "./interfaces/adapter-configs";
 export * from "./interfaces/scope";
+export { resolveEffectiveScope, computeScopeHash } from "./services/ScopeResolver";
 
 // Self-Service Components
 export { SelfServiceManager } from "./services/SelfServiceManager";
