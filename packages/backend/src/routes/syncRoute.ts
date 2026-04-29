@@ -30,6 +30,7 @@ import { createLogger } from "../utils/logger";
 import { processTransactionalBatch } from "../utils/transactionalEdm";
 import { SyncEventStore } from "../stores/SyncEventStore";
 import { SyncJobRegistry } from "../stores/SyncJobRegistry";
+import { SyncTelemetryStore } from "../stores/SyncTelemetryStore";
 
 const log = createLogger("syncRoute");
 
@@ -71,7 +72,11 @@ const ExternalSyncCredentialsSchema = z.object({
   }).optional(),
 });
 
-export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl?: string): Router {
+export function createSyncRouter(
+  appInstanceStore: AppInstanceStore,
+  postgresUrl?: string,
+  telemetryStore?: SyncTelemetryStore,
+): Router {
   const router = Router();
 
   // Create a shared pool for transactional batch processing, reused across requests
@@ -236,6 +241,22 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
             // All events filtered — keep nextCursor so client advances through
             // pages that don't match its area until it reaches the end.
           }
+        }
+      }
+
+      const deviceId = req.header("X-Device-Id");
+      if (telemetryStore && deviceId) {
+        const userId = String((req as AuthenticatedRequest).user?.id ?? "");
+        try {
+          await telemetryStore.recordPull({
+            tenantId: configId as string,
+            userId,
+            deviceId,
+            eventCount: result.events.length,
+            scopeHash: null,
+          });
+        } catch (err) {
+          log.warn({ err, deviceId, tenantId: configId }, "Failed to record pull telemetry; ignoring");
         }
       }
 
