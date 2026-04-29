@@ -138,6 +138,7 @@ describeIfPostgres("Sync route — telemetry", () => {
       .set("X-Device-Id", "device-abc");
 
     expect(res.status).toBe(200);
+    await currentApp.telemetryStore?.whenIdle();
 
     const summaries = await telemetryPool.query(
       "SELECT * FROM device_sync_summary WHERE tenant_id = $1",
@@ -164,6 +165,7 @@ describeIfPostgres("Sync route — telemetry", () => {
       .set("Authorization", `Bearer ${adminToken}`);
 
     expect(res.status).toBe(200);
+    await currentApp.telemetryStore?.whenIdle();
 
     const summaries = await telemetryPool.query("SELECT * FROM device_sync_summary");
     expect(summaries.rows).toHaveLength(0);
@@ -214,6 +216,7 @@ describeIfPostgres("Sync route — telemetry", () => {
       .set("X-Device-Id", "device-abc");
 
     expect(res.status).toBe(200);
+    await currentApp.telemetryStore?.whenIdle();
 
     const summaries = await telemetryPool.query(
       "SELECT * FROM device_sync_summary WHERE tenant_id = $1",

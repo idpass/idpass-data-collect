@@ -54,6 +54,7 @@ export interface DeviceSyncSummaryRow {
  */
 export class SyncTelemetryStore {
   private readonly db: NodePgDatabase;
+  private readonly pending = new Set<Promise<unknown>>();
 
   constructor(pool: Pool) {
     this.db = drizzle(pool);
@@ -64,8 +65,12 @@ export class SyncTelemetryStore {
    * activity row. Increments `total_pulled` and bumps `last_pull_at`.
    */
   async recordPull(input: RecordSyncInput): Promise<void> {
-    await this.upsertSummary(input, "pull");
-    await this.appendActivity(input, "pull");
+    const p = (async () => {
+      await this.upsertSummary(input, "pull");
+      await this.appendActivity(input, "pull");
+    })();
+    this.track(p);
+    return p;
   }
 
   /**
@@ -73,8 +78,30 @@ export class SyncTelemetryStore {
    * activity row. Increments `total_pushed` and bumps `last_push_at`.
    */
   async recordPush(input: RecordSyncInput): Promise<void> {
-    await this.upsertSummary(input, "push");
-    await this.appendActivity(input, "push");
+    const p = (async () => {
+      await this.upsertSummary(input, "push");
+      await this.appendActivity(input, "push");
+    })();
+    this.track(p);
+    return p;
+  }
+
+  /**
+   * Resolve when every in-flight `recordPull`/`recordPush` has completed.
+   * Intended for tests that need deterministic ordering after a fire-and-forget
+   * call from a request handler.
+   */
+  async whenIdle(): Promise<void> {
+    while (this.pending.size > 0) {
+      await Promise.allSettled(Array.from(this.pending));
+    }
+  }
+
+  private track(promise: Promise<unknown>): void {
+    this.pending.add(promise);
+    promise.finally(() => {
+      this.pending.delete(promise);
+    });
   }
 
   /**

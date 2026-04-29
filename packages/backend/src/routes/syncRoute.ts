@@ -247,17 +247,17 @@ export function createSyncRouter(
       const deviceId = req.header("X-Device-Id");
       if (telemetryStore && deviceId) {
         const userId = String((req as AuthenticatedRequest).user?.id ?? "");
-        try {
-          await telemetryStore.recordPull({
+        void telemetryStore
+          .recordPull({
             tenantId: configId as string,
             userId,
             deviceId,
             eventCount: result.events.length,
             scopeHash: null,
+          })
+          .catch((err) => {
+            log.warn({ err, deviceId, tenantId: configId }, "Failed to record pull telemetry; ignoring");
           });
-        } catch (err) {
-          log.warn({ err, deviceId, tenantId: configId }, "Failed to record pull telemetry; ignoring");
-        }
       }
 
       res.json(warnings.length > 0 ? { ...result, warnings } : result);

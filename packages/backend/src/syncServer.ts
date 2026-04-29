@@ -345,5 +345,5 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
     });
   }
 
-  return { httpServer, appInstanceStore, appConfigStore, userStore, clearStore, closeConnection };
+  return { httpServer, appInstanceStore, appConfigStore, userStore, telemetryStore, clearStore, closeConnection };
 }

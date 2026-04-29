@@ -19,6 +19,7 @@
 
 import { EntityDataManager, ExternalSyncConfig } from "@idpass/data-collect-core";
 import { Server } from "http";
+import type { SyncTelemetryStore } from "./stores/SyncTelemetryStore";
 export interface SyncServerConfig {
   port: number;
   adminPassword: string;
@@ -32,6 +33,7 @@ export interface SyncServerInstance {
   appInstanceStore: AppInstanceStore;
   appConfigStore: AppConfigStore;
   userStore: UserStore;
+  telemetryStore?: SyncTelemetryStore;
   clearStore: () => Promise<void>;
   closeConnection: () => Promise<void>;
 }
