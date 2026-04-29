@@ -86,8 +86,7 @@ export class InternalSyncManager {
 
     if (deviceId) {
       axiosInstance.interceptors.request.use((config) => {
-        config.headers = config.headers ?? {};
-        (config.headers as Record<string, string>)["X-Device-Id"] = deviceId;
+        (config.headers as unknown as Record<string, string>)["X-Device-Id"] = deviceId;
         return config;
       });
     }
