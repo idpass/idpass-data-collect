@@ -17,7 +17,7 @@
  * under the License.
  */
 
-import { pgTable, text, jsonb, timestamp, serial, integer, boolean, primaryKey, uniqueIndex, index, customType } from "drizzle-orm/pg-core";
+import { pgTable, text, jsonb, timestamp, serial, integer, bigint, bigserial, boolean, primaryKey, uniqueIndex, index, customType } from "drizzle-orm/pg-core";
 
 /**
  * Main entities table for storing entity pairs (initial and modified states).
@@ -118,6 +118,55 @@ export const syncMetadata = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
   },
   (table) => [primaryKey({ columns: [table.tenantId, table.key] })],
+);
+
+/**
+ * Per-device sync telemetry summary.
+ *
+ * One row per (tenant, user, device) tuple. Updated on every sync request
+ * (UPSERT). Used by the admin UI to show last-seen and lifetime sync counts.
+ *
+ * No data filtering or scope enforcement uses this table — it is
+ * observability-only.
+ */
+export const deviceSyncSummary = pgTable(
+  "device_sync_summary",
+  {
+    tenantId: text("tenant_id").notNull(),
+    userId: text("user_id").notNull(),
+    deviceId: text("device_id").notNull(),
+    lastPullAt: timestamp("last_pull_at", { withTimezone: true }),
+    lastPushAt: timestamp("last_push_at", { withTimezone: true }),
+    totalPulled: bigint("total_pulled", { mode: "number" }).notNull().default(0),
+    totalPushed: bigint("total_pushed", { mode: "number" }).notNull().default(0),
+    lastScopeHash: text("last_scope_hash"),
+  },
+  (table) => [
+    primaryKey({ columns: [table.tenantId, table.userId, table.deviceId] }),
+  ],
+);
+
+/**
+ * Append-only sync activity audit log.
+ *
+ * One row per /pull or /push request. Pruned by a TTL job (90 days default).
+ * Used by admin support tooling to investigate sync history.
+ */
+export const syncActivity = pgTable(
+  "sync_activity",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    tenantId: text("tenant_id").notNull(),
+    userId: text("user_id").notNull(),
+    deviceId: text("device_id").notNull(),
+    route: text("route").notNull(),
+    eventCount: integer("event_count").notNull(),
+    scopeHash: text("scope_hash"),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("sync_activity_tenant_occurred_idx").on(table.tenantId, table.occurredAt),
+  ],
 );
 
 /**
