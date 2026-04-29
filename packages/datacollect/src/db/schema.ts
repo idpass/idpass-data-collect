@@ -194,6 +194,7 @@ export const appConfigs = pgTable("app_configs", {
   entityData: jsonb("entity_data"),
   externalSync: jsonb("external_sync"),
   authConfigs: jsonb("auth_configs"),
+  syncScope: jsonb("sync_scope"),
 });
 
 /**

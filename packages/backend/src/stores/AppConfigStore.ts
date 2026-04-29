@@ -82,6 +82,7 @@ export class AppConfigStoreImpl implements AppConfigStore {
       await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS artifact_id TEXT`);
       await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS self_service JSONB`);
       await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP`);
+      await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS sync_scope JSONB`);
     } catch (error) {
       throw new Error(`Failed to initialize database: ${error}`);
     }
