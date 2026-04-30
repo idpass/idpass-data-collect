@@ -417,4 +417,20 @@ describe("IndexedDbEventStorageAdapter", () => {
     const defaultSavedEntity = await defaultAdapter.getEvents();
     expect(defaultSavedEntity).toEqual([]);
   });
+
+  test("getLastScopeHash returns null before setLastScopeHash", async () => {
+    const adapter = new IndexedDbEventStorageAdapter("scope-hash-test-1");
+    await adapter.initialize();
+    expect(await adapter.getLastScopeHash()).toBeNull();
+  });
+
+  test("setLastScopeHash persists across new adapter instances", async () => {
+    const a = new IndexedDbEventStorageAdapter("scope-hash-test-2");
+    await a.initialize();
+    await a.setLastScopeHash("sha256:deadbeef");
+
+    const b = new IndexedDbEventStorageAdapter("scope-hash-test-2");
+    await b.initialize();
+    expect(await b.getLastScopeHash()).toBe("sha256:deadbeef");
+  });
 });

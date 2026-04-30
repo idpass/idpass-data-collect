@@ -639,6 +639,28 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
   }
 
   /**
+   * Scope hash tracking is a client-only concern; the server is stateless on client scope state.
+   *
+   * @throws {Error} Always throws; this method is not supported on the server-side adapter.
+   */
+  async getLastScopeHash(): Promise<string | null> {
+    throw new Error(
+      "PostgresEventStorageAdapter.getLastScopeHash is client-only; the server is stateless on client scope state",
+    );
+  }
+
+  /**
+   * Scope hash tracking is a client-only concern; the server is stateless on client scope state.
+   *
+   * @throws {Error} Always throws; this method is not supported on the server-side adapter.
+   */
+  async setLastScopeHash(_hash: string): Promise<void> {
+    throw new Error(
+      "PostgresEventStorageAdapter.setLastScopeHash is client-only; the server is stateless on client scope state",
+    );
+  }
+
+  /**
    * Checks if an event with the given GUID exists in the event store for the current tenant.
    *
    * @param guid The GUID of the event to check.

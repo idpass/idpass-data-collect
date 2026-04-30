@@ -396,6 +396,10 @@ export interface EventStorageAdapter {
   getLastPushExternalSyncTimestamp(): Promise<string>;
   /** Set the timestamp of the last external sync push */
   setLastPushExternalSyncTimestamp(timestamp: string): Promise<void>;
+  /** Get the last advertised scope hash from the server, or null if never seen. */
+  getLastScopeHash(): Promise<string | null>;
+  /** Persist the latest scope hash (called after a successful pull). */
+  setLastScopeHash(hash: string): Promise<void>;
   /** Check if an event with the given GUID exists */
   isEventExisted(guid: string): Promise<boolean>;
   /** Get complete audit trail for a specific entity */

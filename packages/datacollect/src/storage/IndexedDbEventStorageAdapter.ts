@@ -717,6 +717,47 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
   }
 
   /**
+   * Retrieves the last advertised scope hash from the server, or `null` if never seen.
+   *
+   * @returns A Promise that resolves with the scope hash string, or `null` if no hash exists.
+   * @throws {Error} If IndexedDB is not initialized or the retrieval operation fails.
+   */
+  async getLastScopeHash(): Promise<string | null> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+    return new Promise<string | null>((resolve, reject) => {
+      const tx = this.db!.transaction("syncTimestamp", "readonly");
+      const req = tx.objectStore("syncTimestamp").get("scope_hash");
+      req.onsuccess = () => {
+        const row = req.result as { id: string; value?: string } | undefined;
+        resolve(row?.value ?? null);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  /**
+   * Persists the latest scope hash (called after a successful pull).
+   *
+   * @param hash The scope hash string to save.
+   * @returns A Promise that resolves when the hash is successfully saved.
+   * @throws {Error} If IndexedDB is not initialized or the save operation fails.
+   */
+  async setLastScopeHash(hash: string): Promise<void> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+    return new Promise<void>((resolve, reject) => {
+      const tx = this.db!.transaction("syncTimestamp", "readwrite");
+      tx.objectStore("syncTimestamp").put({ id: "scope_hash", value: hash });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  }
+
+  /**
    * Checks if an event with the given GUID exists in the event store.
    *
    * @param guid The GUID of the event to check.
