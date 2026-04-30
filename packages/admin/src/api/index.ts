@@ -18,6 +18,7 @@
  */
 
 import { useAuthStore } from '@/stores/auth'
+import type { SyncScopePolicy, SyncScopeOverride } from '@idpass/data-collect-core'
 import axios, { type AxiosInstance } from 'axios'
 
 const API_URL = import.meta.env.VITE_API_URL
@@ -143,6 +144,16 @@ export const purgeApp = async (id: string) => {
   return response.data
 }
 
+// PATCH /api/apps/:id/syncScope — bounded sync scope (#947).
+// Pass `null` to clear the policy; pass a `SyncScopePolicy` to set/replace it.
+export const updateAppSyncScope = async (
+  id: string,
+  syncScope: SyncScopePolicy | null,
+): Promise<{ status: 'success'; syncScope: SyncScopePolicy | null }> => {
+  const response = await api().patch(`${APPS_URL}/${id}/syncScope`, { syncScope })
+  return response.data
+}
+
 export const getAppConfigJsonUrl = (artifactId: string) => {
   api() // ensure initialized
   if (!artifactId) {
@@ -232,16 +243,34 @@ export const retrySyncJob = async (jobId: string) => {
   return response.data as { jobId: string; status: string }
 }
 
+// Per-assignment role binding. `syncScopeOverride` (#947) narrows the tenant
+// `syncScope` policy for this specific role grant; omitted = inherit tenant default.
+export interface AdminRoleAssignment {
+  programId: string
+  role: string
+  areaId?: string
+  syncScopeOverride?: SyncScopeOverride
+}
+
 export const getUsers = async (): Promise<{
   id: string
   email: string
   role: string
   programIds?: string[]
-  roleAssignments?: Array<{ programId: string; role: string; areaId?: string }>
+  roleAssignments?: AdminRoleAssignment[]
 }[]> => {
   const response = await api().get(USERS_URL)
   return response.data.map(
-    (user: { tenantIds?: string[]; roleAssignments?: Array<{ tenantId: string; role: string; areaId?: string }>; [key: string]: unknown }) => {
+    (user: {
+      tenantIds?: string[]
+      roleAssignments?: Array<{
+        tenantId: string
+        role: string
+        areaId?: string
+        syncScopeOverride?: SyncScopeOverride
+      }>
+      [key: string]: unknown
+    }) => {
       const { tenantIds, roleAssignments, ...rest } = user
       return {
         ...rest,
@@ -257,7 +286,7 @@ export const createUser = async (user: {
   password: string
   role: string
   programIds?: string[]
-  roleAssignments?: Array<{ programId: string; role: string; areaId?: string }>
+  roleAssignments?: AdminRoleAssignment[]
 }) => {
   // Backend expects tenantIds and roleAssignments with tenantId
   const { programIds, roleAssignments, ...rest } = user
@@ -275,7 +304,7 @@ export const updateUser = async (user: {
   password?: string
   role: string
   programIds?: string[]
-  roleAssignments?: Array<{ programId: string; role: string; areaId?: string }>
+  roleAssignments?: AdminRoleAssignment[]
 }) => {
   // Backend expects tenantIds and roleAssignments with tenantId
   const { programIds, roleAssignments, ...rest } = user
