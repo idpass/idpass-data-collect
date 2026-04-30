@@ -227,46 +227,58 @@ export function createSyncRouter(
           effectiveAreaIds = queryAreaIdHint.filter((a) => tenantSet.has(a));
         }
       }
-      const hasAreaFilter = effectiveAreaIds !== null && effectiveAreaIds.length > 0;
+      // shouldFilter distinguishes "tenant has a scope policy" from
+      // "intersection happens to be non-empty". An empty intersection
+      // (effectiveAreaIds.length === 0) means the client requested areas
+      // disjoint from its server-side scope — deliver nothing, never widen.
+      const shouldFilter = effectiveAreaIds !== null;
       // Time-window enforcement is intentionally NOT wired in Phase 2 (no PM use
       // case yet). The dimension is advertised in scope.timeWindow but does not
       // filter events. Wire alongside the area filter when a customer asks.
 
       // Use larger pages when area filtering to reduce empty-page round-trips
-      const pageSize = hasAreaFilter ? 100 : 10;
+      const pageSize = shouldFilter ? 100 : 10;
       const result = await edm.getEventsSincePagination(sinceValue, pageSize);
 
       // Apply server-side area filtering when an effective area list is set.
       // This enables selective sync: clients only receive events for entities
       // in their assigned geographic areas.
-      if (hasAreaFilter) {
-        const allowedEntityGuids = new Set<string>();
+      if (shouldFilter) {
+        if (effectiveAreaIds!.length === 0) {
+          // Disjoint between server scope and query hint — deliver nothing.
+          // Advancing the cursor would never expose anything (the filter list
+          // is empty for the rest of this request), so set nextCursor to null.
+          result.events = [];
+          result.nextCursor = null;
+        } else {
+          const allowedEntityGuids = new Set<string>();
 
-        const searchResults = await Promise.all(
-          effectiveAreaIds!.map((areaId) =>
-            edm.searchEntities([{ area_id: areaId }]),
-          ),
-        );
+          const searchResults = await Promise.all(
+            effectiveAreaIds!.map((areaId) =>
+              edm.searchEntities([{ area_id: areaId }]),
+            ),
+          );
 
-        for (const matches of searchResults) {
-          for (const entityPair of matches) {
-            allowedEntityGuids.add(entityPair.guid);
+          for (const matches of searchResults) {
+            for (const entityPair of matches) {
+              allowedEntityGuids.add(entityPair.guid);
+            }
           }
-        }
 
-        // Filter events to only those targeting allowed entities
-        result.events = result.events.filter(
-          (event) => allowedEntityGuids.has(event.entityGuid),
-        );
+          // Filter events to only those targeting allowed entities
+          result.events = result.events.filter(
+            (event) => allowedEntityGuids.has(event.entityGuid),
+          );
 
-        // Recompute nextCursor from the last *delivered* event so the client
-        // doesn't skip events it never received. If all events were filtered
-        // out but the raw page was full, keep the original nextCursor so the
-        // client advances through pages that don't match until it reaches the
-        // end.
-        if (result.events.length > 0) {
-          const lastDelivered = result.events[result.events.length - 1];
-          result.nextCursor = `${lastDelivered.timestamp}|${lastDelivered.guid}`;
+          // Recompute nextCursor from the last *delivered* event so the client
+          // doesn't skip events it never received. If all events were filtered
+          // out but the raw page was full, keep the original nextCursor so the
+          // client advances through pages that don't match until it reaches the
+          // end.
+          if (result.events.length > 0) {
+            const lastDelivered = result.events[result.events.length - 1];
+            result.nextCursor = `${lastDelivered.timestamp}|${lastDelivered.guid}`;
+          }
         }
       }
 
@@ -279,7 +291,7 @@ export function createSyncRouter(
             userId,
             deviceId,
             eventCount: result.events.length,
-            scopeHash: null,
+            scopeHash: (req as ScopeAwareRequest).scope?.hash ?? null,
           })
           .catch((err) => {
             log.warn({ err, deviceId, tenantId: configId }, "Failed to record pull telemetry; ignoring");

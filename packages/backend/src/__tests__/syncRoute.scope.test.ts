@@ -262,6 +262,44 @@ describeIfPostgres("Sync route — scope advertisement & enforcement", () => {
     expect(r1.body.scope.hash).toBe(r2.body.scope.hash);
   });
 
+  test("disjoint query areaIds and tenant scope returns empty events (cannot widen)", async () => {
+    const currentApp = requireApp();
+    const scopedConfig: AppConfig = {
+      ...baseConfig,
+      syncScope: { areaIds: ["A1"] },
+    };
+    await currentApp.appConfigStore.saveConfig(scopedConfig);
+    await currentApp.appInstanceStore.createAppInstance(scopedConfig.id);
+
+    const manager = (await currentApp.appInstanceStore.getAppInstance(scopedConfig.id))?.edm;
+
+    const formA1: FormSubmission = {
+      guid: uuidv4(),
+      entityGuid: uuidv4(),
+      type: "create-individual",
+      data: { name: "Heidi", age: 27, email: "heidi@example.com", area_id: "A1" },
+      timestamp: "2023-01-01T00:00:00.000Z",
+      userId: "user-1",
+      syncLevel: SyncLevel.LOCAL,
+    };
+    await manager?.submitForm(formA1);
+
+    const response = await request(currentApp.httpServer)
+      .get(`/api/sync/pull?configId=${scopedConfig.id}&areaIds=A99`)
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(response.status).toBe(200);
+    // Tenant scope is ["A1"]; query hint is ["A99"]; intersection is [] →
+    // deliver nothing, never widen. The full unfiltered tenant stream must
+    // not leak.
+    expect(response.body.events).toHaveLength(0);
+    expect(response.body.nextCursor).toBeNull();
+    // scope.areaIds advertises the server-side resolved scope (tenant policy
+    // + assignment override), NOT the post-query-intersection result. The
+    // query hint is request-scoped narrowing, not part of persistent scope.
+    expect(response.body.scope.areaIds).toEqual(["A1"]);
+  });
+
   test("scope-policy edit between pulls yields different hashes", async () => {
     const currentApp = requireApp();
     await currentApp.appConfigStore.saveConfig(baseConfig);
