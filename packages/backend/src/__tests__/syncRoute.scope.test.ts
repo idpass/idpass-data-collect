@@ -724,30 +724,16 @@ describeIfPostgres("Sync route — scope advertisement & enforcement", () => {
       expect(rejectedGuids.has(groupA2.guid)).toBe(true);
     });
 
-    test("scoped {areaIds:['A1']}: applied events preserve submission/timestamp order on /pull", async () => {
+    test("scoped {areaIds:['A1']}: applied events preserve submission/timestamp order on /pull (with in-batch create→update of same entity)", async () => {
       const currentApp = requireApp();
       const scopedConfig: AppConfig = { ...baseConfig, syncScope: { areaIds: ["A1"] } };
       await currentApp.appConfigStore.saveConfig(scopedConfig);
       await currentApp.appInstanceStore.createAppInstance(scopedConfig.id);
 
-      // Pre-seed an A1 entity that the update event will target. The /push
-      // validator looks up entities BEFORE applying the batch, so an
-      // in-batch update of an in-batch create would be rejected as
-      // "unknown_entity". Using a pre-existing entity sidesteps that
-      // staging quirk and keeps the focus of this test on order
-      // preservation across the partition.
-      const manager = (await currentApp.appInstanceStore.getAppInstance(scopedConfig.id))?.edm;
-      const seedGuid = uuidv4();
-      await manager?.submitForm({
-        guid: uuidv4(),
-        entityGuid: seedGuid,
-        type: "create-individual",
-        data: { name: "Pre-Seed", age: 40, email: "seed@example.com", area_id: "A1" },
-        timestamp: "2022-12-31T00:00:00.000Z",
-        userId: "user-1",
-        syncLevel: SyncLevel.LOCAL,
-      });
-
+      // Original plan T5 case 10 batch: create-A1, create-A2 (rejected),
+      // create-A1, update of the FIRST in-batch entity. Validation seeds
+      // synthetic refs for in-batch creates BEFORE the per-event scope check
+      // so the update resolves cleanly via lookup.
       const createA1First = buildCreateIndividual({
         data: { name: "Karl", age: 30, email: "karl@example.com", area_id: "A1" },
         timestamp: "2023-01-01T00:00:00.000Z",
@@ -760,17 +746,17 @@ describeIfPostgres("Sync route — scope advertisement & enforcement", () => {
         data: { name: "Mona", age: 32, email: "mona@example.com", area_id: "A1" },
         timestamp: "2023-01-03T00:00:00.000Z",
       });
-      const updateSeed: FormSubmission = {
+      const updateA1First: FormSubmission = {
         guid: uuidv4(),
-        entityGuid: seedGuid,
+        entityGuid: createA1First.entityGuid,
         type: "update-individual",
-        data: { name: "Pre-Seed Updated" },
+        data: { name: "Karl Updated" },
         timestamp: "2023-01-04T00:00:00.000Z",
         userId: "user-1",
         syncLevel: SyncLevel.LOCAL,
       };
 
-      const events = [createA1First, createA2Rejected, createA1Second, updateSeed];
+      const events = [createA1First, createA2Rejected, createA1Second, updateA1First];
 
       const pushRes = await request(currentApp.httpServer)
         .post("/api/sync/push")
@@ -788,10 +774,7 @@ describeIfPostgres("Sync route — scope advertisement & enforcement", () => {
       });
 
       // /pull and assert delivered events are sorted ASC by timestamp and
-      // contain the three accepted batch events in submission order. The
-      // pre-seed event also appears (it is an A1 event), so we filter the
-      // delivered stream down to the batch's accepted guids before
-      // comparing order.
+      // contain the three accepted batch events in submission order.
       const pullRes = await request(currentApp.httpServer)
         .get(`/api/sync/pull?configId=${scopedConfig.id}&areaIds=A1`)
         .set("Authorization", `Bearer ${adminToken}`)
@@ -801,7 +784,7 @@ describeIfPostgres("Sync route — scope advertisement & enforcement", () => {
       const acceptedGuids = new Set([
         createA1First.guid,
         createA1Second.guid,
-        updateSeed.guid,
+        updateA1First.guid,
       ]);
       const deliveredAccepted = pullRes.body.events
         .map((e: { guid: string; timestamp: string }) => e)
@@ -809,13 +792,98 @@ describeIfPostgres("Sync route — scope advertisement & enforcement", () => {
       expect(deliveredAccepted.map((e: { guid: string }) => e.guid)).toEqual([
         createA1First.guid,
         createA1Second.guid,
-        updateSeed.guid,
+        updateA1First.guid,
       ]);
 
       // Timestamps of the full delivered stream must be non-decreasing.
       const timestamps = pullRes.body.events.map((e: { timestamp: string }) => e.timestamp);
       const sorted = [...timestamps].sort();
       expect(timestamps).toEqual(sorted);
+
+      // The update must have applied, not just been delivered: Karl's name
+      // was changed in storage.
+      const manager = (await currentApp.appInstanceStore.getAppInstance(scopedConfig.id))?.edm;
+      const stored = await manager?.getEntity(createA1First.entityGuid);
+      expect(stored?.modified.data.name).toBe("Karl Updated");
+    });
+
+    test("scoped /push: in-batch create then update of same entity is applied", async () => {
+      const currentApp = requireApp();
+      const scopedConfig: AppConfig = { ...baseConfig, syncScope: { areaIds: ["A1"] } };
+      await currentApp.appConfigStore.saveConfig(scopedConfig);
+      await currentApp.appInstanceStore.createAppInstance(scopedConfig.id);
+
+      const create = buildCreateIndividual({
+        data: { name: "Nora", age: 33, email: "nora@example.com", area_id: "A1" },
+        timestamp: "2023-01-01T00:00:00.000Z",
+      });
+      // update without area_id — must resolve through the in-batch create's
+      // synthetic ref and pass the area scope check.
+      const update: FormSubmission = {
+        guid: uuidv4(),
+        entityGuid: create.entityGuid,
+        type: "update-individual",
+        data: { name: "Nora Updated" },
+        timestamp: "2023-01-02T00:00:00.000Z",
+        userId: "user-1",
+        syncLevel: SyncLevel.LOCAL,
+      };
+
+      const response = await request(currentApp.httpServer)
+        .post("/api/sync/push")
+        .send({ events: [create, update], configId: scopedConfig.id })
+        .set("Authorization", `Bearer ${adminToken}`)
+        .set("X-Device-Id", DEVICE_ID);
+
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe("success");
+      expect(response.body.applied).toBe(2);
+      expect(response.body.failed).toEqual([]);
+
+      const manager = (await currentApp.appInstanceStore.getAppInstance(scopedConfig.id))?.edm;
+      const stored = await manager?.getEntity(create.entityGuid);
+      expect(stored?.modified.data.name).toBe("Nora Updated");
+    });
+
+    test("scoped /push: in-batch rejected create followed by update of same entity → both rejected for same reason (out_of_scope)", async () => {
+      // Decision rule (#947 fixup): when an in-batch create is rejected by
+      // scope, we still seed its synthetic ref into the lookup map so a
+      // following update gets the SAME reason (out_of_scope) instead of the
+      // confusing "unknown_entity". This gives clients a consistent error
+      // surface for the whole entity lifecycle in the batch.
+      const currentApp = requireApp();
+      const scopedConfig: AppConfig = { ...baseConfig, syncScope: { areaIds: ["A1"] } };
+      await currentApp.appConfigStore.saveConfig(scopedConfig);
+      await currentApp.appInstanceStore.createAppInstance(scopedConfig.id);
+
+      const createA2 = buildCreateIndividual({
+        data: { name: "Oscar", age: 34, email: "oscar@example.com", area_id: "A2" },
+        timestamp: "2023-01-01T00:00:00.000Z",
+      });
+      const updateSame: FormSubmission = {
+        guid: uuidv4(),
+        entityGuid: createA2.entityGuid,
+        type: "update-individual",
+        data: { name: "Oscar Updated" },
+        timestamp: "2023-01-02T00:00:00.000Z",
+        userId: "user-1",
+        syncLevel: SyncLevel.LOCAL,
+      };
+
+      const response = await request(currentApp.httpServer)
+        .post("/api/sync/push")
+        .send({ events: [createA2, updateSame], configId: scopedConfig.id })
+        .set("Authorization", `Bearer ${adminToken}`)
+        .set("X-Device-Id", DEVICE_ID);
+
+      expect(response.status).toBe(422);
+      expect(response.body.status).toBe("error");
+      expect(response.body.applied).toBe(0);
+      expect(response.body.failed).toHaveLength(2);
+      expect(response.body.failed.every((f: { reason: string }) => f.reason === "out_of_scope")).toBe(true);
+      const rejectedGuids = new Set(response.body.failed.map((f: { guid: string }) => f.guid));
+      expect(rejectedGuids.has(createA2.guid)).toBe(true);
+      expect(rejectedGuids.has(updateSame.guid)).toBe(true);
     });
   });
 });

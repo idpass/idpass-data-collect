@@ -75,6 +75,11 @@ function requireDeviceIdIfScoped(
   | { ok: true }
   | { ok: false; status: 400; body: { status: "error"; code: "DEVICE_ID_REQUIRED"; message: string } } {
   const eff = req.scope!.effective;
+  // TODO(#947 Phase 4): timeWindow-only scopes intentionally bypass the
+  // X-Device-Id requirement (and the scope-aware telemetry it gates) until
+  // time-window enforcement is wired in /pull and /push. When that lands,
+  // include `eff.timeWindow !== null` in `isBounded` below so scoped clients
+  // on time-windowed tenants must also identify themselves.
   const isBounded = eff.areaIds !== null || eff.entityTypes !== null;
   if (!isBounded) return { ok: true };
   if (readDeviceIdHeader(req) !== null) return { ok: true };
@@ -383,7 +388,7 @@ export function createSyncRouter(
     "/push",
     createDynamicAuthMiddleware(appInstanceStore),
     validateTenantAccess,
-    createScopeContextMiddleware(appInstanceStore, { source: "body" }),
+    createScopeContextMiddleware(appInstanceStore, { source: "body", defaultConfigId: "default" }),
     asyncHandler(async (req, res) => {
       const parseResult = SyncPushPayloadSchema.safeParse(req.body);
       if (!parseResult.success) {
@@ -443,12 +448,38 @@ export function createSyncRouter(
               return [guid, { type: pair.modified.type, areaId } as EntityScopeRef];
             } catch {
               // getEntity throws ENTITY_NOT_FOUND for unknown ids — surface as
-              // "no ref" so the validator returns unknown_entity.
+              // "no ref" so the validator returns unknown_entity (unless an
+              // in-batch create later seeds the same entityGuid below).
               return [guid, undefined];
             }
           }),
         );
-        const lookupMap = new Map<string, EntityScopeRef | undefined>(lookupResults);
+        const lookupMap = new Map<string, EntityScopeRef | undefined>();
+        // Only insert successful DB lookups; leaving guids absent from the map
+        // (instead of mapped to `undefined`) lets the in-batch seeding below
+        // fill them via `!lookupMap.has(...)`. DB state remains authoritative
+        // because we insert DB entries first and the seeding step is a
+        // no-op for any guid already present.
+        for (const [guid, ref] of lookupResults) {
+          if (ref !== undefined) lookupMap.set(guid, ref);
+        }
+
+        // Seed synthetic refs from in-batch create-individual / create-group
+        // events so a later update-* targeting the same entityGuid resolves
+        // through the lookup. DB prefetch wins over in-batch synthetic refs
+        // (DB state is authoritative); only fill where the map has no entry.
+        // Even if the create itself will be rejected by scope, we still seed
+        // the ref so subsequent updates surface the SAME reason
+        // (out_of_scope) rather than the spurious "unknown_entity" — this
+        // gives clients a consistent error surface across the batch.
+        for (const evt of allEvents) {
+          if (isCreateIndividualOrGroup(evt.type) && !lookupMap.has(evt.entityGuid)) {
+            const areaIdRaw = (evt.data as Record<string, unknown> | undefined)?.area_id;
+            const areaId = typeof areaIdRaw === "string" ? areaIdRaw : null;
+            const type: EntityScopeRef["type"] = evt.type.endsWith("-individual") ? "individual" : "group";
+            lookupMap.set(evt.entityGuid, { type, areaId });
+          }
+        }
         const lookup = (guid: string): EntityScopeRef | undefined => lookupMap.get(guid);
 
         const accepted: FormSubmission[] = [];

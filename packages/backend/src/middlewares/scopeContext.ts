@@ -34,6 +34,14 @@ export type ScopeAwareRequest = AuthenticatedRequest & { scope?: RequestScope };
 export interface ScopeContextOptions {
   /** Where to read `configId` from. `"body"` requires `bodyParser.json()` to have run earlier in the chain. */
   source?: "query" | "body";
+  /**
+   * When set, the middleware falls back to this configId instead of returning
+   * 400 if the body/query value is missing or non-string. Provided so that
+   * pre-Phase-3 clients which omit `configId` on `/push` continue to work
+   * (the legacy fallback was `"default"`). The 400 response still fires when
+   * neither the request value nor `defaultConfigId` is provided.
+   */
+  defaultConfigId?: string;
 }
 
 /**
@@ -59,16 +67,21 @@ export function createScopeContextMiddleware(
   options: ScopeContextOptions = {},
 ): RequestHandler {
   const source = options.source ?? "query";
+  const defaultConfigId = options.defaultConfigId;
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       const raw =
         source === "body"
           ? (req.body as { configId?: unknown } | undefined)?.configId
           : req.query.configId;
-      if (!raw || typeof raw !== "string") {
+      let configId: string;
+      if (typeof raw === "string" && raw.length > 0) {
+        configId = raw;
+      } else if (defaultConfigId !== undefined) {
+        configId = defaultConfigId;
+      } else {
         return res.status(400).json({ status: "error", message: "configId is required" });
       }
-      const configId = raw;
       const appInstance = await appInstanceStore.getAppInstance(configId);
       if (!appInstance) {
         return res.status(404).json({ status: "error", message: "App instance not found" });

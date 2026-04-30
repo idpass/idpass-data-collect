@@ -53,7 +53,11 @@ function appWithScope(store: AppInstanceStore, assignmentsByUser: Record<string,
   return app;
 }
 
-function appWithBodyScope(store: AppInstanceStore, assignmentsByUser: Record<string, RoleAssignment[]>) {
+function appWithBodyScope(
+  store: AppInstanceStore,
+  assignmentsByUser: Record<string, RoleAssignment[]>,
+  defaultConfigId?: string,
+) {
   const app = express();
   app.use(bodyParser.json());
   app.use((req, _res, next) => {
@@ -65,7 +69,14 @@ function appWithBodyScope(store: AppInstanceStore, assignmentsByUser: Record<str
     };
     next();
   });
-  app.use(createScopeContextMiddleware(store, { source: "body" }));
+  app.use(
+    createScopeContextMiddleware(
+      store,
+      defaultConfigId !== undefined
+        ? { source: "body", defaultConfigId }
+        : { source: "body" },
+    ),
+  );
   app.post("/", (req, res) => {
     res.json((req as unknown as { scope?: unknown }).scope ?? null);
   });
@@ -173,6 +184,27 @@ describe("scopeContext middleware", () => {
       const res = await request(app).post("/").send({ configId: "t1" });
       expect(res.status).toBe(200);
       expect(res.body.effective.areaIds).toEqual(["A1"]);
+    });
+
+    test("falls back to defaultConfigId when body has no configId (pre-Phase-3 client)", async () => {
+      const config: AppConfig = { id: "default", name: "Default", entityForms: [] };
+      const store = makeFakeAppInstanceStore(config);
+      const app = appWithBodyScope(store, {}, "default");
+
+      const res = await request(app).post("/").send({});
+      expect(res.status).toBe(200);
+      expect(res.body.tenantId).toBe("default");
+      expect(res.body.effective.areaIds).toBeNull();
+    });
+
+    test("400 when body has no configId and no defaultConfigId is configured (regression guard)", async () => {
+      const config: AppConfig = { id: "t1", name: "T1", entityForms: [] };
+      const store = makeFakeAppInstanceStore(config);
+      const app = appWithBodyScope(store, {});
+
+      const res = await request(app).post("/").send({});
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ status: "error", message: "configId is required" });
     });
   });
 });
