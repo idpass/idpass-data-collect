@@ -20,6 +20,7 @@
 import { useAuthStore } from '@/stores/auth'
 import { useProgramDraftStore } from '@/stores/programDraft'
 import { useSnackBarStore } from '@/stores/snackBar'
+import { useFeatureFlag } from '@/composables/useFeatureFlag'
 import { createRouter, createWebHistory } from 'vue-router'
 import AppManagerView from '../views/AppManagerView.vue'
 
@@ -61,7 +62,16 @@ const router = createRouter({
       name: 'devices',
       component: () => import('../views/DevicesView.vue'),
       props: true,
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, featureFlag: 'scopedSync' as const },
+      // OP #947 Phase 4 — gate per-device sync UI behind VITE_FEATURE_SCOPED_SYNC.
+      // When the flag is off, redirect to home rather than render the view.
+      beforeEnter: (_to, _from, next) => {
+        if (useFeatureFlag('scopedSync').value) {
+          next()
+        } else {
+          next({ name: 'home' })
+        }
+      },
     },
     {
       path: '/login',
