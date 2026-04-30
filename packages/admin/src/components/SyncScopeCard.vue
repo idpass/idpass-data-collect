@@ -21,7 +21,8 @@
 import { computed, ref, watch } from 'vue'
 import { AxiosError } from 'axios'
 import { updateAppSyncScope } from '@/api'
-import type { SyncScopePolicy, ScopeEntityType, TimeWindow } from '@idpass/data-collect-core'
+import type { SyncScopePolicy, TimeWindow } from '@idpass/data-collect-core'
+import SyncScopeForm from './SyncScopeForm.vue'
 
 interface Props {
   appId: string
@@ -64,53 +65,20 @@ const saving = ref(false)
 const errorMessage = ref<string | null>(null)
 const validationError = ref<string | null>(null)
 
-// Form fields
-const areaIdsEnabled = ref(false)
-const areaIdsText = ref('')
-const entityTypesEnabled = ref(false)
-const entityTypesIndividual = ref(false)
-const entityTypesGroup = ref(false)
-const timeWindowMode = ref<'none' | 'rolling' | 'fixed'>('none')
-const timeWindowRollingDays = ref<number | null>(null)
-const timeWindowFixedFloor = ref<string>('')
-
-function loadFromPolicy() {
-  errorMessage.value = null
-  validationError.value = null
-  const p = props.policy
-  if (!p) {
-    areaIdsEnabled.value = false
-    areaIdsText.value = ''
-    entityTypesEnabled.value = false
-    entityTypesIndividual.value = false
-    entityTypesGroup.value = false
-    timeWindowMode.value = 'none'
-    timeWindowRollingDays.value = null
-    timeWindowFixedFloor.value = ''
-    return
-  }
-  areaIdsEnabled.value = Array.isArray(p.areaIds) && p.areaIds.length > 0
-  areaIdsText.value = (p.areaIds ?? []).join(', ')
-  entityTypesEnabled.value = Array.isArray(p.entityTypes) && p.entityTypes.length > 0
-  entityTypesIndividual.value = (p.entityTypes ?? []).includes('individual')
-  entityTypesGroup.value = (p.entityTypes ?? []).includes('group')
-  if (p.timeWindow?.type === 'rolling') {
-    timeWindowMode.value = 'rolling'
-    timeWindowRollingDays.value = p.timeWindow.days
-    timeWindowFixedFloor.value = ''
-  } else if (p.timeWindow?.type === 'fixed') {
-    timeWindowMode.value = 'fixed'
-    timeWindowRollingDays.value = null
-    timeWindowFixedFloor.value = p.timeWindow.floor
-  } else {
-    timeWindowMode.value = 'none'
-    timeWindowRollingDays.value = null
-    timeWindowFixedFloor.value = ''
-  }
-}
+// Live form value mirrored from <SyncScopeForm v-model="..." />.
+// We intentionally pre-seed from props.policy when the dialog opens so the
+// caller's "Save" handler gets the latest valid build via the form's exposed
+// `build()` method (handles edge cases like empty toggles emitting null).
+const formPolicy = ref<SyncScopePolicy | null>(props.policy ?? null)
+const formValid = ref(true)
+const formRef = ref<InstanceType<typeof SyncScopeForm> | null>(null)
 
 watch(showEdit, (open) => {
-  if (open) loadFromPolicy()
+  if (open) {
+    errorMessage.value = null
+    validationError.value = null
+    formPolicy.value = props.policy ?? null
+  }
 })
 
 function openEdit() {
@@ -122,96 +90,21 @@ function closeEdit() {
   showEdit.value = false
 }
 
-// ---------- Build payload ----------
-function parseAreaIds(text: string): string[] {
-  return text
-    .split(/[,\n]/g)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0)
-}
-
-interface BuildResult {
-  policy: SyncScopePolicy
-  error: string | null
-}
-
-function buildPolicy(): BuildResult {
-  const out: SyncScopePolicy = {}
-
-  // Areas
-  if (areaIdsEnabled.value) {
-    const ids = parseAreaIds(areaIdsText.value)
-    if (ids.length === 0) {
-      return {
-        policy: out,
-        error: 'Areas: remove or add at least one value',
-      }
-    }
-    out.areaIds = ids
-  } else {
-    out.areaIds = null
-  }
-
-  // Entity types
-  if (entityTypesEnabled.value) {
-    const types: ScopeEntityType[] = []
-    if (entityTypesIndividual.value) types.push('individual')
-    if (entityTypesGroup.value) types.push('group')
-    if (types.length === 0) {
-      return {
-        policy: out,
-        error: 'Entity types: remove or add at least one value',
-      }
-    }
-    out.entityTypes = types
-  } else {
-    out.entityTypes = null
-  }
-
-  // Time window
-  if (timeWindowMode.value === 'rolling') {
-    const d = timeWindowRollingDays.value
-    if (d == null || !Number.isFinite(d) || !Number.isInteger(d) || d <= 0) {
-      return {
-        policy: out,
-        error: 'Time window: days must be a positive integer',
-      }
-    }
-    out.timeWindow = { type: 'rolling', days: d }
-  } else if (timeWindowMode.value === 'fixed') {
-    const floor = timeWindowFixedFloor.value
-    if (!floor) {
-      return { policy: out, error: 'Time window: floor datetime is required' }
-    }
-    // Coerce into ISO datetime; <input type=datetime-local> values omit the timezone.
-    let iso: string
-    try {
-      const d = new Date(floor)
-      if (Number.isNaN(d.getTime())) throw new Error('invalid date')
-      iso = d.toISOString()
-    } catch {
-      return { policy: out, error: 'Time window: invalid floor datetime' }
-    }
-    out.timeWindow = { type: 'fixed', floor: iso }
-  } else {
-    out.timeWindow = null
-  }
-
-  return { policy: out, error: null }
-}
-
 async function onSave() {
   validationError.value = null
   errorMessage.value = null
-  const built = buildPolicy()
-  if (built.error) {
+  // Force a fresh build through the child so we surface the current error
+  // even if the user never touched any field after opening the dialog.
+  const built = formRef.value?.build()
+  if (built && built.error) {
     validationError.value = built.error
     return
   }
+  const payload: SyncScopePolicy | null = built ? built.policy : formPolicy.value
   saving.value = true
   try {
-    const res = await updateAppSyncScope(props.appId, built.policy)
-    emit('update:policy', res.syncScope ?? built.policy)
+    const res = await updateAppSyncScope(props.appId, payload)
+    emit('update:policy', res.syncScope ?? payload)
     showEdit.value = false
   } catch (err) {
     if (err instanceof AxiosError) {
@@ -322,102 +215,14 @@ async function onClearConfirm() {
             {{ validationError }}
           </v-alert>
 
-          <!-- Areas -->
-          <div class="sync-scope-card__section">
-            <v-checkbox
-              v-model="areaIdsEnabled"
-              :disabled="saving"
-              label="Restrict by area IDs"
-              density="compact"
-              hide-details
-              data-testid="sync-scope-areas-toggle"
-            />
-            <v-textarea
-              v-if="areaIdsEnabled"
-              v-model="areaIdsText"
-              :disabled="saving"
-              label="Area IDs (comma- or newline-separated)"
-              variant="outlined"
-              density="compact"
-              rows="2"
-              auto-grow
-              hint="Example: A1, A2, A3"
-              persistent-hint
-              data-testid="sync-scope-areas-input"
-            />
-          </div>
-
-          <!-- Entity types -->
-          <div class="sync-scope-card__section">
-            <v-checkbox
-              v-model="entityTypesEnabled"
-              :disabled="saving"
-              label="Restrict by entity types"
-              density="compact"
-              hide-details
-              data-testid="sync-scope-types-toggle"
-            />
-            <div v-if="entityTypesEnabled" class="sync-scope-card__inline-checks">
-              <v-checkbox
-                v-model="entityTypesIndividual"
-                :disabled="saving"
-                label="individual"
-                density="compact"
-                hide-details
-                data-testid="sync-scope-types-individual"
-              />
-              <v-checkbox
-                v-model="entityTypesGroup"
-                :disabled="saving"
-                label="group"
-                density="compact"
-                hide-details
-                data-testid="sync-scope-types-group"
-              />
-            </div>
-          </div>
-
-          <!-- Time window -->
-          <div class="sync-scope-card__section">
-            <p class="sync-scope-card__section-label">Time window</p>
-            <v-radio-group
-              v-model="timeWindowMode"
-              :disabled="saving"
-              density="compact"
-              hide-details
-              data-testid="sync-scope-time-mode"
-            >
-              <v-radio label="No time limit" value="none" />
-              <v-radio label="Rolling window (days)" value="rolling" />
-              <v-radio label="Fixed floor (datetime)" value="fixed" />
-            </v-radio-group>
-            <v-text-field
-              v-if="timeWindowMode === 'rolling'"
-              v-model.number="timeWindowRollingDays"
-              :disabled="saving"
-              type="number"
-              min="1"
-              step="1"
-              label="Days"
-              variant="outlined"
-              density="compact"
-              hide-details="auto"
-              class="mt-2"
-              data-testid="sync-scope-time-days"
-            />
-            <v-text-field
-              v-if="timeWindowMode === 'fixed'"
-              v-model="timeWindowFixedFloor"
-              :disabled="saving"
-              type="datetime-local"
-              label="Floor datetime"
-              variant="outlined"
-              density="compact"
-              hide-details="auto"
-              class="mt-2"
-              data-testid="sync-scope-time-floor"
-            />
-          </div>
+          <SyncScopeForm
+            ref="formRef"
+            v-model="formPolicy"
+            v-model:valid="formValid"
+            v-model:error="validationError"
+            :disabled="saving"
+            test-id-prefix="sync-scope"
+          />
         </v-card-text>
         <v-card-actions>
           <v-btn
@@ -534,24 +339,5 @@ async function onClearConfirm() {
 
 .sync-scope-card__form {
   padding-top: 8px;
-}
-
-.sync-scope-card__section {
-  margin-bottom: 16px;
-}
-
-.sync-scope-card__section-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(var(--v-theme-on-surface), 0.7);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin: 0 0 4px;
-}
-
-.sync-scope-card__inline-checks {
-  display: flex;
-  gap: 16px;
-  margin-left: 8px;
 }
 </style>
