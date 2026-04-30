@@ -115,3 +115,119 @@ function canonicalize(value: unknown): string {
   const keys = Object.keys(obj).sort();
   return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalize(obj[k])}`).join(",")}}`;
 }
+
+// ---------------------------------------------------------------------------
+// Pure /push scope validation (Phase 3 — WP #947)
+// ---------------------------------------------------------------------------
+
+/**
+ * Outcome of {@link validateEventScope}. `unknown_entity` is reserved for
+ * non-create events whose `entityGuid` cannot be resolved by the caller — the
+ * validator cannot prove scope membership, so we deny by default.
+ */
+export type ScopeValidationResult =
+  | { ok: true }
+  | { ok: false; reason: "out_of_scope" | "unknown_entity" };
+
+/**
+ * Reference shape returned by the caller-supplied entity lookup. Mirrors the
+ * minimum surface the validator needs: kind of entity + its current `area_id`.
+ *
+ * `type` widens beyond `ScopeEntityType` to include `"record"` so callers can
+ * surface generic projections that were never intended to be scope-filtered;
+ * v1 rejects any such entity when the scope constrains entity types.
+ */
+export interface EntityScopeRef {
+  type: "individual" | "group" | "record";
+  areaId: string | null;
+}
+
+/**
+ * Pure server-side validator for inbound `/push` events. The caller is
+ * responsible for resolving entity references through whatever store it owns
+ * (Postgres, IndexedDB, in-memory map). The validator only inspects the event
+ * payload and the {@link EntityScopeRef} returned by `lookup`.
+ *
+ * Rules (see `docs/superpowers/specs/2026-04-28-bounded-sync-scope-design.md` §7
+ * and Phase 3 plan):
+ *
+ * - Unbounded scope (`areaIds === null && entityTypes === null`) → always ok.
+ * - `create-individual` / `create-group`: derive type from event-name suffix,
+ *   read `data.area_id` from the payload only.
+ * - All other event types: defer to `lookup(entityGuid)`. If `lookup` returns
+ *   `undefined`, return `unknown_entity` — we cannot prove scope membership.
+ *   `update-*` events that carry a new `data.area_id` must check BOTH the
+ *   stored area and the incoming area: a scoped client must not be able to
+ *   move an entity in or out of its scope.
+ * - `areaIds` set + event resolves to no `area_id` → `out_of_scope`.
+ * - `entityTypes` set + entity is `"record"` (or any non-listed type) →
+ *   `out_of_scope`.
+ */
+export function validateEventScope(
+  event: { type: string; entityGuid: string; data: Record<string, unknown> },
+  scope: EffectiveScope,
+  lookup: (guid: string) => EntityScopeRef | undefined,
+): ScopeValidationResult {
+  // Unbounded scope short-circuit (timeWindow is not validated at /push time —
+  // see spec §10 & §13: temporal dimension has no PM use case for v1).
+  if (scope.areaIds === null && scope.entityTypes === null) {
+    return { ok: true };
+  }
+
+  const eventAreaIdRaw = event.data?.area_id;
+  const eventAreaId = typeof eventAreaIdRaw === "string" ? eventAreaIdRaw : null;
+
+  let entityType: EntityScopeRef["type"];
+  // Areas to check against scope.areaIds. For create events this is just the
+  // event payload's area_id. For update-* it can be a 2-tuple (current + new).
+  // For other event classes (add/remove-member, delete, custom) it is the
+  // looked-up entity's area_id only.
+  let areasToCheck: (string | null)[];
+
+  if (event.type.endsWith("-individual") && event.type.startsWith("create-")) {
+    entityType = "individual";
+    areasToCheck = [eventAreaId];
+  } else if (event.type.endsWith("-group") && event.type.startsWith("create-")) {
+    entityType = "group";
+    areasToCheck = [eventAreaId];
+  } else {
+    const ref = lookup(event.entityGuid);
+    if (!ref) {
+      return { ok: false, reason: "unknown_entity" };
+    }
+    entityType = ref.type;
+    // For update-* events that carry a new area_id, we must validate BOTH
+    // the existing area (so an out-of-scope entity cannot be moved in) and
+    // the incoming area (so an in-scope entity cannot be moved out via a
+    // scoped client). For non-update events the payload area_id is ignored.
+    const isUpdate = event.type.startsWith("update-");
+    if (isUpdate && eventAreaId !== null) {
+      areasToCheck = [ref.areaId, eventAreaId];
+    } else {
+      areasToCheck = [ref.areaId];
+    }
+  }
+
+  // areaIds dimension
+  if (scope.areaIds !== null) {
+    const allowed = new Set(scope.areaIds);
+    for (const a of areasToCheck) {
+      if (a === null || !allowed.has(a)) {
+        return { ok: false, reason: "out_of_scope" };
+      }
+    }
+  }
+
+  // entityTypes dimension
+  if (scope.entityTypes !== null) {
+    if (entityType === "record") {
+      return { ok: false, reason: "out_of_scope" };
+    }
+    const allowedTypes = new Set<EntityScopeRef["type"]>(scope.entityTypes);
+    if (!allowedTypes.has(entityType)) {
+      return { ok: false, reason: "out_of_scope" };
+    }
+  }
+
+  return { ok: true };
+}
