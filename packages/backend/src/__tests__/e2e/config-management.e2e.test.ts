@@ -270,6 +270,205 @@ describeIfPostgres("Config management e2e", () => {
     });
   });
 
+  describe("syncScope round-trip via multipart upload", () => {
+    const scopedId = "e2e-scoped-config";
+    const scopedConfig: AppConfig = {
+      id: scopedId,
+      name: "Scoped Config",
+      description: "Carries syncScope policy",
+      version: "1.0.0",
+      entityForms: [
+        {
+          id: "scoped-form",
+          title: "Scoped Form",
+          formio: { components: [] },
+          name: "Scoped Form",
+          dependsOn: "",
+        },
+      ],
+      syncScope: {
+        areaIds: ["DIST-001", "DIST-002"],
+        entityTypes: ["individual"],
+        timeWindow: { type: "rolling", days: 90 },
+      },
+    };
+
+    afterAll(async () => {
+      for (const id of [scopedId, `${scopedId}-empty`]) {
+        await request(app.httpServer)
+          .delete(`/api/apps/${id}/purge`)
+          .set("Authorization", `Bearer ${adminToken}`)
+          .catch(() => {});
+      }
+    });
+
+    it("persists syncScope on multipart POST", async () => {
+      const filePath = await writeTempConfig(scopedConfig);
+      const res = await request(app.httpServer)
+        .post("/api/apps")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .attach("config", filePath, { contentType: "application/json" });
+
+      expect(res.status).toBe(200);
+
+      const getRes = await request(app.httpServer)
+        .get(`/api/apps/${scopedId}`)
+        .set("Authorization", `Bearer ${adminToken}`);
+
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.syncScope).toEqual(scopedConfig.syncScope);
+    });
+
+    it("persists updated syncScope on multipart PUT", async () => {
+      const updated: AppConfig = {
+        ...scopedConfig,
+        syncScope: {
+          areaIds: ["DIST-003"],
+          entityTypes: ["individual", "group"],
+          timeWindow: { type: "fixed", floor: "2025-01-01T00:00:00.000Z" },
+        },
+      };
+      const filePath = await writeTempConfig(updated);
+
+      const res = await request(app.httpServer)
+        .put(`/api/apps/${scopedId}`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .attach("config", filePath, { contentType: "application/json" });
+
+      expect(res.status).toBe(200);
+
+      const getRes = await request(app.httpServer)
+        .get(`/api/apps/${scopedId}`)
+        .set("Authorization", `Bearer ${adminToken}`);
+
+      expect(getRes.body.syncScope).toEqual(updated.syncScope);
+    });
+
+    it("rejects POST with empty areaIds array (deliver-nothing footgun)", async () => {
+      const badConfig: AppConfig = {
+        id: `${scopedId}-empty`,
+        name: "Empty areaIds Config",
+        version: "1.0.0",
+        entityForms: [
+          {
+            id: "empty-form",
+            title: "Empty Form",
+            formio: { components: [] },
+            name: "Empty Form",
+            dependsOn: "",
+          },
+        ],
+        syncScope: {
+          areaIds: [],
+        },
+      };
+      const filePath = await writeTempConfig(badConfig);
+
+      const res = await request(app.httpServer)
+        .post("/api/apps")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .attach("config", filePath, { contentType: "application/json" });
+
+      expect(res.status).toBe(400);
+      expect(res.body).toHaveProperty("error", "Invalid app config JSON");
+    });
+  });
+
+  describe("PATCH /api/apps/:id/syncScope", () => {
+    const patchId = "e2e-patch-scope";
+    const patchConfig: AppConfig = {
+      id: patchId,
+      name: "Patch Scope Config",
+      version: "1.0.0",
+      entityForms: [
+        {
+          id: "patch-form",
+          title: "Patch Form",
+          formio: { components: [] },
+          name: "Patch Form",
+          dependsOn: "",
+        },
+      ],
+    };
+
+    beforeAll(async () => {
+      const filePath = await writeTempConfig(patchConfig);
+      await request(app.httpServer)
+        .post("/api/apps")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .attach("config", filePath, { contentType: "application/json" });
+    });
+
+    afterAll(async () => {
+      await request(app.httpServer)
+        .delete(`/api/apps/${patchId}/purge`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .catch(() => {});
+    });
+
+    it("persists a syncScope policy", async () => {
+      const policy = {
+        areaIds: ["DIST-A"],
+        entityTypes: ["individual"] as const,
+      };
+      const res = await request(app.httpServer)
+        .patch(`/api/apps/${patchId}/syncScope`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ syncScope: policy });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("success");
+      expect(res.body.syncScope).toEqual(policy);
+
+      const getRes = await request(app.httpServer)
+        .get(`/api/apps/${patchId}`)
+        .set("Authorization", `Bearer ${adminToken}`);
+      expect(getRes.body.syncScope).toEqual(policy);
+    });
+
+    it("clears the policy when syncScope is null", async () => {
+      const res = await request(app.httpServer)
+        .patch(`/api/apps/${patchId}/syncScope`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ syncScope: null });
+
+      expect(res.status).toBe(200);
+      expect(res.body.syncScope).toBeNull();
+
+      const getRes = await request(app.httpServer)
+        .get(`/api/apps/${patchId}`)
+        .set("Authorization", `Bearer ${adminToken}`);
+      expect(getRes.body.syncScope ?? null).toBeNull();
+    });
+
+    it("rejects malformed body (400)", async () => {
+      const res = await request(app.httpServer)
+        .patch(`/api/apps/${patchId}/syncScope`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ syncScope: { areaIds: [] } });
+
+      expect(res.status).toBe(400);
+      expect(res.body).toHaveProperty("error");
+    });
+
+    it("rejects when body has no syncScope key", async () => {
+      const res = await request(app.httpServer)
+        .patch(`/api/apps/${patchId}/syncScope`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({});
+
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects without admin auth (401)", async () => {
+      const res = await request(app.httpServer)
+        .patch(`/api/apps/${patchId}/syncScope`)
+        .send({ syncScope: null });
+
+      expect(res.status).toBe(401);
+    });
+  });
+
   describe("Config listing pagination", () => {
     const configs: AppConfig[] = [];
 

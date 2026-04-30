@@ -30,12 +30,33 @@ import { generatePublicArtifacts, getPublicArtifactPaths, resolvePublicBaseUrl }
 import rateLimit from "express-rate-limit";
 const isTest = process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID !== undefined;
 
+/**
+ * Strict syncScope schema for the admin-facing config save flow.
+ *
+ * Rejects empty arrays for `areaIds` and `entityTypes` — an empty array is a
+ * deliver-nothing footgun (would block all events) and is almost certainly a
+ * user mistake. To unbound a dimension, omit the field or set it to null.
+ *
+ * Closes Phase 2 deferred item #4 (see `docs/superpowers/plans/...phase4.md`).
+ */
+const SYNC_SCOPE_SCHEMA = z.object({
+  areaIds: z.array(z.string().min(1)).nonempty().nullish(),
+  entityTypes: z.array(z.enum(["individual", "group"])).nonempty().nullish(),
+  timeWindow: z
+    .union([
+      z.object({ type: z.literal("rolling"), days: z.number().int().positive() }),
+      z.object({ type: z.literal("fixed"), floor: z.string().datetime() }),
+    ])
+    .nullish(),
+});
+
 const AppConfigSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string().nullish(),
   version: z.string().nullish(),
   url: z.string().nullish(),
+  syncScope: SYNC_SCOPE_SCHEMA.nullish(),
   entityForms: z.array(z.object({
     id: z.string(),
     name: z.string(),
@@ -384,6 +405,38 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
         }
         throw error;
       }
+    }),
+  );
+
+  // JSON-body PATCH for editing only the syncScope policy. Avoids re-uploading
+  // the full config file from the admin UI for a small scoped diff.
+  // Body: `{ syncScope: SyncScopePolicy | null }` — null clears the policy.
+  router.patch(
+    "/:id/syncScope",
+    adminAuth,
+    asyncHandler(async (req, res) => {
+      const { id } = req.params;
+      ensureValidConfigId(id);
+
+      const SyncScopePatchSchema = z.object({
+        syncScope: SYNC_SCOPE_SCHEMA.nullable(),
+      });
+      const parsed = SyncScopePatchSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res
+          .status(400)
+          .json({ error: "Invalid syncScope payload", details: parsed.error.issues });
+      }
+
+      const existing = await appConfigStore.getConfig(id);
+      const updated: AppConfig = {
+        ...existing,
+        syncScope: parsed.data.syncScope ?? undefined,
+      };
+      await appConfigStore.saveConfig(updated);
+      await appInstanceStore.updateAppInstance(id);
+
+      res.json({ status: "success", syncScope: updated.syncScope ?? null });
     }),
   );
 
