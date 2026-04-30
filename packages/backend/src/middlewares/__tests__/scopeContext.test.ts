@@ -17,6 +17,7 @@
  * under the License.
  */
 
+import bodyParser from "body-parser";
 import express from "express";
 import request from "supertest";
 import { createScopeContextMiddleware } from "../scopeContext";
@@ -47,6 +48,25 @@ function appWithScope(store: AppInstanceStore, assignmentsByUser: Record<string,
   });
   app.use(createScopeContextMiddleware(store));
   app.get("/", (req, res) => {
+    res.json((req as unknown as { scope?: unknown }).scope ?? null);
+  });
+  return app;
+}
+
+function appWithBodyScope(store: AppInstanceStore, assignmentsByUser: Record<string, RoleAssignment[]>) {
+  const app = express();
+  app.use(bodyParser.json());
+  app.use((req, _res, next) => {
+    const userEmail = req.header("X-Test-User") || "alice@example.com";
+    (req as unknown as { user?: { id: string; email: string; roleAssignments?: RoleAssignment[] } }).user = {
+      id: userEmail,
+      email: userEmail,
+      roleAssignments: assignmentsByUser[userEmail] ?? [],
+    };
+    next();
+  });
+  app.use(createScopeContextMiddleware(store, { source: "body" }));
+  app.post("/", (req, res) => {
     res.json((req as unknown as { scope?: unknown }).scope ?? null);
   });
   return app;
@@ -111,5 +131,48 @@ describe("scopeContext middleware", () => {
 
     const res = await request(app).get("/");
     expect(res.status).toBe(400);
+  });
+
+  describe("source: body", () => {
+    test("returns unbounded scope when configId is in body and tenant has no syncScope", async () => {
+      const config: AppConfig = { id: "t1", name: "T1", entityForms: [] };
+      const store = makeFakeAppInstanceStore(config);
+      const app = appWithBodyScope(store, {});
+
+      const res = await request(app).post("/").send({ configId: "t1" });
+      expect(res.status).toBe(200);
+      expect(res.body.effective.areaIds).toBeNull();
+      expect(res.body.effective.entityTypes).toBeNull();
+      expect(res.body.effective.timeWindow).toBeNull();
+      expect(res.body.tenantId).toBe("t1");
+    });
+
+    test("400 when body has no configId", async () => {
+      const config: AppConfig = { id: "t1", name: "T1", entityForms: [] };
+      const store = makeFakeAppInstanceStore(config);
+      const app = appWithBodyScope(store, {});
+
+      const res = await request(app).post("/").send({});
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ status: "error", message: "configId is required" });
+    });
+
+    test("applies RoleAssignment.syncScopeOverride from body source", async () => {
+      const config: AppConfig = { id: "t1", name: "T1", entityForms: [] };
+      const store = makeFakeAppInstanceStore(config);
+      const app = appWithBodyScope(store, {
+        "alice@example.com": [
+          {
+            tenantId: "t1",
+            role: "FIELD_AGENT",
+            syncScopeOverride: { areaIds: ["A1"] },
+          },
+        ],
+      });
+
+      const res = await request(app).post("/").send({ configId: "t1" });
+      expect(res.status).toBe(200);
+      expect(res.body.effective.areaIds).toEqual(["A1"]);
+    });
   });
 });

@@ -31,6 +31,11 @@ export interface RequestScope {
 
 export type ScopeAwareRequest = AuthenticatedRequest & { scope?: RequestScope };
 
+export interface ScopeContextOptions {
+  /** Where to read `configId` from. `"body"` requires `bodyParser.json()` to have run earlier in the chain. */
+  source?: "query" | "body";
+}
+
 /**
  * Resolve an `EffectiveScope` for the authenticated user against the
  * requested `configId`, attach it to `req.scope`, and forward.
@@ -38,22 +43,32 @@ export type ScopeAwareRequest = AuthenticatedRequest & { scope?: RequestScope };
  * Pre-conditions:
  * - JWT auth middleware has populated `req.user` (with `roleAssignments`)
  * - `validateTenantAccess` has confirmed the user can read the tenant
+ * - When `options.source === "body"`, a JSON body parser must have run earlier
+ *   in the middleware chain (this middleware does NOT parse the body itself).
  *
  * Post-conditions:
  * - `req.scope.effective` is the merged tenant + assignment policy
  * - `req.scope.hash` is the canonical SHA-256 of the effective scope
  *
  * Errors:
- * - 400 when `configId` query param is missing or non-string
+ * - 400 when `configId` (from query or body, per `options.source`) is missing or non-string
  * - 404 when the tenant config can't be loaded
  */
-export function createScopeContextMiddleware(appInstanceStore: AppInstanceStore): RequestHandler {
+export function createScopeContextMiddleware(
+  appInstanceStore: AppInstanceStore,
+  options: ScopeContextOptions = {},
+): RequestHandler {
+  const source = options.source ?? "query";
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const configId = req.query.configId;
-      if (!configId || typeof configId !== "string") {
+      const raw =
+        source === "body"
+          ? (req.body as { configId?: unknown } | undefined)?.configId
+          : req.query.configId;
+      if (!raw || typeof raw !== "string") {
         return res.status(400).json({ status: "error", message: "configId is required" });
       }
+      const configId = raw;
       const appInstance = await appInstanceStore.getAppInstance(configId);
       if (!appInstance) {
         return res.status(404).json({ status: "error", message: "App instance not found" });
