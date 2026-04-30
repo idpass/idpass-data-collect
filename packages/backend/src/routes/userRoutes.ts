@@ -22,10 +22,10 @@ import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
 import { z } from "zod";
-import { syncScopePolicySchema } from "@idpass/data-collect-core";
 import { AuthenticatedRequest, authenticateJWT, createAuthAdminMiddleware } from "../middlewares/authentication";
 import { verifyRoleFromDatabase } from "../middlewares/rbac";
 import { asyncHandler } from "../middlewares/errorHandlers";
+import { SYNC_SCOPE_SCHEMA } from "../middlewares/syncScopeSchema";
 import { Role, UserStore } from "../types";
 import { PASSWORD_RULES } from "../utils/passwordRules";
 
@@ -36,7 +36,9 @@ const RoleAssignmentSchema = z.object({
   // Phase 2 (#947): per-role narrowing of tenant sync scope. Optional; when
   // omitted the role inherits the tenant's syncScope policy unchanged. Strips
   // unknown keys via Zod, so operators cannot smuggle additional dimensions.
-  syncScopeOverride: syncScopePolicySchema.optional(),
+  // Uses the strict admin schema (rejects empty `areaIds`/`entityTypes`) so
+  // operators cannot persist a deliver-nothing override via the API.
+  syncScopeOverride: SYNC_SCOPE_SCHEMA.optional(),
 });
 
 const CreateUserSchema = z.object({

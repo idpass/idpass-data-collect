@@ -28,27 +28,8 @@ import multer from "multer";
 import fs from "fs/promises";
 import { generatePublicArtifacts, getPublicArtifactPaths, resolvePublicBaseUrl } from "../utils/publicArtifacts";
 import rateLimit from "express-rate-limit";
+import { SYNC_SCOPE_SCHEMA } from "../middlewares/syncScopeSchema";
 const isTest = process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID !== undefined;
-
-/**
- * Strict syncScope schema for the admin-facing config save flow.
- *
- * Rejects empty arrays for `areaIds` and `entityTypes` — an empty array is a
- * deliver-nothing footgun (would block all events) and is almost certainly a
- * user mistake. To unbound a dimension, omit the field or set it to null.
- *
- * Closes Phase 2 deferred item #4 (see `docs/superpowers/plans/...phase4.md`).
- */
-const SYNC_SCOPE_SCHEMA = z.object({
-  areaIds: z.array(z.string().min(1)).nonempty().nullish(),
-  entityTypes: z.array(z.enum(["individual", "group"])).nonempty().nullish(),
-  timeWindow: z
-    .union([
-      z.object({ type: z.literal("rolling"), days: z.number().int().positive() }),
-      z.object({ type: z.literal("fixed"), floor: z.string().datetime() }),
-    ])
-    .nullish(),
-});
 
 const AppConfigSchema = z.object({
   id: z.string().min(1),

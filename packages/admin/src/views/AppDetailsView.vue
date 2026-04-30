@@ -511,6 +511,13 @@ watch(
                 @click="router.push({ name: 'duplicates', params: { id: routeId } })"
               />
               <v-list-item
+                v-if="scopedSyncEnabled"
+                data-testid="app-details-devices-link"
+                prepend-icon="mdi-cellphone-link"
+                title="View device sync activity"
+                @click="router.push({ name: 'devices', params: { configId: app.id } })"
+              />
+              <v-list-item
                 prepend-icon="mdi-content-copy"
                 title="Duplicate Config"
                 @click="duplicateConfig"

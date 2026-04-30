@@ -88,6 +88,14 @@ const editedItem = reactive<EditableUser>({ ...defaultItem })
 // override built by SyncScopeForm. Wiped on dialog open.
 const overrideErrors = reactive<Record<string, string | null>>({})
 const expandedOverrides = reactive<Record<string, boolean>>({})
+// Per-assignment validity, mirrored from each `<SyncScopeForm>` via
+// `@update:valid`. Absent entries are treated as valid (no override editor
+// mounted, nothing to validate). The save handler blocks when any entry is
+// false to avoid persisting a stale override that contradicts the form state
+// — `SyncScopeForm` suppresses `update:modelValue` while invalid (see
+// `SyncScopeForm.vue:210-221`), so the in-memory `ra.syncScopeOverride` lags
+// the UI when errors are present.
+const overrideValid = reactive<Record<string, boolean>>({})
 
 // Computed
 const formTitle = computed(() => {
@@ -133,6 +141,7 @@ const loadPrograms = async () => {
 function resetOverrideEditorState() {
   for (const key of Object.keys(overrideErrors)) delete overrideErrors[key]
   for (const key of Object.keys(expandedOverrides)) delete expandedOverrides[key]
+  for (const key of Object.keys(overrideValid)) delete overrideValid[key]
 }
 
 const editUser = (item: UserRecord) => {
@@ -196,6 +205,10 @@ function setOverrideError(programId: string, error: string | null) {
   }
 }
 
+function setOverrideValid(programId: string, valid: boolean) {
+  overrideValid[programId] = valid
+}
+
 function toggleOverride(programId: string) {
   expandedOverrides[programId] = !expandedOverrides[programId]
 }
@@ -203,6 +216,9 @@ function toggleOverride(programId: string) {
 function clearOverride(programId: string) {
   setOverride(programId, null)
   setOverrideError(programId, null)
+  // The form is unmounted when the panel collapses, so its validity stops
+  // mattering — drop the entry so it doesn't block save.
+  delete overrideValid[programId]
   // Closing the panel signals "no override" visually; reopening starts fresh.
   expandedOverrides[programId] = false
 }
@@ -236,6 +252,17 @@ const saveUser = async () => {
       `Fix sync-scope override errors before saving: ${overrideErrorList.value
         .map((x) => x.error)
         .join('; ')}`,
+      'error',
+    )
+    return
+  }
+  // Block save when any per-assignment SyncScopeForm currently reports invalid.
+  // The form suppresses `update:modelValue` on error, so saving here would
+  // persist a stale override (or a partial one if errors clear racily).
+  const anyOverrideInvalid = Object.values(overrideValid).some((v) => v === false)
+  if (anyOverrideInvalid) {
+    snackBarStore.showSnackbar(
+      'Fix sync-scope override errors before saving.',
       'error',
     )
     return
@@ -456,6 +483,7 @@ onMounted(() => {
                         :test-id-prefix="`role-assignment-override-${ra.programId}`"
                         @update:model-value="(v: SyncScopeOverride | null) => setOverride(ra.programId, v)"
                         @update:error="(e: string | null) => setOverrideError(ra.programId, e)"
+                        @update:valid="(v: boolean) => setOverrideValid(ra.programId, v)"
                       />
 
                       <div class="role-assignments__override-actions">

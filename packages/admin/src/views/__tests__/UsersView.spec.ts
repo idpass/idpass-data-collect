@@ -41,8 +41,10 @@ vi.mock('@/api', () => ({
   deleteUser: (...args: unknown[]) => mockDeleteUser(...args),
 }))
 
+const showSnackbar = vi.fn()
+
 vi.mock('@/stores/snackBar', () => ({
-  useSnackBarStore: vi.fn(() => ({ showSnackbar: vi.fn() })),
+  useSnackBarStore: vi.fn(() => ({ showSnackbar })),
 }))
 
 const vuetify = createVuetify({ components, directives })
@@ -178,6 +180,58 @@ describe('UsersView', () => {
         syncScopeOverride: { areaIds: ['A1'], entityTypes: null, timeWindow: null },
       },
     ])
+  })
+
+  it('blocks save and shows a snackbar when an override editor is in an invalid state', async () => {
+    mockGetUsers.mockResolvedValue([
+      {
+        id: 'u1',
+        email: 'alice@example.com',
+        role: 'USER',
+        programIds: ['p1'],
+        // Start with no override; user will toggle "areas" on without input,
+        // putting the SyncScopeForm into an invalid state.
+        roleAssignments: [{ programId: 'p1', role: 'USER' }],
+      },
+    ])
+    await mountUsersView()
+    await openEditDialog()
+
+    // Expand the override panel for p1.
+    const toggle = document.querySelector(
+      '[data-testid="role-assignment-override-toggle-p1"]',
+    ) as HTMLButtonElement | null
+    expect(toggle).toBeTruthy()
+    toggle!.click()
+    await flushPromises()
+
+    // Toggle "Restrict by area IDs" on — empty list -> invalid form state.
+    const areasToggle = document.querySelector(
+      '[data-testid="role-assignment-override-p1-areas-toggle"] input[type="checkbox"]',
+    ) as HTMLInputElement | null
+    expect(areasToggle).toBeTruthy()
+    areasToggle!.click()
+    await flushPromises()
+
+    // Click Save.
+    const allButtons = Array.from(document.querySelectorAll('button')) as HTMLButtonElement[]
+    const saveBtn = allButtons.find((b) => b.textContent?.trim() === 'Save')
+    expect(saveBtn).toBeTruthy()
+    saveBtn!.click()
+    await flushPromises()
+
+    // Save must NOT call the API; the user gets a snackbar telling them to
+    // fix the override before saving.
+    expect(mockUpdateUser).not.toHaveBeenCalled()
+    expect(showSnackbar).toHaveBeenCalled()
+    const calls = showSnackbar.mock.calls
+    const someErrorAboutOverrides = calls.some(
+      ([msg, level]) =>
+        typeof msg === 'string' &&
+        msg.toLowerCase().includes('sync-scope override') &&
+        level === 'error',
+    )
+    expect(someErrorAboutOverrides).toBe(true)
   })
 
   it('omits syncScopeOverride when the user clears it', async () => {

@@ -241,7 +241,7 @@ async function onClearConfirm() {
             color="primary"
             variant="flat"
             :loading="saving"
-            :disabled="saving"
+            :disabled="saving || !formValid"
             @click="onSave"
           >
             Save
@@ -251,7 +251,7 @@ async function onClearConfirm() {
     </v-dialog>
 
     <!-- Clear-confirm dialog -->
-    <v-dialog v-model="showClearConfirm" :max-width="420">
+    <v-dialog v-model="showClearConfirm" :max-width="420" persistent>
       <v-card>
         <v-card-title class="text-h6">
           <v-icon icon="mdi-alert" start color="warning" />

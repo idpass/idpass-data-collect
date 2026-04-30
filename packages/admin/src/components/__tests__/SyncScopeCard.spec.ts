@@ -162,6 +162,30 @@ describe('SyncScopeCard', () => {
     expect(validation!.textContent).toContain('at least one')
   })
 
+  it('disables the Save button while the form is invalid', async () => {
+    const wrapper = mountCard({ policy: null })
+
+    await wrapper.find('[data-testid="sync-scope-edit-btn"]').trigger('click')
+    await flushPromises()
+
+    // Toggle areas on without any input -> form is invalid.
+    const areasToggle = document.querySelector(
+      '[data-testid="sync-scope-areas-toggle"] input[type="checkbox"]',
+    ) as HTMLInputElement | null
+    areasToggle!.click()
+    await flushPromises()
+
+    const saveBtn = document.querySelector(
+      '[data-testid="sync-scope-save-btn"]',
+    ) as HTMLElement | null
+    // Vuetify v-btn applies `disabled` to the rendered <button>, plus the
+    // `v-btn--disabled` class for visual state. Either is sufficient evidence.
+    const isDisabled =
+      (saveBtn as HTMLButtonElement | null)?.disabled === true ||
+      saveBtn?.classList.contains('v-btn--disabled') === true
+    expect(isDisabled).toBe(true)
+  })
+
   it('clears policy via PATCH with null when confirmed', async () => {
     mockUpdateAppSyncScope.mockResolvedValue({ status: 'success', syncScope: null })
     const wrapper = mountCard({
