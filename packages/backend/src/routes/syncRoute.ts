@@ -36,6 +36,14 @@ import { SyncTelemetryStore } from "../stores/SyncTelemetryStore";
 const log = createLogger("syncRoute");
 
 /**
+ * Cap on the number of area ids accepted from the `?areaIds=` query hint on
+ * `/pull`. Each area id triggers a separate `searchEntities` call, so an
+ * unbounded list lets a client amplify a single HTTP request into N parallel
+ * Postgres queries (DoS). 64 is well above any realistic admin scope.
+ */
+const QUERY_AREA_ID_LIMIT = 64;
+
+/**
  * Validate the client-supplied X-Device-Id header. Returns the value if it
  * looks like a UUID-shaped identifier, null otherwise. Telemetry must not be
  * recorded for malformed values — clients can otherwise inflate the audit
@@ -213,8 +221,13 @@ export function createSyncRouter(
       }
 
       const scope = (req as ScopeAwareRequest).scope!.effective;
-      const queryAreaIdHint = typeof areaIds === "string" && areaIds.length > 0
-        ? areaIds.split(",").filter(Boolean)
+      const queryAreaIdHintRaw = typeof areaIds === "string" && areaIds.length > 0
+        ? areaIds.split(",").map((a) => a.trim()).filter(Boolean)
+        : null;
+      // Dedup + cap to prevent DoS amplification via unbounded ?areaIds=A1,A1,A1,…
+      // — each id fans out to a searchEntities call below.
+      const queryAreaIdHint = queryAreaIdHintRaw
+        ? Array.from(new Set(queryAreaIdHintRaw)).slice(0, QUERY_AREA_ID_LIMIT)
         : null;
 
       // Effective area filter = scope.areaIds (server-authoritative) ∩ queryAreaIdHint
