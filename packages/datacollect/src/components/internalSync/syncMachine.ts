@@ -220,12 +220,19 @@ export function createSyncMachine(
       ),
 
       loadRemoteCursor: fromPromise(
-        async ({ input }: { input: { context: SyncContext } }): Promise<string | null> => {
+        async ({
+          input,
+        }: {
+          input: { context: SyncContext };
+        }): Promise<{ cursor: string | null; scopeHash: string | null }> => {
           const cursor = await input.context.eventStore.getLastRemoteSyncTimestamp();
+          const scopeHash = await input.context.eventStore.getLastScopeHash();
           // Preserve original behavior: empty string is a valid cursor (means "sync from beginning")
           // Only null/undefined means "no cursor available, skip download"
-          if (cursor === null || cursor === undefined) return null;
-          return cursor.toString();
+          if (cursor === null || cursor === undefined) {
+            return { cursor: null, scopeHash };
+          }
+          return { cursor: cursor.toString(), scopeHash };
         },
       ),
 
@@ -234,19 +241,37 @@ export function createSyncMachine(
           input,
         }: {
           input: { context: SyncContext };
-        }): Promise<{ events: FormSubmission[]; nextCursor: string | Date | null }> => {
+        }): Promise<{
+          events: FormSubmission[];
+          nextCursor: string | Date | null;
+          responseScopeHash: string | null;
+        }> => {
           const { axiosInstance, configId, downloadCursor, selectiveSyncOptions, authStorage, reauthenticate } = input.context;
           let url = `/api/sync/pull?since=${encodeURIComponent(String(downloadCursor))}&configId=${encodeURIComponent(configId)}`;
           if (selectiveSyncOptions.assignedAreaIds?.length) {
             url += `&areaIds=${encodeURIComponent(selectiveSyncOptions.assignedAreaIds.join(","))}`;
           }
+          type PullResponse = {
+            events: FormSubmission[];
+            nextCursor: string | Date | null;
+            error?: string;
+            scope?: { hash?: string | null } | null;
+          };
+          const extractScopeHash = (data: PullResponse): string | null => {
+            const raw = data.scope?.hash;
+            return typeof raw === "string" && raw.length > 0 ? raw : null;
+          };
           try {
             const result = await axiosInstance.get(url);
-            const data = result.data as { events: FormSubmission[]; nextCursor: string | Date | null; error?: string };
+            const data = result.data as PullResponse;
             if (data.error && (!data.events || data.events.length === 0)) {
               throw new Error(data.error);
             }
-            return data;
+            return {
+              events: data.events,
+              nextCursor: data.nextCursor,
+              responseScopeHash: extractScopeHash(data),
+            };
           } catch (error: unknown) {
             const axiosErr = error as { response?: { status?: number } };
             if (axiosErr.response?.status === 403 && reauthenticate) {
@@ -258,11 +283,15 @@ export function createSyncMachine(
                   axiosInstance.defaults.headers.Authorization = `${provider} ${token.token}`;
                 }
                 const result = await axiosInstance.get(url);
-                const data = result.data as { events: FormSubmission[]; nextCursor: string | Date | null; error?: string };
+                const data = result.data as PullResponse;
                 if (data.error && (!data.events || data.events.length === 0)) {
                   throw new Error(data.error);
                 }
-                return data;
+                return {
+                  events: data.events,
+                  nextCursor: data.nextCursor,
+                  responseScopeHash: extractScopeHash(data),
+                };
               } catch {
                 throw new Error("You do not have permission to sync this program — Please contact your administrator to request access");
               }
@@ -280,10 +309,42 @@ export function createSyncMachine(
             context: SyncContext;
             events: FormSubmission[];
             nextCursor: string | Date | null;
+            responseScopeHash: string | null;
           };
-        }): Promise<{ nextCursor: string | Date | null; latestEventTimestamp: string | null }> => {
-          const { eventStore, eventApplierService, selectiveSyncOptions } = input.context;
-          const { events, nextCursor } = input;
+        }): Promise<{
+          nextCursor: string | Date | null;
+          latestEventTimestamp: string | null;
+          /** Scope hash echoed back so the machine can update context/persist. */
+          responseScopeHash: string | null;
+          /**
+           * `true` when the response hash differs from the previously persisted
+           * hash and a re-pull session is in progress. Drives accumulation of
+           * in-scope guids and the eventual purge.
+           */
+          scopeRotated: boolean;
+          /** Entity guids carried by THIS page (added to the in-scope accumulator). */
+          pageEntityGuids: string[];
+        }> => {
+          const {
+            eventStore,
+            eventApplierService,
+            selectiveSyncOptions,
+            lastKnownScopeHash,
+            isScopeRepull,
+            inScopeGuids,
+            purgeOutOfScope,
+          } = input.context;
+          const { events, nextCursor, responseScopeHash } = input;
+
+          // Detect scope rotation: the server-advertised hash differs from
+          // what we have on disk. Once detected at the start of a sync, stay
+          // in re-pull mode for the rest of the pagination.
+          const rotatingNow =
+            responseScopeHash !== null && responseScopeHash !== lastKnownScopeHash;
+          const scopeRotated = rotatingNow || isScopeRepull;
+
+          let latestEventTimestamp: string | null = null;
+          const pageEntityGuids: string[] = [];
 
           if (events && events.length) {
             let filteredEvents = events;
@@ -298,16 +359,43 @@ export function createSyncMachine(
               (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
             );
             const lastEvent = allSorted[allSorted.length - 1];
-            const latestEventTimestamp = `${lastEvent.timestamp}|${lastEvent.guid}`;
+            latestEventTimestamp = `${lastEvent.timestamp}|${lastEvent.guid}`;
 
             for (const event of sorted) {
+              pageEntityGuids.push(event.entityGuid);
               if (await eventStore.isEventExisted(event.guid)) continue;
               await eventApplierService.submitForm({ ...event, syncLevel: SyncLevel.REMOTE });
             }
             await eventStore.setLastRemoteSyncTimestamp(latestEventTimestamp);
-            return { nextCursor, latestEventTimestamp };
           }
-          return { nextCursor, latestEventTimestamp: null };
+
+          // End-of-pagination housekeeping for scope state. Only runs once
+          // when the server returned `nextCursor === null`.
+          if (nextCursor === null && responseScopeHash !== null) {
+            if (scopeRotated) {
+              const keepGuids = Array.from(new Set([...inScopeGuids, ...pageEntityGuids]));
+              if (purgeOutOfScope) {
+                try {
+                  await purgeOutOfScope(keepGuids);
+                } catch (err) {
+                  log.error({ err }, "Scope purge callback failed");
+                  throw err;
+                }
+              }
+              await eventStore.setLastScopeHash(responseScopeHash);
+            } else if (responseScopeHash !== lastKnownScopeHash) {
+              // Same-session hash drift without detection — defensive update.
+              await eventStore.setLastScopeHash(responseScopeHash);
+            }
+          }
+
+          return {
+            nextCursor,
+            latestEventTimestamp,
+            responseScopeHash,
+            scopeRotated,
+            pageEntityGuids,
+          };
         },
       ),
 
@@ -334,6 +422,11 @@ export function createSyncMachine(
         allLocalEvents: () => [] as FormSubmission[],
         downloadCursor: () => null as string | null,
         lastSuccessfulDownloadTimestamp: () => null as string | null,
+        // Scope state is per-sync — reset at the boundary so a previous
+        // re-pull session never bleeds into the next.
+        lastKnownScopeHash: () => null as string | null,
+        isScopeRepull: () => false,
+        inScopeGuids: () => [] as string[],
       }),
       enqueuePending: assign({
         pendingSyncIds: ({ context, event }) => [
@@ -353,6 +446,9 @@ export function createSyncMachine(
         allLocalEvents: () => [] as FormSubmission[],
         downloadCursor: () => null as string | null,
         lastSuccessfulDownloadTimestamp: () => null as string | null,
+        lastKnownScopeHash: () => null as string | null,
+        isScopeRepull: () => false,
+        inScopeGuids: () => [] as string[],
       }),
       resetCurrent: assign({
         currentSyncId: () => null as string | null,
@@ -395,6 +491,7 @@ export function createSyncMachine(
       axiosInstance: input.axiosInstance,
       configId: input.configId,
       reauthenticate: input.reauthenticate,
+      purgeOutOfScope: input.purgeOutOfScope,
       selectiveSyncOptions: {} as SelectiveSyncOptions,
       uploadChunks: [] as FormSubmission[][],
       uploadChunkIndex: 0,
@@ -402,6 +499,9 @@ export function createSyncMachine(
       allLocalEvents: [] as FormSubmission[],
       downloadCursor: null as string | null,
       lastSuccessfulDownloadTimestamp: null as string | null,
+      lastKnownScopeHash: null as string | null,
+      isScopeRepull: false,
+      inScopeGuids: [] as string[],
       currentSyncId: null as string | null,
       pendingSyncIds: [] as string[],
       error: null as Error | null,
@@ -570,11 +670,14 @@ export function createSyncMachine(
           input: ({ context }) => ({ context }),
           onDone: [
             {
-              guard: ({ event }) => event.output !== null,
+              guard: ({ event }) => event.output.cursor !== null,
               target: "downloading",
               actions: assign({
-                downloadCursor: ({ event }) => event.output,
+                downloadCursor: ({ event }) => event.output.cursor,
                 lastSuccessfulDownloadTimestamp: () => null as string | null,
+                lastKnownScopeHash: ({ event }) => event.output.scopeHash,
+                isScopeRepull: () => false,
+                inScopeGuids: () => [] as string[],
               }),
             },
             { target: "success" },
@@ -615,11 +718,21 @@ export function createSyncMachine(
           applyingEvents: {
             invoke: {
               src: "filterSortApplyEvents",
-              input: ({ context, event }) => ({
-                context,
-                events: (event as unknown as { output: { events: FormSubmission[]; nextCursor: string | Date | null } }).output.events,
-                nextCursor: (event as unknown as { output: { events: FormSubmission[]; nextCursor: string | Date | null } }).output.nextCursor,
-              }),
+              input: ({ context, event }) => {
+                const pullOutput = (event as unknown as {
+                  output: {
+                    events: FormSubmission[];
+                    nextCursor: string | Date | null;
+                    responseScopeHash: string | null;
+                  };
+                }).output;
+                return {
+                  context,
+                  events: pullOutput.events,
+                  nextCursor: pullOutput.nextCursor,
+                  responseScopeHash: pullOutput.responseScopeHash,
+                };
+              },
               onDone: {
                 target: "checkMorePages",
                 actions: assign({
@@ -629,6 +742,24 @@ export function createSyncMachine(
                       : null,
                   lastSuccessfulDownloadTimestamp: ({ context, event }) =>
                     event.output.latestEventTimestamp ?? context.lastSuccessfulDownloadTimestamp,
+                  // Track scope rotation across pages of the current session.
+                  isScopeRepull: ({ context, event }) =>
+                    event.output.scopeRotated || context.isScopeRepull,
+                  inScopeGuids: ({ context, event }) =>
+                    event.output.scopeRotated
+                      ? [...context.inScopeGuids, ...event.output.pageEntityGuids]
+                      : context.inScopeGuids,
+                  // After pagination completes the persisted hash is up to date,
+                  // so update the in-context value to match.
+                  lastKnownScopeHash: ({ context, event }) => {
+                    if (
+                      event.output.nextCursor === null &&
+                      event.output.responseScopeHash !== null
+                    ) {
+                      return event.output.responseScopeHash;
+                    }
+                    return context.lastKnownScopeHash;
+                  },
                 }),
               },
               onError: {

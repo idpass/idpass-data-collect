@@ -44,6 +44,8 @@ function createMockEventStore(): EventStore {
     isEventExisted: jest.fn().mockResolvedValue(false),
     getAuditTrailByEntityGuid: jest.fn().mockResolvedValue([]),
     deleteEventsForEntity: jest.fn().mockResolvedValue(0),
+    getLastScopeHash: jest.fn().mockResolvedValue(null),
+    setLastScopeHash: jest.fn().mockResolvedValue(undefined),
     clearStore: jest.fn(),
     closeConnection: jest.fn(),
   };

@@ -335,6 +335,10 @@ export interface EventStore {
   getLastPushExternalSyncTimestamp(): Promise<string>;
   /** Set the timestamp of the last external sync push */
   setLastPushExternalSyncTimestamp(timestamp: string): Promise<void>;
+  /** Get the last advertised scope hash from the server, or null if never seen. */
+  getLastScopeHash(): Promise<string | null>;
+  /** Persist the latest scope hash (called after a successful pull). */
+  setLastScopeHash(hash: string): Promise<void>;
   /**
    * Delete all events whose `entityGuid` matches the given guid. Used during
    * client-side scope-purge — see {@link EventStorageAdapter.deleteEventsForEntity}.

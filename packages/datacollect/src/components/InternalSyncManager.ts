@@ -26,10 +26,10 @@ import {
 } from "../interfaces/types";
 import { EventApplierService } from "../services/EventApplierService";
 import { createSyncMachine } from "./internalSync/syncMachine";
-import { SelectiveSyncOptions, ReauthenticateCallback } from "./internalSync/types";
+import { SelectiveSyncOptions, ReauthenticateCallback, PurgeOutOfScopeCallback } from "./internalSync/types";
 
 // Re-export for backwards compatibility
-export type { SelectiveSyncOptions, ReauthenticateCallback } from "./internalSync/types";
+export type { SelectiveSyncOptions, ReauthenticateCallback, PurgeOutOfScopeCallback } from "./internalSync/types";
 
 /**
  * Manages bidirectional synchronization between local DataCollect instances and the remote sync server.
@@ -73,6 +73,7 @@ export class InternalSyncManager {
     configId: string = "default",
     reauthenticate?: ReauthenticateCallback,
     deviceId?: string,
+    purgeOutOfScope?: PurgeOutOfScopeCallback,
   ) {
     this.eventStore = eventStore;
     this.entityStore = entityStore;
@@ -119,6 +120,7 @@ export class InternalSyncManager {
         axiosInstance,
         configId,
         reauthenticate,
+        purgeOutOfScope,
       },
     });
 

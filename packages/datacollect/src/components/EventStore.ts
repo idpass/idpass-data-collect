@@ -550,6 +550,25 @@ export class EventStoreImpl implements EventStore {
   }
 
   /**
+   * Retrieves the last advertised scope hash from the server.
+   *
+   * @returns The hash string, or `null` when no scope has been observed yet.
+   */
+  getLastScopeHash(): Promise<string | null> {
+    return this.storageAdapter.getLastScopeHash();
+  }
+
+  /**
+   * Persists the latest scope hash advertised by the server.
+   *
+   * @param hash The hash string to persist.
+   * @returns A Promise that resolves when the hash is persisted.
+   */
+  setLastScopeHash(hash: string): Promise<void> {
+    return this.storageAdapter.setLastScopeHash(hash);
+  }
+
+  /**
    * Retrieves the complete audit trail for a specific entity.
    *
    * @param entityGuid The global unique identifier of the entity.

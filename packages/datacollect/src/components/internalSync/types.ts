@@ -51,6 +51,24 @@ export interface SelectiveSyncOptions {
 export type ReauthenticateCallback = () => Promise<void>;
 
 /**
+ * Optional callback to purge local entities that fell out of the
+ * server-advertised sync scope. Invoked by the sync machine after a
+ * scope-rotation re-pull completes; receives the set of entity GUIDs the
+ * server delivered during the re-pull session and is expected to drop the
+ * complement.
+ *
+ * Implementations typically delegate to
+ * {@link EntityDataManager.purgeEntitiesNotIn}.
+ *
+ * When omitted, scope rotation is detected (and the new hash persisted)
+ * but no purge runs — useful in tests or in environments that intentionally
+ * want to retain previously-scoped data.
+ */
+export type PurgeOutOfScopeCallback = (
+  keepGuids: readonly string[],
+) => Promise<void>;
+
+/**
  * XState machine context for the sync statechart.
  */
 export interface SyncContext {
@@ -62,6 +80,8 @@ export interface SyncContext {
   axiosInstance: AxiosInstance;
   configId: string;
   reauthenticate?: ReauthenticateCallback;
+  /** Optional callback to purge entities outside the new scope; see {@link PurgeOutOfScopeCallback}. */
+  purgeOutOfScope?: PurgeOutOfScopeCallback;
   // Sync options
   selectiveSyncOptions: SelectiveSyncOptions;
   // Upload tracking
@@ -72,6 +92,22 @@ export interface SyncContext {
   // Download tracking
   downloadCursor: string | null;
   lastSuccessfulDownloadTimestamp: string | null;
+  /**
+   * The scope hash advertised by the server on the most recent pull response,
+   * or `null` when the server did not include a `scope` field (older server).
+   * Reset to the value persisted in the EventStore at the start of each sync.
+   */
+  lastKnownScopeHash: string | null;
+  /**
+   * Tracks whether the current sync session is in a scope-rotation re-pull.
+   * Set to `true` when the first response in a session reports a hash that
+   * differs from the persisted hash. While `true`, the machine accumulates
+   * the entityGuids it sees so it can purge the complement once pagination
+   * completes.
+   */
+  isScopeRepull: boolean;
+  /** Entity GUIDs collected across the current re-pull session. */
+  inScopeGuids: string[];
   // Current sync ID (maps to promise in external Map)
   currentSyncId: string | null;
   // Queue of pending sync requests
@@ -97,4 +133,6 @@ export interface SyncMachineInput {
   axiosInstance: AxiosInstance;
   configId: string;
   reauthenticate?: ReauthenticateCallback;
+  /** Optional purge callback invoked after a scope-rotation re-pull. */
+  purgeOutOfScope?: PurgeOutOfScopeCallback;
 }
