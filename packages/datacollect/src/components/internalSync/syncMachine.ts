@@ -317,11 +317,19 @@ export function createSyncMachine(
           /** Scope hash echoed back so the machine can update context/persist. */
           responseScopeHash: string | null;
           /**
-           * `true` when the response hash differs from the previously persisted
-           * hash and a re-pull session is in progress. Drives accumulation of
-           * in-scope guids and the eventual purge.
+           * `true` when this is the FIRST page of a session AND we detected the
+           * server-advertised hash differs from the previously persisted hash
+           * (rotation case — `lastKnownScopeHash !== null`). When set, the
+           * machine MUST discard the events from this page (they were fetched
+           * with the old cursor) and restart pagination from epoch.
            */
-          scopeRotated: boolean;
+          rotationDetected: boolean;
+          /**
+           * `true` when this is the first sync ever for this scope (persisted
+           * hash was null). Triggers hash establishment at end of pagination
+           * but never a purge.
+           */
+          establishingHash: boolean;
           /** Entity guids carried by THIS page (added to the in-scope accumulator). */
           pageEntityGuids: string[];
         }> => {
@@ -336,12 +344,38 @@ export function createSyncMachine(
           } = input.context;
           const { events, nextCursor, responseScopeHash } = input;
 
-          // Detect scope rotation: the server-advertised hash differs from
-          // what we have on disk. Once detected at the start of a sync, stay
-          // in re-pull mode for the rest of the pagination.
-          const rotatingNow =
-            responseScopeHash !== null && responseScopeHash !== lastKnownScopeHash;
-          const scopeRotated = rotatingNow || isScopeRepull;
+          // Establishment: first sync ever for this scope (no persisted hash).
+          // Apply events normally; at end of pagination persist the hash, no purge.
+          const establishingHash =
+            lastKnownScopeHash === null && responseScopeHash !== null;
+
+          // Rotation detection: persisted hash exists AND response hash differs.
+          // Only meaningful BEFORE we've already entered re-pull mode — once
+          // re-pull is in progress the response hash matches the new hash we
+          // adopted at the start of the re-pull, so this flag stays false.
+          const rotationDetected =
+            !isScopeRepull &&
+            lastKnownScopeHash !== null &&
+            responseScopeHash !== null &&
+            responseScopeHash !== lastKnownScopeHash;
+
+          // If rotation was just detected, DO NOT apply events from this page —
+          // they were fetched with the stale cursor and a re-pull from epoch
+          // will redeliver the in-scope subset. Short-circuit here.
+          if (rotationDetected) {
+            log.info(
+              { oldHash: lastKnownScopeHash, newHash: responseScopeHash },
+              "Scope rotation detected; resetting cursor and re-pulling from epoch",
+            );
+            return {
+              nextCursor,
+              latestEventTimestamp: null,
+              responseScopeHash,
+              rotationDetected: true,
+              establishingHash: false,
+              pageEntityGuids: [],
+            };
+          }
 
           let latestEventTimestamp: string | null = null;
           const pageEntityGuids: string[] = [];
@@ -372,9 +406,18 @@ export function createSyncMachine(
           // End-of-pagination housekeeping for scope state. Only runs once
           // when the server returned `nextCursor === null`.
           if (nextCursor === null && responseScopeHash !== null) {
-            if (scopeRotated) {
+            if (isScopeRepull) {
+              // Rotation re-pull complete. Purge out-of-scope entities, but only
+              // if we actually saw events in this re-pull. An empty in-scope
+              // set after a rotation is suspicious — it would purge the entire
+              // local store. Skip the purge and log a warning instead.
               const keepGuids = Array.from(new Set([...inScopeGuids, ...pageEntityGuids]));
-              if (purgeOutOfScope) {
+              if (keepGuids.length === 0) {
+                log.warn(
+                  { hash: responseScopeHash },
+                  "Scope rotation returned no in-scope events; skipping purge to prevent accidental data loss",
+                );
+              } else if (purgeOutOfScope) {
                 try {
                   await purgeOutOfScope(keepGuids);
                 } catch (err) {
@@ -383,17 +426,19 @@ export function createSyncMachine(
                 }
               }
               await eventStore.setLastScopeHash(responseScopeHash);
-            } else if (responseScopeHash !== lastKnownScopeHash) {
-              // Same-session hash drift without detection — defensive update.
+            } else if (establishingHash) {
+              // First sync ever — establish the hash, never purge.
               await eventStore.setLastScopeHash(responseScopeHash);
             }
+            // Same hash → no-op; deliberate.
           }
 
           return {
             nextCursor,
             latestEventTimestamp,
             responseScopeHash,
-            scopeRotated,
+            rotationDetected: false,
+            establishingHash,
             pageEntityGuids,
           };
         },
@@ -733,35 +778,53 @@ export function createSyncMachine(
                   responseScopeHash: pullOutput.responseScopeHash,
                 };
               },
-              onDone: {
-                target: "checkMorePages",
-                actions: assign({
-                  downloadCursor: ({ event }) =>
-                    event.output.nextCursor !== null
-                      ? event.output.nextCursor.toString()
-                      : null,
-                  lastSuccessfulDownloadTimestamp: ({ context, event }) =>
-                    event.output.latestEventTimestamp ?? context.lastSuccessfulDownloadTimestamp,
-                  // Track scope rotation across pages of the current session.
-                  isScopeRepull: ({ context, event }) =>
-                    event.output.scopeRotated || context.isScopeRepull,
-                  inScopeGuids: ({ context, event }) =>
-                    event.output.scopeRotated
-                      ? [...context.inScopeGuids, ...event.output.pageEntityGuids]
-                      : context.inScopeGuids,
-                  // After pagination completes the persisted hash is up to date,
-                  // so update the in-context value to match.
-                  lastKnownScopeHash: ({ context, event }) => {
-                    if (
-                      event.output.nextCursor === null &&
-                      event.output.responseScopeHash !== null
-                    ) {
-                      return event.output.responseScopeHash;
-                    }
-                    return context.lastKnownScopeHash;
-                  },
-                }),
-              },
+              onDone: [
+                {
+                  // Rotation just detected on the first page of this session.
+                  // Discard the events fetched with the stale cursor, reset
+                  // download state to epoch, mark re-pull mode, and adopt the
+                  // new hash in-context so subsequent pages won't re-trigger
+                  // detection. Loop back to pullingPage to fetch from "" again.
+                  guard: ({ event }) => event.output.rotationDetected === true,
+                  target: "pullingPage",
+                  actions: assign({
+                    downloadCursor: () => "",
+                    lastSuccessfulDownloadTimestamp: () => null as string | null,
+                    isScopeRepull: () => true,
+                    inScopeGuids: () => [] as string[],
+                    lastKnownScopeHash: ({ event }) => event.output.responseScopeHash,
+                  }),
+                },
+                {
+                  target: "checkMorePages",
+                  actions: assign({
+                    downloadCursor: ({ event }) =>
+                      event.output.nextCursor !== null
+                        ? event.output.nextCursor.toString()
+                        : null,
+                    lastSuccessfulDownloadTimestamp: ({ context, event }) =>
+                      event.output.latestEventTimestamp ?? context.lastSuccessfulDownloadTimestamp,
+                    // While in re-pull mode, accumulate the entity guids carried
+                    // by each page so the end-of-pagination purge has the full
+                    // in-scope set.
+                    inScopeGuids: ({ context, event }) =>
+                      context.isScopeRepull
+                        ? [...context.inScopeGuids, ...event.output.pageEntityGuids]
+                        : context.inScopeGuids,
+                    // After pagination completes the persisted hash is up to date,
+                    // so update the in-context value to match.
+                    lastKnownScopeHash: ({ context, event }) => {
+                      if (
+                        event.output.nextCursor === null &&
+                        event.output.responseScopeHash !== null
+                      ) {
+                        return event.output.responseScopeHash;
+                      }
+                      return context.lastKnownScopeHash;
+                    },
+                  }),
+                },
+              ],
               onError: {
                 target: "downloadFailed",
                 actions: assign({

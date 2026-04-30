@@ -310,4 +310,239 @@ describe("syncMachine scope handling", () => {
     expect(input.eventStore.deleteEventsForEntity).not.toHaveBeenCalled();
     actor.stop();
   });
+
+  test("rotation: second page request uses since='' after rotation detected (multi-page re-pull)", async () => {
+    // Pre-state: an old hash + a non-empty cursor on disk. Server advertises
+    // a different hash → rotation. The first page must be discarded, cursor
+    // reset to "", and the SECOND request must carry since="" (epoch).
+    const eventStore = createMockEventStore();
+    const entityStore = createMockEntityStore();
+    (eventStore.getLastRemoteSyncTimestamp as jest.Mock).mockResolvedValue(
+      "2026-04-29T00:00:00Z|prior-event",
+    );
+    (eventStore.getLastScopeHash as jest.Mock).mockResolvedValue("sha256:old");
+
+    const purgeOutOfScope = jest.fn(async (_keep: readonly string[]) => {
+      /* intentionally inert — only inspecting query strings + purge call */
+    });
+
+    const input = createInput({ eventStore, entityStore, purgeOutOfScope });
+
+    const firstPageEvent: FormSubmission = {
+      guid: "evt-first-page",
+      entityGuid: "entity-from-old-cursor",
+      type: "create-individual",
+      data: { name: "Old cursor result" },
+      timestamp: "2026-04-29T12:00:00Z",
+      userId: "u1",
+      syncLevel: 0,
+    };
+    const repullPageEvent: FormSubmission = {
+      guid: "evt-repull",
+      entityGuid: "entity-in-new-scope",
+      type: "create-individual",
+      data: { name: "Re-pull result" },
+      timestamp: "2026-01-01T00:00:00Z",
+      userId: "u1",
+      syncLevel: 0,
+    };
+
+    const mock = new MockAdapter(input.axiosInstance);
+    let callCount = 0;
+    mock.onGet(/\/api\/sync\/pull/).reply(() => {
+      callCount += 1;
+      if (callCount === 1) {
+        // First request — uses the OLD cursor. Server already advertises new hash.
+        return [
+          200,
+          {
+            events: [firstPageEvent],
+            nextCursor: "page-2-from-old-cursor",
+            scope: { hash: "sha256:new", areaIds: null, entityTypes: null, timeWindow: null },
+          },
+        ];
+      }
+      // Second request — must carry since="" (epoch) because the machine
+      // reset the cursor after detecting rotation. Single page suffices.
+      return [
+        200,
+        {
+          events: [repullPageEvent],
+          nextCursor: null,
+          scope: { hash: "sha256:new", areaIds: null, entityTypes: null, timeWindow: null },
+        },
+      ];
+    });
+
+    const actor = startActor(input);
+    actor.send({ type: "SYNC", syncId: "rotate-multipage" });
+    await waitFor("rotate-multipage", "resolve");
+
+    // Two requests issued: first with the stale cursor, second from epoch.
+    expect(mock.history.get).toHaveLength(2);
+    const firstUrl = mock.history.get[0].url ?? "";
+    const secondUrl = mock.history.get[1].url ?? "";
+
+    // First request carries the old persisted cursor.
+    expect(firstUrl).toContain(
+      `since=${encodeURIComponent("2026-04-29T00:00:00Z|prior-event")}`,
+    );
+    // Second request — after rotation detection — must have an empty `since`
+    // value, indicating the cursor was reset to epoch.
+    expect(secondUrl).toContain("since=&");
+
+    // Events from the FIRST (stale) page must be discarded — only the
+    // re-pull event should be applied to the EventApplierService.
+    const submitFormCalls = (input.eventApplierService.submitForm as jest.Mock).mock.calls;
+    const submittedGuids = submitFormCalls.map((c) => c[0].guid);
+    expect(submittedGuids).toContain("evt-repull");
+    expect(submittedGuids).not.toContain("evt-first-page");
+
+    // Purge ran with only the re-pulled entity in the keep set.
+    expect(purgeOutOfScope).toHaveBeenCalledTimes(1);
+    const keepArg = purgeOutOfScope.mock.calls[0][0] as readonly string[];
+    expect(keepArg).toContain("entity-in-new-scope");
+    expect(keepArg).not.toContain("entity-from-old-cursor");
+
+    // New hash persisted exactly once at end of pagination.
+    expect(eventStore.setLastScopeHash).toHaveBeenCalledWith("sha256:new");
+
+    actor.stop();
+  });
+
+  test("rotation with empty in-scope set: no purge, hash persisted, warning logged", async () => {
+    // Rotation detected, but the server returns no events on the re-pull —
+    // empty in-scope set. We must NOT purge (would wipe the local store) and
+    // we MUST persist the new hash so the next sync treats it as same-hash.
+    const eventStore = createMockEventStore();
+    const entityStore = createMockEntityStore();
+    (eventStore.getLastRemoteSyncTimestamp as jest.Mock).mockResolvedValue(
+      "2026-04-29T00:00:00Z|some-event",
+    );
+    (eventStore.getLastScopeHash as jest.Mock).mockResolvedValue("sha256:old");
+
+    // Local store has entities from a prior assignment — these must survive.
+    (entityStore.getAllEntities as jest.Mock).mockResolvedValue([
+      {
+        guid: "stale-entity-1",
+        initial: null,
+        modified: {
+          id: "stale-entity-1",
+          guid: "stale-entity-1",
+          type: "individual",
+          version: 1,
+          data: {},
+          lastUpdated: "2026-01-01T00:00:00Z",
+        },
+      },
+    ]);
+
+    const purgeOutOfScope = jest.fn(async (_keep: readonly string[]) => {
+      /* must NEVER be called in this scenario */
+    });
+
+    const input = createInput({ eventStore, entityStore, purgeOutOfScope });
+
+    const mock = new MockAdapter(input.axiosInstance);
+    let callCount = 0;
+    mock.onGet(/\/api\/sync\/pull/).reply(() => {
+      callCount += 1;
+      if (callCount === 1) {
+        // First page: rotation signalled, but we still return some events
+        // (which will be discarded) so the rotation flow exercises end-to-end.
+        return [
+          200,
+          {
+            events: [],
+            nextCursor: null,
+            scope: { hash: "sha256:new", areaIds: null, entityTypes: null, timeWindow: null },
+          },
+        ];
+      }
+      // Re-pull from epoch returns nothing — empty scope.
+      return [
+        200,
+        {
+          events: [],
+          nextCursor: null,
+          scope: { hash: "sha256:new", areaIds: null, entityTypes: null, timeWindow: null },
+        },
+      ];
+    });
+
+    const actor = startActor(input);
+    actor.send({ type: "SYNC", syncId: "rotate-empty" });
+    await waitFor("rotate-empty", "resolve");
+
+    // Purge MUST NOT be called when the keep set is empty.
+    expect(purgeOutOfScope).not.toHaveBeenCalled();
+    // New hash persisted — next sync treats it as same-hash, not another rotation.
+    expect(eventStore.setLastScopeHash).toHaveBeenCalledWith("sha256:new");
+    // Local entities untouched.
+    expect(entityStore.deleteEntity).not.toHaveBeenCalled();
+    expect(eventStore.deleteEventsForEntity).not.toHaveBeenCalled();
+
+    actor.stop();
+  });
+
+  test("first sync ever: hash establishes, no purge", async () => {
+    // No persisted hash on disk — establishment, not rotation.
+    // Local store may already contain entities (e.g., from a prior import or
+    // legacy state). Establishment must NOT purge those.
+    const eventStore = createMockEventStore();
+    const entityStore = createMockEntityStore();
+    (eventStore.getLastRemoteSyncTimestamp as jest.Mock).mockResolvedValue("");
+    (eventStore.getLastScopeHash as jest.Mock).mockResolvedValue(null);
+    (entityStore.getAllEntities as jest.Mock).mockResolvedValue([
+      {
+        guid: "preexisting-entity",
+        initial: null,
+        modified: {
+          id: "preexisting-entity",
+          guid: "preexisting-entity",
+          type: "individual",
+          version: 1,
+          data: {},
+          lastUpdated: "2026-01-01T00:00:00Z",
+        },
+      },
+    ]);
+
+    const purgeOutOfScope = jest.fn(async (_keep: readonly string[]) => {
+      /* must NEVER be called on first establishment */
+    });
+
+    const input = createInput({ eventStore, entityStore, purgeOutOfScope });
+
+    const event: FormSubmission = {
+      guid: "evt-init",
+      entityGuid: "entity-from-server",
+      type: "create-individual",
+      data: { name: "Initial" },
+      timestamp: "2026-04-30T00:00:00Z",
+      userId: "u1",
+      syncLevel: 0,
+    };
+
+    const mock = new MockAdapter(input.axiosInstance);
+    mock.onGet(/\/api\/sync\/pull/).reply(200, {
+      events: [event],
+      nextCursor: null,
+      scope: { hash: "sha256:initial", areaIds: null, entityTypes: null, timeWindow: null },
+    });
+
+    const actor = startActor(input);
+    actor.send({ type: "SYNC", syncId: "first-ever" });
+    await waitFor("first-ever", "resolve");
+
+    // Establishment path: hash persisted, no purge, no deletes.
+    expect(eventStore.setLastScopeHash).toHaveBeenCalledWith("sha256:initial");
+    expect(purgeOutOfScope).not.toHaveBeenCalled();
+    expect(entityStore.deleteEntity).not.toHaveBeenCalled();
+    expect(eventStore.deleteEventsForEntity).not.toHaveBeenCalled();
+
+    // Only one request issued (no rotation re-pull).
+    expect(mock.history.get).toHaveLength(1);
+    actor.stop();
+  });
 });
