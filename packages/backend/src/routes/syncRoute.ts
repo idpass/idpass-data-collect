@@ -20,7 +20,13 @@
 import { Router } from "express";
 import bodyParser from "body-parser";
 import { Pool } from "pg";
-import { ExternalSyncCredentials, SyncProgress } from "@idpass/data-collect-core";
+import {
+  ExternalSyncCredentials,
+  SyncProgress,
+  validateEventScope,
+  type EntityScopeRef,
+  type FormSubmission,
+} from "@idpass/data-collect-core";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
 import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware, validateTenantAccess } from "../middlewares/authentication";
@@ -345,6 +351,7 @@ export function createSyncRouter(
     "/push",
     createDynamicAuthMiddleware(appInstanceStore),
     validateTenantAccess,
+    createScopeContextMiddleware(appInstanceStore, { source: "body" }),
     asyncHandler(async (req, res) => {
       const parseResult = SyncPushPayloadSchema.safeParse(req.body);
       if (!parseResult.success) {
@@ -358,10 +365,69 @@ export function createSyncRouter(
         return res.status(404).json({ status: "error", message: "App instance not found" });
       }
 
-      const sorted = events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-      const batchEvents = sorted.map((event) => ({ ...event, syncLevel: 1 }));
+      // Sort the FULL parsed list by timestamp so applied events preserve
+      // submission order. Validation/partition below preserves this order.
+      const sorted = events
+        .slice()
+        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      const allEvents: FormSubmission[] = sorted.map((event) => ({ ...event, syncLevel: 1 }));
 
-      const recordPushTelemetry = () => {
+      // ---------------------------------------------------------------
+      // Per-event scope validation (Phase 3 — WP #947)
+      // ---------------------------------------------------------------
+      const scope = (req as ScopeAwareRequest).scope!.effective;
+      const isBounded = scope.areaIds !== null || scope.entityTypes !== null;
+
+      type ScopeRejection = {
+        guid: string;
+        entityGuid: string;
+        type: string;
+        reason: "out_of_scope" | "unknown_entity";
+      };
+
+      let acceptedEvents: FormSubmission[] = allEvents;
+      const rejected: ScopeRejection[] = [];
+
+      if (isBounded) {
+        // Build a lookup map for events that need entity resolution: anything
+        // that is NOT a create-individual / create-group event. The validator
+        // resolves create-* events purely from the payload.
+        const isCreateIndividualOrGroup = (t: string) =>
+          (t.startsWith("create-") && (t.endsWith("-individual") || t.endsWith("-group")));
+        const guidsToLookup = Array.from(
+          new Set(allEvents.filter((e) => !isCreateIndividualOrGroup(e.type)).map((e) => e.entityGuid)),
+        );
+
+        const lookupResults = await Promise.all(
+          guidsToLookup.map(async (guid): Promise<[string, EntityScopeRef | undefined]> => {
+            try {
+              const pair = await appInstance.edm.getEntity(guid);
+              const areaIdRaw = (pair.modified.data as Record<string, unknown> | undefined)?.area_id;
+              const areaId = typeof areaIdRaw === "string" ? areaIdRaw : null;
+              return [guid, { type: pair.modified.type, areaId } as EntityScopeRef];
+            } catch {
+              // getEntity throws ENTITY_NOT_FOUND for unknown ids — surface as
+              // "no ref" so the validator returns unknown_entity.
+              return [guid, undefined];
+            }
+          }),
+        );
+        const lookupMap = new Map<string, EntityScopeRef | undefined>(lookupResults);
+        const lookup = (guid: string): EntityScopeRef | undefined => lookupMap.get(guid);
+
+        const accepted: FormSubmission[] = [];
+        for (const evt of allEvents) {
+          const result = validateEventScope(evt, scope, lookup);
+          if (result.ok) {
+            accepted.push(evt);
+          } else {
+            rejected.push({ guid: evt.guid, entityGuid: evt.entityGuid, type: evt.type, reason: result.reason });
+          }
+        }
+        acceptedEvents = accepted;
+      }
+
+      const recordPushTelemetry = (eventCount: number) => {
         const deviceId = readDeviceIdHeader(req);
         if (telemetryStore && deviceId) {
           const userId = String((req as AuthenticatedRequest).user?.id ?? "");
@@ -370,8 +436,8 @@ export function createSyncRouter(
               tenantId,
               userId,
               deviceId,
-              eventCount: events.length,
-              scopeHash: null,
+              eventCount,
+              scopeHash: (req as ScopeAwareRequest).scope?.hash ?? null,
             })
             .catch((err) => {
               log.warn({ err, deviceId, tenantId }, "Failed to record push telemetry; ignoring");
@@ -379,33 +445,66 @@ export function createSyncRouter(
         }
       };
 
+      // All-rejected: never call submit. Emit 422 with rejected list.
+      if (acceptedEvents.length === 0 && rejected.length > 0) {
+        return res.status(422).json({
+          status: "error",
+          message: "All events rejected by scope policy",
+          applied: 0,
+          failed: rejected,
+          errors: [],
+        });
+      }
+
+      // Helper to combine submit-failed entries with scope-rejected entries.
+      // Submit-failed entries keep their existing shape (the FormSubmission for
+      // the fallback path; the {index, eventGuid, error} shape for the
+      // transactional path) and additionally carry a `reason: "submit_failed"`
+      // tag where it's straightforward to add — this is additive and does not
+      // remove or rename any pre-existing field.
+
       if (txPool) {
-        // Transactional path: all events succeed or none are applied
-        const result = await processTransactionalBatch(txPool, tenantId, batchEvents);
+        // Transactional path: all accepted events succeed or none are applied
+        const result = await processTransactionalBatch(txPool, tenantId, acceptedEvents);
         if (!result.success) {
+          const failedWithReason = result.failed.map((f) => ({ ...f, reason: "submit_failed" as const }));
           return res.status(422).json({
             status: "error",
             message: "Batch push failed; no events were applied",
             applied: result.applied,
-            failed: result.failed,
+            failed: [...failedWithReason, ...rejected],
           });
         }
-        recordPushTelemetry();
-        return res.json({ status: "success", applied: result.applied, failed: result.failed, errors: [] });
+        recordPushTelemetry(result.applied);
+        const status = rejected.length > 0 ? 207 : 200;
+        return res.status(status).json({
+          status: rejected.length > 0 ? "partial" : "success",
+          applied: result.applied,
+          failed: [...result.failed, ...rejected],
+          errors: [],
+        });
       }
 
       // Fallback for environments without a direct postgres URL (e.g., tests
       // that don't pass the URL through). Uses the non-transactional path.
       try {
-        const result = await appInstance.edm.submitFormBatch(batchEvents);
-        recordPushTelemetry();
-        res.json({ status: "success", applied: result.applied, failed: result.failed, errors: result.errors });
+        const result = await appInstance.edm.submitFormBatch(acceptedEvents);
+        recordPushTelemetry(result.applied);
+        const failedWithReason = result.failed.map((f) => ({ ...f, reason: "submit_failed" as const }));
+        const status = rejected.length > 0 ? 207 : 200;
+        res.status(status).json({
+          status: rejected.length > 0 ? "partial" : "success",
+          applied: result.applied,
+          failed: [...failedWithReason, ...rejected],
+          errors: result.errors,
+        });
       } catch (error) {
         log.error({ err: error }, "Batch push failed");
         const message = error instanceof Error ? error.message : String(error);
         res.status(422).json({
           status: "error",
           message: "Batch push failed; no events were applied",
+          failed: rejected,
           errors: [message],
         });
       }
