@@ -61,6 +61,34 @@ function readDeviceIdHeader(req: { header(name: string): string | undefined }): 
   return /^[A-Za-z0-9_-]+$/.test(raw) ? raw : null;
 }
 
+/**
+ * Phase 3 (#947): on scoped tenants, the X-Device-Id header is mandatory so
+ * pre-upgrade clients fail loud rather than silently bypassing scope-aware
+ * telemetry. A tenant is "scoped" when its effective scope constrains areaIds
+ * or entityTypes; time-window-only is treated as unscoped (enforcement
+ * deferred). Returns `{ ok: true }` if the request may proceed, otherwise a
+ * ready-to-send 400 response body.
+ */
+function requireDeviceIdIfScoped(
+  req: ScopeAwareRequest,
+):
+  | { ok: true }
+  | { ok: false; status: 400; body: { status: "error"; code: "DEVICE_ID_REQUIRED"; message: string } } {
+  const eff = req.scope!.effective;
+  const isBounded = eff.areaIds !== null || eff.entityTypes !== null;
+  if (!isBounded) return { ok: true };
+  if (readDeviceIdHeader(req) !== null) return { ok: true };
+  return {
+    ok: false,
+    status: 400,
+    body: {
+      status: "error",
+      code: "DEVICE_ID_REQUIRED",
+      message: "X-Device-Id header is required for scoped tenants. Upgrade your client.",
+    },
+  };
+}
+
 const SyncPushPayloadSchema = z.object({
   events: z.array(z.object({
     guid: z.string().uuid(),
@@ -216,6 +244,10 @@ export function createSyncRouter(
       if (!appInstance) {
         return res.status(404).json({ status: "error", message: "App instance not found" });
       }
+      const deviceCheck = requireDeviceIdIfScoped(req as ScopeAwareRequest);
+      if (!deviceCheck.ok) {
+        return res.status(deviceCheck.status).json(deviceCheck.body);
+      }
       const edm = appInstance.edm;
 
       // Duplicates are advisory — they must not block sync. Include a warning
@@ -363,6 +395,10 @@ export function createSyncRouter(
       const appInstance = await appInstanceStore.getAppInstance(tenantId);
       if (!appInstance) {
         return res.status(404).json({ status: "error", message: "App instance not found" });
+      }
+      const deviceCheck = requireDeviceIdIfScoped(req as ScopeAwareRequest);
+      if (!deviceCheck.ok) {
+        return res.status(deviceCheck.status).json(deviceCheck.body);
       }
 
       // Sort the FULL parsed list by timestamp so applied events preserve
