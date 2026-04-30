@@ -24,7 +24,7 @@ import type { AppInstanceStore, AppInstance, AppConfig, RoleAssignment } from ".
 
 function makeFakeAppInstanceStore(config: AppConfig): AppInstanceStore {
   return {
-    async getAppInstance(_id: string) {
+    async getAppInstance() {
       return {
         config,
         edm: {} as never,
