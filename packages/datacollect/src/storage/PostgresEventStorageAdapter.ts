@@ -661,6 +661,19 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
   }
 
   /**
+   * Per-entity event deletion is a client-only data-minimization operation
+   * used during scope-purge. The server retains the full audit trail and
+   * MUST NOT support this method.
+   *
+   * @throws {Error} Always throws; this method is not supported on the server-side adapter.
+   */
+  async deleteEventsForEntity(_entityGuid: string): Promise<number> {
+    throw new Error(
+      "PostgresEventStorageAdapter.deleteEventsForEntity is client-only; the server is stateless on client scope state",
+    );
+  }
+
+  /**
    * Checks if an event with the given GUID exists in the event store for the current tenant.
    *
    * @param guid The GUID of the event to check.

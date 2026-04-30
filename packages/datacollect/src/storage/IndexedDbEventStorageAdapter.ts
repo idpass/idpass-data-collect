@@ -758,6 +758,43 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
   }
 
   /**
+   * Deletes all events whose `entityGuid` matches the given guid.
+   *
+   * Used during client-side scope-purge — when an entity falls outside the
+   * effective sync scope, its events would otherwise be orphans. This is a
+   * local data-minimization operation; it does NOT generate `delete-entity`
+   * events and is invisible to the server.
+   *
+   * @param entityGuid The entity guid whose events should be removed.
+   * @returns A Promise that resolves with the number of events deleted.
+   * @throws {Error} If IndexedDB is not initialized or the deletion fails.
+   */
+  async deleteEventsForEntity(entityGuid: string): Promise<number> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+    return new Promise<number>((resolve, reject) => {
+      const tx = this.db!.transaction("events", "readwrite");
+      const store = tx.objectStore("events");
+      const index = store.index("entityGuid");
+      const cursorReq = index.openCursor(IDBKeyRange.only(entityGuid));
+      let count = 0;
+      cursorReq.onsuccess = () => {
+        const cursor = cursorReq.result;
+        if (cursor) {
+          cursor.delete();
+          count++;
+          cursor.continue();
+        }
+      };
+      cursorReq.onerror = () => reject(cursorReq.error);
+      tx.oncomplete = () => resolve(count);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  }
+
+  /**
    * Checks if an event with the given GUID exists in the event store.
    *
    * @param guid The GUID of the event to check.

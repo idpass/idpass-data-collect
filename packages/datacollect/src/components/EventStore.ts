@@ -400,6 +400,24 @@ export class EventStoreImpl implements EventStore {
   }
 
   /**
+   * Deletes all events whose `entityGuid` matches the given guid.
+   *
+   * Delegates to the underlying storage adapter. Used during client-side
+   * scope-purge — see {@link EventStorageAdapter.deleteEventsForEntity}.
+   *
+   * Note: Purge does NOT extend the hash chain. It is a local data-
+   * minimization operation, so the chain anchor is intentionally not updated;
+   * a subsequent rebuildHashChain on the next initialize would recompute
+   * from remaining events if needed.
+   *
+   * @param entityGuid The entity guid whose events should be removed.
+   * @returns The number of events deleted.
+   */
+  async deleteEventsForEntity(entityGuid: string): Promise<number> {
+    return await this.storageAdapter.deleteEventsForEntity(entityGuid);
+  }
+
+  /**
    * Updates the sync level of an event.
    *
    * @param id The ID of the event to update.

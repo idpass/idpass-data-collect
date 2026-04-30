@@ -30,6 +30,7 @@ function createMockEventStore(): EventStore {
     setLastPushExternalSyncTimestamp: jest.fn(),
     isEventExisted: jest.fn().mockResolvedValue(false),
     getAuditTrailByEntityGuid: jest.fn().mockResolvedValue([]),
+    deleteEventsForEntity: jest.fn().mockResolvedValue(0),
     clearStore: jest.fn(),
     closeConnection: jest.fn(),
   };
