@@ -31,3 +31,11 @@ export * from "./models";
 export { OpenSppV2Client, PreconditionFailedError, ConflictError } from "./v2/OpenSppV2Client";
 export { default as OpenSppV2SyncAdapter } from "./v2/OpenSppV2SyncAdapter";
 export * from "./v2/types";
+export type {
+  ChangeRequestType,
+  RegistrantRef,
+  ChangeRequestStatus,
+  ChangeRequestCreate,
+  ChangeRequestUpdate,
+  ChangeRequestResponse,
+} from "./v2/ChangeRequestTypes";
