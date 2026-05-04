@@ -48,3 +48,11 @@ export type {
   EventTypeKey,
   OpenSppV2AdapterOptions,
 } from "./v2/OpenSppV2AdapterOptions";
+export {
+  CR_KEY_PREFIX,
+  getCR,
+  setCR,
+  deleteCR,
+  listInFlightCRs,
+} from "./v2/changeRequestStore";
+export type { CRRecord } from "./v2/changeRequestStore";

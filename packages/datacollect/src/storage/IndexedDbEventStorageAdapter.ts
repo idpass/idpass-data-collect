@@ -956,4 +956,102 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
       };
     });
   }
+
+  /**
+   * Generic key-value metadata accessor. Reuses the existing `syncTimestamp`
+   * object store, which is already a `{ id, value }` key/value table — the
+   * same store that holds scope-hash, push-watermark, hash-anchor, etc.
+   * Returns `null` when the key is absent (do not return empty-string
+   * sentinel — empty string is a legitimate stored value).
+   *
+   * @param key The metadata key.
+   * @returns The stored value, or `null` if the key does not exist.
+   */
+  async getMetadataValue(key: string): Promise<string | null> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+    return new Promise<string | null>((resolve, reject) => {
+      const tx = this.db!.transaction("syncTimestamp", "readonly");
+      const req = tx.objectStore("syncTimestamp").get(key);
+      req.onsuccess = () => {
+        const row = req.result as { id: string; value?: string } | undefined;
+        resolve(row?.value ?? null);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  /**
+   * Persist (upsert) a metadata value under `key` in the `syncTimestamp`
+   * store. Resolves on `transaction.oncomplete` so callers see the write
+   * committed before the Promise settles.
+   *
+   * @param key The metadata key.
+   * @param value The value to store.
+   */
+  async setMetadataValue(key: string, value: string): Promise<void> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+    return new Promise<void>((resolve, reject) => {
+      const tx = this.db!.transaction("syncTimestamp", "readwrite");
+      tx.objectStore("syncTimestamp").put({ id: key, value });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  }
+
+  /**
+   * Delete the metadata row for `key`. No-op if absent. Resolves on
+   * `transaction.oncomplete`.
+   *
+   * @param key The metadata key to remove.
+   */
+  async deleteMetadataValue(key: string): Promise<void> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+    return new Promise<void>((resolve, reject) => {
+      const tx = this.db!.transaction("syncTimestamp", "readwrite");
+      tx.objectStore("syncTimestamp").delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  }
+
+  /**
+   * List metadata keys whose name starts with `prefix`. Opens a cursor on the
+   * `syncTimestamp` object store, accumulates matching keys, and resolves on
+   * `transaction.oncomplete`.
+   *
+   * @param prefix Key prefix to filter on (e.g. `"cr:"`).
+   */
+  async listMetadataKeys(prefix: string): Promise<string[]> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+    return new Promise<string[]>((resolve, reject) => {
+      const tx = this.db!.transaction("syncTimestamp", "readonly");
+      const store = tx.objectStore("syncTimestamp");
+      const keys: string[] = [];
+      const req = store.openCursor();
+      req.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+        if (cursor) {
+          const id = cursor.value?.id;
+          if (typeof id === "string" && id.startsWith(prefix)) {
+            keys.push(id);
+          }
+          cursor.continue();
+        }
+      };
+      req.onerror = () => reject(req.error);
+      tx.oncomplete = () => resolve(keys);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  }
 }

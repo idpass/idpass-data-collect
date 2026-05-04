@@ -597,4 +597,42 @@ export class EventStoreImpl implements EventStore {
   getAuditTrailByEntityGuid(entityGuid: string): Promise<AuditLogEntry[]> {
     return this.storageAdapter.getAuditTrailByEntityGuid(entityGuid);
   }
+
+  /**
+   * Read a generic metadata value scoped to this store's tenant. Returns
+   * `null` when the key is absent.
+   *
+   * @param key The metadata key.
+   */
+  getMetadataValue(key: string): Promise<string | null> {
+    return this.storageAdapter.getMetadataValue(key);
+  }
+
+  /**
+   * Persist (upsert) a metadata value under `key`.
+   *
+   * @param key The metadata key.
+   * @param value The value to store.
+   */
+  setMetadataValue(key: string, value: string): Promise<void> {
+    return this.storageAdapter.setMetadataValue(key, value);
+  }
+
+  /**
+   * Delete the metadata row for `key`. No-op if absent.
+   *
+   * @param key The metadata key to remove.
+   */
+  deleteMetadataValue(key: string): Promise<void> {
+    return this.storageAdapter.deleteMetadataValue(key);
+  }
+
+  /**
+   * List metadata keys whose name starts with `prefix` (tenant-scoped).
+   *
+   * @param prefix Key prefix to filter on.
+   */
+  listMetadataKeys(prefix: string): Promise<string[]> {
+    return this.storageAdapter.listMetadataKeys(prefix);
+  }
 }
