@@ -34,6 +34,11 @@ import {
 import { EventApplierService } from "@idpass/data-collect-core";
 import { OpenSppV2Client, PreconditionFailedError, ConflictError } from "./OpenSppV2Client";
 import type {
+  ChangeRequestSubmitMode,
+  EventTypeKey,
+  OpenSppV2AdapterOptions,
+} from "./OpenSppV2AdapterOptions";
+import type {
   IndividualResource,
   GroupResource,
   HumanName,
@@ -94,6 +99,10 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   private readonly maxRetries: number;
   private readonly identifierType: string;
   private readonly groupIdentifierType: string;
+  /** ChangeRequest push mode. Defaults to `"direct"` for backward compat. */
+  private readonly submitVia: ChangeRequestSubmitMode;
+  /** Tenant override for CR request-type codes. Empty when unset. */
+  private readonly changeRequestTypeMap: Partial<Record<EventTypeKey, string>>;
 
   constructor(
     private eventStore: EventStore,
@@ -114,6 +123,8 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       getAdapterConfigValue<string>(config, "identifierType") ?? "system_id";
     this.groupIdentifierType =
       getAdapterConfigValue<string>(config, "groupIdentifierType") ?? this.identifierType;
+    this.submitVia = readSubmitVia(config);
+    this.changeRequestTypeMap = readChangeRequestTypeMap(config);
   }
 
   /**
@@ -934,4 +945,54 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   }
 }
 
+/**
+ * Read `submitVia` from `ExternalSyncConfig.adapterConfig`, falling back to
+ * the legacy `extraFields` shape. Anything other than `"change-request"`
+ * (including `undefined`) resolves to `"direct"` so tenants without explicit
+ * config retain the pre-#948 behaviour.
+ */
+function readSubmitVia(config: ExternalSyncConfig): ChangeRequestSubmitMode {
+  const raw = getAdapterConfigValue<string>(config, "submitVia");
+  return raw === "change-request" ? "change-request" : "direct";
+}
+
+/**
+ * Read `changeRequestTypeMap` from config. The map is an object, not a
+ * primitive, so we accept either:
+ *   - `adapterConfig.changeRequestTypeMap` as a JSON-stringified record, or
+ *   - the same field on the parent config as a real object (forwarded by
+ *     callers that bypass `adapterConfig`'s primitive constraint).
+ *
+ * Returns `{}` when absent or unparseable so the resolver falls through to
+ * {@link DEFAULT_CR_TYPE_MAP}.
+ */
+function readChangeRequestTypeMap(
+  config: ExternalSyncConfig,
+): Partial<Record<EventTypeKey, string>> {
+  // Direct object on the parent config (set by V2 callers that hold the typed
+  // options; not exposed on adapterConfig because it's not a primitive).
+  const direct = (config as ExternalSyncConfig & {
+    changeRequestTypeMap?: Partial<Record<EventTypeKey, string>>;
+  }).changeRequestTypeMap;
+  if (direct && typeof direct === "object") {
+    return direct;
+  }
+
+  // String fallback for tenants that round-trip config through JSON.
+  const raw = getAdapterConfigValue<string>(config, "changeRequestTypeMap");
+  if (typeof raw !== "string" || raw.trim() === "") {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Partial<Record<EventTypeKey, string>>;
+    }
+  } catch {
+    // Fall through to {} — the resolver will use defaults.
+  }
+  return {};
+}
+
+export type { OpenSppV2AdapterOptions };
 export default OpenSppV2SyncAdapter;
