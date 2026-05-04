@@ -67,4 +67,27 @@ describe("EventStore generic metadata accessor", () => {
     await store.setMetadataValue("blank", "");
     expect(await store.getMetadataValue("blank")).toBe("");
   });
+
+  test("listMetadataKeys returns prefix-matching keys at scale (1000 total, 500 matching)", async () => {
+    // Seed 1000 keys under unique prefixes that don't collide with sibling
+    // tests in this file: 500 with `scaleA:` prefix, 500 with `scaleB:`.
+    const writes: Promise<void>[] = [];
+    for (let i = 0; i < 500; i++) {
+      writes.push(
+        store.setMetadataValue(`scaleA:entity-${String(i).padStart(4, "0")}`, "{}"),
+      );
+      writes.push(
+        store.setMetadataValue(`scaleB:row-${String(i).padStart(4, "0")}`, "{}"),
+      );
+    }
+    await Promise.all(writes);
+
+    const aKeys = await store.listMetadataKeys("scaleA:");
+    expect(aKeys).toHaveLength(500);
+    expect(aKeys.every((k) => k.startsWith("scaleA:"))).toBe(true);
+
+    const bKeys = await store.listMetadataKeys("scaleB:");
+    expect(bKeys).toHaveLength(500);
+    expect(bKeys.every((k) => k.startsWith("scaleB:"))).toBe(true);
+  });
 });

@@ -1023,9 +1023,13 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
   }
 
   /**
-   * List metadata keys whose name starts with `prefix`. Opens a cursor on the
-   * `syncTimestamp` object store, accumulates matching keys, and resolves on
-   * `transaction.oncomplete`.
+   * List metadata keys whose name starts with `prefix`. Uses a key-range cursor
+   * over the `syncTimestamp` object store (whose `keyPath` is `id`) so the
+   * scan visits only the prefix-matching subset of the keyspace instead of
+   * walking every row. The upper bound `prefix + "￿"` exploits the fact
+   * that no DataCollect-issued metadata key contains `U+FFFF`.
+   *
+   * Resolves on `transaction.oncomplete`.
    *
    * @param prefix Key prefix to filter on (e.g. `"cr:"`).
    */
@@ -1033,18 +1037,17 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     if (!this.db) {
       throw new Error("IndexedDB is not initialized");
     }
+    const db = this.db;
     return new Promise<string[]>((resolve, reject) => {
-      const tx = this.db!.transaction("syncTimestamp", "readonly");
+      const tx = db.transaction("syncTimestamp", "readonly");
       const store = tx.objectStore("syncTimestamp");
+      const range = IDBKeyRange.bound(prefix, prefix + "￿", false, false);
+      const req = store.openKeyCursor(range);
       const keys: string[] = [];
-      const req = store.openCursor();
       req.onsuccess = (event) => {
-        const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+        const cursor = (event.target as IDBRequest<IDBCursor | null>).result;
         if (cursor) {
-          const id = cursor.value?.id;
-          if (typeof id === "string" && id.startsWith(prefix)) {
-            keys.push(id);
-          }
+          if (typeof cursor.key === "string") keys.push(cursor.key);
           cursor.continue();
         }
       };

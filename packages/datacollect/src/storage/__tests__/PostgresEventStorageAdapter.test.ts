@@ -825,5 +825,21 @@ describeTenantTests("PostgresEventStorageAdapter - Tenant Tests", () => {
       await tenant1Adapter.setMetadataValue("blank", "");
       expect(await tenant1Adapter.getMetadataValue("blank")).toBe("");
     });
+
+    test("listMetadataKeys treats LIKE metacharacters in prefix as literals", async () => {
+      // Without LIKE-escape, a prefix containing `%` would behave like a
+      // wildcard and silently match unrelated keys (e.g. `cr:abc`).
+      await tenant1Adapter.setMetadataValue("cr:abc", "{}");
+      await tenant1Adapter.setMetadataValue("cr:%literal", "{}");
+      await tenant1Adapter.setMetadataValue("cr:_under", "{}");
+
+      // `cr:%` should match only the literal-`%` key, not `cr:abc`.
+      const percentMatches = await tenant1Adapter.listMetadataKeys("cr:%");
+      expect(percentMatches).toEqual(["cr:%literal"]);
+
+      // `cr:_` should match only the literal-`_` key, not all single-chars.
+      const underscoreMatches = await tenant1Adapter.listMetadataKeys("cr:_");
+      expect(underscoreMatches).toEqual(["cr:_under"]);
+    });
   });
 });

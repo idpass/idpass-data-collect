@@ -541,6 +541,82 @@ describe("OpenSppV2SyncAdapter — submitVia: 'change-request' group create", ()
   });
 });
 
+describe("OpenSppV2SyncAdapter — submitVia: 'change-request' watermark advance", () => {
+  it("advances the push watermark when the only failures are permanently-blocked CR_REVISION_NEEDED entities", async () => {
+    // One entity has a `rejected` CR (permanently blocked until operator
+    // resets it on OpenSPP). The watermark must advance so successful pushes
+    // are not re-considered every cycle.
+    const blocked = individualPair({ guid: "ind-rej-watermark" });
+    const fresh = individualPair({ guid: "ind-fresh-watermark" });
+    const { store } = makeEventStore({
+      "cr:ind-rej-watermark": JSON.stringify({
+        reference: "CR/2026/00091",
+        status: "rejected",
+        rejectionReason: "Bad name",
+      } as CRRecord),
+    });
+    const applier = makeApplierService([blocked, fresh]);
+    const adapter = new OpenSppV2SyncAdapter(store, applier, configWithMode("change-request"));
+
+    mockV2ClientImplementation.createChangeRequest.mockResolvedValueOnce(
+      crResponse({
+        reference: "CR/2026/00500",
+        status: "draft",
+        registrant: { system: "datacollect:guid", value: "ind-fresh-watermark" },
+        requestType: { code: "add_individual" },
+      }),
+    );
+    mockV2ClientImplementation.submitChangeRequest.mockResolvedValueOnce(
+      crResponse({
+        reference: "CR/2026/00500",
+        status: "pending",
+        submittedDate: "2026-05-04T10:00:00Z",
+        requestType: { code: "add_individual" },
+      }),
+    );
+
+    const result = await adapter.pushData();
+
+    // 1 pushed, 1 failed (the rejected CR is permanently blocked).
+    expect(result.pushed).toBe(1);
+    expect(result.failed).toBe(1);
+    expect(result.errors[0].code).toBe("CR_REVISION_NEEDED");
+    expect(result.errors[0].retryable).toBe(false);
+
+    // Watermark MUST advance — only permanently-blocked CR failures remain.
+    expect(store.setLastPushExternalSyncTimestamp).toHaveBeenCalledTimes(1);
+  });
+
+  it("holds the push watermark when retryable PUSH_FAILED errors remain", async () => {
+    // Use a direct-mode push so we can force a retryable network failure
+    // without involving the CR pipeline. The watermark MUST NOT advance.
+    const pair = individualPair({ guid: "ind-retry-watermark" });
+    const { store } = makeEventStore();
+    const applier = makeApplierService([pair]);
+    const cfg: ExternalSyncConfig = {
+      ...configWithMode("direct"),
+      adapterConfig: {
+        ...((configWithMode("direct").adapterConfig ?? {}) as Record<string, unknown>),
+        maxRetries: 0,
+      },
+    };
+    const adapter = new OpenSppV2SyncAdapter(store, applier, cfg);
+
+    mockV2ClientImplementation.createIndividual.mockRejectedValueOnce(
+      new Error("boom: 503 Service Unavailable"),
+    );
+
+    const result = await adapter.pushData();
+
+    expect(result.failed).toBe(1);
+    expect(result.errors[0].code).toBe("PUSH_FAILED");
+    expect(result.errors[0].retryable).toBe(true);
+
+    // Watermark stays put — the failure is retryable.
+    expect(store.setLastPushExternalSyncTimestamp).not.toHaveBeenCalled();
+  });
+});
+
 describe("OpenSppV2SyncAdapter — submitVia: 'change-request' submit failure", () => {
   it("leaves metadata in 'draft' when $submit fails so next run can retry", async () => {
     const pair = individualPair({ guid: "ind-submit-fail-1" });
