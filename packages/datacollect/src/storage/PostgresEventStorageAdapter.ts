@@ -838,16 +838,23 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
    * List metadata keys whose name starts with `prefix` (tenant-scoped).
    *
    * Uses SQL `LIKE prefix%` with the prefix passed verbatim — callers should
-   * not include `%` themselves. Returns keys in insertion-order-agnostic order
-   * (no sort applied).
+   * not include `%` themselves. LIKE metacharacters (`%`, `_`, `\`) in the
+   * caller-supplied prefix are escaped so a prefix like `"cr:%"` matches the
+   * literal `"cr:%"` rather than treating `%` as a wildcard. Returns keys in
+   * insertion-order-agnostic order (no sort applied).
    *
    * @param prefix Key prefix to filter on (e.g. `"cr:"`).
    */
   async listMetadataKeys(prefix: string): Promise<string[]> {
+    // Escape LIKE metacharacters so callers can pass literal prefixes safely.
+    // PostgreSQL's default LIKE escape character is `\`, so `\%` / `\_` /
+    // `\\` are interpreted as literal `%` / `_` / `\` without an explicit
+    // ESCAPE clause.
+    const escaped = prefix.replace(/[\\%_]/g, (c) => `\\${c}`);
     const rows = await this.db
       .select({ key: syncMetadata.key })
       .from(syncMetadata)
-      .where(and(eq(syncMetadata.tenantId, this.tenantId), like(syncMetadata.key, `${prefix}%`)));
+      .where(and(eq(syncMetadata.tenantId, this.tenantId), like(syncMetadata.key, `${escaped}%`)));
     return rows.map((r) => r.key);
   }
 

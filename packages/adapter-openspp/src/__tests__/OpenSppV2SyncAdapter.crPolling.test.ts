@@ -414,6 +414,120 @@ describe("OpenSppV2SyncAdapter — pull CR status polling — CR mode", () => {
     expect(mockV2ClientImplementation.getChangeRequest).toHaveBeenCalledTimes(100);
   });
 
+  it("returns CR_REJECTED in pull errors when a CR transitions to rejected", async () => {
+    const seed: Record<string, string> = {};
+    seedCR(seed, "ind-rej-err", {
+      reference: "CR/2026/00900",
+      status: "pending",
+      submittedAt: "2026-05-01T00:00:00Z",
+    });
+    const { store } = makeEventStore(seed);
+    const applier = makeApplierService();
+    const adapter = new OpenSppV2SyncAdapter(store, applier, configWithMode("change-request"));
+
+    mockV2ClientImplementation.getChangeRequest.mockResolvedValueOnce(
+      crResponse({
+        reference: "CR/2026/00900",
+        status: "rejected",
+        rejectionReason: "Operator denied",
+      }),
+    );
+
+    const result = await adapter.pullData();
+
+    const rej = result.errors.find((e) => e.code === "CR_REJECTED");
+    expect(rej).toBeDefined();
+    expect(rej?.entityGuid).toBe("ind-rej-err");
+    expect(rej?.retryable).toBe(false);
+    expect(rej?.message).toMatch(/CR\/2026\/00900/);
+    expect(rej?.message).toMatch(/Operator denied/);
+  });
+
+  it("returns CR_POLL_FAILED in pull errors when a poll throws", async () => {
+    const seed: Record<string, string> = {};
+    seedCR(seed, "ind-pollfail", {
+      reference: "CR/2026/00910",
+      status: "pending",
+      submittedAt: "2026-05-01T00:00:00Z",
+    });
+    const { store } = makeEventStore(seed);
+    const applier = makeApplierService();
+    const adapter = new OpenSppV2SyncAdapter(store, applier, configWithMode("change-request"));
+
+    mockV2ClientImplementation.getChangeRequest.mockRejectedValueOnce(
+      new Error("network: ETIMEDOUT"),
+    );
+
+    const result = await adapter.pullData();
+
+    const fail = result.errors.find((e) => e.code === "CR_POLL_FAILED");
+    expect(fail).toBeDefined();
+    expect(fail?.entityGuid).toBe("ind-pollfail");
+    expect(fail?.retryable).toBe(true);
+    expect(fail?.message).toMatch(/ETIMEDOUT/);
+  });
+
+  it("does NOT add an error for applied transitions (informational only)", async () => {
+    const seed: Record<string, string> = {};
+    seedCR(seed, "ind-applied-ok", {
+      reference: "CR/2026/00920",
+      status: "pending",
+      submittedAt: "2026-05-01T00:00:00Z",
+    });
+    const { store } = makeEventStore(seed);
+    const applier = makeApplierService();
+    const adapter = new OpenSppV2SyncAdapter(store, applier, configWithMode("change-request"));
+
+    mockV2ClientImplementation.getChangeRequest.mockResolvedValueOnce(
+      crResponse({
+        reference: "CR/2026/00920",
+        status: "applied",
+        appliedDate: "2026-05-04T10:00:00Z",
+      }),
+    );
+
+    const result = await adapter.pullData();
+
+    expect(result.errors.find((e) => e.code === "CR_REJECTED")).toBeUndefined();
+    expect(result.errors.find((e) => e.code === "CR_POLL_FAILED")).toBeUndefined();
+  });
+
+  it("never calls getChangeRequest for a pre-seeded applied record (defensive guard)", async () => {
+    // Pre-seed both an applied (terminal) and a pending record. The defensive
+    // guard inside the per-record loop combined with listInFlightCRs's filter
+    // ensures the applied record never triggers a network call, while the
+    // pending one is polled normally.
+    const seed: Record<string, string> = {};
+    seedCR(seed, "ind-applied-skip", {
+      reference: "CR/2026/00930",
+      status: "applied",
+      submittedAt: "2026-05-01T00:00:00Z",
+    });
+    seedCR(seed, "ind-still-pending", {
+      reference: "CR/2026/00931",
+      status: "pending",
+      submittedAt: "2026-05-02T00:00:00Z",
+    });
+    const { store } = makeEventStore(seed);
+    const applier = makeApplierService();
+    const adapter = new OpenSppV2SyncAdapter(store, applier, configWithMode("change-request"));
+
+    mockV2ClientImplementation.getChangeRequest.mockResolvedValue(
+      crResponse({ reference: "CR/2026/00931", status: "pending" }),
+    );
+
+    await adapter.pullData();
+
+    // Only the pending record is polled; the applied record never hits the
+    // network even though it sits in storage under the `cr:` prefix.
+    const calls = mockV2ClientImplementation.getChangeRequest.mock.calls.map(
+      (c) => c[0] as string,
+    );
+    expect(calls).toEqual(["CR/2026/00931"]);
+    expect(calls).not.toContain("CR/2026/00930");
+    expect(store.listMetadataKeys).toHaveBeenCalledWith("cr:");
+  });
+
   it("polls oldest-submittedAt first", async () => {
     const seed: Record<string, string> = {};
     // Insert in non-chronological order; expected poll order is c → a → b.

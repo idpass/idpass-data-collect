@@ -205,11 +205,11 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       totalPushed += result.pushed;
       totalFailed += result.failed;
       totalSkipped += result.skipped;
-      allErrors.push(...result.errors.map(e => ({
+      allErrors.push(...result.errors.map((e) => ({
         entityGuid: e.guid,
-        code: "PUSH_FAILED",
+        code: e.code,
         message: e.error,
-        retryable: true,
+        retryable: e.code !== "CR_REVISION_NEEDED",
       })));
     }
 
@@ -218,18 +218,20 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       totalPushed += result.pushed;
       totalFailed += result.failed;
       totalSkipped += result.skipped;
-      allErrors.push(...result.errors.map(e => ({
+      allErrors.push(...result.errors.map((e) => ({
         entityGuid: e.guid,
-        code: "PUSH_FAILED",
+        code: e.code,
         message: e.error,
-        retryable: true,
+        retryable: e.code !== "CR_REVISION_NEEDED",
       })));
     }
 
-    // Only advance the push watermark when all entities were pushed successfully.
-    // Failed entities have lastUpdated from before this cycle — advancing the
-    // watermark past them would permanently exclude them from future push attempts.
-    if (totalFailed === 0) {
+    // Advance the watermark when only permanently-blocked CR failures remain.
+    // Operator must $reset rejected CRs on OpenSPP; A5 polling will rediscover
+    // them as `draft` and the next push will re-submit. Holding the watermark
+    // for these would inflate the push set across cycles.
+    const permanentlyBlocked = allErrors.filter((e) => e.code === "CR_REVISION_NEEDED").length;
+    if (totalFailed - permanentlyBlocked === 0) {
       await this.eventStore.setLastPushExternalSyncTimestamp(new Date().toISOString());
     }
 
@@ -246,18 +248,20 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
     const indResult = await this.pullIndividuals(since);
     const grpResult = await this.pullGroups(since);
+    const errors: SyncError[] = [...indResult.errors, ...grpResult.errors];
 
     // Poll in-flight CR statuses only when running in change-request mode.
     // Direct mode never persists CR records, so this is a defensive skip.
     if (this.submitVia === "change-request") {
-      await this.pollChangeRequestStatuses();
+      const pollErrors = await this.pollChangeRequestStatuses();
+      errors.push(...pollErrors);
     }
 
     return {
       pulled: indResult.pulled + grpResult.pulled,
       failed: indResult.failed + grpResult.failed,
       skipped: indResult.skipped + grpResult.skipped,
-      errors: [...indResult.errors, ...grpResult.errors],
+      errors,
     };
   }
 
@@ -278,11 +282,17 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
    *
    * Per-record errors never abort the loop: an individual 404 / network blip
    * must not fail the surrounding pull.
+   *
+   * Returns the list of `SyncError` entries surfaced during polling so callers
+   * (i.e. {@link pullData}) can merge them into the pull's `errors[]` and the
+   * admin/orchestration layer regains visibility into rejected CR transitions
+   * and per-record poll failures.
    */
-  private async pollChangeRequestStatuses(): Promise<void> {
+  private async pollChangeRequestStatuses(): Promise<SyncError[]> {
+    const errors: SyncError[] = [];
     const inFlight = await listInFlightCRs(this.eventStore);
     if (inFlight.length === 0) {
-      return;
+      return errors;
     }
 
     // Oldest first, nulls last — stuck CRs surface fastest.
@@ -298,6 +308,11 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     const bounded = sorted.slice(0, OpenSppV2SyncAdapter.CR_POLL_CAP);
 
     for (const { entityGuid, record } of bounded) {
+      if (record.status === "applied" || record.status === "rejected") {
+        // Defensive: listInFlightCRs filters these out, but if a stale list
+        // leaks through, skip the network call.
+        continue;
+      }
       try {
         const fresh = await this.getClient().getChangeRequest(record.reference);
         if (fresh === null) {
@@ -325,6 +340,12 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
               { entityGuid, reference: fresh.reference, reason: fresh.rejectionReason },
               "Change request rejected by OpenSPP operator",
             );
+            errors.push({
+              entityGuid,
+              code: "CR_REJECTED",
+              message: `Change request ${fresh.reference} rejected by OpenSPP operator${fresh.rejectionReason ? `: ${fresh.rejectionReason}` : ""}`,
+              retryable: false,
+            });
           } else if (fresh.status === "applied") {
             log.info(
               { entityGuid, reference: fresh.reference },
@@ -343,8 +364,16 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
           { entityGuid, reference: record.reference, err },
           "Failed to poll change request status; will retry next pull",
         );
+        errors.push({
+          entityGuid,
+          code: "CR_POLL_FAILED",
+          message: err instanceof Error ? err.message : String(err),
+          retryable: true,
+        });
       }
     }
+
+    return errors;
   }
 
   /**
@@ -362,8 +391,8 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   private async pushEntities(
     entities: Array<{ modified: { guid: string; type: EntityType; externalId?: string; data: Record<string, unknown> } }>,
     entityType: "individual" | "group",
-  ): Promise<{ pushed: number; failed: number; skipped: number; errors: Array<{ guid: string; error: string }> }> {
-    const failedEntities: Array<{ guid: string; error: string }> = [];
+  ): Promise<{ pushed: number; failed: number; skipped: number; errors: Array<{ guid: string; error: string; code: string }> }> {
+    const failedEntities: Array<{ guid: string; error: string; code: string }> = [];
     let skipped = 0;
 
     for (let i = 0; i < entities.length; i += this.batchSize) {
@@ -393,7 +422,11 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
             // Operator must reset the CR on the OpenSPP side before DC can
             // re-submit. Don't retry — log + record + move on.
             if (error instanceof ChangeRequestRevisionNeededError) {
-              failedEntities.push({ guid: entity.guid, error: error.message });
+              failedEntities.push({
+                guid: entity.guid,
+                error: error.message,
+                code: "CR_REVISION_NEEDED",
+              });
               log.warn(
                 {
                   entityType,
@@ -415,7 +448,11 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
               log.warn({ entityType, guid: entity.guid, attempt, maxRetries: this.maxRetries, delayMs }, `${reason}, retrying push`);
               await this.delay(delayMs);
             } else {
-              failedEntities.push({ guid: entity.guid, error: lastError.message });
+              failedEntities.push({
+                guid: entity.guid,
+                error: lastError.message,
+                code: "PUSH_FAILED",
+              });
               log.error({ entityType, guid: entity.guid, err: lastError }, "Push failed after retries");
             }
           }

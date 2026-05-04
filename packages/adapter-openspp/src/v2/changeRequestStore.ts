@@ -18,6 +18,20 @@
  */
 
 /**
+ * @module changeRequestStore
+ *
+ * Persists OpenSPP /ChangeRequest references against entities, scoped by
+ * `cr:{entityGuid}` keys in the EventStore metadata table.
+ *
+ * **TENANT ISOLATION INVARIANT**: callers MUST pass an EventStore whose
+ * underlying storage adapter is scoped to a single tenant. The CR key shape
+ * does NOT include `tenantId` because tenant scoping is implicit in the
+ * adapter's `tenant_id` filter on `sync_metadata`. Sharing an EventStore
+ * across tenants (e.g. via a global cache) is a data corruption bug — CRs
+ * from tenant A would be visible to and overwritten by tenant B.
+ */
+
+/**
  * Per-entity ChangeRequest record store, persisted in `sync_metadata` via the
  * `EventStore` generic metadata accessor. Each row tracks the OpenSPP CR
  * reference plus its lifecycle status for one DataCollect entity.
