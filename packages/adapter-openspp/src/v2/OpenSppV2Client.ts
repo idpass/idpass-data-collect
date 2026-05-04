@@ -53,6 +53,30 @@ export class ConflictError extends Error {
 }
 
 /**
+ * Thrown by the V2 sync adapter when a previously-issued ChangeRequest is in
+ * a terminal-but-not-applied state (`rejected` or `revision`) for an entity
+ * the field worker is trying to push again.
+ *
+ * From DataCollect's perspective these states are terminal: the operator must
+ * `$reset` the CR on the OpenSPP side before DataCollect can re-submit a fresh
+ * CR for the same entity. The push retry loop must therefore NOT retry on
+ * this error — it represents an external-state mismatch, not a transient
+ * fault.
+ */
+export class ChangeRequestRevisionNeededError extends Error {
+  constructor(
+    public readonly entityGuid: string,
+    public readonly reference: string,
+    public readonly status: "rejected" | "revision",
+  ) {
+    super(
+      `Change request ${reference} for entity ${entityGuid} is in '${status}' state — operator must $reset on OpenSPP before re-push`,
+    );
+    this.name = "ChangeRequestRevisionNeededError";
+  }
+}
+
+/**
  * OpenSPP V2 API Client
  *
  * Provides methods to interact with the OpenSPP V2 REST API using OAuth2 authentication.

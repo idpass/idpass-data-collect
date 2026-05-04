@@ -32,12 +32,18 @@ import {
   createLogger,
 } from "@idpass/data-collect-core";
 import { EventApplierService } from "@idpass/data-collect-core";
-import { OpenSppV2Client, PreconditionFailedError, ConflictError } from "./OpenSppV2Client";
+import {
+  OpenSppV2Client,
+  PreconditionFailedError,
+  ConflictError,
+  ChangeRequestRevisionNeededError,
+} from "./OpenSppV2Client";
 import type {
   ChangeRequestSubmitMode,
   EventTypeKey,
   OpenSppV2AdapterOptions,
 } from "./OpenSppV2AdapterOptions";
+import { resolveCRTypeCode } from "./OpenSppV2AdapterOptions";
 import type {
   IndividualResource,
   GroupResource,
@@ -45,6 +51,11 @@ import type {
   CodeableConcept,
   Extension,
 } from "./types";
+import type {
+  ChangeRequestCreate,
+  RegistrantRef,
+} from "./ChangeRequestTypes";
+import { getCR, setCR, type CRRecord } from "./changeRequestStore";
 import { v4 as uuidv4 } from "uuid";
 
 const log = createLogger("adapter-openspp:v2");
@@ -54,6 +65,18 @@ const SYNC_USER_ID = "openspp-v2-sync";
 
 /** Extension key for Studio individual custom fields (OpenSPP V2 API) */
 const STUDIO_INDIVIDUAL_EXTENSION_KEY = "urn:openspp:extension:studio-individual";
+
+/**
+ * Placeholder identifier system used in `registrant.system` when a CR is
+ * created for an entity that does not yet have an OpenSPP-issued external id
+ * (i.e. a `create-*` CR). OpenSPP will assign the real identifier when the CR
+ * is `$apply`-ed.
+ *
+ * v1 limitation (#948): some OpenSPP deployments may reject CR payloads whose
+ * `registrant` does not refer to an existing record. If your registry rejects
+ * this placeholder, override the strategy in a successor adapter — see README.
+ */
+const CR_GUID_REGISTRANT_SYSTEM = "datacollect:guid";
 
 /**
  * Gender codes per ISO/IEC 5218 (representation of human sexes).
@@ -275,6 +298,22 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
               break;
             }
 
+            // Operator must reset the CR on the OpenSPP side before DC can
+            // re-submit. Don't retry — log + record + move on.
+            if (error instanceof ChangeRequestRevisionNeededError) {
+              failedEntities.push({ guid: entity.guid, error: error.message });
+              log.warn(
+                {
+                  entityType,
+                  guid: entity.guid,
+                  reference: error.reference,
+                  status: error.status,
+                },
+                "Push aborted: CR in terminal state needing operator reset",
+              );
+              break;
+            }
+
             attempt++;
             lastError = error instanceof Error ? error : new Error(String(error));
 
@@ -305,6 +344,18 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   }
 
   private async pushIndividual(
+    guid: string,
+    data: Record<string, unknown>,
+    externalId?: string,
+  ): Promise<void> {
+    if (this.submitVia === "change-request") {
+      await this.pushIndividualViaCR(guid, data, externalId);
+      return;
+    }
+    await this.pushIndividualDirect(guid, data, externalId);
+  }
+
+  private async pushIndividualDirect(
     guid: string,
     data: Record<string, unknown>,
     externalId?: string,
@@ -341,6 +392,18 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     data: Record<string, unknown>,
     externalId?: string,
   ): Promise<void> {
+    if (this.submitVia === "change-request") {
+      await this.pushGroupViaCR(guid, data, externalId);
+      return;
+    }
+    await this.pushGroupDirect(guid, data, externalId);
+  }
+
+  private async pushGroupDirect(
+    guid: string,
+    data: Record<string, unknown>,
+    externalId?: string,
+  ): Promise<void> {
     const resource = this.buildGroupResource(guid, data);
     const system = this.resolveIdentifierSystem(data, "group");
 
@@ -362,6 +425,167 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       const created = await this.getClient().createGroup(resource);
       await this.saveExternalIdToEntity(guid, created);
     }
+  }
+
+  // ==================== Push Logic — Change Request mode ====================
+
+  /**
+   * Push an Individual via the OpenSPP `/ChangeRequest` workflow instead of
+   * writing directly. The actual entity write is deferred to the OpenSPP
+   * operator's `$apply` step and flows back via pull.
+   *
+   * v1 mapping (#948): `add-member` / `remove-member` events on members of a
+   * group are NOT distinguished here — they show up as plain
+   * `update-individual` / `update-group` and map to `edit_*` codes. Granular
+   * member-CR mapping is deferred.
+   */
+  private async pushIndividualViaCR(
+    guid: string,
+    data: Record<string, unknown>,
+    externalId?: string,
+  ): Promise<void> {
+    const eventTypeKey: EventTypeKey = externalId ? "update-individual" : "create-individual";
+    const detail = this.buildIndividualResource(guid, data) as unknown as Record<string, unknown>;
+    const system = this.resolveIdentifierSystem(data);
+    const display =
+      typeof data.name === "string"
+        ? data.name
+        : typeof data.fullName === "string"
+          ? data.fullName
+          : undefined;
+    await this.pushViaChangeRequest(guid, "individual", eventTypeKey, detail, system, externalId, display);
+  }
+
+  /**
+   * Push a Group via the OpenSPP `/ChangeRequest` workflow.
+   * See {@link pushIndividualViaCR} for v1 mapping limitations.
+   */
+  private async pushGroupViaCR(
+    guid: string,
+    data: Record<string, unknown>,
+    externalId?: string,
+  ): Promise<void> {
+    const eventTypeKey: EventTypeKey = externalId ? "update-group" : "create-group";
+    const detail = this.buildGroupResource(guid, data) as unknown as Record<string, unknown>;
+    const system = this.resolveIdentifierSystem(data, "group");
+    const display =
+      typeof data._displayName === "string"
+        ? data._displayName
+        : typeof data.name === "string"
+          ? data.name
+          : typeof data.groupName === "string"
+            ? data.groupName
+            : undefined;
+    await this.pushViaChangeRequest(guid, "group", eventTypeKey, detail, system, externalId, display);
+  }
+
+  /**
+   * Shared CR push path. Idempotent across re-runs:
+   *
+   * - If a CR record already exists for the entity:
+   *   - `draft`: $submit was never reached (or failed); re-attempt $submit only.
+   *   - `pending` / `approved` / `applied`: in flight or done; skip silently.
+   *   - `rejected` / `revision`: throw {@link ChangeRequestRevisionNeededError}
+   *     so the push loop records the failure without retrying.
+   * - Otherwise create + submit a fresh CR and persist its reference + status.
+   *
+   * Note on partial failures: if `$create` succeeds but `$submit` fails, the
+   * persisted record stays in `draft` so the next push run picks up exactly at
+   * the recovery branch above (no second CR is created).
+   */
+  private async pushViaChangeRequest(
+    entityGuid: string,
+    entityKind: "individual" | "group",
+    eventTypeKey: EventTypeKey,
+    detail: Record<string, unknown>,
+    identifierSystem: string,
+    externalId: string | undefined,
+    display: string | undefined,
+  ): Promise<void> {
+    const existing = await getCR(this.eventStore, entityGuid);
+    if (existing) {
+      if (existing.status === "draft") {
+        // Recovery: $submit was never reached or failed last run. Try again.
+        const submitted = await this.getClient().submitChangeRequest(existing.reference);
+        const next: CRRecord = {
+          ...existing,
+          status: submitted.status,
+          submittedAt: submitted.submittedDate ?? new Date().toISOString(),
+        };
+        await setCR(this.eventStore, entityGuid, next);
+        return;
+      }
+
+      if (
+        existing.status === "pending" ||
+        existing.status === "approved" ||
+        existing.status === "applied"
+      ) {
+        // Already in flight or done. Pull projects status updates separately.
+        log.debug(
+          { entityGuid, reference: existing.reference, status: existing.status },
+          "Skipping CR push: existing CR already in flight or applied",
+        );
+        return;
+      }
+
+      if (existing.status === "rejected" || existing.status === "revision") {
+        throw new ChangeRequestRevisionNeededError(
+          entityGuid,
+          existing.reference,
+          existing.status,
+        );
+      }
+    }
+
+    const requestTypeCode = resolveCRTypeCode(eventTypeKey, entityKind, this.changeRequestTypeMap);
+    const registrant = this.buildRegistrantRef(entityGuid, identifierSystem, externalId, display);
+    const payload: ChangeRequestCreate = {
+      type: "ChangeRequest",
+      requestType: { code: requestTypeCode },
+      registrant,
+      detail,
+      description: `DataCollect entity ${entityGuid}`,
+    };
+
+    const created = await this.getClient().createChangeRequest(payload);
+    const draftRecord: CRRecord = {
+      reference: created.reference,
+      status: created.status,
+    };
+    await setCR(this.eventStore, entityGuid, draftRecord);
+
+    const submitted = await this.getClient().submitChangeRequest(created.reference);
+    const submittedRecord: CRRecord = {
+      reference: created.reference,
+      status: submitted.status,
+      submittedAt: submitted.submittedDate ?? new Date().toISOString(),
+    };
+    await setCR(this.eventStore, entityGuid, submittedRecord);
+  }
+
+  /**
+   * Build the `registrant` field for a CR payload.
+   *
+   * - When `externalId` is present (UPDATE CRs), point at the OpenSPP-issued
+   *   identifier so the operator's `$apply` resolves the existing registrant.
+   * - When absent (CREATE CRs), fall back to a `datacollect:guid` placeholder.
+   *   See {@link CR_GUID_REGISTRANT_SYSTEM} for caveats.
+   */
+  private buildRegistrantRef(
+    entityGuid: string,
+    identifierSystem: string,
+    externalId: string | undefined,
+    display: string | undefined,
+  ): RegistrantRef {
+    if (externalId) {
+      const ref: RegistrantRef = { system: identifierSystem, value: externalId };
+      if (display) ref.display = display;
+      return ref;
+    }
+    const ref: RegistrantRef = { system: CR_GUID_REGISTRANT_SYSTEM, value: entityGuid };
+    if (display) ref.display = display;
+    return ref;
   }
 
   // ==================== Pull Logic ====================

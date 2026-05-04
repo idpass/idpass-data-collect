@@ -17,7 +17,12 @@
  * under the License.
  */
 
-export { OpenSppV2Client, PreconditionFailedError, ConflictError } from "./OpenSppV2Client";
+export {
+  OpenSppV2Client,
+  PreconditionFailedError,
+  ConflictError,
+  ChangeRequestRevisionNeededError,
+} from "./OpenSppV2Client";
 export { default as OpenSppV2SyncAdapter } from "./OpenSppV2SyncAdapter";
 export * from "./types";
 export type {

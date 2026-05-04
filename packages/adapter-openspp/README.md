@@ -64,6 +64,33 @@ Configure the adapter via the tenant's `externalSync` config block:
 
 For configurable field mappings see the `OpenSppAdapterOptions` type and the `opensppAdapterOptions` extra field documented in `packages/datacollect/README.md`.
 
+## Change Request Push Mode (#948)
+
+Set `externalSync.adapterConfig.submitVia: "change-request"` (or pass `submitVia: "change-request"` via `OpenSppV2AdapterOptions`) to route DataCollect pushes through OpenSPP's `/ChangeRequest` workflow instead of writing directly to `/Individual` and `/Group`. Required when OpenSPP has CR governance enabled for the registry.
+
+When enabled, every push:
+
+1. Creates a CR via `POST /ChangeRequest` (status `draft`).
+2. Submits it via `POST /ChangeRequest/{ref}/$submit` (status `pending`).
+3. Persists the reference + status under metadata key `cr:{entityGuid}` for idempotency on re-push.
+
+OpenSPP operator actions (`$approve` / `$reject` / `$apply`) are out of scope for DataCollect — see #948 for design.
+
+### Idempotency on re-push
+
+| Stored CR status                           | Behaviour on next push of the same entity                                            |
+| ------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `draft`                                    | Re-attempt `$submit` only (no second CR is created).                                 |
+| `pending` / `approved` / `applied`         | Skip silently. Pull will project status changes back into metadata.                  |
+| `rejected` / `revision`                    | Throw `ChangeRequestRevisionNeededError`; push loop records failure, no retry.       |
+
+### Current limitations (v1)
+
+- `requestType.code` defaults are best-guesses (`add_individual`, `edit_individual`, `add_group`, `edit_group`, `archive_individual`, `archive_group`, `add_member`, `remove_member`). Verify against your OpenSPP instance and override per-event-type via `changeRequestTypeMap`.
+- `add-member` / `remove-member` events are mapped to `update-individual` / `update-group` (i.e. `edit_*` codes) — granular member-CR mapping is deferred.
+- Create CRs use `registrant: { system: "datacollect:guid", value: <entityGuid> }` as a placeholder. OpenSPP assigns the real identifier on `$apply`. If your CR workflow requires a pre-existing identifier, this won't work — file a successor ticket.
+- `rejected` / `revision` are terminal from DataCollect's perspective. The operator must `$reset` on OpenSPP before DataCollect can submit a fresh CR for the same entity.
+
 ## Contributing
 
 See the main project [Contributing Guide](../../CONTRIBUTING.md) for development setup and guidelines.
