@@ -101,6 +101,22 @@ export const initStore = async (
   const eventApplierService = new EventApplierService(eventStore, entityStore)
   const deviceIdentity = new DeviceIdentity()
   const deviceId = await deviceIdentity.getOrCreateDeviceId()
+
+  // Late-bound EDM reference: InternalSyncManager needs a purgeOutOfScope
+  // callback at construction time, but EDM is built after ISM (because EDM's
+  // constructor takes ISM). The closure below captures `edmRef` which is
+  // populated immediately after `store` is created. Scope rotation cannot
+  // fire before sync runs, so the post-init assignment is always in place
+  // by the time the callback is invoked.
+  let edmRef: EntityDataManager | null = null
+  const purgeOutOfScope = async (keep: readonly string[]) => {
+    if (!edmRef) {
+      // Defensive: should never happen post-init.
+      return
+    }
+    await edmRef.purgeEntitiesNotIn(keep)
+  }
+
   const internalSyncManager = new InternalSyncManager(
     eventStore,
     entityStore,
@@ -110,6 +126,7 @@ export const initStore = async (
     appId,
     reauthenticate,
     deviceId,
+    purgeOutOfScope,
   )
 
   store = new EntityDataManager(
@@ -120,6 +137,7 @@ export const initStore = async (
     internalSyncManager,
     authManagerInstance
   )
+  edmRef = store
   storeCache.set(appId, store)
 }
 
