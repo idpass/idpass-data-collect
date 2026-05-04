@@ -28,7 +28,12 @@ export { HouseholdTransformer } from "./pullTransformers/HouseholdTransformer";
 export * from "./models";
 
 // OpenSPP V2 — REST API with OAuth2 adapter
-export { OpenSppV2Client, PreconditionFailedError, ConflictError } from "./v2/OpenSppV2Client";
+export {
+  OpenSppV2Client,
+  PreconditionFailedError,
+  ConflictError,
+  ChangeRequestRevisionNeededError,
+} from "./v2/OpenSppV2Client";
 export { default as OpenSppV2SyncAdapter } from "./v2/OpenSppV2SyncAdapter";
 export * from "./v2/types";
 export type {
