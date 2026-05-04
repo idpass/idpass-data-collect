@@ -55,7 +55,7 @@ import type {
   ChangeRequestCreate,
   RegistrantRef,
 } from "./ChangeRequestTypes";
-import { getCR, setCR, type CRRecord } from "./changeRequestStore";
+import { getCR, setCR, listInFlightCRs, type CRRecord } from "./changeRequestStore";
 import { v4 as uuidv4 } from "uuid";
 
 const log = createLogger("adapter-openspp:v2");
@@ -247,12 +247,104 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     const indResult = await this.pullIndividuals(since);
     const grpResult = await this.pullGroups(since);
 
+    // Poll in-flight CR statuses only when running in change-request mode.
+    // Direct mode never persists CR records, so this is a defensive skip.
+    if (this.submitVia === "change-request") {
+      await this.pollChangeRequestStatuses();
+    }
+
     return {
       pulled: indResult.pulled + grpResult.pulled,
       failed: indResult.failed + grpResult.failed,
       skipped: indResult.skipped + grpResult.skipped,
       errors: [...indResult.errors, ...grpResult.errors],
     };
+  }
+
+  /**
+   * Per-pull cap on in-flight CR status polls.
+   *
+   * Bounds the per-pull fan-out: a small entity pull must never amplify into a
+   * large `/ChangeRequest/{ref}` GET storm. Beyond this cap we defer to the
+   * next pull; ordering by oldest `submittedAt` first ensures stuck CRs make
+   * progress and rejected/applied transitions surface quickly.
+   */
+  private static readonly CR_POLL_CAP = 100;
+
+  /**
+   * Poll status for in-flight CRs and project transitions into local
+   * metadata. Runs after the entity pull so any operator-applied CR's entity
+   * changes are already ingested in the same pull cycle.
+   *
+   * Per-record errors never abort the loop: an individual 404 / network blip
+   * must not fail the surrounding pull.
+   */
+  private async pollChangeRequestStatuses(): Promise<void> {
+    const inFlight = await listInFlightCRs(this.eventStore);
+    if (inFlight.length === 0) {
+      return;
+    }
+
+    // Oldest first, nulls last — stuck CRs surface fastest.
+    const sorted = [...inFlight].sort((a, b) => {
+      const ta = a.record.submittedAt ?? "";
+      const tb = b.record.submittedAt ?? "";
+      if (ta === tb) return 0;
+      if (ta === "") return 1;
+      if (tb === "") return -1;
+      return ta < tb ? -1 : 1;
+    });
+
+    const bounded = sorted.slice(0, OpenSppV2SyncAdapter.CR_POLL_CAP);
+
+    for (const { entityGuid, record } of bounded) {
+      try {
+        const fresh = await this.getClient().getChangeRequest(record.reference);
+        if (fresh === null) {
+          // 404 — CR vanished from OpenSPP. Log warn, leave metadata as-is
+          // so admin can still surface the audit record.
+          log.warn(
+            { entityGuid, reference: record.reference },
+            "Change request not found on OpenSPP; keeping local metadata",
+          );
+          continue;
+        }
+
+        if (fresh.status !== record.status) {
+          await setCR(this.eventStore, entityGuid, {
+            reference: fresh.reference,
+            status: fresh.status,
+            submittedAt: record.submittedAt,
+            lastPolledAt: new Date().toISOString(),
+            rejectionReason: fresh.rejectionReason,
+            appliedDate: fresh.appliedDate,
+            approvedDate: fresh.approvedDate,
+          });
+          if (fresh.status === "rejected") {
+            log.warn(
+              { entityGuid, reference: fresh.reference, reason: fresh.rejectionReason },
+              "Change request rejected by OpenSPP operator",
+            );
+          } else if (fresh.status === "applied") {
+            log.info(
+              { entityGuid, reference: fresh.reference },
+              "Change request applied by OpenSPP — entity changes will arrive on next pull",
+            );
+          }
+        } else {
+          // Status unchanged — bump only lastPolledAt to avoid unnecessary writes.
+          await setCR(this.eventStore, entityGuid, {
+            ...record,
+            lastPolledAt: new Date().toISOString(),
+          });
+        }
+      } catch (err) {
+        log.warn(
+          { entityGuid, reference: record.reference, err },
+          "Failed to poll change request status; will retry next pull",
+        );
+      }
+    }
   }
 
   /**
