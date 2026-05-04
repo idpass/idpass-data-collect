@@ -24,6 +24,7 @@ import {
   DeviceIdentity,
   EntityDataManager,
   EntityStoreImpl,
+  EventStore,
   EventStoreImpl,
   IndexedDbEventStorageAdapter,
   IndexedDbEntityStorageAdapter,
@@ -38,6 +39,20 @@ const REFRESH_TOKEN_KEY_PREFIX = 'sync_refresh_'
 export let store: EntityDataManager
 
 const storeCache = new Map<string, EntityDataManager>()
+// Per-app EventStore handles. EntityDataManager keeps `eventStore` private, so
+// composables that need to read scope metadata (`getLastScope()`) go through
+// this cache. Populated alongside `storeCache` inside `initStore`.
+const eventStoreCache = new Map<string, EventStore>()
+
+/**
+ * Returns the EventStore associated with an app id, or `null` if `initStore`
+ * has not yet been called for that id. Intended for read-only consumers in the
+ * UI layer (e.g. the sync-scope badge composable) — do not use to mutate
+ * persisted state.
+ */
+export function getEventStore(appId: string): EventStore | null {
+  return eventStoreCache.get(appId) ?? null
+}
 
 /**
  * Store refresh token in secure storage for silent re-authentication.
@@ -139,6 +154,7 @@ export const initStore = async (
   )
   edmRef = store
   storeCache.set(appId, store)
+  eventStoreCache.set(appId, eventStore)
 }
 
 export const closeStore = async (appId: string) => {
@@ -146,5 +162,6 @@ export const closeStore = async (appId: string) => {
     const store = storeCache.get(appId)
     await store.closeConnection()
     storeCache.delete(appId)
+    eventStoreCache.delete(appId)
   }
 }

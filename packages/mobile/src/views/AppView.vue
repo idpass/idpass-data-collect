@@ -8,6 +8,7 @@ import { isOnline, onNetworkChange } from '@/utils/networkUtils'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 import { useSnackbar } from '@/composables/useSnackbar'
 import { useSyncService } from '@/store/syncService'
+import SyncScopeBadge from '@/components/SyncScopeBadge.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -143,10 +144,11 @@ const stats = computed(() => [
           </div>
           <v-chip size="small" color="primary" variant="tonal">{{ formattedVersion }}</v-chip>
         </div>
-        <div class="mt-3">
+        <div class="mt-3 d-flex flex-wrap ga-2">
           <v-chip size="small" :color="statusColor" variant="tonal" :prepend-icon="isOffline ? 'mdi-wifi-off' : syncService.isSynced ? 'mdi-check-circle' : 'mdi-sync'">
             {{ statusLabel }}
           </v-chip>
+          <SyncScopeBadge :app-id="(route.params.id as string)" />
         </div>
       </v-card-text>
     </v-card>
