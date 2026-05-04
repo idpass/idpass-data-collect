@@ -126,8 +126,9 @@ export const initStore = async (
   let edmRef: EntityDataManager | null = null
   const purgeOutOfScope = async (keep: readonly string[]) => {
     if (!edmRef) {
-      // Defensive: should never happen post-init.
-      return
+      throw new Error(
+        'purgeOutOfScope: EntityDataManager not yet initialised — sync rolled back to retry',
+      )
     }
     await edmRef.purgeEntitiesNotIn(keep)
   }

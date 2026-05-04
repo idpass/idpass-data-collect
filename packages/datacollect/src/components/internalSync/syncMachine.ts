@@ -268,15 +268,32 @@ export function createSyncMachine(
             const raw = data.scope?.hash;
             return typeof raw === "string" && raw.length > 0 ? raw : null;
           };
+          const validTimeWindow = (tw: unknown): EffectiveScope["timeWindow"] => {
+            if (!tw || typeof tw !== "object") return null;
+            const t = (tw as { type?: unknown }).type;
+            if (t === "rolling") {
+              const days = (tw as { days?: unknown }).days;
+              return typeof days === "number" && days > 0 ? { type: "rolling", days } : null;
+            }
+            if (t === "fixed") {
+              const floor = (tw as { floor?: unknown }).floor;
+              return typeof floor === "string" && floor.length > 0 ? { type: "fixed", floor } : null;
+            }
+            return null;
+          };
           const extractScopeBody = (data: PullResponse): EffectiveScopeBody | null => {
             const scope = data.scope;
             if (!scope) return null;
             const hash = typeof scope.hash === "string" && scope.hash.length > 0 ? scope.hash : null;
             if (!hash) return null;
             return {
-              areaIds: scope.areaIds ?? null,
-              entityTypes: scope.entityTypes ?? null,
-              timeWindow: scope.timeWindow ?? null,
+              areaIds: Array.isArray(scope.areaIds)
+                ? scope.areaIds.filter((s): s is string => typeof s === "string")
+                : null,
+              entityTypes: Array.isArray(scope.entityTypes)
+                ? scope.entityTypes.filter((s): s is "individual" | "group" => s === "individual" || s === "group")
+                : null,
+              timeWindow: validTimeWindow(scope.timeWindow),
               hash,
             };
           };
@@ -449,13 +466,27 @@ export function createSyncMachine(
               }
               await eventStore.setLastScopeHash(responseScopeHash);
               if (responseScope) {
-                await eventStore.setLastScope(responseScope);
+                try {
+                  await eventStore.setLastScope(responseScope);
+                } catch (err) {
+                  log.warn(
+                    { err, hash: responseScopeHash },
+                    "Failed to persist scope body; badge may show stale info until next sync",
+                  );
+                }
               }
             } else if (establishingHash) {
               // First sync ever — establish the hash, never purge.
               await eventStore.setLastScopeHash(responseScopeHash);
               if (responseScope) {
-                await eventStore.setLastScope(responseScope);
+                try {
+                  await eventStore.setLastScope(responseScope);
+                } catch (err) {
+                  log.warn(
+                    { err, hash: responseScopeHash },
+                    "Failed to persist scope body; badge may show stale info until next sync",
+                  );
+                }
               }
             }
             // Same hash → no-op; deliberate. The persisted body is left
