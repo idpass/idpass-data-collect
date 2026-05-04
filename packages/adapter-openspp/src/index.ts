@@ -39,3 +39,12 @@ export type {
   ChangeRequestUpdate,
   ChangeRequestResponse,
 } from "./v2/ChangeRequestTypes";
+export {
+  DEFAULT_CR_TYPE_MAP,
+  resolveCRTypeCode,
+} from "./v2/OpenSppV2AdapterOptions";
+export type {
+  ChangeRequestSubmitMode,
+  EventTypeKey,
+  OpenSppV2AdapterOptions,
+} from "./v2/OpenSppV2AdapterOptions";
