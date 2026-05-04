@@ -61,6 +61,10 @@ function createMockEventStore(): EventStore {
     setLastScopeHash: jest.fn().mockResolvedValue(undefined),
     getLastScope: jest.fn().mockResolvedValue(null),
     setLastScope: jest.fn().mockResolvedValue(undefined),
+    getMetadataValue: jest.fn().mockResolvedValue(null),
+    setMetadataValue: jest.fn().mockResolvedValue(undefined),
+    deleteMetadataValue: jest.fn().mockResolvedValue(undefined),
+    listMetadataKeys: jest.fn().mockResolvedValue([]),
     clearStore: jest.fn(),
     closeConnection: jest.fn(),
   };

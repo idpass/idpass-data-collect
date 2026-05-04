@@ -502,4 +502,57 @@ describe("IndexedDbEventStorageAdapter", () => {
     const body = await reopened.getLastScope();
     expect(body?.hash).toBe("sha256:committed");
   });
+
+  describe("generic metadata accessor", () => {
+    test("getMetadataValue returns null on miss", async () => {
+      expect(await adapter.getMetadataValue("missing-key")).toBeNull();
+    });
+
+    test("setMetadataValue / getMetadataValue round-trips", async () => {
+      await adapter.setMetadataValue("foo", "bar");
+      expect(await adapter.getMetadataValue("foo")).toBe("bar");
+    });
+
+    test("setMetadataValue upserts the same key", async () => {
+      await adapter.setMetadataValue("foo", "v1");
+      await adapter.setMetadataValue("foo", "v2");
+      expect(await adapter.getMetadataValue("foo")).toBe("v2");
+    });
+
+    test("deleteMetadataValue removes the key (no-op when absent)", async () => {
+      await adapter.setMetadataValue("foo", "bar");
+      await adapter.deleteMetadataValue("foo");
+      expect(await adapter.getMetadataValue("foo")).toBeNull();
+      // No-op delete must not throw.
+      await expect(adapter.deleteMetadataValue("foo")).resolves.toBeUndefined();
+    });
+
+    test("listMetadataKeys filters by prefix", async () => {
+      await adapter.setMetadataValue("cr:abc", "{}");
+      await adapter.setMetadataValue("cr:def", "{}");
+      await adapter.setMetadataValue("scope_hash", "x"); // existing namespace
+      await adapter.setMetadataValue("other:foo", "y");
+
+      const crKeys = await adapter.listMetadataKeys("cr:");
+      expect(crKeys.sort()).toEqual(["cr:abc", "cr:def"]);
+    });
+
+    test("listMetadataKeys returns [] when no keys match", async () => {
+      await adapter.setMetadataValue("alpha", "1");
+      expect(await adapter.listMetadataKeys("zz:")).toEqual([]);
+    });
+
+    test("metadata write commits to disk (visible after re-open)", async () => {
+      const named = new IndexedDbEventStorageAdapter("metadata-commit-test");
+      await named.initialize();
+      await named.setMetadataValue("cr:entity-1", '{"reference":"abc"}');
+      await named.closeConnection();
+
+      const reopened = new IndexedDbEventStorageAdapter("metadata-commit-test");
+      await reopened.initialize();
+      expect(await reopened.getMetadataValue("cr:entity-1")).toBe('{"reference":"abc"}');
+      await reopened.clearStore();
+      await reopened.closeConnection();
+    });
+  });
 });

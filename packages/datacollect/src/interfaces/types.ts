@@ -365,6 +365,21 @@ export interface EventStore {
   clearStore(): Promise<void>;
   /** Close database connections and cleanup resources */
   closeConnection(): Promise<void>;
+  /**
+   * Generic key-value metadata accessor scoped to this adapter's tenant.
+   * Stored alongside scope-hash / push-watermark metadata in the same backing
+   * store. Returns `null` when the key is absent.
+   */
+  getMetadataValue(key: string): Promise<string | null>;
+  /** Persist a metadata value under `key`. Upsert semantics. */
+  setMetadataValue(key: string, value: string): Promise<void>;
+  /** Delete the metadata row for `key`. No-op if absent. */
+  deleteMetadataValue(key: string): Promise<void>;
+  /**
+   * List metadata keys whose name starts with `prefix` (tenant-scoped).
+   * Used for namespaced scans (e.g. `cr:` change-request records).
+   */
+  listMetadataKeys(prefix: string): Promise<string[]>;
 }
 
 /**
@@ -459,6 +474,21 @@ export interface EventStorageAdapter {
   persistHashAnchor(hash: string): Promise<void>;
   /** Retrieve the previously persisted hash anchor, or null if none exists */
   getPersistedHashAnchor(): Promise<string | null>;
+  /**
+   * Generic key-value metadata accessor scoped to this adapter's tenant.
+   * Stored alongside scope-hash / push-watermark metadata in the same backing
+   * store. Returns `null` when the key is absent.
+   */
+  getMetadataValue(key: string): Promise<string | null>;
+  /** Persist a metadata value under `key`. Upsert semantics. */
+  setMetadataValue(key: string, value: string): Promise<void>;
+  /** Delete the metadata row for `key`. No-op if absent. */
+  deleteMetadataValue(key: string): Promise<void>;
+  /**
+   * List metadata keys whose name starts with `prefix` (tenant-scoped).
+   * Used for namespaced scans (e.g. `cr:` change-request records).
+   */
+  listMetadataKeys(prefix: string): Promise<string[]>;
 }
 
 /**
