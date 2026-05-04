@@ -59,6 +59,8 @@ function createMockEventStore(): EventStore {
     deleteEventsForEntity: jest.fn().mockResolvedValue(0),
     getLastScopeHash: jest.fn().mockResolvedValue(null),
     setLastScopeHash: jest.fn().mockResolvedValue(undefined),
+    getLastScope: jest.fn().mockResolvedValue(null),
+    setLastScope: jest.fn().mockResolvedValue(undefined),
     clearStore: jest.fn(),
     closeConnection: jest.fn(),
   };
@@ -172,7 +174,7 @@ describe("syncMachine scope handling", () => {
     });
   }
 
-  test("first pull: persists scope.hash from response", async () => {
+  test("first pull: persists scope.hash AND scope body from response", async () => {
     const input = createInput();
     // No prior remote cursor → loadRemoteCursor returns "" so download proceeds.
     (input.eventStore.getLastRemoteSyncTimestamp as jest.Mock).mockResolvedValue("");
@@ -182,7 +184,12 @@ describe("syncMachine scope handling", () => {
     mock.onGet(/\/api\/sync\/pull/).reply(200, {
       events: [],
       nextCursor: null,
-      scope: { hash: "sha256:abc", areaIds: null, entityTypes: null, timeWindow: null },
+      scope: {
+        hash: "sha256:abc",
+        areaIds: ["KH0101"],
+        entityTypes: ["individual"],
+        timeWindow: { type: "rolling", days: 90 },
+      },
     });
 
     const actor = startActor(input);
@@ -190,11 +197,17 @@ describe("syncMachine scope handling", () => {
     await waitFor("first-pull", "resolve");
 
     expect(input.eventStore.setLastScopeHash).toHaveBeenCalledWith("sha256:abc");
+    expect(input.eventStore.setLastScope).toHaveBeenCalledWith({
+      areaIds: ["KH0101"],
+      entityTypes: ["individual"],
+      timeWindow: { type: "rolling", days: 90 },
+      hash: "sha256:abc",
+    });
     expect(input.entityStore.deleteEntity).not.toHaveBeenCalled();
     actor.stop();
   });
 
-  test("second pull with same hash: does NOT call purge", async () => {
+  test("second pull with same hash: does NOT call purge and does NOT call setLastScope", async () => {
     const input = createInput();
     (input.eventStore.getLastRemoteSyncTimestamp as jest.Mock).mockResolvedValue("");
     (input.eventStore.getLastScopeHash as jest.Mock).mockResolvedValue("sha256:abc");
@@ -212,6 +225,9 @@ describe("syncMachine scope handling", () => {
 
     expect(input.entityStore.deleteEntity).not.toHaveBeenCalled();
     expect(input.eventStore.deleteEventsForEntity).not.toHaveBeenCalled();
+    // Same hash → body persistence is skipped; no body write since the hash
+    // equality implies the body is unchanged from what was already persisted.
+    expect(input.eventStore.setLastScope).not.toHaveBeenCalled();
     // Hash unchanged so no need to persist again — but it's harmless if we do.
     actor.stop();
   });
@@ -264,7 +280,12 @@ describe("syncMachine scope handling", () => {
     mock.onGet(/\/api\/sync\/pull/).reply(200, {
       events: [event],
       nextCursor: null,
-      scope: { hash: "sha256:new", areaIds: null, entityTypes: null, timeWindow: null },
+      scope: {
+        hash: "sha256:new",
+        areaIds: ["KH0202"],
+        entityTypes: ["individual", "group"],
+        timeWindow: null,
+      },
     });
 
     const actor = startActor(input);
@@ -286,6 +307,12 @@ describe("syncMachine scope handling", () => {
     expect(deleteEventsCalls).not.toContain("entity-keep");
 
     expect(eventStore.setLastScopeHash).toHaveBeenCalledWith("sha256:new");
+    expect(eventStore.setLastScope).toHaveBeenCalledWith({
+      areaIds: ["KH0202"],
+      entityTypes: ["individual", "group"],
+      timeWindow: null,
+      hash: "sha256:new",
+    });
     actor.stop();
   });
 
@@ -528,15 +555,26 @@ describe("syncMachine scope handling", () => {
     mock.onGet(/\/api\/sync\/pull/).reply(200, {
       events: [event],
       nextCursor: null,
-      scope: { hash: "sha256:initial", areaIds: null, entityTypes: null, timeWindow: null },
+      scope: {
+        hash: "sha256:initial",
+        areaIds: ["KH0303"],
+        entityTypes: null,
+        timeWindow: { type: "fixed", floor: "2026-01-01T00:00:00.000Z" },
+      },
     });
 
     const actor = startActor(input);
     actor.send({ type: "SYNC", syncId: "first-ever" });
     await waitFor("first-ever", "resolve");
 
-    // Establishment path: hash persisted, no purge, no deletes.
+    // Establishment path: hash + body persisted, no purge, no deletes.
     expect(eventStore.setLastScopeHash).toHaveBeenCalledWith("sha256:initial");
+    expect(eventStore.setLastScope).toHaveBeenCalledWith({
+      areaIds: ["KH0303"],
+      entityTypes: null,
+      timeWindow: { type: "fixed", floor: "2026-01-01T00:00:00.000Z" },
+      hash: "sha256:initial",
+    });
     expect(purgeOutOfScope).not.toHaveBeenCalled();
     expect(entityStore.deleteEntity).not.toHaveBeenCalled();
     expect(eventStore.deleteEventsForEntity).not.toHaveBeenCalled();

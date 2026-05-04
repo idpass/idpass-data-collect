@@ -72,3 +72,16 @@ export interface EffectiveScope {
   /** Increment when the scope shape changes; informs `scope_hash` collisions. */
   schemaVersion: 1;
 }
+
+/**
+ * Persisted snapshot of the last-applied effective scope. Includes the hash so
+ * a stored body can be matched against a fresh /pull response without
+ * re-computing the canonical-JSON SHA-256. Stored client-side only — server
+ * adapters must not implement persistence for this type.
+ */
+export interface EffectiveScopeBody {
+  areaIds: string[] | null;
+  entityTypes: ScopeEntityType[] | null;
+  timeWindow: EffectiveScope["timeWindow"];
+  hash: string;
+}

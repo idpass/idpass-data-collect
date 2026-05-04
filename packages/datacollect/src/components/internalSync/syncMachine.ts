@@ -20,6 +20,7 @@
 import { setup, assign, fromPromise } from "xstate";
 import { SyncContext, SyncEvent, SyncMachineInput, SelectiveSyncOptions } from "./types";
 import { FormSubmission, SyncLevel } from "../../interfaces/types";
+import type { EffectiveScope, EffectiveScopeBody, ScopeEntityType } from "../../interfaces/scope";
 import { createLogger } from "../../utils/logger";
 
 const log = createLogger("syncMachine");
@@ -245,6 +246,7 @@ export function createSyncMachine(
           events: FormSubmission[];
           nextCursor: string | Date | null;
           responseScopeHash: string | null;
+          responseScope: EffectiveScopeBody | null;
         }> => {
           const { axiosInstance, configId, downloadCursor, selectiveSyncOptions, authStorage, reauthenticate } = input.context;
           let url = `/api/sync/pull?since=${encodeURIComponent(String(downloadCursor))}&configId=${encodeURIComponent(configId)}`;
@@ -255,11 +257,28 @@ export function createSyncMachine(
             events: FormSubmission[];
             nextCursor: string | Date | null;
             error?: string;
-            scope?: { hash?: string | null } | null;
+            scope?: {
+              areaIds?: string[] | null;
+              entityTypes?: ScopeEntityType[] | null;
+              timeWindow?: EffectiveScope["timeWindow"];
+              hash?: string | null;
+            } | null;
           };
           const extractScopeHash = (data: PullResponse): string | null => {
             const raw = data.scope?.hash;
             return typeof raw === "string" && raw.length > 0 ? raw : null;
+          };
+          const extractScopeBody = (data: PullResponse): EffectiveScopeBody | null => {
+            const scope = data.scope;
+            if (!scope) return null;
+            const hash = typeof scope.hash === "string" && scope.hash.length > 0 ? scope.hash : null;
+            if (!hash) return null;
+            return {
+              areaIds: scope.areaIds ?? null,
+              entityTypes: scope.entityTypes ?? null,
+              timeWindow: scope.timeWindow ?? null,
+              hash,
+            };
           };
           try {
             const result = await axiosInstance.get(url);
@@ -271,6 +290,7 @@ export function createSyncMachine(
               events: data.events,
               nextCursor: data.nextCursor,
               responseScopeHash: extractScopeHash(data),
+              responseScope: extractScopeBody(data),
             };
           } catch (error: unknown) {
             const axiosErr = error as { response?: { status?: number } };
@@ -291,6 +311,7 @@ export function createSyncMachine(
                   events: data.events,
                   nextCursor: data.nextCursor,
                   responseScopeHash: extractScopeHash(data),
+                  responseScope: extractScopeBody(data),
                 };
               } catch {
                 throw new Error("You do not have permission to sync this program — Please contact your administrator to request access");
@@ -310,6 +331,7 @@ export function createSyncMachine(
             events: FormSubmission[];
             nextCursor: string | Date | null;
             responseScopeHash: string | null;
+            responseScope: EffectiveScopeBody | null;
           };
         }): Promise<{
           nextCursor: string | Date | null;
@@ -342,7 +364,7 @@ export function createSyncMachine(
             inScopeGuids,
             purgeOutOfScope,
           } = input.context;
-          const { events, nextCursor, responseScopeHash } = input;
+          const { events, nextCursor, responseScopeHash, responseScope } = input;
 
           // Establishment: first sync ever for this scope (no persisted hash).
           // Apply events normally; at end of pagination persist the hash, no purge.
@@ -426,11 +448,18 @@ export function createSyncMachine(
                 }
               }
               await eventStore.setLastScopeHash(responseScopeHash);
+              if (responseScope) {
+                await eventStore.setLastScope(responseScope);
+              }
             } else if (establishingHash) {
               // First sync ever — establish the hash, never purge.
               await eventStore.setLastScopeHash(responseScopeHash);
+              if (responseScope) {
+                await eventStore.setLastScope(responseScope);
+              }
             }
-            // Same hash → no-op; deliberate.
+            // Same hash → no-op; deliberate. The persisted body is left
+            // untouched since hash equality implies the body is unchanged.
           }
 
           return {
@@ -769,6 +798,7 @@ export function createSyncMachine(
                     events: FormSubmission[];
                     nextCursor: string | Date | null;
                     responseScopeHash: string | null;
+                    responseScope: EffectiveScopeBody | null;
                   };
                 }).output;
                 return {
@@ -776,6 +806,7 @@ export function createSyncMachine(
                   events: pullOutput.events,
                   nextCursor: pullOutput.nextCursor,
                   responseScopeHash: pullOutput.responseScopeHash,
+                  responseScope: pullOutput.responseScope,
                 };
               },
               onDone: [

@@ -19,6 +19,7 @@
 
 import CryptoJS from "crypto-js";
 import { AuditLogEntry, EventStorageAdapter, EventStore, FormSubmission, SyncLevel } from "../interfaces/types";
+import type { EffectiveScopeBody } from "../interfaces/scope";
 import { EventUpcasterService } from "../services/EventUpcasterService";
 import { createLogger } from "../utils/logger";
 
@@ -566,6 +567,25 @@ export class EventStoreImpl implements EventStore {
    */
   setLastScopeHash(hash: string): Promise<void> {
     return this.storageAdapter.setLastScopeHash(hash);
+  }
+
+  /**
+   * Retrieves the last persisted effective scope body, or `null` if none.
+   *
+   * @returns A Promise that resolves with the parsed scope body, or `null` if absent.
+   */
+  getLastScope(): Promise<EffectiveScopeBody | null> {
+    return this.storageAdapter.getLastScope();
+  }
+
+  /**
+   * Persists the latest effective scope body advertised by the server.
+   *
+   * @param scope The effective scope body to persist.
+   * @returns A Promise that resolves when the body is persisted.
+   */
+  setLastScope(scope: EffectiveScopeBody): Promise<void> {
+    return this.storageAdapter.setLastScope(scope);
   }
 
   /**

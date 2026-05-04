@@ -18,6 +18,7 @@
  */
 
 import { AuditLogEntry, EventStorageAdapter, FormSubmission, SyncLevel } from "../interfaces/types";
+import type { EffectiveScopeBody } from "../interfaces/scope";
 import { createLogger } from "../utils/logger";
 
 const log = createLogger("IndexedDbEventStorageAdapter");
@@ -751,6 +752,62 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
     return new Promise<void>((resolve, reject) => {
       const tx = this.db!.transaction("syncTimestamp", "readwrite");
       tx.objectStore("syncTimestamp").put({ id: "scope_hash", value: hash });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  }
+
+  /**
+   * Retrieves the last persisted effective scope body (areaIds/entityTypes/timeWindow + hash),
+   * or `null` if none has been observed yet. Stored as a JSON string under the
+   * `"scope_body"` key in the `syncTimestamp` object store.
+   *
+   * @returns A Promise that resolves with the parsed scope body, or `null` if absent.
+   * @throws {Error} If IndexedDB is not initialized or the retrieval fails.
+   */
+  async getLastScope(): Promise<EffectiveScopeBody | null> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+    return new Promise<EffectiveScopeBody | null>((resolve, reject) => {
+      const tx = this.db!.transaction("syncTimestamp", "readonly");
+      const req = tx.objectStore("syncTimestamp").get("scope_body");
+      req.onsuccess = () => {
+        const row = req.result as { id: string; value?: string } | undefined;
+        if (!row?.value) {
+          resolve(null);
+          return;
+        }
+        try {
+          resolve(JSON.parse(row.value) as EffectiveScopeBody);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  /**
+   * Persists the latest effective scope body advertised by the server. Called
+   * after a successful pull, alongside `setLastScopeHash`. The body is stored
+   * as a JSON string under the `"scope_body"` key in the `syncTimestamp`
+   * object store. Resolves on `transaction.oncomplete` so callers see the
+   * write committed before the Promise settles.
+   *
+   * @param scope The effective scope body to persist.
+   * @returns A Promise that resolves when the body is successfully saved.
+   * @throws {Error} If IndexedDB is not initialized or the save operation fails.
+   */
+  async setLastScope(scope: EffectiveScopeBody): Promise<void> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+    const value = JSON.stringify(scope);
+    return new Promise<void>((resolve, reject) => {
+      const tx = this.db!.transaction("syncTimestamp", "readwrite");
+      tx.objectStore("syncTimestamp").put({ id: "scope_body", value });
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error);

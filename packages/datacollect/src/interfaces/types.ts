@@ -17,6 +17,8 @@
  * under the License.
  */
 
+import type { EffectiveScopeBody } from "./scope";
+
 /**
  * Entity types supported by the DataCollect system.
  *
@@ -340,6 +342,16 @@ export interface EventStore {
   /** Persist the latest scope hash (called after a successful pull). */
   setLastScopeHash(hash: string): Promise<void>;
   /**
+   * Get the last persisted effective scope body (areaIds/entityTypes/timeWindow + hash),
+   * or `null` if no body has been observed yet. Client-only.
+   */
+  getLastScope(): Promise<EffectiveScopeBody | null>;
+  /**
+   * Persist the effective scope body advertised by the server (called after a
+   * successful pull alongside `setLastScopeHash`). Client-only.
+   */
+  setLastScope(scope: EffectiveScopeBody): Promise<void>;
+  /**
    * Delete all events whose `entityGuid` matches the given guid. Used during
    * client-side scope-purge — see {@link EventStorageAdapter.deleteEventsForEntity}.
    * Returns the number of events deleted.
@@ -410,6 +422,22 @@ export interface EventStorageAdapter {
   getLastScopeHash(): Promise<string | null>;
   /** Persist the latest scope hash (called after a successful pull). */
   setLastScopeHash(hash: string): Promise<void>;
+  /**
+   * Get the last persisted effective scope body (areaIds/entityTypes/timeWindow + hash),
+   * or `null` when none has been observed yet.
+   *
+   * Server-side adapters (Postgres) MUST NOT implement this — scope body
+   * persistence is client-only. The Postgres adapter throws.
+   */
+  getLastScope(): Promise<EffectiveScopeBody | null>;
+  /**
+   * Persist the effective scope body advertised by the server (called after a
+   * successful pull alongside `setLastScopeHash`).
+   *
+   * Server-side adapters (Postgres) MUST NOT implement this — scope body
+   * persistence is client-only. The Postgres adapter throws.
+   */
+  setLastScope(scope: EffectiveScopeBody): Promise<void>;
   /**
    * Delete all events whose `entityGuid` matches the given guid. Used during
    * client-side scope-purge — the events would otherwise be orphans when
