@@ -20,3 +20,11 @@
 export { OpenSppV2Client, PreconditionFailedError, ConflictError } from "./OpenSppV2Client";
 export { default as OpenSppV2SyncAdapter } from "./OpenSppV2SyncAdapter";
 export * from "./types";
+export type {
+  ChangeRequestType,
+  RegistrantRef,
+  ChangeRequestStatus,
+  ChangeRequestCreate,
+  ChangeRequestUpdate,
+  ChangeRequestResponse,
+} from "./ChangeRequestTypes";
