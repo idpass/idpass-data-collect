@@ -37,6 +37,8 @@ const log = createLogger("db:initialize");
  *   4. verifications        (no dependencies)
  *   5. submission_reviews   (no dependencies)
  *   6. review_configs       (no dependencies)
+ *   7. sync_events          (FK on app_configs)
+ *   8. conflicts            (no dependencies)
  */
 export async function initializeDatabase(postgresUrl: string): Promise<void> {
   const pool = new Pool({ connectionString: postgresUrl });
@@ -210,6 +212,32 @@ export async function initializeDatabase(postgresUrl: string): Promise<void> {
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_sync_events_job_id
       ON sync_events (job_id) WHERE job_id IS NOT NULL
+    `);
+
+    // ── 8. conflicts ──────────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS conflicts (
+        guid TEXT PRIMARY KEY,
+        entity_guid TEXT NOT NULL,
+        tenant_id TEXT NOT NULL,
+        local_version JSONB NOT NULL,
+        remote_version JSONB NOT NULL,
+        local_event_guid TEXT NOT NULL,
+        remote_event_guid TEXT NOT NULL,
+        detected_at TIMESTAMPTZ NOT NULL,
+        resolved_at TIMESTAMPTZ,
+        resolution TEXT,
+        resolved_by TEXT,
+        merged_data JSONB
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS conflicts_tenant_resolved_idx
+      ON conflicts (tenant_id, resolved_at)
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS conflicts_entity_idx
+      ON conflicts (tenant_id, entity_guid)
     `);
 
     log.info("Backend database schema initialized successfully");
