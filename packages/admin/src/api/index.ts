@@ -19,6 +19,9 @@
 
 import { useAuthStore } from '@/stores/auth'
 import axios, { type AxiosInstance } from 'axios'
+import type { ConflictRecord } from '@idpass/data-collect-core'
+
+export type { ConflictRecord }
 
 const API_URL = import.meta.env.VITE_API_URL
 const APPS_URL = '/api/apps'
@@ -29,6 +32,7 @@ const SYNC_EVENTS_URL = '/api/sync/events'
 const USERS_URL = '/api/users'
 const REVIEWS_URL = '/api/reviews'
 const DUPLICATES_URL = '/api/potential-duplicates'
+const CONFLICTS_URL = '/api/conflicts'
 const ATTACHMENTS_URL = '/api/attachments'
 
 export let instance: AxiosInstance | null = null
@@ -477,6 +481,39 @@ export const resolveDuplicate = async (params: {
 }): Promise<{ status: string }> => {
   const response = await api().post(`${DUPLICATES_URL}/resolve`, params)
   return response.data
+}
+
+// --- Conflicts ---
+
+export const getConflicts = async (
+  configId: string,
+): Promise<{ conflicts: ConflictRecord[]; unresolvedCount: number }> => {
+  const response = await api().get(CONFLICTS_URL, { params: { configId } })
+  return response.data
+}
+
+export const getConflict = async (
+  guid: string,
+  configId: string,
+): Promise<ConflictRecord> => {
+  const response = await api().get(`${CONFLICTS_URL}/${encodeURIComponent(guid)}`, {
+    params: { configId },
+  })
+  return response.data.conflict
+}
+
+export const resolveConflict = async (params: {
+  guid: string
+  configId: string
+  resolution: 'local' | 'remote' | 'merged'
+  mergedData?: Record<string, unknown>
+}): Promise<ConflictRecord> => {
+  const response = await api().post(
+    `${CONFLICTS_URL}/${encodeURIComponent(params.guid)}/resolve`,
+    { resolution: params.resolution, mergedData: params.mergedData },
+    { params: { configId: params.configId } },
+  )
+  return response.data.conflict
 }
 
 // --- Attachments ---
