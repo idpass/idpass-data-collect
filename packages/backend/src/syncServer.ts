@@ -30,6 +30,7 @@ import YAML from "yamljs";
 import { Pool } from "pg";
 import { errorHandler, notFoundHandler, setupUncaughtHandlers } from "./middlewares/errorHandlers";
 import { createAppConfigRoutes } from "./routes/appConfigRoutes";
+import { createConflictRouter } from "./routes/conflictRoutes";
 import { createEntitiesRouter } from "./routes/entitiesRoute";
 import { createOpenSppFieldRoutes } from "./routes/opensppFieldRoutes";
 import { createPotentialDuplicatesRoute } from "./routes/potentialDuplicatesRoute";
@@ -190,6 +191,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   });
 
   app.use("/api/apps", createAppConfigRoutes(appConfigStore, appInstanceStore, userStore));
+  app.use("/api/conflicts", createConflictRouter(appInstanceStore));
   app.use("/api/entities", createEntitiesRouter(appInstanceStore));
   app.use("/api/sync", createSyncRouter(appInstanceStore, config.postgresUrl));
   app.use("/api/users", createUserRoutes(userStore));
