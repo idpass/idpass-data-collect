@@ -38,6 +38,7 @@ import * as dotenv from "dotenv";
 import { Pool } from "pg";
 import {
   ConflictService,
+  createLogger,
   EntityStoreImpl,
   EventStoreImpl,
   EventApplierService,
@@ -49,6 +50,8 @@ import { AppConfigStoreImpl } from "../stores/AppConfigStore";
 import { ConflictStorePg } from "../stores/ConflictStorePg";
 
 dotenv.config();
+
+const log = createLogger("cli:rebuild-projections");
 
 function parseArgs(argv: string[]): { tenant?: string; batchSize: number } {
   const args = argv.slice(2);
@@ -64,7 +67,7 @@ function parseArgs(argv: string[]): { tenant?: string; batchSize: number } {
       if (!isNaN(parsed) && parsed > 0) {
         batchSize = parsed;
       } else {
-        console.error(`Invalid --batch-size value: ${args[i + 1]}. Must be a positive integer.`);
+        log.error({ value: args[i + 1] }, "Invalid --batch-size value. Must be a positive integer.");
         process.exit(1);
       }
       i++;
@@ -75,7 +78,7 @@ function parseArgs(argv: string[]): { tenant?: string; batchSize: number } {
 }
 
 async function rebuildTenant(postgresUrl: string, tenantId: string, batchSize: number): Promise<boolean> {
-  console.log(`\n[${tenantId}] Starting projection rebuild...`);
+  log.info({ tenantId }, "Starting projection rebuild");
 
   const eventAdapter = new PostgresEventStorageAdapter(postgresUrl, tenantId);
   const entityAdapter = new PostgresEntityStorageAdapter(postgresUrl, tenantId);
@@ -118,16 +121,21 @@ async function rebuildTenant(postgresUrl: string, tenantId: string, batchSize: n
     process.stdout.write("\n");
   }
 
-  console.log(`[${tenantId}] Rebuild complete:`);
-  console.log(`  Total events : ${result.totalEvents}`);
-  console.log(`  Applied      : ${result.appliedEvents}`);
-  console.log(`  Failed       : ${result.failedEvents}`);
-  console.log(`  Duration     : ${result.durationMs}ms`);
+  log.info(
+    {
+      tenantId,
+      totalEvents: result.totalEvents,
+      appliedEvents: result.appliedEvents,
+      failedEvents: result.failedEvents,
+      durationMs: result.durationMs,
+    },
+    "Rebuild complete",
+  );
 
   if (result.errors.length > 0) {
-    console.error(`[${tenantId}] Failed events:`);
+    log.error({ tenantId, failedCount: result.errors.length }, "Failed events during rebuild");
     for (const { eventGuid, error } of result.errors) {
-      console.error(`  - ${eventGuid}: ${error}`);
+      log.error({ tenantId, eventGuid, error }, "Failed event");
     }
   }
 
@@ -141,8 +149,10 @@ async function rebuildTenant(postgresUrl: string, tenantId: string, batchSize: n
 async function main(): Promise<void> {
   const postgresUrl = process.env.POSTGRES;
   if (!postgresUrl) {
-    console.error("Error: POSTGRES environment variable is not set.");
-    console.error("Example: POSTGRES=postgresql://user:pass@localhost:5432/mydb npx ts-node src/cli/rebuild-projections.ts");
+    log.error("POSTGRES environment variable is not set");
+    log.error(
+      "Example: POSTGRES=postgresql://user:pass@localhost:5432/mydb npx ts-node src/cli/rebuild-projections.ts",
+    );
     process.exit(1);
   }
 
@@ -153,19 +163,19 @@ async function main(): Promise<void> {
   if (tenant) {
     tenantIds = [tenant];
   } else {
-    console.log("No --tenant specified. Loading all tenants from app_configs...");
+    log.info("No --tenant specified. Loading all tenants from app_configs...");
     const appConfigStore = new AppConfigStoreImpl(postgresUrl);
     await appConfigStore.initialize();
     const configs = await appConfigStore.getConfigs();
     await appConfigStore.closeConnection();
 
     if (configs.length === 0) {
-      console.log("No tenant configurations found. Nothing to rebuild.");
+      log.info("No tenant configurations found. Nothing to rebuild.");
       process.exit(0);
     }
 
     tenantIds = configs.map((c) => c.id);
-    console.log(`Found ${tenantIds.length} tenant(s): ${tenantIds.join(", ")}`);
+    log.info({ count: tenantIds.length, tenantIds }, "Found tenant(s) to rebuild");
   }
 
   let allSucceeded = true;
@@ -178,15 +188,15 @@ async function main(): Promise<void> {
   }
 
   if (!allSucceeded) {
-    console.error("\nOne or more tenants had failed events during rebuild.");
+    log.error("One or more tenants had failed events during rebuild");
     process.exit(1);
   }
 
-  console.log("\nAll projections rebuilt successfully.");
+  log.info("All projections rebuilt successfully");
   process.exit(0);
 }
 
 main().catch((err) => {
-  console.error("Fatal error during rebuild:", err instanceof Error ? err.message : err);
+  log.error({ err: err instanceof Error ? err.message : err }, "Fatal error during rebuild");
   process.exit(1);
 });

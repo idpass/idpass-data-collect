@@ -127,9 +127,8 @@ const handleSave = async () => {
     await conflictsStore.resolve(payload)
     snackBarStore.showSnackbar('Conflict resolved', 'success')
     closeResolveDialog()
-  } catch (error) {
+  } catch {
     snackBarStore.showSnackbar('Failed to resolve conflict', 'error')
-    console.error('Failed to resolve conflict', error)
   } finally {
     saving.value = false
   }

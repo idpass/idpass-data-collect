@@ -34,7 +34,15 @@ const log = createLogger("conflictRoutes");
 const ResolvePayloadSchema = z
   .object({
     resolution: z.enum(["local", "remote", "merged"]),
-    mergedData: z.record(z.string(), z.unknown()).optional(),
+    // Accept either a JSON object or `null`, then coerce `null` to `undefined`
+    // so the refine below can use a single `=== undefined` check. Without this
+    // step, `mergedData: null` slips past the refine and reaches
+    // ConflictService.resolveConflict, which throws "mergedData is required"
+    // and falls through the route's try/catch as a 500 instead of a 400.
+    mergedData: z
+      .union([z.record(z.string(), z.unknown()), z.null()])
+      .optional()
+      .transform((v) => v ?? undefined),
   })
   .refine((v) => v.resolution !== "merged" || v.mergedData !== undefined, {
     message: "mergedData is required when resolution is 'merged'",

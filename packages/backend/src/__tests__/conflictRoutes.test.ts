@@ -302,6 +302,23 @@ describeIfPostgres("Conflict Routes", () => {
       expect(response.body.message).toBe("Invalid payload");
     });
 
+    it("returns 400 when resolution is merged and mergedData is explicitly null", async () => {
+      const currentApp = requireApp();
+      const instance = await currentApp.appInstanceStore.getAppInstance(TENANT_A.id);
+      const conflict = buildConflict({ guid: "res-merged-null" });
+      await instance!.conflictStore.saveConflict(conflict);
+
+      const response = await request(currentApp.httpServer)
+        .post(`/api/conflicts/res-merged-null/resolve?configId=${TENANT_A.id}`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ resolution: "merged", mergedData: null });
+
+      // Without the Zod null-coercion fix, this falls through to
+      // ConflictService.resolveConflict and surfaces as 500.
+      expect(response.status).toBe(400);
+      expect(response.body.message).toBe("Invalid payload");
+    });
+
     it("returns 409 when the conflict is already resolved", async () => {
       const currentApp = requireApp();
       const instance = await currentApp.appInstanceStore.getAppInstance(TENANT_A.id);

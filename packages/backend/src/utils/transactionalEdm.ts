@@ -80,6 +80,13 @@ export async function processTransactionalBatch(
     // Conflict store also rides on the same pool — its Drizzle instance is
     // re-pointed at the transaction below so that any conflict records written
     // by EventApplierService participate in the same atomic batch.
+    //
+    // IMPORTANT: construct a NEW ConflictStorePg here. Do NOT reuse the one
+    // stored on AppInstance.conflictStore — setDrizzleInstance(tx) below
+    // permanently mutates the store's `db` field, and the AppInstance store
+    // is shared across all requests. Reusing it would leak the tx ref past
+    // the request boundary, causing the next request to write to a closed
+    // transaction.
     const conflictStore = new ConflictStorePg(pool, tenantId);
 
     // Track the result from inside the transaction callback

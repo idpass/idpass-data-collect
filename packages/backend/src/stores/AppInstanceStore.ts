@@ -43,6 +43,13 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
    * so it can be closed in `clearAppInstance` / `closeConnection`. Kept apart
    * from the event/entity adapters' internal pools (which they own and close
    * themselves) to avoid cross-coupling lifecycles.
+   *
+   * TODO(#202 Phase 2): consolidate to a single shared pool per tenant.
+   * Today we open 3 pools per tenant (event adapter, entity adapter,
+   * conflict store). At ~10 connections/pool default, this is 30 max
+   * connections per tenant. Plausible exhaustion at >=30 active tenants.
+   * ConflictStorePg should accept an existing pool/Drizzle handle from
+   * the event adapter rather than constructing its own.
    */
   private conflictPools: Record<string, Pool> = {};
 
