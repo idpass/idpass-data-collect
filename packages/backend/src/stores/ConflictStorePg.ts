@@ -41,6 +41,20 @@ export class ConflictStorePg implements ConflictStore {
   }
 
   /**
+   * Replaces the internal Drizzle instance. Mirrors the pattern used by
+   * `PostgresEventStorageAdapter` / `PostgresEntityStorageAdapter`: callers
+   * inject a Drizzle transaction object so that conflict-record inserts
+   * participate in an external transaction (e.g. the transactional /push
+   * batch in `transactionalEdm.ts`). Without this, conflicts recorded during
+   * a transactional batch would NOT roll back on transaction failure.
+   *
+   * @param db A Drizzle database or transaction instance.
+   */
+  setDrizzleInstance(db: NodePgDatabase): void {
+    this.db = db;
+  }
+
+  /**
    * Persist a new conflict record. Idempotent on `guid` — if a record with the
    * same guid already exists, the insert is a no-op. This matches retry
    * semantics used by other stores in the codebase.

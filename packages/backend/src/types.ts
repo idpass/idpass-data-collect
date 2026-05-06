@@ -19,6 +19,7 @@
 
 import { EntityDataManager, ExternalSyncConfig } from "@idpass/data-collect-core";
 import { Server } from "http";
+import type { ConflictStorePg } from "./stores/ConflictStorePg";
 export interface SyncServerConfig {
   port: number;
   adminPassword: string;
@@ -169,6 +170,12 @@ export interface AppInstance {
   configId: string;
   config: AppConfig;
   edm: EntityDataManager;
+  /**
+   * Per-tenant conflict store backing the ConflictService wired into
+   * EventApplierService. Routes (B2) construct a ConflictService per request
+   * around this same store instance instead of opening a parallel connection.
+   */
+  conflictStore: ConflictStorePg;
 }
 
 export interface AppInstanceStore {

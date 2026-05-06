@@ -35,7 +35,9 @@
  */
 
 import * as dotenv from "dotenv";
+import { Pool } from "pg";
 import {
+  ConflictService,
   EntityStoreImpl,
   EventStoreImpl,
   EventApplierService,
@@ -44,6 +46,7 @@ import {
   ProjectionRebuildService,
 } from "@idpass/data-collect-core";
 import { AppConfigStoreImpl } from "../stores/AppConfigStore";
+import { ConflictStorePg } from "../stores/ConflictStorePg";
 
 dotenv.config();
 
@@ -83,7 +86,20 @@ async function rebuildTenant(postgresUrl: string, tenantId: string, batchSize: n
   await eventStore.initialize();
   await entityStore.initialize();
 
-  const eventApplierService = new EventApplierService(eventStore, entityStore);
+  // Conflict store gets its own short-lived pool — re-applies during rebuild
+  // run through EventApplierService and may detect conflicts that need recording.
+  const conflictPool = new Pool({ connectionString: postgresUrl });
+  const conflictStore = new ConflictStorePg(conflictPool, tenantId);
+  const conflictService = new ConflictService(conflictStore);
+
+  const eventApplierService = new EventApplierService(
+    eventStore,
+    entityStore,
+    undefined,
+    undefined,
+    conflictService,
+    tenantId,
+  );
   const rebuildService = new ProjectionRebuildService(eventStore, entityStore, eventApplierService);
 
   let lastProgressLine = "";
@@ -117,6 +133,7 @@ async function rebuildTenant(postgresUrl: string, tenantId: string, batchSize: n
 
   await eventStore.closeConnection();
   await entityStore.closeConnection();
+  await conflictPool.end();
 
   return result.failedEvents === 0;
 }
