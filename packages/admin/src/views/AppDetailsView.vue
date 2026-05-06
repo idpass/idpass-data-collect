@@ -501,6 +501,12 @@ watch(
                 @click="router.push({ name: 'duplicates', params: { id: routeId } })"
               />
               <v-list-item
+                prepend-icon="mdi-merge"
+                title="Conflicts"
+                data-testid="app-details-conflicts-link"
+                @click="router.push({ name: 'conflicts', params: { id: routeId } })"
+              />
+              <v-list-item
                 prepend-icon="mdi-content-copy"
                 title="Duplicate Config"
                 @click="duplicateConfig"
