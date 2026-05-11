@@ -1,0 +1,39 @@
+name: Deploy to Coolify
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Action
+        required: true
+        default: deploy
+        type: choice
+        options: [deploy, delete]
+      instance_name:
+        description: Coolify instance name (e.g. qa-947)
+        required: true
+        type: string
+      branch:
+        description: Branch to deploy (deploy only). Defaults to the branch the workflow runs against.
+        required: false
+        type: string
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fire repository_dispatch on idpass-coolify
+        env:
+          GH_TOKEN: ${{ secrets.COOLIFY_DISPATCH_TOKEN }}
+          ACTION: ${{ inputs.action }}
+          INSTANCE_NAME: ${{ inputs.instance_name }}
+          BRANCH: ${{ inputs.branch || github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh api repos/idpass/idpass-coolify/dispatches \
+            -X POST \
+            -F "event_type=coolify-deploy" \
+            -F "client_payload[action]=$ACTION" \
+            -F "client_payload[instance_name]=$INSTANCE_NAME" \
+            -F "client_payload[branch]=$BRANCH"
+          echo "Dispatched. Watch the run at https://github.com/idpass/idpass-coolify/actions"
