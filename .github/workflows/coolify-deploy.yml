@@ -13,6 +13,11 @@ on:
         description: Coolify instance name (e.g. qa-947)
         required: true
         type: string
+      env_name:
+        description: Coolify environment (default qa). Use `production` / `staging` to deploy to lifecycle envs.
+        required: false
+        default: qa
+        type: string
       branch:
         description: Branch to deploy (deploy only). Defaults to the branch the workflow runs against.
         required: false
@@ -27,6 +32,7 @@ jobs:
           GH_TOKEN: ${{ secrets.COOLIFY_DISPATCH_TOKEN }}
           ACTION: ${{ inputs.action }}
           INSTANCE_NAME: ${{ inputs.instance_name }}
+          ENV_NAME: ${{ inputs.env_name || 'qa' }}
           BRANCH: ${{ inputs.branch || github.ref_name }}
         run: |
           set -euo pipefail
@@ -35,5 +41,6 @@ jobs:
             -F "event_type=coolify-deploy" \
             -F "client_payload[action]=$ACTION" \
             -F "client_payload[instance_name]=$INSTANCE_NAME" \
+            -F "client_payload[env_name]=$ENV_NAME" \
             -F "client_payload[branch]=$BRANCH"
           echo "Dispatched. Watch the run at https://github.com/idpass/idpass-coolify/actions"
