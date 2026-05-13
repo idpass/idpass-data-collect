@@ -1,15 +1,23 @@
 import { defineConfig } from 'vitest/config'
 import { resolve } from 'path'
 import vue from '@vitejs/plugin-vue'
+import vuetify from 'vite-plugin-vuetify'
 import type { Plugin } from 'vite'
 
 export default defineConfig({
-  plugins: [vue() as Plugin],
+  plugins: [vue() as Plugin, vuetify({ autoImport: true }) as Plugin],
   test: {
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/__tests__/setup.ts'],
     exclude: ['e2e/**', 'node_modules/**'],
+    // Vuetify ships per-component CSS imports; without inlining, Vitest's
+    // Node loader rejects the `.css` extension. Mirrors the admin config.
+    server: {
+      deps: {
+        inline: ['vuetify'],
+      },
+    },
   },
   resolve: {
     alias: {

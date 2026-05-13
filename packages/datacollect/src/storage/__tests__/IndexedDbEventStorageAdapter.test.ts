@@ -417,4 +417,89 @@ describe("IndexedDbEventStorageAdapter", () => {
     const defaultSavedEntity = await defaultAdapter.getEvents();
     expect(defaultSavedEntity).toEqual([]);
   });
+
+  test("getLastScopeHash returns null before setLastScopeHash", async () => {
+    const adapter = new IndexedDbEventStorageAdapter("scope-hash-test-1");
+    await adapter.initialize();
+    expect(await adapter.getLastScopeHash()).toBeNull();
+  });
+
+  test("setLastScopeHash persists across new adapter instances", async () => {
+    const a = new IndexedDbEventStorageAdapter("scope-hash-test-2");
+    await a.initialize();
+    await a.setLastScopeHash("sha256:deadbeef");
+
+    const b = new IndexedDbEventStorageAdapter("scope-hash-test-2");
+    await b.initialize();
+    expect(await b.getLastScopeHash()).toBe("sha256:deadbeef");
+  });
+
+  test("getLastScope returns null before setLastScope", async () => {
+    const a = new IndexedDbEventStorageAdapter("scope-body-test-1");
+    await a.initialize();
+    expect(await a.getLastScope()).toBeNull();
+  });
+
+  test("setLastScope round-trips a full body across new adapter instances", async () => {
+    const body = {
+      areaIds: ["KH0101", "KH0102"],
+      entityTypes: ["individual" as const, "group" as const],
+      timeWindow: { type: "rolling" as const, days: 90 },
+      hash: "sha256:roundtrip",
+    };
+    const a = new IndexedDbEventStorageAdapter("scope-body-test-2");
+    await a.initialize();
+    await a.setLastScope(body);
+
+    // Re-open: setLastScope must resolve only after txn.oncomplete so the
+    // value is observable from a freshly-opened database.
+    const b = new IndexedDbEventStorageAdapter("scope-body-test-2");
+    await b.initialize();
+    expect(await b.getLastScope()).toEqual(body);
+  });
+
+  test("setLastScope overwrites a previous body with the new one", async () => {
+    const adapter = new IndexedDbEventStorageAdapter("scope-body-test-3");
+    await adapter.initialize();
+    await adapter.setLastScope({
+      areaIds: null,
+      entityTypes: null,
+      timeWindow: null,
+      hash: "sha256:first",
+    });
+    await adapter.setLastScope({
+      areaIds: ["KH9999"],
+      entityTypes: ["individual"],
+      timeWindow: null,
+      hash: "sha256:second",
+    });
+    const observed = await adapter.getLastScope();
+    expect(observed).toEqual({
+      areaIds: ["KH9999"],
+      entityTypes: ["individual"],
+      timeWindow: null,
+      hash: "sha256:second",
+    });
+  });
+
+  test("setLastScope resolves only after the IDB transaction commits", async () => {
+    // The CLAUDE.md mandate: any IDB write MUST resolve via transaction.oncomplete,
+    // not on IDBRequest.onsuccess. If the implementation incorrectly resolves on
+    // request.onsuccess, this test can still pass — but a re-open in the same
+    // microtask is the strongest practical signal that the txn committed.
+    const adapter = new IndexedDbEventStorageAdapter("scope-body-test-4");
+    await adapter.initialize();
+    await adapter.setLastScope({
+      areaIds: null,
+      entityTypes: null,
+      timeWindow: null,
+      hash: "sha256:committed",
+    });
+    await adapter.closeConnection();
+
+    const reopened = new IndexedDbEventStorageAdapter("scope-body-test-4");
+    await reopened.initialize();
+    const body = await reopened.getLastScope();
+    expect(body?.hash).toBe("sha256:committed");
+  });
 });

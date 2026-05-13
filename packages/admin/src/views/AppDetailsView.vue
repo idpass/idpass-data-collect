@@ -15,6 +15,9 @@ import { useAuthStore } from '@/stores/auth'
 import { useSnackBarStore } from '@/stores/snackBar'
 import DataDiagnostics from '@/components/DataDiagnostics.vue'
 import SyncStatusPanel from '@/components/SyncStatusPanel.vue'
+import SyncScopeCard from '@/components/SyncScopeCard.vue'
+import { useFeatureFlag } from '@/composables/useFeatureFlag'
+import type { SyncScopePolicy } from '@idpass/data-collect-core'
 
 interface EntityForm {
   name: string
@@ -68,6 +71,7 @@ interface AppConfig {
   externalSync?: ExternalSyncConfig
   authConfigs?: AuthConfig[]
   selfService?: SelfServiceConfig
+  syncScope?: SyncScopePolicy | null
   createdAt?: string
   updatedAt?: string
 }
@@ -95,6 +99,12 @@ const isDeleting = ref(false)
 const qrError = ref(false)
 const entityRecords = ref<Record<string, unknown[]>>({})
 const syncPanelRef = ref<InstanceType<typeof SyncStatusPanel> | null>(null)
+const scopedSyncEnabled = useFeatureFlag('scopedSync')
+
+function onSyncScopeUpdated(policy: SyncScopePolicy | null) {
+  if (!app.value) return
+  app.value = { ...app.value, syncScope: policy }
+}
 
 const routeId = computed(() => route.params.id as string)
 
@@ -501,6 +511,13 @@ watch(
                 @click="router.push({ name: 'duplicates', params: { id: routeId } })"
               />
               <v-list-item
+                v-if="scopedSyncEnabled"
+                data-testid="app-details-devices-link"
+                prepend-icon="mdi-cellphone-link"
+                title="View device sync activity"
+                @click="router.push({ name: 'devices', params: { configId: app.id } })"
+              />
+              <v-list-item
                 prepend-icon="mdi-content-copy"
                 title="Duplicate Config"
                 @click="duplicateConfig"
@@ -533,6 +550,13 @@ watch(
         :requires-credentials="requiresCredentials"
         @sync-completed="fetchApp"
         @request-credentials="showAuthDialog = true"
+      />
+
+      <SyncScopeCard
+        v-if="scopedSyncEnabled"
+        :app-id="app.id"
+        :policy="app.syncScope ?? null"
+        @update:policy="onSyncScopeUpdated"
       />
 
       <div class="details-grid">

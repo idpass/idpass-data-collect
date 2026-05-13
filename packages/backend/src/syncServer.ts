@@ -35,6 +35,7 @@ import { createOpenSppFieldRoutes } from "./routes/opensppFieldRoutes";
 import { createPotentialDuplicatesRoute } from "./routes/potentialDuplicatesRoute";
 import { createSyncRouter } from "./routes/syncRoute";
 import { createUserRoutes } from "./routes/userRoutes";
+import { createAdminDevicesRouter } from "./routes/adminDevicesRoute";
 import { createSelfServiceRouter } from "./routes/selfServiceRoutes";
 import { createReviewRoutes, clearReviewState } from "./routes/reviewRoutes";
 import { createAttachmentRoutes } from "./routes/attachmentRoutes";
@@ -43,6 +44,7 @@ import { AppInstanceStoreImpl } from "./stores/AppInstanceStore";
 import { UserStoreImpl } from "./stores/UserStore";
 import { OtpStoreImpl } from "./stores/OtpStore";
 import { ReviewStoreImpl } from "./stores/ReviewStore";
+import { SyncTelemetryStore } from "./stores/SyncTelemetryStore";
 import { Role, SyncServerConfig, SyncServerInstance } from "./types";
 import { generatePublicArtifacts, resolvePublicBaseUrl } from "./utils/publicArtifacts";
 import { logger, createLogger } from "./utils/logger";
@@ -178,6 +180,11 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   // Shared pool for health checks to verify database connectivity
   const healthCheckPool = new Pool({ connectionString: config.postgresUrl, max: 2 });
 
+  // Per-device sync telemetry store (OpenProject WP #947). Pool is registered
+  // for cleanup so tests don't leak connections across server boots.
+  const telemetryPool = config.postgresUrl ? new Pool({ connectionString: config.postgresUrl }) : null;
+  const telemetryStore = telemetryPool ? new SyncTelemetryStore(telemetryPool) : undefined;
+
   app.get("/health", async (_req, res) => {
     const timestamp = new Date().toISOString();
     try {
@@ -191,13 +198,16 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
 
   app.use("/api/apps", createAppConfigRoutes(appConfigStore, appInstanceStore, userStore));
   app.use("/api/entities", createEntitiesRouter(appInstanceStore));
-  app.use("/api/sync", createSyncRouter(appInstanceStore, config.postgresUrl));
+  app.use("/api/sync", createSyncRouter(appInstanceStore, config.postgresUrl, telemetryStore));
   app.use("/api/users", createUserRoutes(userStore));
   app.use("/api/openspp-fields", createOpenSppFieldRoutes());
   app.use("/api/potential-duplicates", createPotentialDuplicatesRoute(appInstanceStore));
   app.use("/api/auth", createSelfServiceRouter(otpStore, appInstanceStore, reviewStore));
   app.use("/api/reviews", createReviewRoutes(appInstanceStore, reviewStore, userStore));
   app.use("/api/attachments", createAttachmentRoutes(appInstanceStore, config.postgresUrl));
+  if (telemetryStore) {
+    app.use("/api/admin/devices", createAdminDevicesRouter(userStore, telemetryStore));
+  }
 
   app.get("/artifacts/:artifactId.json", async (req, res, next) => {
     try {
@@ -331,10 +341,13 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
     await otpStore.closeConnection();
     await reviewStore.closeConnection();
     await healthCheckPool.end();
+    if (telemetryPool) {
+      await telemetryPool.end();
+    }
     await new Promise<void>((resolve) => {
       httpServer.close(() => resolve());
     });
   }
 
-  return { httpServer, appInstanceStore, appConfigStore, userStore, clearStore, closeConnection };
+  return { httpServer, appInstanceStore, appConfigStore, userStore, telemetryStore, clearStore, closeConnection };
 }

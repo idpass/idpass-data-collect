@@ -28,6 +28,7 @@ import multer from "multer";
 import fs from "fs/promises";
 import { generatePublicArtifacts, getPublicArtifactPaths, resolvePublicBaseUrl } from "../utils/publicArtifacts";
 import rateLimit from "express-rate-limit";
+import { SYNC_SCOPE_SCHEMA } from "../middlewares/syncScopeSchema";
 const isTest = process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID !== undefined;
 
 const AppConfigSchema = z.object({
@@ -36,6 +37,7 @@ const AppConfigSchema = z.object({
   description: z.string().nullish(),
   version: z.string().nullish(),
   url: z.string().nullish(),
+  syncScope: SYNC_SCOPE_SCHEMA.nullish(),
   entityForms: z.array(z.object({
     id: z.string(),
     name: z.string(),
@@ -384,6 +386,38 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
         }
         throw error;
       }
+    }),
+  );
+
+  // JSON-body PATCH for editing only the syncScope policy. Avoids re-uploading
+  // the full config file from the admin UI for a small scoped diff.
+  // Body: `{ syncScope: SyncScopePolicy | null }` — null clears the policy.
+  router.patch(
+    "/:id/syncScope",
+    adminAuth,
+    asyncHandler(async (req, res) => {
+      const { id } = req.params;
+      ensureValidConfigId(id);
+
+      const SyncScopePatchSchema = z.object({
+        syncScope: SYNC_SCOPE_SCHEMA.nullable(),
+      });
+      const parsed = SyncScopePatchSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res
+          .status(400)
+          .json({ error: "Invalid syncScope payload", details: parsed.error.issues });
+      }
+
+      const existing = await appConfigStore.getConfig(id);
+      const updated: AppConfig = {
+        ...existing,
+        syncScope: parsed.data.syncScope ?? undefined,
+      };
+      await appConfigStore.saveConfig(updated);
+      await appInstanceStore.updateAppInstance(id);
+
+      res.json({ status: "success", syncScope: updated.syncScope ?? null });
     }),
   );
 

@@ -21,6 +21,7 @@ import { randomBytes } from "crypto";
 import { Pool } from "pg";
 import { eq, isNull, sql } from "drizzle-orm";
 import { drizzle, NodePgDatabase } from "drizzle-orm/node-postgres";
+import type { SyncScopePolicy } from "@idpass/data-collect-core";
 import { AppConfig, AppConfigStore } from "../types";
 import { appConfigs } from "../db/schema";
 
@@ -46,6 +47,7 @@ function mapRowToAppConfig(row: AppConfigRow, artifactId: string): AppConfig {
     externalSync: row.externalSync,
     authConfigs: row.authConfigs,
     selfService: row.selfService ?? undefined,
+    syncScope: (row.syncScope ?? undefined) as SyncScopePolicy | undefined,
     archivedAt: row.archivedAt ?? null,
   } as AppConfig;
 }
@@ -82,6 +84,7 @@ export class AppConfigStoreImpl implements AppConfigStore {
       await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS artifact_id TEXT`);
       await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS self_service JSONB`);
       await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP`);
+      await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS sync_scope JSONB`);
     } catch (error) {
       throw new Error(`Failed to initialize database: ${error}`);
     }
@@ -157,6 +160,7 @@ export class AppConfigStoreImpl implements AppConfigStore {
         externalSync: config.externalSync ?? null,
         authConfigs: JSON.stringify(config.authConfigs),
         selfService: config.selfService ? JSON.stringify(config.selfService) : null,
+        syncScope: config.syncScope ?? null,
       };
       await this.db
         .insert(appConfigs)
@@ -174,6 +178,7 @@ export class AppConfigStoreImpl implements AppConfigStore {
             externalSync: config.externalSync ?? null,
             authConfigs: JSON.stringify(config.authConfigs),
             selfService: config.selfService ? JSON.stringify(config.selfService) : null,
+            syncScope: config.syncScope ?? null,
             archivedAt: null,
           },
         });

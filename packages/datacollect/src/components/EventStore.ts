@@ -19,6 +19,7 @@
 
 import CryptoJS from "crypto-js";
 import { AuditLogEntry, EventStorageAdapter, EventStore, FormSubmission, SyncLevel } from "../interfaces/types";
+import type { EffectiveScopeBody } from "../interfaces/scope";
 import { EventUpcasterService } from "../services/EventUpcasterService";
 import { createLogger } from "../utils/logger";
 
@@ -400,6 +401,24 @@ export class EventStoreImpl implements EventStore {
   }
 
   /**
+   * Deletes all events whose `entityGuid` matches the given guid.
+   *
+   * Delegates to the underlying storage adapter. Used during client-side
+   * scope-purge — see {@link EventStorageAdapter.deleteEventsForEntity}.
+   *
+   * Note: Purge does NOT extend the hash chain. It is a local data-
+   * minimization operation, so the chain anchor is intentionally not updated;
+   * a subsequent rebuildHashChain on the next initialize would recompute
+   * from remaining events if needed.
+   *
+   * @param entityGuid The entity guid whose events should be removed.
+   * @returns The number of events deleted.
+   */
+  async deleteEventsForEntity(entityGuid: string): Promise<number> {
+    return await this.storageAdapter.deleteEventsForEntity(entityGuid);
+  }
+
+  /**
    * Updates the sync level of an event.
    *
    * @param id The ID of the event to update.
@@ -529,6 +548,44 @@ export class EventStoreImpl implements EventStore {
    */
   setLastPushExternalSyncTimestamp(timestamp: string): Promise<void> {
     return this.storageAdapter.setLastPushExternalSyncTimestamp(timestamp);
+  }
+
+  /**
+   * Retrieves the last advertised scope hash from the server.
+   *
+   * @returns The hash string, or `null` when no scope has been observed yet.
+   */
+  getLastScopeHash(): Promise<string | null> {
+    return this.storageAdapter.getLastScopeHash();
+  }
+
+  /**
+   * Persists the latest scope hash advertised by the server.
+   *
+   * @param hash The hash string to persist.
+   * @returns A Promise that resolves when the hash is persisted.
+   */
+  setLastScopeHash(hash: string): Promise<void> {
+    return this.storageAdapter.setLastScopeHash(hash);
+  }
+
+  /**
+   * Retrieves the last persisted effective scope body, or `null` if none.
+   *
+   * @returns A Promise that resolves with the parsed scope body, or `null` if absent.
+   */
+  getLastScope(): Promise<EffectiveScopeBody | null> {
+    return this.storageAdapter.getLastScope();
+  }
+
+  /**
+   * Persists the latest effective scope body advertised by the server.
+   *
+   * @param scope The effective scope body to persist.
+   * @returns A Promise that resolves when the body is persisted.
+   */
+  setLastScope(scope: EffectiveScopeBody): Promise<void> {
+    return this.storageAdapter.setLastScope(scope);
   }
 
   /**

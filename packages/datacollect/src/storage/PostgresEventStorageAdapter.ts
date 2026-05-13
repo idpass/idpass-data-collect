@@ -20,6 +20,7 @@
 import { Pool } from "pg";
 import { and, eq, gt, sql, asc, desc, count } from "drizzle-orm";
 import { AuditLogEntry, EventStorageAdapter, FormSubmission, SyncLevel } from "../interfaces/types";
+import type { EffectiveScopeBody } from "../interfaces/scope";
 import { createDrizzleFromPool, DrizzleDatabase, withClient } from "../db/connection";
 import { events, auditLog, syncMetadata } from "../db/schema";
 import { createLogger } from "../utils/logger";
@@ -636,6 +637,63 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
    */
   async setLastPushExternalSyncTimestamp(timestamp: string): Promise<void> {
     await this.setSyncMetadataValue("last_push_external_sync_timestamp", timestamp);
+  }
+
+  /**
+   * Scope hash tracking is a client-only concern; the server is stateless on client scope state.
+   *
+   * @throws {Error} Always throws; this method is not supported on the server-side adapter.
+   */
+  async getLastScopeHash(): Promise<string | null> {
+    throw new Error(
+      "PostgresEventStorageAdapter.getLastScopeHash is client-only; the server is stateless on client scope state",
+    );
+  }
+
+  /**
+   * Scope hash tracking is a client-only concern; the server is stateless on client scope state.
+   *
+   * @throws {Error} Always throws; this method is not supported on the server-side adapter.
+   */
+  async setLastScopeHash(_hash: string): Promise<void> {
+    throw new Error(
+      "PostgresEventStorageAdapter.setLastScopeHash is client-only; the server is stateless on client scope state",
+    );
+  }
+
+  /**
+   * Effective-scope-body persistence is a client-only concern; the server is stateless on client scope state.
+   *
+   * @throws {Error} Always throws; this method is not supported on the server-side adapter.
+   */
+  async getLastScope(): Promise<EffectiveScopeBody | null> {
+    throw new Error(
+      "PostgresEventStorageAdapter.getLastScope is client-only; the server is stateless on client scope state",
+    );
+  }
+
+  /**
+   * Effective-scope-body persistence is a client-only concern; the server is stateless on client scope state.
+   *
+   * @throws {Error} Always throws; this method is not supported on the server-side adapter.
+   */
+  async setLastScope(_scope: EffectiveScopeBody): Promise<void> {
+    throw new Error(
+      "PostgresEventStorageAdapter.setLastScope is client-only; the server is stateless on client scope state",
+    );
+  }
+
+  /**
+   * Per-entity event deletion is a client-only data-minimization operation
+   * used during scope-purge. The server retains the full audit trail and
+   * MUST NOT support this method.
+   *
+   * @throws {Error} Always throws; this method is not supported on the server-side adapter.
+   */
+  async deleteEventsForEntity(_entityGuid: string): Promise<number> {
+    throw new Error(
+      "PostgresEventStorageAdapter.deleteEventsForEntity is client-only; the server is stateless on client scope state",
+    );
   }
 
   /**
