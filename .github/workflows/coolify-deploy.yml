@@ -10,13 +10,13 @@ on:
         type: choice
         options: [deploy, delete]
       instance_name:
-        description: Coolify instance name (e.g. qa-947)
+        description: Coolify instance name (e.g. feature-947)
         required: true
         type: string
       env_name:
-        description: Coolify environment (default qa). Use `production` / `staging` to deploy to lifecycle envs.
+        description: Coolify environment (default `testing`). Use `production` / `staging` to deploy to lifecycle envs.
         required: false
-        default: qa
+        default: testing
         type: string
       branch:
         description: Branch to deploy (deploy only). Defaults to the branch the workflow runs against.
@@ -32,7 +32,7 @@ jobs:
           GH_TOKEN: ${{ secrets.COOLIFY_DISPATCH_TOKEN }}
           ACTION: ${{ inputs.action }}
           INSTANCE_NAME: ${{ inputs.instance_name }}
-          ENV_NAME: ${{ inputs.env_name || 'qa' }}
+          ENV_NAME: ${{ inputs.env_name || 'testing' }}
           BRANCH: ${{ inputs.branch || github.ref_name }}
         run: |
           set -euo pipefail
