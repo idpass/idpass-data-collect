@@ -18,6 +18,7 @@
  */
 
 import {
+  ConflictService,
   EntityDataManager,
   EntityStoreImpl,
   EventStoreImpl,
@@ -29,12 +30,28 @@ import {
   AuthManager,
   FormClassifier,
 } from "@idpass/data-collect-core";
+import { Pool } from "pg";
 import { v4 as uuidv4 } from "uuid";
 import { AppConfigStore, AppInstance, AppInstanceStore } from "../types";
 import { InMemoryAuthStorageAdapter } from "../auth/InMemoryAuthStorageAdapter";
+import { ConflictStorePg } from "./ConflictStorePg";
 
 export class AppInstanceStoreImpl implements AppInstanceStore {
   private instances: Record<string, AppInstance> = {};
+  /**
+   * Per-instance pg Pool dedicated to the ConflictStorePg. Tracked separately
+   * so it can be closed in `clearAppInstance` / `closeConnection`. Kept apart
+   * from the event/entity adapters' internal pools (which they own and close
+   * themselves) to avoid cross-coupling lifecycles.
+   *
+   * TODO(#202 Phase 2): consolidate to a single shared pool per tenant.
+   * Today we open 3 pools per tenant (event adapter, entity adapter,
+   * conflict store). At ~10 connections/pool default, this is 30 max
+   * connections per tenant. Plausible exhaustion at >=30 active tenants.
+   * ConflictStorePg should accept an existing pool/Drizzle handle from
+   * the event adapter rather than constructing its own.
+   */
+  private conflictPools: Record<string, Pool> = {};
 
   constructor(
     private appConfigStore: AppConfigStore,
@@ -70,7 +87,19 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
       await authManager.initialize();
     }
 
-    const eventApplierService = new EventApplierService(eventStore, entityStore);
+    const conflictPool = new Pool({ connectionString: this.postgresUrl });
+    const conflictStore = new ConflictStorePg(conflictPool, configId);
+    const conflictService = new ConflictService(conflictStore);
+    this.conflictPools[configId] = conflictPool;
+
+    const eventApplierService = new EventApplierService(
+      eventStore,
+      entityStore,
+      undefined,
+      undefined,
+      conflictService,
+      configId,
+    );
     const externalSyncAdapter = new ExternalSyncManager(
       eventStore,
       eventApplierService,
@@ -89,6 +118,7 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
       configId,
       config,
       edm: manager,
+      conflictStore,
     };
     return this.instances[configId];
   }
@@ -97,8 +127,17 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
     const instance = this.instances[configId];
     if (instance) {
       instance.edm.closeConnection();
+      await this.closeConflictPool(configId);
       const newInstance = await this.createAppInstance(configId);
       this.instances[configId] = newInstance;
+    }
+  }
+
+  private async closeConflictPool(configId: string): Promise<void> {
+    const pool = this.conflictPools[configId];
+    if (pool) {
+      await pool.end();
+      delete this.conflictPools[configId];
     }
   }
 
@@ -183,6 +222,9 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
     for (const instance of Object.values(this.instances)) {
       await instance.edm.closeConnection();
     }
+    for (const configId of Object.keys(this.conflictPools)) {
+      await this.closeConflictPool(configId);
+    }
     this.instances = {};
   }
 
@@ -190,6 +232,7 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
     const instance = this.instances[configId];
     if (instance) {
       await instance.edm.clearStore();
+      await this.closeConflictPool(configId);
       delete this.instances[configId];
     }
   }

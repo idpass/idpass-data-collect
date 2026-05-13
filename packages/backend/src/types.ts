@@ -18,7 +18,7 @@
  */
 
 import { EntityDataManager, ExternalSyncConfig } from "@idpass/data-collect-core";
-import type { SyncScopeOverride, SyncScopePolicy } from "@idpass/data-collect-core";
+import type { ConflictStore, SyncScopeOverride, SyncScopePolicy } from "@idpass/data-collect-core";
 import { Server } from "http";
 import type { SyncTelemetryStore } from "./stores/SyncTelemetryStore";
 export interface SyncServerConfig {
@@ -174,6 +174,16 @@ export interface AppInstance {
   configId: string;
   config: AppConfig;
   edm: EntityDataManager;
+  /**
+   * Per-tenant conflict store backing the ConflictService wired into
+   * EventApplierService. Routes (B2) construct a ConflictService per request
+   * around this same store instance instead of opening a parallel connection.
+   *
+   * Typed as the `ConflictStore` interface (not `ConflictStorePg`) so route
+   * handlers depend on the abstract contract — the concrete Postgres backing
+   * is an implementation detail of `AppInstanceStore`.
+   */
+  conflictStore: ConflictStore;
 }
 
 export interface AppInstanceStore {

@@ -3,8 +3,10 @@ import "dotenv/config";
 import { Pool } from "pg";
 import { AppConfigStoreImpl } from "../AppConfigStore";
 import { AppInstanceStoreImpl } from "../AppInstanceStore";
+import { ConflictStorePg } from "../ConflictStorePg";
 import { AppConfig } from "../../types";
 import { Client } from "pg";
+import { initializeDatabase } from "../../db/initialize";
 
 const getConnectionString = () => {
   const url = process.env.POSTGRES_TEST;
@@ -89,6 +91,9 @@ describeIfPostgres("AppInstanceStore", () => {
 
   beforeAll(async () => {
     await ensureDatabaseExists(getConnectionString());
+    // Initialize the full backend schema so the conflicts table exists for the
+    // ConflictStorePg wired in createAppInstance.
+    await initializeDatabase(getConnectionString());
     pool = new Pool({
       connectionString: getConnectionString(),
     });
@@ -127,6 +132,14 @@ describeIfPostgres("AppInstanceStore", () => {
       expect(instance).not.toBeNull();
       expect(instance.configId).toBe(mockConfig.id);
       expect(instance.edm).toBeDefined();
+    });
+
+    it("should expose a tenant-scoped ConflictStorePg on the instance", async () => {
+      const instance = await appInstanceStore.createAppInstance(mockConfig.id);
+      expect(instance.conflictStore).toBeInstanceOf(ConflictStorePg);
+      // Routes will read this store; sanity-check it works with the bound tenant.
+      const count = await instance.conflictStore.getConflictCount(mockConfig.id);
+      expect(typeof count).toBe("number");
     });
 
     it("should throw error when config does not exist", async () => {

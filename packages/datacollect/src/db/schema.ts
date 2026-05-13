@@ -307,6 +307,38 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
 });
 
 /**
+ * Conflicts table for storing detected version conflicts between local and remote
+ * entity versions during sync. Populated by ConflictService.
+ *
+ * Records remain unresolved until an admin (or auto-merge) resolves them via the
+ * `/api/conflicts/:guid/resolve` endpoint. `tenant_id` partitions records for
+ * multi-tenant isolation. Indexes optimize the two main read paths:
+ *  - list unresolved per tenant (admin view)
+ *  - lookup by entity within a tenant (entity-detail enrichment)
+ */
+export const conflicts = pgTable(
+  "conflicts",
+  {
+    guid: text("guid").primaryKey(),
+    entityGuid: text("entity_guid").notNull(),
+    tenantId: text("tenant_id").notNull(),
+    localVersion: jsonb("local_version").notNull(),
+    remoteVersion: jsonb("remote_version").notNull(),
+    localEventGuid: text("local_event_guid").notNull(),
+    remoteEventGuid: text("remote_event_guid").notNull(),
+    detectedAt: timestamp("detected_at", { withTimezone: true }).notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    resolution: text("resolution"),
+    resolvedBy: text("resolved_by"),
+    mergedData: jsonb("merged_data"),
+  },
+  (table) => [
+    index("conflicts_tenant_resolved_idx").on(table.tenantId, table.resolvedAt),
+    index("conflicts_entity_idx").on(table.tenantId, table.entityGuid),
+  ],
+);
+
+/**
  * Attachment metadata table for storing file attachment metadata.
  * Uses guid as primary key with tenant_id for multi-tenant isolation.
  */

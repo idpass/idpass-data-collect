@@ -74,6 +74,12 @@ const router = createRouter({
       },
     },
     {
+      path: '/collection-programs/:id/conflicts',
+      name: 'conflicts',
+      component: () => import('../views/ConflictsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('../views/LoginView.vue'),
