@@ -15,11 +15,16 @@ services:
       - internal
     command: ["postgres"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-admin} -d $${POSTGRES_DB:-datacollect}"]
+      # Target the always-present `postgres` system database rather than
+      # `${POSTGRES_DB}` — the user-facing DB may not exist yet while the
+      # /docker-entrypoint-initdb.d scripts are still running on first init,
+      # which would cause `pg_isready -d datacollect` to report unhealthy and
+      # break the sync-server `depends_on { condition: service_healthy }` gate.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-admin} -d postgres"]
       interval: 5s
       timeout: 3s
-      start_period: 30s
-      retries: 10
+      start_period: 60s
+      retries: 20
 
   sync-server:
     build:
