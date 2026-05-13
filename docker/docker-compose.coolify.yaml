@@ -34,11 +34,16 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - POSTGRES=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@dc-postgres:5432/${POSTGRES_DB:-datacollect}
-      - POSTGRES_TEST=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@dc-postgres:5432/${POSTGRES_DB:-datacollect}_test
-      - JWT_SECRET=${JWT_SECRET:-staging-secret-change-me}
+      # POSTGRES_PASSWORD, JWT_SECRET and ADMIN_PASSWORD have NO weak defaults on
+      # purpose. `${VAR:?msg}` makes compose abort with the message when the
+      # variable is empty/unset, which is safer than silently falling back to
+      # a weak default like "admin" — the backend enforces password policy
+      # and would refuse to start anyway.
+      - POSTGRES=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@dc-postgres:5432/${POSTGRES_DB:-datacollect}
+      - POSTGRES_TEST=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@dc-postgres:5432/${POSTGRES_DB:-datacollect}_test
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be at least 32 characters}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@datacollect.lan}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD must satisfy backend policy (>=8 chars, upper+lower+digit+special)}
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
       - EXTERNAL_SYNC_ENABLED=${EXTERNAL_SYNC_ENABLED:-false}
