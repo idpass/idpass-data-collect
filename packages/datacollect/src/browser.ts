@@ -33,3 +33,4 @@ export * from "./storage/IndexedDbAuthStorageAdapter";
 export * from "./services/SingleAuthStorageImpl";
 export * from "./utils/fieldTransformers";
 export * from "./services/FormClassifier";
+export { DeviceIdentity } from "./services/DeviceIdentity";
