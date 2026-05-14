@@ -48,6 +48,12 @@ addRxPlugin(RxDBCleanupPlugin)
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election'
 addRxPlugin(RxDBLeaderElectionPlugin)
 
+// Required for any collection whose schema version is > 0. The tenantapps
+// collection bumped to v1 to add the optional `programs[]` field — without
+// this plugin RxDB throws "function must be overwritten by a plugin" on init.
+import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema'
+addRxPlugin(RxDBMigrationSchemaPlugin)
+
 // dev-mode
 const isDevelop = import.meta.env.DEV && import.meta.env.VITE_DEVELOP
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode'
