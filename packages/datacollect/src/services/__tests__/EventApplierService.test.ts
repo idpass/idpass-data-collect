@@ -552,3 +552,98 @@ describe("EventApplierService – create-record / update-record", () => {
     expect((pair!.modified as GroupDoc).memberIds).toBeUndefined();
   });
 });
+
+describe("EventApplierService – enrol-in-program", () => {
+  let entityStore: EntityStore;
+  let eventStore: EventStore;
+  let service: EventApplierService;
+
+  beforeEach(async () => {
+    entityStore = new EntityStoreImpl(new IndexedDbEntityStorageAdapter());
+    await entityStore.initialize();
+    eventStore = new EventStoreImpl(new IndexedDbEventStorageAdapter());
+    await eventStore.initialize();
+    service = new EventApplierService(eventStore, entityStore);
+  });
+
+  afterEach(async () => {
+    await entityStore.clearStore();
+    await eventStore.clearStore();
+  });
+
+  it("stamps pendingProgramEnrolments on a household", async () => {
+    const groupGuid = uuidv4();
+    await service.submitForm(
+      makeForm({ entityGuid: groupGuid, type: "create-group", data: { name: "Santos HH" } }),
+    );
+
+    await service.submitForm(
+      makeForm({
+        entityGuid: groupGuid,
+        type: "enrol-in-program",
+        data: { programId: 42, programName: "Cash Transfer" },
+      }),
+    );
+
+    const pair = await entityStore.getEntity(groupGuid);
+    const pending = (pair!.modified.data as Record<string, unknown>).pendingProgramEnrolments as Array<
+      Record<string, unknown>
+    >;
+    expect(pending).toHaveLength(1);
+    expect(pending[0]).toMatchObject({ programId: 42, programName: "Cash Transfer" });
+    expect(pending[0].enrolledAt).toBeTruthy();
+  });
+
+  it("is idempotent on programId — re-enrolling the same program is a no-op", async () => {
+    const groupGuid = uuidv4();
+    await service.submitForm(
+      makeForm({ entityGuid: groupGuid, type: "create-group", data: { name: "Santos HH" } }),
+    );
+    await service.submitForm(
+      makeForm({ entityGuid: groupGuid, type: "enrol-in-program", data: { programId: 7 } }),
+    );
+    await service.submitForm(
+      makeForm({ entityGuid: groupGuid, type: "enrol-in-program", data: { programId: 7 } }),
+    );
+
+    const pair = await entityStore.getEntity(groupGuid);
+    const pending = (pair!.modified.data as Record<string, unknown>).pendingProgramEnrolments as unknown[];
+    expect(pending).toHaveLength(1);
+  });
+
+  it("accumulates distinct programs", async () => {
+    const groupGuid = uuidv4();
+    await service.submitForm(
+      makeForm({ entityGuid: groupGuid, type: "create-group", data: { name: "Santos HH" } }),
+    );
+    await service.submitForm(
+      makeForm({ entityGuid: groupGuid, type: "enrol-in-program", data: { programId: 1 } }),
+    );
+    await service.submitForm(
+      makeForm({ entityGuid: groupGuid, type: "enrol-in-program", data: { programId: 2 } }),
+    );
+
+    const pair = await entityStore.getEntity(groupGuid);
+    const pending = (pair!.modified.data as Record<string, unknown>).pendingProgramEnrolments as Array<
+      { programId: number }
+    >;
+    expect(pending.map((p) => p.programId).sort()).toEqual([1, 2]);
+  });
+
+  it("rejects non-numeric programId", async () => {
+    const groupGuid = uuidv4();
+    await service.submitForm(
+      makeForm({ entityGuid: groupGuid, type: "create-group", data: { name: "Santos HH" } }),
+    );
+
+    await expect(
+      service.submitForm(
+        makeForm({
+          entityGuid: groupGuid,
+          type: "enrol-in-program",
+          data: { programId: "not-a-number" },
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_PROGRAM_ID" });
+  });
+});

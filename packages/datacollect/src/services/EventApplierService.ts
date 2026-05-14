@@ -446,6 +446,8 @@ export class EventApplierService {
     } else if (formData.type === "delete-entity") {
       // log.debug(`Deleting entity: ${JSON.stringify(formData)}`);
       await this.deleteEntity(entityPair, eventGuid, formData.userId);
+    } else if (formData.type === "enrol-in-program") {
+      updatedEntity = await this.enrolInProgram(eventGuid, entityGuid, formData);
     } else if (formData.type === "resolve-duplicate") {
       log.debug(
         `Resolving duplicate: ${JSON.stringify(formData)} with shouldDelete: ${formData.data.shouldDelete}`,
@@ -953,6 +955,79 @@ export class EventApplierService {
       return;
     }
     await this.cascadeDeleteEntity(entityPair.modified.guid, eventGuid, userId);
+  }
+
+  /**
+   * Stamp a pending program-enrolment intent on an entity. The adapter push
+   * path reads `data.pendingProgramEnrolments[]` and emits one
+   * `assign_program` ChangeRequest per entry against OpenSPP.
+   *
+   * Idempotent on `programId`: re-applying the same enrolment is a no-op.
+   *
+   * @param eventGuid    GUID of the triggering form submission.
+   * @param entityGuid   Target entity (typically a household group).
+   * @param formData     Form submission carrying `{ programId, programName? }`.
+   * @returns The updated entity with the new pending-enrolment marker.
+   *
+   * @private
+   */
+  private async enrolInProgram(
+    eventGuid: string,
+    entityGuid: string,
+    formData: FormSubmission,
+  ): Promise<EntityDoc> {
+    const programIdRaw = (formData.data as Record<string, unknown>).programId;
+    const programId =
+      typeof programIdRaw === "number"
+        ? programIdRaw
+        : typeof programIdRaw === "string"
+          ? Number.parseInt(programIdRaw, 10)
+          : NaN;
+    if (!Number.isFinite(programId)) {
+      throw new AppError(
+        "INVALID_PROGRAM_ID",
+        "Enrol-in-program event requires a numeric data.programId",
+      );
+    }
+    const programName = (formData.data as Record<string, unknown>).programName;
+
+    const entityPair = await this.entityStore.getEntity(entityGuid);
+    if (!entityPair) {
+      throw new AppError("ENTITY_NOT_FOUND", `Entity ${entityGuid} not found`);
+    }
+
+    const entity = entityPair.modified;
+    const existing = (entity.data as Record<string, unknown>).pendingProgramEnrolments;
+    const pending: Array<{ programId: number; programName?: string; enrolledAt: string }> =
+      Array.isArray(existing)
+        ? (existing as Array<{ programId: number; programName?: string; enrolledAt: string }>).slice()
+        : [];
+
+    if (pending.some((p) => p.programId === programId)) {
+      // Already pending — keep idempotent, just log + audit.
+      await this.logAudit(formData.userId, formData.type, eventGuid, entityGuid, {
+        programId,
+        skipped: true,
+        reason: "already-pending",
+      });
+      return entity;
+    }
+
+    pending.push({
+      programId,
+      ...(typeof programName === "string" ? { programName } : {}),
+      enrolledAt: formData.timestamp ?? new Date().toISOString(),
+    });
+    (entity.data as Record<string, unknown>).pendingProgramEnrolments = pending;
+    entity.version += 1;
+    entity.lastUpdated = new Date().toISOString();
+
+    await this.entityStore.saveEntity(entityPair.initial, entity);
+    await this.logAudit(formData.userId, formData.type, eventGuid, entityGuid, {
+      programId,
+      programName,
+    });
+    return entity;
   }
 
   /**
