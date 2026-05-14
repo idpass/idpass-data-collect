@@ -455,7 +455,7 @@ describe('AuthManager Store', () => {
       const result = await authManagerStore.checkAuthenticationStatus('test-app-id')
 
       expect(result.isAuthenticated).toBe(false)
-      expect(result.error).toBe('No tenant or auth configuration found')
+      expect(result.error).toBe('No tenant configuration found')
     })
 
     it('should handle errors', async () => {

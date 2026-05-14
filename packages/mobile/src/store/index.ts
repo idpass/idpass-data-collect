@@ -85,11 +85,16 @@ export const initStore = async (
 
   const authStorage = new IndexedDbAuthStorageAdapter(appId)
   const authManagerInstance = new AuthManager(authConfigs, syncServerUrl, authStorage)
+  // authStorage.initialize() MUST complete before AuthManager.initialize(),
+  // because the latter calls authStorage.getUsername() which silently returns
+  // "" when the IndexedDB connection is not yet established. That stale empty
+  // username then causes handleDefaultLogin's isAuthenticated() check to race
+  // and reject the freshly-stored token, bouncing the user back to /login.
+  await authStorage.initialize()
   await Promise.all([
     entityStore.initialize(),
     eventStore.initialize(),
-    authManagerInstance?.initialize(),
-    authStorage.initialize()
+    authManagerInstance?.initialize()
   ])
 
   // Silent re-authentication callback: uses refresh token stored in SecureStorage

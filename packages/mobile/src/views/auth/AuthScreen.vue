@@ -56,7 +56,7 @@ onMounted(async () => {
 
   currentAppId.value = appId
   const tenant = await tenantStore.getTenant(appId)
-  authProviders.value = tenant._data.authConfigs as AuthConfig[]
+  authProviders.value = (tenant._data.authConfigs ?? []) as AuthConfig[]
 })
 
 onUnmounted(() => {
@@ -82,7 +82,7 @@ const handleOAuthCallback = async () => {
       throw new Error('No tenant configuration found for app ID: ' + appId)
     }
 
-    authProviders.value = tenant._data.authConfigs as AuthConfig[]
+    authProviders.value = (tenant._data.authConfigs ?? []) as AuthConfig[]
     await authManager.initialize(appId)
     await authManager.initialize(currentAppId.value)
     await authManager.handleCallback()

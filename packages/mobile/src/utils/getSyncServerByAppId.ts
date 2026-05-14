@@ -22,8 +22,9 @@ const db = getDatabase()
 const cache = new Map<string, string>()
 
 export const getSyncServerUrlByAppId = async (appId: string): Promise<string> => {
-  if (cache.has(appId)) {
-    return cache.get(appId)
+  const cached = cache.get(appId)
+  if (cached) {
+    return cached
   }
 
   const tenantApp = await (
@@ -35,10 +36,15 @@ export const getSyncServerUrlByAppId = async (appId: string): Promise<string> =>
       }
     })
     .exec()
-    .then((result) => {
-      return result
-    })
 
-  cache.set(appId, tenantApp.syncServerUrl)
-  return tenantApp.syncServerUrl
+  // Fall back to the build-time VITE_SYNC_URL so a tenant config missing the
+  // syncServerUrl field (legacy, or self-hosted dev) still resolves cleanly
+  // instead of returning undefined and tripping AuthManager downstream.
+  const url =
+    (tenantApp?.syncServerUrl as string | undefined) ||
+    (import.meta.env.VITE_SYNC_URL as string | undefined) ||
+    ''
+
+  if (url) cache.set(appId, url)
+  return url
 }
