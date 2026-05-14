@@ -79,6 +79,17 @@ const AppConfigSchema = z.object({
       }),
     }).nullish(),
   }).nullish(),
+  /**
+   * Programs offered for enrolment via the OpenSPP `assign_program` CR
+   * workflow. Mobile clients use this to render the "Enrol in Program"
+   * picker. The `id` is the OpenSPP `spp.program` PK sent as
+   * `detail.program_id` on the CR.
+   */
+  programs: z.array(z.object({
+    id: z.number().int(),
+    name: z.string().min(1),
+    code: z.string().nullish(),
+  })).nullish(),
   // Extra fields present in downloaded artifacts — accepted on upload but not persisted
   syncServerUrl: z.string().nullish(),
   artifactId: z.string().nullish(),

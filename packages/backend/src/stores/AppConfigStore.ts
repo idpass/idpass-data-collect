@@ -49,6 +49,7 @@ function mapRowToAppConfig(row: AppConfigRow, artifactId: string): AppConfig {
     selfService: row.selfService ?? undefined,
     syncScope: (row.syncScope ?? undefined) as SyncScopePolicy | undefined,
     archivedAt: row.archivedAt ?? null,
+    programs: (row.programs ?? undefined) as AppConfig["programs"],
   } as AppConfig;
 }
 
@@ -85,6 +86,7 @@ export class AppConfigStoreImpl implements AppConfigStore {
       await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS self_service JSONB`);
       await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP`);
       await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS sync_scope JSONB`);
+      await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS programs JSONB`);
     } catch (error) {
       throw new Error(`Failed to initialize database: ${error}`);
     }
@@ -161,6 +163,7 @@ export class AppConfigStoreImpl implements AppConfigStore {
         authConfigs: JSON.stringify(config.authConfigs),
         selfService: config.selfService ? JSON.stringify(config.selfService) : null,
         syncScope: config.syncScope ?? null,
+        programs: config.programs ? JSON.stringify(config.programs) : null,
       };
       await this.db
         .insert(appConfigs)
@@ -179,6 +182,7 @@ export class AppConfigStoreImpl implements AppConfigStore {
             authConfigs: JSON.stringify(config.authConfigs),
             selfService: config.selfService ? JSON.stringify(config.selfService) : null,
             syncScope: config.syncScope ?? null,
+            programs: config.programs ? JSON.stringify(config.programs) : null,
             archivedAt: null,
           },
         });

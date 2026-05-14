@@ -98,6 +98,7 @@ export const appConfigs = pgTable("app_configs", {
   selfService: jsonb("self_service"),
   syncScope: jsonb("sync_scope"),
   archivedAt: timestamp("archived_at"),
+  programs: jsonb("programs"),
 });
 
 /**

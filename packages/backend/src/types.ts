@@ -141,6 +141,17 @@ export interface SelfServiceConfig {
   };
 }
 
+/**
+ * Program enrolment offering surfaced to mobile clients via tenant config.
+ * The `id` is the OpenSPP `spp.program` primary key sent as
+ * `detail.program_id` on `assign_program` ChangeRequest pushes.
+ */
+export interface AppProgram {
+  id: number;
+  name: string;
+  code?: string;
+}
+
 export interface AppConfig {
   id: string;
   artifactId?: string;
@@ -155,6 +166,11 @@ export interface AppConfig {
   selfService?: SelfServiceConfig;
   syncScope?: SyncScopePolicy;
   archivedAt?: Date | null;
+  /**
+   * Programs offered for enrolment via the OpenSPP `assign_program` CR
+   * workflow. Empty/omitted hides the mobile "Enrol in Program" action.
+   */
+  programs?: AppProgram[];
 }
 
 export interface AppConfigStore {
