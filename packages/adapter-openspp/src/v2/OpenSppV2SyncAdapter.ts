@@ -79,6 +79,18 @@ const STUDIO_INDIVIDUAL_EXTENSION_KEY = "urn:openspp:extension:studio-individual
 const CR_GUID_REGISTRANT_SYSTEM = "datacollect:guid";
 
 /**
+ * Strip a URI fragment (`#…`) from an identifier system URI. OpenSPP's CR
+ * `find_registrant_by_identifier` matches on the BASE vocabulary namespace
+ * (`urn:openspp:vocab:id-type`), not the per-code URI
+ * (`urn:openspp:vocab:id-type#system_id`) — the latter is rejected. Direct
+ * `/Group` / `/Individual` create paths still want the full URI.
+ */
+const stripFragment = (uri: string): string => {
+  const idx = uri.indexOf("#");
+  return idx >= 0 ? uri.slice(0, idx) : uri;
+};
+
+/**
  * Gender codes per ISO/IEC 5218 (representation of human sexes).
  * Push: text -> code; Pull: code -> text.
  */
@@ -307,7 +319,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
     const bounded = sorted.slice(0, OpenSppV2SyncAdapter.CR_POLL_CAP);
 
-    for (const { entityGuid, record } of bounded) {
+    for (const { entityGuid, discriminator, record } of bounded) {
       if (record.status === "applied" || record.status === "rejected") {
         // Defensive: listInFlightCRs filters these out, but if a stale list
         // leaks through, skip the network call.
@@ -326,15 +338,20 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
         }
 
         if (fresh.status !== record.status) {
-          await setCR(this.eventStore, entityGuid, {
-            reference: fresh.reference,
-            status: fresh.status,
-            submittedAt: record.submittedAt,
-            lastPolledAt: new Date().toISOString(),
-            rejectionReason: fresh.rejectionReason,
-            appliedDate: fresh.appliedDate,
-            approvedDate: fresh.approvedDate,
-          });
+          await setCR(
+            this.eventStore,
+            entityGuid,
+            {
+              reference: fresh.reference,
+              status: fresh.status,
+              submittedAt: record.submittedAt,
+              lastPolledAt: new Date().toISOString(),
+              rejectionReason: fresh.rejectionReason,
+              appliedDate: fresh.appliedDate,
+              approvedDate: fresh.approvedDate,
+            },
+            discriminator,
+          );
           if (fresh.status === "rejected") {
             log.warn(
               { entityGuid, reference: fresh.reference, reason: fresh.rejectionReason },
@@ -354,10 +371,15 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
           }
         } else {
           // Status unchanged — bump only lastPolledAt to avoid unnecessary writes.
-          await setCR(this.eventStore, entityGuid, {
-            ...record,
-            lastPolledAt: new Date().toISOString(),
-          });
+          await setCR(
+            this.eventStore,
+            entityGuid,
+            {
+              ...record,
+              lastPolledAt: new Date().toISOString(),
+            },
+            discriminator,
+          );
         }
       } catch (err) {
         log.warn(
@@ -479,9 +501,10 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   ): Promise<void> {
     if (this.submitVia === "change-request") {
       await this.pushIndividualViaCR(guid, data, externalId);
-      return;
+    } else {
+      await this.pushIndividualDirect(guid, data, externalId);
     }
-    await this.pushIndividualDirect(guid, data, externalId);
+    await this.pushPendingProgramEnrolments(guid, "individual", data, externalId);
   }
 
   private async pushIndividualDirect(
@@ -523,9 +546,10 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   ): Promise<void> {
     if (this.submitVia === "change-request") {
       await this.pushGroupViaCR(guid, data, externalId);
-      return;
+    } else {
+      await this.pushGroupDirect(guid, data, externalId);
     }
-    await this.pushGroupDirect(guid, data, externalId);
+    await this.pushPendingProgramEnrolments(guid, "group", data, externalId);
   }
 
   private async pushGroupDirect(
@@ -630,8 +654,9 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     identifierSystem: string,
     externalId: string | undefined,
     display: string | undefined,
+    discriminator?: string | number,
   ): Promise<void> {
-    const existing = await getCR(this.eventStore, entityGuid);
+    const existing = await getCR(this.eventStore, entityGuid, discriminator);
     if (existing) {
       if (existing.status === "draft") {
         // Recovery: $submit was never reached or failed last run. Try again.
@@ -641,7 +666,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
           status: submitted.status,
           submittedAt: submitted.submittedDate ?? new Date().toISOString(),
         };
-        await setCR(this.eventStore, entityGuid, next);
+        await setCR(this.eventStore, entityGuid, next, discriminator);
         return;
       }
 
@@ -652,7 +677,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       ) {
         // Already in flight or done. Pull projects status updates separately.
         log.debug(
-          { entityGuid, reference: existing.reference, status: existing.status },
+          { entityGuid, reference: existing.reference, status: existing.status, discriminator },
           "Skipping CR push: existing CR already in flight or applied",
         );
         return;
@@ -682,7 +707,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       reference: created.reference,
       status: created.status,
     };
-    await setCR(this.eventStore, entityGuid, draftRecord);
+    await setCR(this.eventStore, entityGuid, draftRecord, discriminator);
 
     const submitted = await this.getClient().submitChangeRequest(created.reference);
     const submittedRecord: CRRecord = {
@@ -690,7 +715,72 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       status: submitted.status,
       submittedAt: submitted.submittedDate ?? new Date().toISOString(),
     };
-    await setCR(this.eventStore, entityGuid, submittedRecord);
+    await setCR(this.eventStore, entityGuid, submittedRecord, discriminator);
+  }
+
+  /**
+   * Push any pending program enrolments stored on an entity via the OpenSPP
+   * ChangeRequest workflow (CR type `assign_program`).
+   *
+   * Each entry in `data.pendingProgramEnrolments[]` becomes one CR keyed on
+   * the program id so concurrent enrolments into distinct programs do not
+   * collide on the idempotency store.
+   *
+   * Runs regardless of `submitVia` mode — program enrolment is approval-gated
+   * on OpenSPP and has no `direct` equivalent in the V2 API.
+   *
+   * Per-enrolment errors are swallowed with `log.warn` so an enrolment that
+   * fails to submit does not abort the surrounding entity push.
+   */
+  private async pushPendingProgramEnrolments(
+    entityGuid: string,
+    entityKind: "individual" | "group",
+    data: Record<string, unknown>,
+    externalId: string | undefined,
+  ): Promise<void> {
+    const raw = data.pendingProgramEnrolments;
+    if (!Array.isArray(raw) || raw.length === 0) return;
+
+    const fullSystem = this.resolveIdentifierSystem(data, entityKind === "group" ? "group" : "individual");
+    const crSystem = stripFragment(fullSystem);
+    const display =
+      typeof data._displayName === "string"
+        ? data._displayName
+        : typeof data.name === "string"
+          ? data.name
+          : typeof data.groupName === "string"
+            ? data.groupName
+            : undefined;
+
+    for (const entry of raw) {
+      if (!entry || typeof entry !== "object") continue;
+      const programId = (entry as { programId?: unknown }).programId;
+      if (typeof programId !== "number" || !Number.isFinite(programId)) {
+        log.warn({ entityGuid, entry }, "Skipping invalid pendingProgramEnrolment entry");
+        continue;
+      }
+      try {
+        await this.pushViaChangeRequest(
+          entityGuid,
+          entityKind,
+          "enrol-in-program",
+          { program_id: programId },
+          crSystem,
+          externalId,
+          display,
+          programId,
+        );
+      } catch (err) {
+        if (err instanceof ChangeRequestRevisionNeededError) {
+          // Bubble to caller — already classified.
+          throw err;
+        }
+        log.warn(
+          { entityGuid, programId, err },
+          "Pending program enrolment CR push failed; will retry next sync",
+        );
+      }
+    }
   }
 
   /**

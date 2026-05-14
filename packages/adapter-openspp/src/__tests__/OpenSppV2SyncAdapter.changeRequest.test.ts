@@ -654,3 +654,107 @@ describe("OpenSppV2SyncAdapter — submitVia: 'change-request' submit failure", 
     });
   });
 });
+
+describe("OpenSppV2SyncAdapter — enrol-in-program CR push", () => {
+  it("emits one assign_program CR per pendingProgramEnrolment, keyed on programId", async () => {
+    const pair = groupPair({ guid: "g-enrol-1", externalId: "openspp-grp-001", name: "Santos HH" });
+    // Stamp two pending enrolments on the entity (applier output).
+    (pair.modified.data as Record<string, unknown>).pendingProgramEnrolments = [
+      { programId: 42, programName: "Cash Transfer" },
+      { programId: 99 },
+    ];
+    const { store, metadata } = makeEventStore();
+    const applier = makeApplierService([pair]);
+    // Run in direct mode so we know enrolments still flow regardless of submitVia.
+    const adapter = new OpenSppV2SyncAdapter(store, applier, configWithMode("direct"));
+
+    mockV2ClientImplementation.createChangeRequest.mockImplementation(
+      async (payload: ChangeRequestCreate): Promise<ChangeRequestResponse> => ({
+        type: "ChangeRequest",
+        reference: `CR/2026/0${(payload.detail as { program_id: number }).program_id}`,
+        requestType: payload.requestType,
+        status: "draft",
+        registrant: payload.registrant,
+      }),
+    );
+    mockV2ClientImplementation.submitChangeRequest.mockImplementation(
+      async (ref: string): Promise<ChangeRequestResponse> => ({
+        type: "ChangeRequest",
+        reference: ref,
+        requestType: { code: "assign_program" },
+        status: "pending",
+        registrant: { system: "urn:openspp:vocab:id-type", value: "openspp-grp-001" },
+        submittedDate: "2026-05-14T01:00:00.000Z",
+      }),
+    );
+
+    const result = await adapter.pushData();
+    expect(result.failed).toBe(0);
+
+    // Two CRs created — one per program.
+    expect(mockV2ClientImplementation.createChangeRequest).toHaveBeenCalledTimes(2);
+    const first = mockV2ClientImplementation.createChangeRequest.mock.calls[0][0] as ChangeRequestCreate;
+    expect(first.requestType).toEqual({ code: "assign_program" });
+    // CR registrant strips the #code fragment from identifier system URI.
+    expect(first.registrant).toEqual({
+      system: "urn:openspp:vocab:id-type",
+      value: "openspp-grp-001",
+      display: "Santos HH",
+    });
+    expect(first.detail).toEqual({ program_id: 42 });
+
+    // Idempotency keys split per program — both stored.
+    expect(metadata.get("cr:g-enrol-1:42")).toBeTruthy();
+    expect(metadata.get("cr:g-enrol-1:99")).toBeTruthy();
+    const stored42 = JSON.parse(metadata.get("cr:g-enrol-1:42")!);
+    expect(stored42.reference).toBe("CR/2026/042");
+    expect(stored42.status).toBe("pending");
+  });
+
+  it("skips an enrolment whose CR is already pending on a second push", async () => {
+    const pair = groupPair({ guid: "g-enrol-2", externalId: "openspp-grp-002" });
+    (pair.modified.data as Record<string, unknown>).pendingProgramEnrolments = [{ programId: 7 }];
+    const { store, metadata } = makeEventStore({
+      "cr:g-enrol-2:7": JSON.stringify({ reference: "CR/2026/00007", status: "pending" } as CRRecord),
+    });
+    const applier = makeApplierService([pair]);
+    const adapter = new OpenSppV2SyncAdapter(store, applier, configWithMode("direct"));
+
+    await adapter.pushData();
+
+    // No new CR created — idempotency hit.
+    expect(mockV2ClientImplementation.createChangeRequest).not.toHaveBeenCalled();
+    expect(mockV2ClientImplementation.submitChangeRequest).not.toHaveBeenCalled();
+    // Metadata still pending; not overwritten.
+    expect(JSON.parse(metadata.get("cr:g-enrol-2:7")!)).toEqual({
+      reference: "CR/2026/00007",
+      status: "pending",
+    });
+  });
+
+  it("ignores invalid enrolment entries without aborting the push", async () => {
+    const pair = groupPair({ guid: "g-enrol-3", externalId: "openspp-grp-003" });
+    (pair.modified.data as Record<string, unknown>).pendingProgramEnrolments = [
+      { programId: "not-a-number" },
+      null,
+      { programId: 11 },
+    ];
+    const { store } = makeEventStore();
+    const applier = makeApplierService([pair]);
+    const adapter = new OpenSppV2SyncAdapter(store, applier, configWithMode("direct"));
+
+    mockV2ClientImplementation.createChangeRequest.mockResolvedValueOnce(
+      crResponse({ reference: "CR/2026/00011", status: "draft" }),
+    );
+    mockV2ClientImplementation.submitChangeRequest.mockResolvedValueOnce(
+      crResponse({ reference: "CR/2026/00011", status: "pending", submittedDate: "2026-05-14T01:00:00.000Z" }),
+    );
+
+    const result = await adapter.pushData();
+    expect(result.failed).toBe(0);
+    // Only the one valid entry triggers a CR.
+    expect(mockV2ClientImplementation.createChangeRequest).toHaveBeenCalledTimes(1);
+    const call = mockV2ClientImplementation.createChangeRequest.mock.calls[0][0] as ChangeRequestCreate;
+    expect(call.detail).toEqual({ program_id: 11 });
+  });
+});

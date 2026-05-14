@@ -57,7 +57,8 @@ export type EventTypeKey =
   | "update-group"
   | "add-member"
   | "remove-member"
-  | "delete-entity";
+  | "delete-entity"
+  | "enrol-in-program";
 
 /**
  * V2 adapter options surfaced to tenant config.
@@ -103,6 +104,7 @@ export const DEFAULT_CR_TYPE_MAP: Record<EventTypeKey, string> = {
   "remove-member": "remove_member",
   // Branched at call site: groups → archive_group, individuals → archive_individual.
   "delete-entity": "archive_individual",
+  "enrol-in-program": "assign_program",
 };
 
 /**
