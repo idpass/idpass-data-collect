@@ -171,6 +171,13 @@ export interface AppConfig {
    * workflow. Empty/omitted hides the mobile "Enrol in Program" action.
    */
   programs?: AppProgram[];
+  /**
+   * Backend URL the mobile/admin clients call for sync push + pull. Stored
+   * per-tenant so a single backend can serve tenants whose clients connect
+   * via different reverse-proxy domains (e.g. Coolify multi-instance setups).
+   * If absent, mobile falls back to `VITE_SYNC_URL` from the build env.
+   */
+  syncServerUrl?: string;
 }
 
 export interface AppConfigStore {

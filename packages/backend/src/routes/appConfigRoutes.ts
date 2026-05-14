@@ -90,8 +90,14 @@ const AppConfigSchema = z.object({
     name: z.string().min(1),
     code: z.string().nullish(),
   })).nullish(),
-  // Extra fields present in downloaded artifacts — accepted on upload but not persisted
+  /**
+   * Backend sync endpoint the mobile/admin clients use for this tenant.
+   * Persisted (was previously accepted-but-dropped). Mobile reads it from
+   * the downloaded tenant config to construct its sync URLs; without it the
+   * AuthManager throws `Cannot read properties of undefined (reading 'startsWith')`.
+   */
   syncServerUrl: z.string().nullish(),
+  // Extra fields present in downloaded artifacts — accepted on upload but not persisted
   artifactId: z.string().nullish(),
   archivedAt: z.unknown().nullish(),
 });
