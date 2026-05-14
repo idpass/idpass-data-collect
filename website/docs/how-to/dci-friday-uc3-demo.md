@@ -13,23 +13,34 @@ the live-test verification step until you're satisfied.
 
 ## Scenario being demonstrated
 
-A DataCollect field agent enrols the **Adeyemi Household** (Farajaland, North)
-— a disabled widow Funke Adeyemi with two child dependents — into the
-**Widow Disability Support** program. On sync, the adapter pushes the
-household + members directly to OpenSPP, then submits one
-`assign_program` ChangeRequest. An OpenSPP operator approves + applies the
-CR; the next mobile pull surfaces the transition.
+A DataCollect field agent works offline in **Farajaland, North**, intakes the
+**Adeyemi Household** with widow Funke Adeyemi + two dependents, taps **Enrol
+in Program → Widow Disability Support**, then syncs when back online. The
+adapter pushes the household + members to OpenSPP via the V2 API, then
+submits one `assign_program` ChangeRequest. An OpenSPP operator approves +
+applies the CR; OpenSPP runs eligibility (PMT, disability checks)
+transparently downstream and the next mobile pull surfaces the transition.
+
+**DataCollect's responsibility**: offline-capable identity intake
+(household + widow + dependents), optional Claim-169 identity verification,
+program-enrolment intent capture, and sync.
+
+**OpenSPP's responsibility (transparent to DataCollect)**:
+disability-registry queries, PMT / Social Registry poverty checks,
+eligibility decision, membership lifecycle.
 
 What is **in scope** for Friday:
-- Mobile UI: kebab/button to select a program and enrol the household
+- Mobile offline-first capture of household + widow + dependents
+- Mobile UI: button to select a program and enrol the household
 - Adapter: `enrol-in-program` event → `/ChangeRequest` with `requestType.code=assign_program`
 - OpenSPP: existing approval workflow (`spp_cr_type_assign_program`)
 - Idempotency: re-syncing the same enrolment is a no-op
 
 What is **out of scope**:
-- Widow-specific intake forms with Claim-169 VC scanner + disability assessor wizard (UC3 Phase 1-3 of the plan)
-- DCI birth-verification flow (different module, `spp_dci_demo` — not used)
-- Eligibility computation — that's OpenSPP's job after the CR applies
+- **Disability fields, PMT inputs, school enrolment**: OpenSPP owns these and queries them transparently. The widow form intentionally does not duplicate them.
+- **Claim-169 VC scanner wiring**: the form carries an optional verification panel placeholder. Live MOSIP-VC integration is post-demo (UC3 Phase 4 of the full plan).
+- **DCI birth-verification flow**: different OpenSPP module (`spp_dci_demo`), not used here.
+- **Eligibility decision**: OpenSPP's job after `$apply`.
 
 ---
 
@@ -157,27 +168,53 @@ Log in as `fieldworker@datacollect.lan / fieldworker123`. The UC3 tenant
 
 ## Live demo walkthrough
 
-1. **Open the UC3 tenant** on mobile.
-2. **Open the Adeyemi Household** from the household list (pre-seeded).
-3. On the household detail card, click **"Enrol in Program"** (visible
-   because the entityType is `group` and the tenant config carries `programs[]`).
-4. Tap **"Widow Disability Support"**. A pending chip appears: *"Widow
-   Disability Support · pending"*. The mobile event store now has one
-   `enrol-in-program` event.
-5. **Trigger sync** (sync button / scheduled push). The adapter:
-   - PATCHes the household to OpenSPP (direct mode).
-   - Submits one `/ChangeRequest` with `requestType.code=assign_program` +
-     `detail.program_id=<X>`.
-6. On OpenSPP: Registry → Change Requests → find the new draft CR for
-   Adeyemi → click **Submit** → **Approve** → **Apply**.
-7. Back on mobile: trigger another sync. The CR poll picks up the
-   transition; the chip clears (or shows applied — UI polish has it stay
-   advisory until next entity pull).
-8. Confirm on OpenSPP: Registry → Programs → Widow Disability Support →
-   Members. The Adeyemi Household should be in `draft` membership state
-   (per the `spp_cr_type_assign_program` apply strategy). A Program Manager
-   would then activate the membership in production — out of scope for the
-   demo.
+The flow has three beats: **offline capture → enrol → sync round-trip**.
+
+### Beat 1 — Offline capture (proves the "data collect" half)
+
+1. **Open the UC3 tenant** on mobile. Show the pre-seeded Adeyemi Household
+   in the household list to anchor the audience.
+2. **Toggle airplane mode** (or otherwise drop network).
+3. **Create a fresh household**: tap **+ New** → household form. Enter
+   "Okonkwo Household", area "Farajaland — North", an address. Save.
+4. **Add the widow**: from the new household, tap the **widow** form
+   (it's a dependent form). Enter "Amaka Okonkwo", DOB, national ID.
+   Leave the *Identity Verification* panel collapsed (Claim-169 is
+   post-demo). Save.
+5. **Add a dependent**: same household → dependent form → "Chidi Okonkwo",
+   relationship "child". Save.
+6. *Optional aside:* open IndexedDB devtools to show events queued locally.
+   The mobile UI also shows a sync indicator with the local-event count.
+
+### Beat 2 — Enrol in program (the new piece this PR ships)
+
+7. Open the new household's detail card. Below the title you'll see a
+   **Programs** section with an **"Enrol in Program"** button (visible
+   because the entity is a group and the tenant config carries `programs[]`).
+8. Tap → select **"Widow Disability Support"**.
+9. A pending chip appears under the household: *"Widow Disability Support ·
+   pending"*. The mobile event store now has one `enrol-in-program` event
+   referencing this household + the program id.
+
+### Beat 3 — Sync round-trip (proves the OpenSPP integration)
+
+10. **Toggle airplane mode off**. Trigger sync (the sync button on the
+    home screen, or wait for the scheduled push).
+11. On sync, the adapter:
+    - POSTs `/Group` + `/Individual` for the new offline-captured records.
+    - POSTs `/ChangeRequest` with `requestType.code=assign_program` and
+      `detail.program_id=<X>` for the household.
+12. Switch to OpenSPP UI: Registry → Change Requests. Find the new draft
+    CR for Okonkwo. Click **Submit → Approve → Apply**. OpenSPP runs its
+    own eligibility logic at apply time (disability registry, PMT, etc.) —
+    that's transparent to the audience and to DataCollect.
+13. Back on mobile: trigger another sync. The CR poll picks up the
+    transition; the chip's record updates to `applied` (the UI keeps the
+    chip advisory until the next entity pull surfaces the membership).
+14. Confirm on OpenSPP: Registry → Programs → Widow Disability Support →
+    Members. The Okonkwo Household appears in `draft` membership state per
+    the `spp_cr_type_assign_program` apply strategy. A Program Manager
+    activates the membership in production — out of scope for the demo.
 
 ---
 
@@ -221,9 +258,10 @@ podman compose --profile ui down -v
 - [ ] OpenSPP API client has all four scopes
 - [ ] Program "Widow Disability Support" exists with `state=active`
 - [ ] `pnpm exec jest …uc3.integration… --verbose` passes (2/2)
-- [ ] Mobile shows the Adeyemi household with Enrol button
-- [ ] Tapping → selecting program → pending chip appears
-- [ ] First sync → CR appears on OpenSPP with `requestType.code=assign_program`
+- [ ] Mobile shows the seeded Adeyemi household with Enrol button
+- [ ] **Offline mode**: agent can create household + widow + dependent and save (all events land in IndexedDB)
+- [ ] Tapping Enrol → selecting program → pending chip appears
+- [ ] First sync → household + members POSTed and CR appears on OpenSPP with `requestType.code=assign_program`
 - [ ] Operator approves → applies → membership row created
 - [ ] Second sync → poll updates the CR record to `applied`
 

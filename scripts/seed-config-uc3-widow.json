@@ -67,7 +67,7 @@
       "nameField": "name",
       "displayTemplate": "{name}",
       "dependsOn": "household",
-      "description": "Primary applicant: capture identity, disability, PMT inputs.",
+      "description": "Primary applicant identity. Disability + PMT inputs are owned by OpenSPP downstream and transparent to DataCollect — do not duplicate them here.",
       "formio": {
         "display": "form",
         "components": [
@@ -118,7 +118,8 @@
             "key": "national_id",
             "type": "textfield",
             "input": true,
-            "label": "National ID"
+            "label": "National ID",
+            "description": "Optional. If a Claim-169 VC is scanned, this is auto-filled."
           },
           {
             "key": "widow_status",
@@ -134,47 +135,35 @@
             }
           },
           {
-            "key": "disability_type",
-            "type": "select",
-            "input": true,
-            "label": "Disability Type",
-            "data": {
-              "values": [
-                { "label": "Mobility", "value": "mobility" },
-                { "label": "Visual", "value": "visual" },
-                { "label": "Hearing", "value": "hearing" },
-                { "label": "Cognitive", "value": "cognitive" },
-                { "label": "Other", "value": "other" },
-                { "label": "None", "value": "none" }
-              ]
-            }
-          },
-          {
-            "key": "disability_severity",
-            "type": "select",
-            "input": true,
-            "label": "Disability Severity",
-            "data": {
-              "values": [
-                { "label": "Mild", "value": "mild" },
-                { "label": "Moderate", "value": "moderate" },
-                { "label": "Severe", "value": "severe" }
-              ]
-            }
-          },
-          {
-            "key": "household_monthly_income",
-            "type": "number",
-            "input": true,
-            "label": "Household Monthly Income (FJD)",
-            "validate": { "required": true, "min": 0 }
-          },
-          {
-            "key": "dependents_count",
-            "type": "number",
-            "input": true,
-            "label": "Number of Dependents",
-            "validate": { "required": true, "min": 0, "max": 20 }
+            "key": "claim169_panel",
+            "type": "panel",
+            "title": "Identity Verification (optional)",
+            "collapsible": true,
+            "collapsed": true,
+            "description": "Scan the applicant's MOSIP wallet QR to verify identity. Skippable for the demo — the Claim-169 component wiring is post-demo work (UC3 Phase 4).",
+            "components": [
+              {
+                "key": "claim169_verified",
+                "type": "select",
+                "input": true,
+                "label": "Verification result",
+                "data": {
+                  "values": [
+                    { "label": "Verified via MOSIP VC", "value": "verified" },
+                    { "label": "Not scanned (manual entry)", "value": "not_scanned" },
+                    { "label": "Scan failed", "value": "failed" }
+                  ]
+                },
+                "defaultValue": "not_scanned"
+              },
+              {
+                "key": "claim169_issuer_did",
+                "type": "textfield",
+                "input": true,
+                "label": "Issuer DID (auto-filled by scanner)",
+                "disabled": true
+              }
+            ]
           },
           {
             "key": "submit",
@@ -195,7 +184,7 @@
       "nameField": "name",
       "displayTemplate": "{name}",
       "dependsOn": "household",
-      "description": "Other household members supported by the widow.",
+      "description": "Other household members. Identity only — school enrolment, disability, PMT-relevant fields are derived/queried by OpenSPP downstream.",
       "formio": {
         "display": "form",
         "components": [
@@ -243,19 +232,6 @@
             }
           },
           {
-            "key": "school_enrolled",
-            "type": "select",
-            "input": true,
-            "label": "Currently in School?",
-            "data": {
-              "values": [
-                { "label": "Yes", "value": "yes" },
-                { "label": "No", "value": "no" },
-                { "label": "Not applicable", "value": "na" }
-              ]
-            }
-          },
-          {
             "key": "submit",
             "type": "button",
             "input": true,
@@ -292,10 +268,7 @@
           "gender": "female",
           "national_id": "FJ-1982-0001",
           "widow_status": "self_declared",
-          "disability_type": "mobility",
-          "disability_severity": "moderate",
-          "household_monthly_income": 110,
-          "dependents_count": 2,
+          "claim169_verified": "not_scanned",
           "parentId": "hh-uc3-demo-001"
         }
       ]
@@ -310,7 +283,6 @@
           "last_name": "Adeyemi",
           "date_of_birth": "2012-02-09",
           "relationship": "child",
-          "school_enrolled": "yes",
           "parentId": "hh-uc3-demo-001"
         },
         {
@@ -320,7 +292,6 @@
           "last_name": "Adeyemi",
           "date_of_birth": "2015-11-23",
           "relationship": "child",
-          "school_enrolled": "no",
           "parentId": "hh-uc3-demo-001"
         }
       ]
