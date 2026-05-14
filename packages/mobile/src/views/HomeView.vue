@@ -194,6 +194,12 @@ const saveTenantApp = async (config: TenantAppData, sourceUrl = '') => {
       externalSync: config.externalSync,
       authConfigs: config.authConfigs,
       trustedIssuers: config.trustedIssuers,
+      // Without this the Enrol-in-Program picker silently disappears after
+      // any version-bump re-import: the explicit patch payload overrides
+      // existing fields, and any field NOT listed here is left untouched
+      // ⇒ stays at its prior value, including `undefined` for fresh
+      // installs that didn't carry programs the first time.
+      programs: config.programs,
     })
     return
   }
