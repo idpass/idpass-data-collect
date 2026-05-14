@@ -119,7 +119,7 @@
             "type": "textfield",
             "input": true,
             "label": "National ID",
-            "description": "Optional. If a Claim-169 VC is scanned, this is auto-filled."
+            "description": "Auto-filled when a Claim-169 VC is scanned below."
           },
           {
             "key": "widow_status",
@@ -135,34 +135,25 @@
             }
           },
           {
-            "key": "claim169_panel",
-            "type": "panel",
-            "title": "Identity Verification (optional)",
-            "collapsible": true,
-            "collapsed": true,
-            "description": "Scan the applicant's MOSIP wallet QR to verify identity. Skippable for the demo — the Claim-169 component wiring is post-demo work (UC3 Phase 4).",
-            "components": [
+            "key": "identityVerification",
+            "type": "claim169Scanner",
+            "label": "Scan MOSIP wallet QR (Claim-169)",
+            "input": true,
+            "description": "Optional. Verifies the applicant's identity against the trusted MOSIP issuer offline. On success, auto-fills first/last name, date of birth, gender, and national ID.",
+            "storeOriginalData": false,
+            "trustedIssuers": [
               {
-                "key": "claim169_verified",
-                "type": "select",
-                "input": true,
-                "label": "Verification result",
-                "data": {
-                  "values": [
-                    { "label": "Verified via MOSIP VC", "value": "verified" },
-                    { "label": "Not scanned (manual entry)", "value": "not_scanned" },
-                    { "label": "Scan failed", "value": "failed" }
-                  ]
-                },
-                "defaultValue": "not_scanned"
-              },
-              {
-                "key": "claim169_issuer_did",
-                "type": "textfield",
-                "input": true,
-                "label": "Issuer DID (auto-filled by scanner)",
-                "disabled": true
+                "issuerId": "did:web:demo-issuer.farajaland.gov",
+                "publicKey": {
+                  "ed25519": "${UC3_ISSUER_ED25519_PUB_B64}"
+                }
               }
+            ],
+            "fieldMappings": [
+              { "claimField": "firstName",   "formField": "first_name",  "overwrite": true },
+              { "claimField": "lastName",    "formField": "last_name",   "overwrite": true },
+              { "claimField": "dateOfBirth", "formField": "date_of_birth", "overwrite": true },
+              { "claimField": "id",          "formField": "national_id", "overwrite": true }
             ]
           },
           {

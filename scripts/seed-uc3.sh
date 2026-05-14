@@ -34,6 +34,8 @@ CONFIG_TEMPLATE="$SCRIPT_DIR/seed-config-uc3-widow.json"
 CONFIG_ID="uc3-widow-enrolment"
 PROGRAM_NAME="Widow Disability Support"
 PROGRAM_TARGET_TYPE="group"
+UC3_ARTIFACTS_DIR="$SCRIPT_DIR/uc3-demo-artifacts"
+UC3_ISSUER_PUB_FILE="$UC3_ARTIFACTS_DIR/issuer-ed25519.pub.b64"
 
 BACKEND_URL="${BACKEND_URL:-http://localhost:3000}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@datacollect.lan}"
@@ -120,6 +122,18 @@ fi
 
 # --- Step 2: render tenant config --------------------------------------------
 
+# Look for the Claim-169 issuer public key. If not present, fall back to a
+# placeholder so the seed still works (Claim-169 verification will fail at
+# scan time — see runbook for how to mint a real demo VC).
+if [ -f "$UC3_ISSUER_PUB_FILE" ]; then
+  UC3_ISSUER_ED25519_PUB_B64="$(tr -d '\n' < "$UC3_ISSUER_PUB_FILE")"
+  log "Loaded Claim-169 issuer public key from $UC3_ISSUER_PUB_FILE"
+else
+  UC3_ISSUER_ED25519_PUB_B64="UNCONFIGURED-RUN-mint-uc3-demo-vc.mjs"
+  log "WARNING: $UC3_ISSUER_PUB_FILE not found. Claim-169 scan verification will fail until you run:"
+  log "  cd packages/mobile && node scripts/mint-uc3-demo-vc.mjs"
+fi
+
 # numeric program_id; everything else string-safe
 CONFIG_TMP=$(mktemp --suffix=.json)
 trap 'rm -f "$OPENSPP_COOKIE" "$CONFIG_TMP"' EXIT
@@ -128,12 +142,14 @@ jq \
   --arg url        "$OPENSPP_URL" \
   --arg cid        "$OPENSPP_CLIENT_ID" \
   --arg csec       "$OPENSPP_CLIENT_SECRET" \
+  --arg pubkey     "$UC3_ISSUER_ED25519_PUB_B64" \
   --argjson progid "$PROGRAM_ID" \
   '
     .externalSync.url = $url
     | .externalSync.adapterConfig.clientId = $cid
     | .externalSync.adapterConfig.clientSecret = $csec
     | .programs[0].id = $progid
+    | (.entityForms[] | select(.name == "widow") | .formio.components[] | select(.type == "claim169Scanner") | .trustedIssuers[0].publicKey.ed25519) |= $pubkey
   ' "$CONFIG_TEMPLATE" > "$CONFIG_TMP"
 
 # --- Step 3: upload to DataCollect -------------------------------------------

@@ -109,3 +109,8 @@ playwright-report/
 docs/superpowers/
 docs/proposals/
 .superpowers/
+
+# UC3 demo Claim-169 issuer secrets + built artifacts. Regenerable via
+# `node packages/mobile/scripts/mint-uc3-demo-vc.mjs`. Keeps the private
+# key off git; demo presenters mint locally before showtime.
+scripts/uc3-demo-artifacts/
