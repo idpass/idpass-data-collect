@@ -2,9 +2,10 @@
 import { useDatabase } from '@/database'
 import { TenantAppData } from '@/schemas/tenantApp.schema'
 import { store } from '@/store'
-import { EntityForm } from '@/utils/formIoUtils'
-import { onMounted, ref } from 'vue'
+import { EntityForm, Program } from '@/utils/formIoUtils'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { v4 as uuidv4 } from 'uuid'
 import type { FormSubmission, EntityDoc } from '@idpass/data-collect-core'
 import { SyncLevel } from '@idpass/data-collect-core'
 import { useNetworkStatus } from '@/composables/useNetworkStatus'
@@ -17,8 +18,53 @@ const entityForm = ref<EntityForm>()
 const storedEntityData = ref<Array<{ initial: EntityDoc; modified: EntityDoc }> | undefined>()
 const dependentForms = ref<EntityForm[]>([])
 const openViewDialog = ref(false)
+const openEnrolDialog = ref(false)
 const events = ref<FormSubmission[]>([])
+const enrolBusy = ref(false)
+const enrolError = ref<string | null>(null)
 const { isOffline } = useNetworkStatus()
+
+const programs = computed<Program[]>(() => tenantapp.value?.programs ?? [])
+
+const pendingEnrolments = computed<Array<{ programId: number; programName?: string }>>(() => {
+  const raw = storedEntityData.value?.[0]?.modified?.data?.pendingProgramEnrolments
+  return Array.isArray(raw) ? (raw as Array<{ programId: number; programName?: string }>) : []
+})
+
+const isHousehold = computed(() => entityForm.value?.entityType === 'group')
+
+const enrolableProgams = computed<Program[]>(() => {
+  const enrolledIds = new Set(pendingEnrolments.value.map((p) => p.programId))
+  return programs.value.filter((p) => !enrolledIds.has(p.id))
+})
+
+const enrolInProgram = async (program: Program) => {
+  enrolBusy.value = true
+  enrolError.value = null
+  try {
+    await store.submitForm({
+      guid: uuidv4(),
+      entityGuid: route.params.guid as string,
+      type: 'enrol-in-program',
+      data: { programId: program.id, programName: program.name },
+      timestamp: new Date().toISOString(),
+      userId: 'admin',
+      syncLevel: SyncLevel.LOCAL
+    })
+    // Refresh local state so the chip + disabled list updates immediately.
+    const entityData = await store.searchEntities([{ guid: route.params.guid }])
+    storedEntityData.value = entityData
+    const allEvents = await store.getAllEvents()
+    events.value = allEvents
+      .filter((event) => event.entityGuid === route.params.guid)
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    openEnrolDialog.value = false
+  } catch (err) {
+    enrolError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    enrolBusy.value = false
+  }
+}
 
 const navigateToEntityList = () => {
   const appId = route.params.id as string
@@ -120,6 +166,35 @@ const getEntityName = () => {
             <v-btn icon="mdi-eye" variant="tonal" size="small" @click="openViewDialog = true" aria-label="View JSON" />
           </div>
         </div>
+
+        <div v-if="isHousehold && programs.length > 0" class="mt-4">
+          <div class="d-flex justify-space-between align-center mb-2">
+            <div class="text-subtitle-2 font-weight-bold">Programs</div>
+            <v-btn
+              prepend-icon="mdi-clipboard-plus-outline"
+              color="primary"
+              variant="tonal"
+              size="small"
+              :disabled="enrolableProgams.length === 0"
+              @click="openEnrolDialog = true"
+            >
+              Enrol in Program
+            </v-btn>
+          </div>
+          <div v-if="pendingEnrolments.length > 0" class="d-flex ga-2 flex-wrap">
+            <v-chip
+              v-for="enrolment in pendingEnrolments"
+              :key="enrolment.programId"
+              size="small"
+              color="warning"
+              variant="tonal"
+              prepend-icon="mdi-clock-outline"
+            >
+              {{ enrolment.programName || `Program #${enrolment.programId}` }} · pending
+            </v-chip>
+          </div>
+          <div v-else class="text-caption text-medium-emphasis">No enrolments yet.</div>
+        </div>
       </v-card-text>
     </v-card>
 
@@ -174,6 +249,35 @@ const getEntityName = () => {
       <v-card-actions class="pa-4 pt-0">
         <v-spacer />
         <v-btn variant="text" @click="openViewDialog = false">Close</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
+
+  <v-dialog v-model="openEnrolDialog" max-width="500">
+    <v-card rounded="lg">
+      <v-card-title class="pa-4">Enrol in Program</v-card-title>
+      <v-card-text class="pa-4 pt-0">
+        <v-alert v-if="enrolError" type="error" variant="tonal" class="mb-3" closable>
+          {{ enrolError }}
+        </v-alert>
+        <v-list lines="two" density="comfortable">
+          <v-list-item
+            v-for="program in enrolableProgams"
+            :key="program.id"
+            :disabled="enrolBusy"
+            @click="enrolInProgram(program)"
+          >
+            <v-list-item-title class="font-weight-bold">{{ program.name }}</v-list-item-title>
+            <v-list-item-subtitle v-if="program.code">{{ program.code }}</v-list-item-subtitle>
+            <template #append>
+              <v-icon icon="mdi-chevron-right" />
+            </template>
+          </v-list-item>
+        </v-list>
+      </v-card-text>
+      <v-card-actions class="pa-4 pt-0">
+        <v-spacer />
+        <v-btn variant="text" :disabled="enrolBusy" @click="openEnrolDialog = false">Cancel</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

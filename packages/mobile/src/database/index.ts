@@ -253,7 +253,10 @@ export async function getDatabase(): Promise<RxDatabase> {
         schema: keySchema
       },
       tenantapps: {
-        schema: TenantAppSchema
+        schema: TenantAppSchema,
+        migrationStrategies: {
+          1: (oldDoc) => oldDoc // v0 → v1: optional `programs` array added; no data transform needed.
+        }
       }
     })
     if (import.meta.env.DEV && import.meta.env.VITE_DEVELOP) {

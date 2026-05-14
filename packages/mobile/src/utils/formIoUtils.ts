@@ -39,6 +39,15 @@ export interface ExternalSync {
   fieldMappings?: FieldMapping[]
 }
 
+export interface Program {
+  /** OpenSPP `spp.program` primary key — sent as `detail.program_id` on `assign_program` CRs. */
+  id: number
+  /** Display label for the enrolment chooser. */
+  name: string
+  /** Optional short code shown next to the name. */
+  code?: string
+}
+
 export interface Config {
   id: string
   name: string
@@ -51,6 +60,11 @@ export interface Config {
   externalSync?: ExternalSync
   authConfigs?: Record<string, unknown>[]
   trustedIssuers?: TrustedIssuer[]
+  /**
+   * Programs available for enrolment via the OpenSPP `assign_program` CR
+   * workflow. Empty/omitted hides the mobile "Enrol in Program" action.
+   */
+  programs?: Program[]
 }
 
 export interface TrustedIssuer {
