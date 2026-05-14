@@ -38,6 +38,11 @@ UC3_ARTIFACTS_DIR="$SCRIPT_DIR/uc3-demo-artifacts"
 UC3_ISSUER_PUB_FILE="$UC3_ARTIFACTS_DIR/issuer-ed25519.pub.b64"
 
 BACKEND_URL="${BACKEND_URL:-http://localhost:3000}"
+# URL the mobile/admin clients call to push/pull events. Defaults to BACKEND_URL
+# when running everything on the host (compose), but on Coolify-style deploys
+# the mobile sees the public domain whereas seed-uc3.sh talks to a private
+# admin endpoint — set both explicitly there.
+DATACOLLECT_SYNC_URL="${DATACOLLECT_SYNC_URL:-$BACKEND_URL}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@datacollect.lan}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-Correct horse battery staple 42!}"
 
@@ -140,12 +145,14 @@ trap 'rm -f "$OPENSPP_COOKIE" "$CONFIG_TMP"' EXIT
 
 jq \
   --arg url        "$OPENSPP_URL" \
+  --arg sync       "$DATACOLLECT_SYNC_URL" \
   --arg cid        "$OPENSPP_CLIENT_ID" \
   --arg csec       "$OPENSPP_CLIENT_SECRET" \
   --arg pubkey     "$UC3_ISSUER_ED25519_PUB_B64" \
   --argjson progid "$PROGRAM_ID" \
   '
     .externalSync.url = $url
+    | .syncServerUrl = $sync
     | .externalSync.adapterConfig.clientId = $cid
     | .externalSync.adapterConfig.clientSecret = $csec
     | .programs[0].id = $progid

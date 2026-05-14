@@ -3,6 +3,7 @@
   "name": "UC3 Widow Enrolment (Farajaland)",
   "description": "DCI demo (Friday 2026-05-15) — field agent intake of disabled-widow applications, pushed to OpenSPP via assign_program ChangeRequest workflow.",
   "version": "1.0.0",
+  "syncServerUrl": "${DATACOLLECT_SYNC_URL}",
   "entityForms": [
     {
       "id": "household",
