@@ -83,6 +83,10 @@ describe("OpenSppV2SyncAdapter", () => {
       setLastPushExternalSyncTimestamp: jest.fn(),
       getLastPullExternalSyncTimestamp: jest.fn().mockResolvedValue("1970-01-01T00:00:00.000Z"),
       setLastPullExternalSyncTimestamp: jest.fn(),
+      getMetadataValue: jest.fn().mockResolvedValue(null),
+      setMetadataValue: jest.fn(),
+      deleteMetadataValue: jest.fn(),
+      listMetadataKeys: jest.fn().mockResolvedValue([]),
     } as unknown as jest.Mocked<EventStore>;
 
     const mockEntityStore = {

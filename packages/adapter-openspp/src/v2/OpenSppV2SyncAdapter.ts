@@ -262,12 +262,12 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     const grpResult = await this.pullGroups(since);
     const errors: SyncError[] = [...indResult.errors, ...grpResult.errors];
 
-    // Poll in-flight CR statuses only when running in change-request mode.
-    // Direct mode never persists CR records, so this is a defensive skip.
-    if (this.submitVia === "change-request") {
-      const pollErrors = await this.pollChangeRequestStatuses();
-      errors.push(...pollErrors);
-    }
+    // Poll in-flight CR statuses. Always runs: program enrolments
+    // (`enrol-in-program` → `assign_program` CR) flow through CRs even when
+    // `submitVia: direct`, so a mode gate would silently drop those polls.
+    // `listInFlightCRs` short-circuits empty in O(1) when no CRs exist.
+    const pollErrors = await this.pollChangeRequestStatuses();
+    errors.push(...pollErrors);
 
     return {
       pulled: indResult.pulled + grpResult.pulled,
@@ -504,7 +504,11 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     } else {
       await this.pushIndividualDirect(guid, data, externalId);
     }
-    await this.pushPendingProgramEnrolments(guid, "individual", data, externalId);
+    // Direct create writes the new externalId via `saveExternalIdToEntity`;
+    // re-resolve from the store so the program-enrolment CR registrant
+    // references the OpenSPP-issued identifier instead of a stale undefined.
+    const refreshedId = await this.refreshExternalIdAfterPush(guid, externalId);
+    await this.pushPendingProgramEnrolments(guid, "individual", data, refreshedId);
   }
 
   private async pushIndividualDirect(
@@ -549,7 +553,31 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     } else {
       await this.pushGroupDirect(guid, data, externalId);
     }
-    await this.pushPendingProgramEnrolments(guid, "group", data, externalId);
+    const refreshedId = await this.refreshExternalIdAfterPush(guid, externalId);
+    await this.pushPendingProgramEnrolments(guid, "group", data, refreshedId);
+  }
+
+  /**
+   * Re-read the entity's externalId from the EntityStore after a direct push.
+   *
+   * `pushXxxDirect.saveExternalIdToEntity` may have just assigned a new
+   * OpenSPP-issued identifier; the local `externalId` closure var is stale
+   * after that. `pushPendingProgramEnrolments` needs the fresh value so the
+   * CR registrant can resolve on OpenSPP.
+   *
+   * Silent on lookup failures — falls back to the input value.
+   */
+  private async refreshExternalIdAfterPush(
+    guid: string,
+    fallback: string | undefined,
+  ): Promise<string | undefined> {
+    try {
+      const fresh = await this.eventApplierService.getEntityStore().getEntity(guid);
+      const id = fresh?.modified?.externalId ?? (fresh?.modified?.data?.externalId as string | undefined);
+      return id ?? fallback;
+    } catch {
+      return fallback;
+    }
   }
 
   private async pushGroupDirect(

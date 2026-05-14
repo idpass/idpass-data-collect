@@ -1,0 +1,352 @@
+{
+  "id": "uc3-widow-enrolment",
+  "name": "UC3 Widow Enrolment (Farajaland)",
+  "description": "DCI demo (Friday 2026-05-15) — field agent intake of disabled-widow applications, pushed to OpenSPP via assign_program ChangeRequest workflow.",
+  "version": "1.0.0",
+  "entityForms": [
+    {
+      "id": "household",
+      "name": "household",
+      "title": "Household",
+      "entityType": "group",
+      "nameField": "name",
+      "displayTemplate": "{name}",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "name",
+            "type": "textfield",
+            "input": true,
+            "label": "Household Name",
+            "validate": { "required": true }
+          },
+          {
+            "key": "area",
+            "type": "select",
+            "input": true,
+            "label": "Area",
+            "validate": { "required": true },
+            "data": {
+              "values": [
+                { "label": "Farajaland — North", "value": "farajaland-north" },
+                { "label": "Farajaland — South", "value": "farajaland-south" },
+                { "label": "Farajaland — Central", "value": "farajaland-central" }
+              ]
+            }
+          },
+          {
+            "key": "address",
+            "type": "textarea",
+            "input": true,
+            "label": "Address",
+            "rows": 3
+          },
+          {
+            "key": "phone",
+            "type": "phoneNumber",
+            "input": true,
+            "label": "Phone Number"
+          },
+          {
+            "key": "submit",
+            "type": "button",
+            "input": true,
+            "label": "Save Household",
+            "action": "submit",
+            "theme": "primary"
+          }
+        ]
+      }
+    },
+    {
+      "id": "widow",
+      "name": "widow",
+      "title": "Widow (Applicant)",
+      "entityType": "individual",
+      "nameField": "name",
+      "displayTemplate": "{name}",
+      "dependsOn": "household",
+      "description": "Primary applicant: capture identity, disability, PMT inputs.",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "first_name",
+            "type": "textfield",
+            "input": true,
+            "label": "First Name",
+            "validate": { "required": true }
+          },
+          {
+            "key": "last_name",
+            "type": "textfield",
+            "input": true,
+            "label": "Last Name",
+            "validate": { "required": true }
+          },
+          {
+            "key": "name",
+            "type": "hidden",
+            "calculateValue": "value = (data.first_name||'') + ' ' + (data.last_name||'')"
+          },
+          {
+            "key": "date_of_birth",
+            "type": "datetime",
+            "input": true,
+            "label": "Date of Birth",
+            "format": "yyyy-MM-dd",
+            "enableTime": false,
+            "enableDate": true,
+            "validate": { "required": true }
+          },
+          {
+            "key": "gender",
+            "type": "select",
+            "input": true,
+            "label": "Gender",
+            "defaultValue": "female",
+            "data": {
+              "values": [
+                { "label": "Female", "value": "female" },
+                { "label": "Male", "value": "male" },
+                { "label": "Other", "value": "other" }
+              ]
+            }
+          },
+          {
+            "key": "national_id",
+            "type": "textfield",
+            "input": true,
+            "label": "National ID"
+          },
+          {
+            "key": "widow_status",
+            "type": "select",
+            "input": true,
+            "label": "Widow Status",
+            "validate": { "required": true },
+            "data": {
+              "values": [
+                { "label": "Self-declared", "value": "self_declared" },
+                { "label": "Verified by spouse death record", "value": "verified" }
+              ]
+            }
+          },
+          {
+            "key": "disability_type",
+            "type": "select",
+            "input": true,
+            "label": "Disability Type",
+            "data": {
+              "values": [
+                { "label": "Mobility", "value": "mobility" },
+                { "label": "Visual", "value": "visual" },
+                { "label": "Hearing", "value": "hearing" },
+                { "label": "Cognitive", "value": "cognitive" },
+                { "label": "Other", "value": "other" },
+                { "label": "None", "value": "none" }
+              ]
+            }
+          },
+          {
+            "key": "disability_severity",
+            "type": "select",
+            "input": true,
+            "label": "Disability Severity",
+            "data": {
+              "values": [
+                { "label": "Mild", "value": "mild" },
+                { "label": "Moderate", "value": "moderate" },
+                { "label": "Severe", "value": "severe" }
+              ]
+            }
+          },
+          {
+            "key": "household_monthly_income",
+            "type": "number",
+            "input": true,
+            "label": "Household Monthly Income (FJD)",
+            "validate": { "required": true, "min": 0 }
+          },
+          {
+            "key": "dependents_count",
+            "type": "number",
+            "input": true,
+            "label": "Number of Dependents",
+            "validate": { "required": true, "min": 0, "max": 20 }
+          },
+          {
+            "key": "submit",
+            "type": "button",
+            "input": true,
+            "label": "Save Application",
+            "action": "submit",
+            "theme": "primary"
+          }
+        ]
+      }
+    },
+    {
+      "id": "dependent",
+      "name": "dependent",
+      "title": "Dependent",
+      "entityType": "individual",
+      "nameField": "name",
+      "displayTemplate": "{name}",
+      "dependsOn": "household",
+      "description": "Other household members supported by the widow.",
+      "formio": {
+        "display": "form",
+        "components": [
+          {
+            "key": "first_name",
+            "type": "textfield",
+            "input": true,
+            "label": "First Name",
+            "validate": { "required": true }
+          },
+          {
+            "key": "last_name",
+            "type": "textfield",
+            "input": true,
+            "label": "Last Name",
+            "validate": { "required": true }
+          },
+          {
+            "key": "name",
+            "type": "hidden",
+            "calculateValue": "value = (data.first_name||'') + ' ' + (data.last_name||'')"
+          },
+          {
+            "key": "date_of_birth",
+            "type": "datetime",
+            "input": true,
+            "label": "Date of Birth",
+            "format": "yyyy-MM-dd",
+            "enableTime": false,
+            "enableDate": true
+          },
+          {
+            "key": "relationship",
+            "type": "select",
+            "input": true,
+            "label": "Relationship to Widow",
+            "validate": { "required": true },
+            "data": {
+              "values": [
+                { "label": "Child", "value": "child" },
+                { "label": "Parent", "value": "parent" },
+                { "label": "Sibling", "value": "sibling" },
+                { "label": "Other relative", "value": "other_relative" }
+              ]
+            }
+          },
+          {
+            "key": "school_enrolled",
+            "type": "select",
+            "input": true,
+            "label": "Currently in School?",
+            "data": {
+              "values": [
+                { "label": "Yes", "value": "yes" },
+                { "label": "No", "value": "no" },
+                { "label": "Not applicable", "value": "na" }
+              ]
+            }
+          },
+          {
+            "key": "submit",
+            "type": "button",
+            "input": true,
+            "label": "Save Dependent",
+            "action": "submit",
+            "theme": "primary"
+          }
+        ]
+      }
+    }
+  ],
+  "entityData": [
+    {
+      "name": "household",
+      "data": [
+        {
+          "id": "hh-uc3-demo-001",
+          "name": "Adeyemi Household",
+          "area": "farajaland-north",
+          "address": "Plot 4, Maseno Lane, North Farajaland",
+          "phone": "+999-555-0001"
+        }
+      ]
+    },
+    {
+      "name": "widow",
+      "data": [
+        {
+          "id": "ind-uc3-widow-001",
+          "name": "Funke Adeyemi",
+          "first_name": "Funke",
+          "last_name": "Adeyemi",
+          "date_of_birth": "1982-06-14",
+          "gender": "female",
+          "national_id": "FJ-1982-0001",
+          "widow_status": "self_declared",
+          "disability_type": "mobility",
+          "disability_severity": "moderate",
+          "household_monthly_income": 110,
+          "dependents_count": 2,
+          "parentId": "hh-uc3-demo-001"
+        }
+      ]
+    },
+    {
+      "name": "dependent",
+      "data": [
+        {
+          "id": "ind-uc3-dep-001",
+          "name": "Sade Adeyemi",
+          "first_name": "Sade",
+          "last_name": "Adeyemi",
+          "date_of_birth": "2012-02-09",
+          "relationship": "child",
+          "school_enrolled": "yes",
+          "parentId": "hh-uc3-demo-001"
+        },
+        {
+          "id": "ind-uc3-dep-002",
+          "name": "Tunde Adeyemi",
+          "first_name": "Tunde",
+          "last_name": "Adeyemi",
+          "date_of_birth": "2015-11-23",
+          "relationship": "child",
+          "school_enrolled": "no",
+          "parentId": "hh-uc3-demo-001"
+        }
+      ]
+    }
+  ],
+  "externalSync": {
+    "type": "openspp-v2-adapter",
+    "url": "${OPENSPP_URL}",
+    "adapterConfig": {
+      "clientId": "${OPENSPP_CLIENT_ID}",
+      "clientSecret": "${OPENSPP_CLIENT_SECRET}",
+      "submitVia": "direct",
+      "identifierType": "system_id",
+      "groupIdentifierType": "system_id",
+      "identifierNamespace": "urn:openspp:vocab:id-type#",
+      "batchSize": 25,
+      "batchDelayMs": 250,
+      "maxRetries": 2,
+      "_comment": "submitVia=direct for household + members (DataCollect = source of truth). Program enrolment goes via assign_program CR regardless because it's approval-gated on OpenSPP."
+    }
+  },
+  "programs": [
+    {
+      "id": "${OPENSPP_PROGRAM_ID}",
+      "name": "Widow Disability Support",
+      "code": "widow-disability-support"
+    }
+  ]
+}

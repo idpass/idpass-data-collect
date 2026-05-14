@@ -174,7 +174,7 @@ beforeEach(() => {
 });
 
 describe("OpenSppV2SyncAdapter — pull CR status polling — direct mode", () => {
-  it("does NOT poll CR status when submitVia is 'direct', even if metadata has CR records", async () => {
+  it("DOES poll CR status in direct mode when CR records exist (program enrolments are CR-only)", async () => {
     const seed: Record<string, string> = {};
     seedCR(seed, "ind-leftover", {
       reference: "CR/2026/00500",
@@ -185,9 +185,20 @@ describe("OpenSppV2SyncAdapter — pull CR status polling — direct mode", () =
     const applier = makeApplierService();
     const adapter = new OpenSppV2SyncAdapter(store, applier, configWithMode("direct"));
 
+    mockV2ClientImplementation.getChangeRequest.mockResolvedValueOnce({
+      type: "ChangeRequest",
+      reference: "CR/2026/00500",
+      requestType: { code: "assign_program" },
+      status: "pending",
+      registrant: { system: "urn:openspp:vocab:id-type", value: "ind-leftover" },
+    });
+
     await adapter.pullData();
 
-    expect(mockV2ClientImplementation.getChangeRequest).not.toHaveBeenCalled();
+    // `enrol-in-program` events fire CRs even under `submitVia: direct`, so
+    // the pull-side poll must NOT gate on submitVia mode. Otherwise the
+    // adapter would silently leak in-flight program enrolments.
+    expect(mockV2ClientImplementation.getChangeRequest).toHaveBeenCalledWith("CR/2026/00500");
   });
 });
 
