@@ -479,9 +479,9 @@ watch(entityGuid, loadEntity)
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 24px;
+  gap: var(--spacing-lg);
   flex-wrap: wrap;
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-lg);
 }
 
 .detail-header__text {
@@ -489,19 +489,22 @@ watch(entityGuid, loadEntity)
   min-width: 260px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .detail-header__title {
+  font-family: var(--font-family-display);
   font-size: clamp(1.75rem, 1.6rem + 0.5vw, 2.2rem);
   font-weight: 600;
+  letter-spacing: -0.015em;
   margin: 0;
+  color: var(--text-main);
 }
 
 .detail-header__subtitle {
   margin: 0;
-  font-size: 0.95rem;
-  color: rgba(0, 0, 0, 0.6);
+  font-size: var(--font-size-base);
+  color: var(--text-muted);
 }
 
 .detail-content {
@@ -552,7 +555,7 @@ watch(entityGuid, loadEntity)
 .data-display {
   margin: 0;
   font-size: 0.85rem;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-family: var(--font-family-mono);
   line-height: 1.5;
   overflow-x: auto;
 }
@@ -684,7 +687,7 @@ watch(entityGuid, loadEntity)
 }
 
 .mono-text {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-family: var(--font-family-mono);
   font-size: 0.85rem;
 }
 

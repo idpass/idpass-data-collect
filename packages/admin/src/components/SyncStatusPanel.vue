@@ -503,7 +503,7 @@ watch(() => props.configId, () => {
 }
 
 .sync-panel__error-guid {
-  font-family: monospace;
+  font-family: var(--font-family-mono);
   font-size: 11px;
   background: rgba(var(--v-theme-on-surface), 0.06);
   padding: 1px 6px;

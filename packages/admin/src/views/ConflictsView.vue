@@ -354,7 +354,7 @@ watch(
 
 <style scoped>
 .entity-guid {
-  font-family: monospace;
+  font-family: var(--font-family-mono);
   font-size: var(--font-size-sm);
 }
 
@@ -365,7 +365,7 @@ watch(
 }
 
 .payload {
-  font-family: monospace;
+  font-family: var(--font-family-mono);
   font-size: var(--font-size-sm);
   white-space: pre-wrap;
   word-break: break-word;
@@ -377,7 +377,7 @@ watch(
 }
 
 .merged-textarea {
-  font-family: monospace;
+  font-family: var(--font-family-mono);
 }
 
 .loading-wrap {

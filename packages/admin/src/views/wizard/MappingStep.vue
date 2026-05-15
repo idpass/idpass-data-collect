@@ -686,7 +686,7 @@ const toggleRowExpansion = (index: number) => {
 
 .config-value {
   color: var(--text-main);
-  font-family: monospace;
+  font-family: var(--font-family-mono);
   font-size: 0.8125rem;
 }
 
