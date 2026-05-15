@@ -647,3 +647,145 @@ describe("EventApplierService – enrol-in-program", () => {
     ).rejects.toMatchObject({ code: "INVALID_PROGRAM_ID" });
   });
 });
+
+describe("EventApplierService – program-enrolment-applied", () => {
+  let entityStore: EntityStore;
+  let eventStore: EventStore;
+  let service: EventApplierService;
+
+  beforeEach(async () => {
+    entityStore = new EntityStoreImpl(new IndexedDbEntityStorageAdapter());
+    await entityStore.initialize();
+    eventStore = new EventStoreImpl(new IndexedDbEventStorageAdapter());
+    await eventStore.initialize();
+    service = new EventApplierService(eventStore, entityStore);
+  });
+
+  afterEach(async () => {
+    await entityStore.clearStore();
+    await eventStore.clearStore();
+  });
+
+  it("moves a programme from pending to enrolled", async () => {
+    const groupGuid = uuidv4();
+    await service.submitForm(
+      makeForm({ entityGuid: groupGuid, type: "create-group", data: { name: "Adeyemi HH" } }),
+    );
+    await service.submitForm(
+      makeForm({
+        entityGuid: groupGuid,
+        type: "enrol-in-program",
+        data: { programId: 1, programName: "Cash" },
+      }),
+    );
+
+    // Stamp the applied event in the future so the conflict resolver picks
+    // remote-wins. In production the adapter uses `new Date().toISOString()`
+    // at emit time, which is always after the local pending event.
+    await service.submitForm(
+      makeForm({
+        entityGuid: groupGuid,
+        type: "program-enrolment-applied",
+        syncLevel: SyncLevel.EXTERNAL,
+        userId: "openspp-v2-sync",
+        timestamp: "2099-01-01T00:00:00Z",
+        data: {
+          programId: 1,
+          programName: "Cash",
+          appliedAt: "2026-05-14T10:00:00Z",
+          crId: "CR/2026/00001",
+        },
+      }),
+    );
+
+    const pair = await entityStore.getEntity(groupGuid);
+    const data = pair!.modified.data as Record<string, unknown>;
+    expect(data.pendingProgramEnrolments).toEqual([]);
+    const enrolled = data.enrolledPrograms as Array<Record<string, unknown>>;
+    expect(enrolled).toHaveLength(1);
+    expect(enrolled[0]).toMatchObject({
+      programId: 1,
+      programName: "Cash",
+      appliedAt: "2026-05-14T10:00:00Z",
+      crId: "CR/2026/00001",
+    });
+  });
+
+  it("is idempotent on re-pull — re-applying the same event leaves state unchanged (second-sync invariant)", async () => {
+    const groupGuid = uuidv4();
+    await service.submitForm(
+      makeForm({ entityGuid: groupGuid, type: "create-group", data: { name: "HH" } }),
+    );
+    await service.submitForm(
+      makeForm({
+        entityGuid: groupGuid,
+        type: "enrol-in-program",
+        data: { programId: 5, programName: "Five" },
+      }),
+    );
+    const applied = {
+      entityGuid: groupGuid,
+      type: "program-enrolment-applied",
+      syncLevel: SyncLevel.EXTERNAL,
+      userId: "openspp-v2-sync",
+      timestamp: "2099-01-01T00:00:00Z",
+      data: { programId: 5, programName: "Five", appliedAt: "2026-05-14T10:00:00Z" },
+    } as const;
+    await service.submitForm(makeForm(applied));
+    await service.submitForm(makeForm(applied));
+
+    const pair = await entityStore.getEntity(groupGuid);
+    const data = pair!.modified.data as Record<string, unknown>;
+    expect(data.pendingProgramEnrolments).toEqual([]);
+    expect((data.enrolledPrograms as unknown[]).length).toBe(1);
+  });
+
+  it("only removes the matching pending entry — other pending programmes survive", async () => {
+    const groupGuid = uuidv4();
+    await service.submitForm(
+      makeForm({ entityGuid: groupGuid, type: "create-group", data: { name: "HH" } }),
+    );
+    await service.submitForm(
+      makeForm({ entityGuid: groupGuid, type: "enrol-in-program", data: { programId: 1 } }),
+    );
+    await service.submitForm(
+      makeForm({ entityGuid: groupGuid, type: "enrol-in-program", data: { programId: 2 } }),
+    );
+
+    await service.submitForm(
+      makeForm({
+        entityGuid: groupGuid,
+        type: "program-enrolment-applied",
+        syncLevel: SyncLevel.EXTERNAL,
+        userId: "openspp-v2-sync",
+        timestamp: "2099-01-01T00:00:00Z",
+        data: { programId: 1, appliedAt: "2026-05-14T10:00:00Z" },
+      }),
+    );
+
+    const pair = await entityStore.getEntity(groupGuid);
+    const data = pair!.modified.data as Record<string, unknown>;
+    const pending = data.pendingProgramEnrolments as Array<{ programId: number }>;
+    expect(pending.map((p) => p.programId)).toEqual([2]);
+    const enrolled = data.enrolledPrograms as Array<{ programId: number }>;
+    expect(enrolled.map((p) => p.programId)).toEqual([1]);
+  });
+
+  it("rejects non-numeric programId", async () => {
+    const groupGuid = uuidv4();
+    await service.submitForm(
+      makeForm({ entityGuid: groupGuid, type: "create-group", data: { name: "HH" } }),
+    );
+    await expect(
+      service.submitForm(
+        makeForm({
+          entityGuid: groupGuid,
+          type: "program-enrolment-applied",
+          syncLevel: SyncLevel.EXTERNAL,
+          userId: "openspp-v2-sync",
+          data: { programId: "nope" },
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_PROGRAM_ID" });
+  });
+});
