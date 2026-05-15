@@ -60,7 +60,7 @@ const describeIf = ENABLED ? describe : describe.skip;
 
 const runId = Date.now().toString(36);
 const householdGuid = `g-uc3-int-${runId}`;
-const householdExternalId = `openspp-grp-uc3-${runId}`;
+const _householdExternalId = `openspp-grp-uc3-${runId}`;
 
 function makeMetadataStore(): { store: jest.Mocked<EventStore>; metadata: Map<string, string> } {
   const metadata = new Map<string, string>();
@@ -218,7 +218,6 @@ describeIf(`UC3 live integration (LOCAL_OPENSPP_* env)`, () => {
 // Always emit at least one assertion so jest does not error with
 // "Your test suite must contain at least one test." when env not configured.
 if (!ENABLED) {
-  // eslint-disable-next-line jest/no-export
   describe("UC3 live integration", () => {
     it("skipped: set LOCAL_OPENSPP_URL, LOCAL_OPENSPP_CLIENT_ID, LOCAL_OPENSPP_CLIENT_SECRET, LOCAL_OPENSPP_PROGRAM_ID to enable", () => {
       expect(true).toBe(true);
