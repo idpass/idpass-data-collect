@@ -82,16 +82,21 @@ export class SyncTelemetryStore {
   }
 
   /**
-   * Resolve the path to the canonical telemetry migration SQL. Uses
-   * `require.resolve` (CJS-native) to find the data-collect-core package
-   * root, then locates the migration relative to it. Works for both the
-   * development setup (workspace symlink) and a published install
-   * (node_modules/@idpass/data-collect-core).
+   * Resolve the path to the canonical telemetry migration SQL. Resolves
+   * through the package's `.` export entry (always defined) rather than its
+   * `package.json` subpath (which would require the host to declare
+   * `"./package.json"` in exports — fragile across legacy installs).
+   *
+   * From `dist/cjs/index.js` walk two levels up to reach the package root
+   * (datacollect/), then descend into the `drizzle/` folder. Works for both
+   * workspace symlink (dev) and a published install (node_modules).
    */
   private static migrationPath(): string {
-    const fromCore = require.resolve("@idpass/data-collect-core/package.json");
-    // .../packages/datacollect/package.json  →  .../packages/datacollect/drizzle/0001_…sql
-    return resolve(dirname(fromCore), "drizzle/0001_add_sync_telemetry.sql");
+    // require.resolve returns `<pkgRoot>/dist/cjs/index.js`; the package root
+    // is two directories up from that file.
+    const mainEntry = require.resolve("@idpass/data-collect-core");
+    const pkgRoot = dirname(dirname(dirname(mainEntry)));
+    return resolve(pkgRoot, "drizzle/0001_add_sync_telemetry.sql");
   }
 
   /**
