@@ -104,7 +104,36 @@ CLIENT_OAUTH_ID=$(echo "$CREDS" | jq -r '.result[0].oauth_client_id')
 CLIENT_SECRET=$(echo "$CREDS" | jq -r '.result[0].client_secret')
 [ -n "$CLIENT_OAUTH_ID" ] && [ -n "$CLIENT_SECRET" ] || fail "Failed to read credentials"
 
-# --- 5. patch the FastAPI endpoint to run as admin --------------------------
+# --- 5. ensure id-type vocabulary codes used by DataCollect exist -----------
+# The `feat/spp-cel-dci-bridge` branch adds strict validation: any identifier
+# whose `system` resolves to `urn:openspp:vocab:id-type#<code>` requires that
+# <code> to exist in spp_vocabulary_code. The default seed ships with only
+# birth_certificate / national_id / passport / tax_id, so DataCollect's
+# `system_id` (individuals) and `household_id` (groups) both fail 422.
+# Add them once; idempotent.
+log "Ensuring id-type vocabulary codes for DataCollect sync ..."
+VOCAB=$(call_kw "spp.vocabulary" "search" \
+  '[[["namespace_uri","=","urn:openspp:vocab:id-type"]]]' '{"limit":1}')
+VOCAB_ID=$(echo "$VOCAB" | jq -r '.result[0] // empty')
+[ -n "$VOCAB_ID" ] || fail "id-type vocabulary not found — OpenSPP not fully initialised"
+
+for code in system_id household_id; do
+  EXIST=$(call_kw "spp.vocabulary.code" "search" \
+    "[[[\"vocabulary_id\",\"=\",$VOCAB_ID],[\"code\",\"=\",\"$code\"]]]" '{"limit":1}')
+  if [ "$(echo "$EXIST" | jq -r '.result | length // 0')" = "0" ]; then
+    label="$(echo "$code" | tr '_' ' ')"
+    label="$(echo "$label" | awk '{for(i=1;i<=NF;i++){$i=toupper(substr($i,1,1)) tolower(substr($i,2))}; print}')"
+    # `is_local=true` required because id-type is a system vocabulary —
+    # spp_vocabulary refuses non-local additions to lock down canonical codes.
+    CRES=$(call_kw "spp.vocabulary.code" "create" \
+      "[[{\"vocabulary_id\":$VOCAB_ID,\"code\":\"$code\",\"display\":{\"en_US\":\"$label\"},\"is_local\":true,\"active\":true}]]" '{}')
+    CERR=$(echo "$CRES" | jq -r '.error.data.message // empty')
+    [ -z "$CERR" ] || fail "Failed to add id-type code '$code': $CERR"
+    log "  Added id-type code '$code'."
+  fi
+done
+
+# --- 6. patch the FastAPI endpoint to run as admin --------------------------
 # Default `public` user is fenced out of Change-Request groups.
 log "Ensuring /api/v2 FastAPI endpoint user is admin ..."
 EP=$(call_kw "fastapi.endpoint" "search_read" \

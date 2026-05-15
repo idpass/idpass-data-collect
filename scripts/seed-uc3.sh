@@ -50,6 +50,12 @@ FIELDWORKER_EMAIL="${FIELDWORKER_EMAIL:-fieldworker@datacollect.lan}"
 FIELDWORKER_PASSWORD="${FIELDWORKER_PASSWORD:-fieldworker123}"
 
 OPENSPP_URL="${OPENSPP_URL:-http://localhost:8069}"
+# URL the DataCollect backend container uses to reach OpenSPP. Inside a Podman
+# container `localhost` resolves to the container itself, so the host-facing
+# OPENSPP_URL must be rewritten before it lands in the tenant config. Default
+# `host.containers.internal` matches the Podman compose network bridge; on
+# Coolify/remote deploys set this to the public OpenSPP URL explicitly.
+OPENSPP_CONTAINER_URL="${OPENSPP_CONTAINER_URL:-http://host.containers.internal:8069}"
 OPENSPP_DB="${OPENSPP_DB:-openspp}"
 OPENSPP_ADMIN_LOGIN="${OPENSPP_ADMIN_LOGIN:-admin}"
 OPENSPP_ADMIN_PASSWORD="${OPENSPP_ADMIN_PASSWORD:-admin}"
@@ -144,7 +150,7 @@ CONFIG_TMP=$(mktemp --suffix=.json)
 trap 'rm -f "$OPENSPP_COOKIE" "$CONFIG_TMP"' EXIT
 
 jq \
-  --arg url        "$OPENSPP_URL" \
+  --arg url        "$OPENSPP_CONTAINER_URL" \
   --arg sync       "$DATACOLLECT_SYNC_URL" \
   --arg cid        "$OPENSPP_CLIENT_ID" \
   --arg csec       "$OPENSPP_CLIENT_SECRET" \
