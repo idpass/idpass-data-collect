@@ -210,7 +210,19 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     // After pull, the baseline is reset (initial.version === modified.version).
     // Without this filter, pulled entities would be pushed back, overwriting
     // any changes made directly in OpenSPP between pull and push.
+    // BUT: entities with un-pushed `pendingProgramEnrolments` must always be
+    // included. EventApplierService resets the baseline after applying any
+    // SyncLevel.REMOTE event (mobile push lands as REMOTE on the backend),
+    // which makes initial.version === modified.version even for genuinely
+    // local-origin events like enrol-in-program. The original filter would
+    // then hide those from the push pipeline and the CR would never reach
+    // OpenSPP. Pending enrolments are a positive signal of un-synced state.
     const entitiesToSync = allModified.filter((pair) => {
+      const data = pair.modified.data as Record<string, unknown> | undefined;
+      const pendingEnrol = data?.pendingProgramEnrolments;
+      if (Array.isArray(pendingEnrol) && pendingEnrol.length > 0) {
+        return true;
+      }
       if (pair.modified.externalId && pair.initial && pair.initial.version === pair.modified.version) {
         return false;
       }
