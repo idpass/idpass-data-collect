@@ -63,6 +63,23 @@ const log = createLogger("adapter-openspp:v2");
 /** User ID for sync-originated events */
 const SYNC_USER_ID = "openspp-v2-sync";
 
+/**
+ * A CR record persisted with a numeric program discriminator (see
+ * `pushPendingProgramEnrolments`) encodes the enrolment's `programId` in the
+ * metadata key suffix as a stringified integer. `listInFlightCRs` returns the
+ * suffix as a raw string; this helper coerces back to a finite positive
+ * integer, or returns `null` for anything else (entity-level CRs, malformed
+ * discriminators).
+ */
+function parseProgramEnrolmentDiscriminator(discriminator: string): number | null {
+  if (!discriminator) return null;
+  // Only digits — reject negatives, floats, NaN, embedded text. Program ids
+  // in OpenSPP are Odoo record ids (positive integers).
+  if (!/^\d+$/.test(discriminator)) return null;
+  const parsed = Number.parseInt(discriminator, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
 /** Extension key for Studio individual custom fields (OpenSPP V2 API) */
 const STUDIO_INDIVIDUAL_EXTENSION_KEY = "urn:openspp:extension:studio-individual";
 
@@ -338,20 +355,68 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
         }
 
         if (fresh.status !== record.status) {
-          await setCR(
-            this.eventStore,
-            entityGuid,
-            {
-              reference: fresh.reference,
-              status: fresh.status,
-              submittedAt: record.submittedAt,
-              lastPolledAt: new Date().toISOString(),
-              rejectionReason: fresh.rejectionReason,
-              appliedDate: fresh.appliedDate,
-              approvedDate: fresh.approvedDate,
-            },
-            discriminator,
-          );
+          // For `applied` transitions on program-enrolment CRs, emit the
+          // projection event BEFORE persisting the terminal status. If the
+          // emit fails we leave the CR record in its pre-transition status so
+          // the next pull retries — once the metadata flips to `applied`,
+          // listInFlightCRs filters it out and the event would never re-emit.
+          let projectionEmitted = false;
+          let projectionError: unknown | null = null;
+          if (fresh.status === "applied") {
+            const programId = parseProgramEnrolmentDiscriminator(discriminator);
+            if (programId !== null) {
+              try {
+                await this.emitProgramEnrolmentApplied(entityGuid, programId, fresh);
+                projectionEmitted = true;
+              } catch (emitErr) {
+                projectionError = emitErr;
+                log.warn(
+                  { entityGuid, reference: fresh.reference, programId, err: emitErr },
+                  "Failed to emit program-enrolment-applied event; keeping CR in-flight for retry",
+                );
+                errors.push({
+                  entityGuid,
+                  code: "CR_PROJECTION_FAILED",
+                  message: emitErr instanceof Error ? emitErr.message : String(emitErr),
+                  retryable: true,
+                });
+              }
+            } else {
+              // Non-program-enrolment CR — no projection needed.
+              projectionEmitted = true;
+            }
+          }
+
+          // If this is an `applied` transition for a program-enrolment CR and
+          // the projection failed, do NOT persist the terminal status. Bump
+          // lastPolledAt only so observability survives.
+          if (fresh.status === "applied" && projectionError !== null && !projectionEmitted) {
+            await setCR(
+              this.eventStore,
+              entityGuid,
+              {
+                ...record,
+                lastPolledAt: new Date().toISOString(),
+              },
+              discriminator,
+            );
+          } else {
+            await setCR(
+              this.eventStore,
+              entityGuid,
+              {
+                reference: fresh.reference,
+                status: fresh.status,
+                submittedAt: record.submittedAt,
+                lastPolledAt: new Date().toISOString(),
+                rejectionReason: fresh.rejectionReason,
+                appliedDate: fresh.appliedDate,
+                approvedDate: fresh.approvedDate,
+              },
+              discriminator,
+            );
+          }
+
           if (fresh.status === "rejected") {
             log.warn(
               { entityGuid, reference: fresh.reference, reason: fresh.rejectionReason },
@@ -363,10 +428,10 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
               message: `Change request ${fresh.reference} rejected by OpenSPP operator${fresh.rejectionReason ? `: ${fresh.rejectionReason}` : ""}`,
               retryable: false,
             });
-          } else if (fresh.status === "applied") {
+          } else if (fresh.status === "applied" && projectionEmitted) {
             log.info(
               { entityGuid, reference: fresh.reference },
-              "Change request applied by OpenSPP — entity changes will arrive on next pull",
+              "Change request applied by OpenSPP — projection emitted",
             );
           }
         } else {
@@ -396,6 +461,72 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     }
 
     return errors;
+  }
+
+  /**
+   * Emit a `program-enrolment-applied` event locally for one
+   * `(entityGuid, programId)` pair. Marked `EXTERNAL` so:
+   *   - `EventApplierService.submitForm` treats it as a remote event and
+   *     skips duplicate-detection enqueue (per CLAUDE.md "isRemoteEvent" rule)
+   *   - the conflict-resolution path uses the remote-timestamp branch
+   *   - mobile consumes it via the regular /pull endpoint without special
+   *     casing
+   *
+   * Program name is best-effort: read from the persisted pending entry on
+   * the entity (we don't have a guaranteed lookup table here) and falls back
+   * to `undefined` so the mobile chip renders `Program #N`.
+   *
+   * Throws if `submitForm` throws — callers in `pollChangeRequestStatuses`
+   * wrap this in try/catch so the surrounding pull is unaffected.
+   */
+  private async emitProgramEnrolmentApplied(
+    entityGuid: string,
+    programId: number,
+    fresh: { reference: string; appliedDate?: string },
+  ): Promise<void> {
+    // Best-effort program name from the existing pending entry; missing if
+    // the entity payload was scrubbed or the enrolment originated server-side.
+    let programName: string | undefined;
+    try {
+      const pair = await this.eventApplierService.getEntityStore().getEntity(entityGuid);
+      const pending = (pair?.modified?.data as Record<string, unknown> | undefined)
+        ?.pendingProgramEnrolments;
+      if (Array.isArray(pending)) {
+        const entry = (pending as Array<{ programId?: unknown; programName?: unknown }>).find(
+          (p) => p && typeof p === "object" && p.programId === programId,
+        );
+        if (entry && typeof entry.programName === "string") {
+          programName = entry.programName;
+        }
+      }
+    } catch {
+      // Best-effort only; missing name is acceptable.
+    }
+
+    const appliedAt = fresh.appliedDate ?? new Date().toISOString();
+    // `timestamp` is the event-emission time, NOT `appliedAt`. The conflict
+    // resolver (`handleIncomingConflict`) compares this against the local
+    // entity's `lastUpdated`: if the field worker's pending-enrolment was
+    // stamped after OpenSPP's approval (clock skew, slow approval), an
+    // `appliedAt`-based timestamp would lose to the local pending event and
+    // the chip would never flip. The emission moment is always later than
+    // the most recent local edit on this device, so it always wins.
+    // `appliedAt` is preserved on `data.appliedAt` for audit.
+    await this.eventApplierService.submitForm({
+      guid: uuidv4(),
+      entityGuid,
+      type: "program-enrolment-applied",
+      data: {
+        programId,
+        ...(programName ? { programName } : {}),
+        appliedAt,
+        crId: fresh.reference,
+        crName: fresh.reference,
+      },
+      timestamp: new Date().toISOString(),
+      userId: SYNC_USER_ID,
+      syncLevel: SyncLevel.EXTERNAL,
+    });
   }
 
   /**
