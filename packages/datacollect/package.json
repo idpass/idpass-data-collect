@@ -20,10 +20,13 @@
     "./types": {
       "browser": "./dist/types/browser.d.ts",
       "default": "./dist/types/index.d.ts"
-    }
+    },
+    "./package.json": "./package.json",
+    "./drizzle/*": "./drizzle/*"
   },
   "files": [
-    "dist"
+    "dist",
+    "drizzle"
   ],
   "scripts": {
     "test": "jest --silent",

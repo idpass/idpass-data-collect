@@ -17,6 +17,8 @@
  * under the License.
  */
 
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import type { Pool } from "pg";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { eq, sql } from "drizzle-orm";
@@ -63,36 +65,33 @@ export class SyncTelemetryStore {
   }
 
   /**
-   * Create the telemetry tables if they don't already exist.
-   * Must be called once at server startup (before any sync routes are served).
-   * Idempotent — safe to call on a populated DB.
+   * Create the telemetry tables if they don't already exist by replaying the
+   * canonical drizzle migration SQL. Single source of truth — if the schema
+   * evolves, only the .sql file needs updating, not this code.
+   *
+   * Must be called once at server startup (before any sync routes are
+   * served). Idempotent — the migration uses `CREATE TABLE IF NOT EXISTS`.
+   *
+   * Replaying SQL here (rather than relying on `drizzle-kit migrate`) keeps
+   * the dev `compose down -v` workflow self-healing: the first request after
+   * a volume wipe always finds the tables present.
    */
   async initialize(): Promise<void> {
-    await this.pool.query(`
-      CREATE TABLE IF NOT EXISTS device_sync_summary (
-        tenant_id       TEXT        NOT NULL,
-        user_id         TEXT        NOT NULL,
-        device_id       TEXT        NOT NULL,
-        last_pull_at    TIMESTAMPTZ,
-        last_push_at    TIMESTAMPTZ,
-        total_pulled    BIGINT      NOT NULL DEFAULT 0,
-        total_pushed    BIGINT      NOT NULL DEFAULT 0,
-        last_scope_hash TEXT,
-        PRIMARY KEY (tenant_id, user_id, device_id)
-      );
-      CREATE TABLE IF NOT EXISTS sync_activity (
-        id          BIGSERIAL   PRIMARY KEY,
-        tenant_id   TEXT        NOT NULL,
-        user_id     TEXT        NOT NULL,
-        device_id   TEXT        NOT NULL,
-        route       TEXT        NOT NULL,
-        event_count INTEGER     NOT NULL,
-        scope_hash  TEXT,
-        occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-      CREATE INDEX IF NOT EXISTS sync_activity_tenant_occurred_idx
-        ON sync_activity (tenant_id, occurred_at);
-    `);
+    const sqlText = readFileSync(SyncTelemetryStore.migrationPath(), "utf8");
+    await this.pool.query(sqlText);
+  }
+
+  /**
+   * Resolve the path to the canonical telemetry migration SQL. Uses
+   * `require.resolve` (CJS-native) to find the data-collect-core package
+   * root, then locates the migration relative to it. Works for both the
+   * development setup (workspace symlink) and a published install
+   * (node_modules/@idpass/data-collect-core).
+   */
+  private static migrationPath(): string {
+    const fromCore = require.resolve("@idpass/data-collect-core/package.json");
+    // .../packages/datacollect/package.json  →  .../packages/datacollect/drizzle/0001_…sql
+    return resolve(dirname(fromCore), "drizzle/0001_add_sync_telemetry.sql");
   }
 
   /**
