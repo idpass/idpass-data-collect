@@ -147,6 +147,7 @@ const getEntityName = () => {
       </v-chip>
     </div>
 
+    <!-- Entity header -->
     <v-card elevation="2" class="mb-4">
       <v-card-text>
         <div class="d-flex justify-space-between align-start ga-3">
@@ -166,34 +167,56 @@ const getEntityName = () => {
             <v-btn icon="mdi-eye" variant="tonal" size="small" @click="openViewDialog = true" aria-label="View JSON" />
           </div>
         </div>
+      </v-card-text>
+    </v-card>
 
-        <div v-if="isHousehold && programs.length > 0" class="mt-4">
-          <div class="d-flex justify-space-between align-center mb-2">
-            <div class="text-subtitle-2 font-weight-bold">Programs</div>
-            <v-btn
-              prepend-icon="mdi-clipboard-plus-outline"
-              color="primary"
-              variant="tonal"
-              size="small"
-              :disabled="enrolableProgams.length === 0"
-              @click="openEnrolDialog = true"
-            >
-              Enrol in Program
-            </v-btn>
-          </div>
-          <div v-if="pendingEnrolments.length > 0" class="d-flex ga-2 flex-wrap">
-            <v-chip
-              v-for="enrolment in pendingEnrolments"
-              :key="enrolment.programId"
-              size="small"
-              color="warning"
-              variant="tonal"
-              prepend-icon="mdi-clock-outline"
-            >
-              {{ enrolment.programName || `Program #${enrolment.programId}` }} · pending
-            </v-chip>
-          </div>
-          <div v-else class="text-caption text-medium-emphasis">No enrolments yet.</div>
+    <!-- Programme Enrolment — standalone card, only shown for group entities with programmes configured -->
+    <v-card
+      v-if="isHousehold && programs.length > 0"
+      class="mb-4 enrolment-card"
+      elevation="0"
+      rounded="lg"
+    >
+      <v-card-text class="pa-4">
+        <div class="d-flex align-center ga-2 mb-3">
+          <v-icon icon="mdi-seal" color="success" size="20" />
+          <span class="text-subtitle-1 font-weight-bold">Programme Enrolment</span>
+        </div>
+
+        <!-- Pending enrolments list -->
+        <div v-if="pendingEnrolments.length > 0" class="mb-3">
+          <v-chip
+            v-for="enrolment in pendingEnrolments"
+            :key="enrolment.programId"
+            class="mr-2 mb-2"
+            color="warning"
+            variant="flat"
+            prepend-icon="mdi-clock-outline"
+            label
+          >
+            {{ enrolment.programName || `Program #${enrolment.programId}` }}
+            <span class="text-caption ml-1 opacity-70">· pending sync</span>
+          </v-chip>
+        </div>
+
+        <!-- CTA: enrol into remaining programmes -->
+        <v-btn
+          v-if="enrolableProgams.length > 0"
+          block
+          size="large"
+          color="success"
+          variant="flat"
+          prepend-icon="mdi-clipboard-plus-outline"
+          class="enrol-btn"
+          @click="openEnrolDialog = true"
+        >
+          Enrol in Programme
+        </v-btn>
+
+        <!-- All enrolled state -->
+        <div v-else class="d-flex align-center ga-2 pa-2 all-enrolled-banner rounded">
+          <v-icon icon="mdi-check-circle" color="success" />
+          <span class="text-body-2 text-success font-weight-medium">All programmes enrolled</span>
         </div>
       </v-card-text>
     </v-card>
@@ -284,6 +307,21 @@ const getEntityName = () => {
 </template>
 
 <style scoped>
+.enrolment-card {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 1.5px solid #86efac;
+}
+
+.enrol-btn {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.all-enrolled-banner {
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+}
+
 .json-block {
   background: #0f172a;
   border-radius: 8px;
