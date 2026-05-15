@@ -2,23 +2,31 @@
 /**
  * Mint a Claim-169 demo VC for the UC3 (widow-enrolment) Friday demo.
  *
- * Generates:
- *   uc3-demo-artifacts/
+ * Profiles:
+ *   amaka  — Amaka Okonkwo (offline-capture flow, household created live on stage)
+ *   funke  — Funke Adeyemi (pre-seeded widow on the Adeyemi household; "self-declared" → verified)
+ *
+ * Usage:
+ *   node scripts/mint-uc3-demo-vc.mjs [--profile <name>] [--regen-keys]
+ *
+ * Default profile is `amaka` for backwards-compat with the existing demo
+ * runbook. `--regen-keys` rotates the issuer keypair (otherwise the existing
+ * keys at uc3-demo-artifacts/issuer-ed25519.{priv,pub}.b64 are reused, so the
+ * minted VC still verifies against the tenant-config trusted issuer).
+ *
+ * Per-profile artifacts (written under scripts/uc3-demo-artifacts/):
+ *     <profile-id>-vc.qr.png       — scannable QR (12cm prints fine)
+ *     <profile-id>-vc.raw          — raw VC string for debugging
+ *     <profile-id>-vc.json         — pretty-printed claim payload for reviewers
+ *
+ * Shared issuer key files (one set, reused across profiles):
  *     issuer-ed25519.priv.b64      — issuer ed25519 private key (32 B base64). DO NOT COMMIT.
  *     issuer-ed25519.pub.b64       — issuer ed25519 public  key (32 B base64). Goes into tenant config trustedIssuers.
  *     issuer-ed25519.pub.hex       — same key, hex form (compat with claim169 service).
- *     amaka-okonkwo-vc.qr.png      — scannable QR for the demo (1MB-ish, ~12cm printed).
- *     amaka-okonkwo-vc.raw         — raw VC string for debugging / re-encoding.
- *     amaka-okonkwo-vc.json        — pretty-printed claim payload for reviewers.
  *
- * Re-runnable: overwrites artifacts on each invocation. Pass --regen-keys
- * to also rotate the issuer keypair (otherwise it reuses existing ones).
- *
- *   node scripts/mint-uc3-demo-vc.mjs [--regen-keys]
- *
- * Print the PNG (12cm wide is plenty) and place it on a table at the demo.
- * The mobile claim169Scanner reads it as a verifiable credential signed by
- * the issuer key listed in the tenant's trustedIssuers array.
+ * Print the PNG and place it on a table at the demo. The mobile
+ * claim169Scanner reads it as a verifiable credential signed by the issuer
+ * key listed in the tenant's trustedIssuers array.
  */
 
 import { Encoder } from 'claim169';
@@ -34,6 +42,48 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ARTIFACTS_DIR = join(__dirname, '..', '..', '..', 'scripts', 'uc3-demo-artifacts');
 const ISSUER_ID = 'did:web:demo-issuer.farajaland.gov';
 const REGEN_KEYS = process.argv.includes('--regen-keys');
+
+// Per-profile claim payloads. Add new entries here for future demo subjects.
+// Keep `id` aligned with the seed entity's national_id when one exists so
+// reviewers can correlate the scan target with the registry row.
+const PROFILES = {
+  amaka: {
+    fileSlug: 'amaka-okonkwo',
+    claim169Input: {
+      id: 'FJ-2026-AMAKA-001',
+      version: '1',
+      language: 'en',
+      fullName: 'Amaka Okonkwo',
+      firstName: 'Amaka',
+      lastName: 'Okonkwo',
+      dateOfBirth: '1984-09-12',
+      gender: 2, // Female
+      address: 'Plot 7, Maseno Lane, Farajaland — North',
+    },
+  },
+  funke: {
+    fileSlug: 'funke-adeyemi',
+    claim169Input: {
+      id: 'FJ-1982-0001',
+      version: '1',
+      language: 'en',
+      fullName: 'Funke Adeyemi',
+      firstName: 'Funke',
+      lastName: 'Adeyemi',
+      dateOfBirth: '1982-06-14',
+      gender: 2, // Female
+      address: 'Plot 4, Maseno Lane, North Farajaland',
+    },
+  },
+};
+
+const profileFlagIdx = process.argv.indexOf('--profile');
+const PROFILE_KEY = profileFlagIdx >= 0 ? process.argv[profileFlagIdx + 1] : 'amaka';
+if (!PROFILES[PROFILE_KEY]) {
+  console.error(`[mint-vc] unknown profile '${PROFILE_KEY}'. Available: ${Object.keys(PROFILES).join(', ')}`);
+  process.exit(2);
+}
+const PROFILE = PROFILES[PROFILE_KEY];
 
 mkdirSync(ARTIFACTS_DIR, { recursive: true });
 
@@ -70,19 +120,8 @@ if (privBytes.length !== 32 || pubBytes.length !== 32) {
 }
 
 // ---- 2. Mint the demo VC ---------------------------------------------------
-// Claim payload for the on-stage scan target: Amaka Okonkwo, the widow the
-// agent will register live during Beat 1 of the demo walkthrough.
-const claim169Input = {
-  id: 'FJ-2026-AMAKA-001',
-  version: '1',
-  language: 'en',
-  fullName: 'Amaka Okonkwo',
-  firstName: 'Amaka',
-  lastName: 'Okonkwo',
-  dateOfBirth: '1984-09-12',
-  gender: 2,  // Female
-  address: 'Plot 7, Maseno Lane, Farajaland — North',
-};
+// Claim payload comes from the selected profile (see PROFILES above).
+const claim169Input = PROFILE.claim169Input;
 
 const nowSec = Math.floor(Date.now() / 1000);
 const cwtMetaInput = {
@@ -104,9 +143,9 @@ if (typeof qrData !== 'string' || qrData.length === 0) {
   process.exit(1);
 }
 
-const rawPath = join(ARTIFACTS_DIR, 'amaka-okonkwo-vc.raw');
-const jsonPath = join(ARTIFACTS_DIR, 'amaka-okonkwo-vc.json');
-const qrPath = join(ARTIFACTS_DIR, 'amaka-okonkwo-vc.qr.png');
+const rawPath = join(ARTIFACTS_DIR, `${PROFILE.fileSlug}-vc.raw`);
+const jsonPath = join(ARTIFACTS_DIR, `${PROFILE.fileSlug}-vc.json`);
+const qrPath = join(ARTIFACTS_DIR, `${PROFILE.fileSlug}-vc.qr.png`);
 
 writeFileSync(rawPath, qrData);
 writeFileSync(jsonPath, JSON.stringify({ claim169Input, cwtMetaInput }, null, 2));
@@ -121,15 +160,15 @@ await QRCode.toFile(qrPath, qrData, {
 });
 
 console.log('');
-console.log('[mint-vc] Done.');
+console.log(`[mint-vc] Done (profile: ${PROFILE_KEY} → ${claim169Input.fullName}).`);
 console.log('  Tenant config: copy this into trustedIssuers[].publicKey.ed25519');
 console.log(`    issuerId : ${ISSUER_ID}`);
 console.log(`    ed25519  : ${Buffer.from(pubBytes).toString('base64')}`);
 console.log('');
 console.log(`  Files written under ${ARTIFACTS_DIR}/`);
-console.log('    issuer-ed25519.priv.b64    (DO NOT COMMIT)');
-console.log('    issuer-ed25519.pub.b64     (safe to share — goes in tenant config)');
-console.log('    issuer-ed25519.pub.hex     (alt encoding)');
-console.log('    amaka-okonkwo-vc.qr.png    (print this)');
-console.log('    amaka-okonkwo-vc.raw       (raw VC payload for debugging)');
-console.log('    amaka-okonkwo-vc.json      (claim payload for reviewers)');
+console.log('    issuer-ed25519.priv.b64                  (DO NOT COMMIT)');
+console.log('    issuer-ed25519.pub.b64                   (safe to share — goes in tenant config)');
+console.log('    issuer-ed25519.pub.hex                   (alt encoding)');
+console.log(`    ${PROFILE.fileSlug}-vc.qr.png            (print this)`);
+console.log(`    ${PROFILE.fileSlug}-vc.raw               (raw VC payload for debugging)`);
+console.log(`    ${PROFILE.fileSlug}-vc.json              (claim payload for reviewers)`);
