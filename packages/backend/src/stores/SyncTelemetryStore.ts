@@ -54,10 +54,45 @@ export interface DeviceSyncSummaryRow {
  */
 export class SyncTelemetryStore {
   private readonly db: NodePgDatabase;
+  private readonly pool: Pool;
   private readonly pending = new Set<Promise<unknown>>();
 
   constructor(pool: Pool) {
+    this.pool = pool;
     this.db = drizzle(pool);
+  }
+
+  /**
+   * Create the telemetry tables if they don't already exist.
+   * Must be called once at server startup (before any sync routes are served).
+   * Idempotent — safe to call on a populated DB.
+   */
+  async initialize(): Promise<void> {
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS device_sync_summary (
+        tenant_id       TEXT        NOT NULL,
+        user_id         TEXT        NOT NULL,
+        device_id       TEXT        NOT NULL,
+        last_pull_at    TIMESTAMPTZ,
+        last_push_at    TIMESTAMPTZ,
+        total_pulled    BIGINT      NOT NULL DEFAULT 0,
+        total_pushed    BIGINT      NOT NULL DEFAULT 0,
+        last_scope_hash TEXT,
+        PRIMARY KEY (tenant_id, user_id, device_id)
+      );
+      CREATE TABLE IF NOT EXISTS sync_activity (
+        id          BIGSERIAL   PRIMARY KEY,
+        tenant_id   TEXT        NOT NULL,
+        user_id     TEXT        NOT NULL,
+        device_id   TEXT        NOT NULL,
+        route       TEXT        NOT NULL,
+        event_count INTEGER     NOT NULL,
+        scope_hash  TEXT,
+        occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS sync_activity_tenant_occurred_idx
+        ON sync_activity (tenant_id, occurred_at);
+    `);
   }
 
   /**
@@ -99,7 +134,14 @@ export class SyncTelemetryStore {
 
   private track(promise: Promise<unknown>): void {
     this.pending.add(promise);
-    promise.finally(() => {
+    // Attach a no-op .catch() to the internal tracking reference so Node.js
+    // does not flag this chain as an unhandled rejection. The outer callers
+    // (sync routes) attach their own .catch() to the same promise returned
+    // by recordPull/recordPush, so errors are always surfaced there; the
+    // suppression here only prevents the process from crashing on
+    // unhandledRejection when the telemetry table is temporarily unavailable
+    // (e.g. first boot after compose down -v before initialize() has run).
+    promise.catch(() => {}).finally(() => {
       this.pending.delete(promise);
     });
   }

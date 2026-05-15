@@ -185,6 +185,9 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   // for cleanup so tests don't leak connections across server boots.
   const telemetryPool = config.postgresUrl ? new Pool({ connectionString: config.postgresUrl }) : null;
   const telemetryStore = telemetryPool ? new SyncTelemetryStore(telemetryPool) : undefined;
+  if (telemetryStore) {
+    await telemetryStore.initialize();
+  }
 
   app.get("/health", async (_req, res) => {
     const timestamp = new Date().toISOString();
