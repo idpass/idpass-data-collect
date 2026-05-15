@@ -213,7 +213,10 @@ const saveTenantApp = async (config: TenantAppData, sourceUrl = '') => {
 const loadAppFromUrl = async (url: string) => {
   try {
     const parsed = new URL(url)
-    const allowedSchemes = import.meta.env.DEV ? ['https:', 'http:'] : ['https:']
+    // Demo (Friday 2026-05-15): accept HTTP in addition to HTTPS so QR codes
+    // pointing at the Coolify demo instance over plain HTTP can be scanned.
+    // Revert to `import.meta.env.DEV ? […] : ['https:']` post-demo.
+    const allowedSchemes = ['https:', 'http:']
     if (!allowedSchemes.includes(parsed.protocol)) {
       throw new Error(`Invalid URL scheme "${parsed.protocol}" — only ${allowedSchemes.join(', ')} allowed`)
     }
