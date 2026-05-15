@@ -239,7 +239,7 @@ describe("UC3 demo happy path — enrol household into 'Widow Disability Support
   });
 
   it("pull: polls and updates the CR to `applied` once OpenSPP operator approves", async () => {
-    const pair = uc3HouseholdPair();
+    const _pair = uc3HouseholdPair();
     const { store, metadata } = makeEventStore({
       "cr:g-uc3-adeyemi-001:42": JSON.stringify({
         reference: "CR/2026/00042",

@@ -33,6 +33,7 @@
  */
 
 import type { EventStore, ExternalSyncConfig } from "@idpass/data-collect-core";
+import { SyncLevel } from "@idpass/data-collect-core";
 import OpenSppV2SyncAdapter from "../v2/OpenSppV2SyncAdapter";
 import { EventApplierService } from "@idpass/data-collect-core";
 import type { ChangeRequestResponse } from "../v2/ChangeRequestTypes";
@@ -571,5 +572,166 @@ describe("OpenSppV2SyncAdapter — pull CR status polling — CR mode", () => {
       (c) => c[0] as string,
     );
     expect(callOrder).toEqual(["CR/C", "CR/A", "CR/B"]);
+  });
+});
+
+describe("OpenSppV2SyncAdapter — pull CR status polling — program-enrolment-applied projection", () => {
+  function seedCRWithDiscriminator(
+    metadata: Record<string, string>,
+    entityGuid: string,
+    discriminator: string | number,
+    record: CRRecord,
+  ): void {
+    metadata[`cr:${entityGuid}:${discriminator}`] = JSON.stringify(record);
+  }
+
+  it("emits one program-enrolment-applied event when a program CR transitions to applied", async () => {
+    const seed: Record<string, string> = {};
+    seedCRWithDiscriminator(seed, "hh-1", 7, {
+      reference: "CR/2026/01001",
+      status: "pending",
+      submittedAt: "2026-05-01T00:00:00Z",
+    });
+    const { store, metadata } = makeEventStore(seed);
+    const applier = makeApplierService();
+    const adapter = new OpenSppV2SyncAdapter(store, applier, configWithMode("change-request"));
+
+    mockV2ClientImplementation.getChangeRequest.mockResolvedValueOnce(
+      crResponse({
+        reference: "CR/2026/01001",
+        status: "applied",
+        appliedDate: "2026-05-04T10:00:00Z",
+      }),
+    );
+
+    const result = await adapter.pullData();
+
+    expect(applier.submitForm).toHaveBeenCalledTimes(1);
+    const submitted = applier.submitForm.mock.calls[0][0];
+    expect(submitted).toMatchObject({
+      entityGuid: "hh-1",
+      type: "program-enrolment-applied",
+      data: {
+        programId: 7,
+        appliedAt: "2026-05-04T10:00:00Z",
+        crId: "CR/2026/01001",
+      },
+    });
+    expect(submitted.syncLevel).toBe(SyncLevel.EXTERNAL);
+    expect(submitted.userId).toBe("openspp-v2-sync");
+    // No errors for happy-path applied projection.
+    expect(result.errors.filter((e) => e.code === "CR_PROJECTION_FAILED")).toEqual([]);
+    // Metadata flipped to applied so the second sync skips it.
+    const stored = JSON.parse(metadata.get("cr:hh-1:7")!) as CRRecord;
+    expect(stored.status).toBe("applied");
+  });
+
+  it("does NOT emit on the second sync (terminal-state filter ensures at-most-once)", async () => {
+    const seed: Record<string, string> = {};
+    seedCRWithDiscriminator(seed, "hh-2", 9, {
+      reference: "CR/2026/01002",
+      status: "pending",
+      submittedAt: "2026-05-01T00:00:00Z",
+    });
+    const { store } = makeEventStore(seed);
+    const applier = makeApplierService();
+    const adapter = new OpenSppV2SyncAdapter(store, applier, configWithMode("change-request"));
+
+    mockV2ClientImplementation.getChangeRequest.mockResolvedValueOnce(
+      crResponse({
+        reference: "CR/2026/01002",
+        status: "applied",
+        appliedDate: "2026-05-04T10:00:00Z",
+      }),
+    );
+
+    // First sync: emits.
+    await adapter.pullData();
+    expect(applier.submitForm).toHaveBeenCalledTimes(1);
+
+    // Second sync: listInFlightCRs filters out applied; no further poll, no emit.
+    applier.submitForm.mockClear();
+    mockV2ClientImplementation.getChangeRequest.mockClear();
+    await adapter.pullData();
+    expect(mockV2ClientImplementation.getChangeRequest).not.toHaveBeenCalled();
+    expect(applier.submitForm).not.toHaveBeenCalled();
+  });
+
+  it("does NOT emit for entity-level CRs (no discriminator)", async () => {
+    const seed: Record<string, string> = {};
+    seedCR(seed, "entity-only", {
+      reference: "CR/2026/01010",
+      status: "pending",
+      submittedAt: "2026-05-01T00:00:00Z",
+    });
+    const { store } = makeEventStore(seed);
+    const applier = makeApplierService();
+    const adapter = new OpenSppV2SyncAdapter(store, applier, configWithMode("change-request"));
+
+    mockV2ClientImplementation.getChangeRequest.mockResolvedValueOnce(
+      crResponse({
+        reference: "CR/2026/01010",
+        status: "applied",
+        appliedDate: "2026-05-04T10:00:00Z",
+      }),
+    );
+
+    await adapter.pullData();
+    expect(applier.submitForm).not.toHaveBeenCalled();
+  });
+
+  it("does NOT emit for non-numeric discriminators", async () => {
+    const seed: Record<string, string> = {};
+    seedCRWithDiscriminator(seed, "hh-3", "foo-bar", {
+      reference: "CR/2026/01020",
+      status: "pending",
+      submittedAt: "2026-05-01T00:00:00Z",
+    });
+    const { store } = makeEventStore(seed);
+    const applier = makeApplierService();
+    const adapter = new OpenSppV2SyncAdapter(store, applier, configWithMode("change-request"));
+
+    mockV2ClientImplementation.getChangeRequest.mockResolvedValueOnce(
+      crResponse({
+        reference: "CR/2026/01020",
+        status: "applied",
+        appliedDate: "2026-05-04T10:00:00Z",
+      }),
+    );
+
+    await adapter.pullData();
+    expect(applier.submitForm).not.toHaveBeenCalled();
+  });
+
+  it("on emit failure, leaves CR status non-terminal so the next sync retries (no silent loss)", async () => {
+    const seed: Record<string, string> = {};
+    seedCRWithDiscriminator(seed, "hh-4", 11, {
+      reference: "CR/2026/01030",
+      status: "pending",
+      submittedAt: "2026-05-01T00:00:00Z",
+    });
+    const { store, metadata } = makeEventStore(seed);
+    const applier = makeApplierService();
+    applier.submitForm.mockRejectedValueOnce(new Error("indexeddb: QuotaExceededError"));
+    const adapter = new OpenSppV2SyncAdapter(store, applier, configWithMode("change-request"));
+
+    mockV2ClientImplementation.getChangeRequest.mockResolvedValueOnce(
+      crResponse({
+        reference: "CR/2026/01030",
+        status: "applied",
+        appliedDate: "2026-05-04T10:00:00Z",
+      }),
+    );
+
+    const result = await adapter.pullData();
+
+    // CR metadata must NOT flip to applied — otherwise next sync would skip
+    // and the event would be permanently lost.
+    const stored = JSON.parse(metadata.get("cr:hh-4:11")!) as CRRecord;
+    expect(stored.status).toBe("pending");
+    expect(stored.lastPolledAt).toBeDefined();
+    const projErr = result.errors.find((e) => e.code === "CR_PROJECTION_FAILED");
+    expect(projErr).toBeDefined();
+    expect(projErr?.retryable).toBe(true);
   });
 });

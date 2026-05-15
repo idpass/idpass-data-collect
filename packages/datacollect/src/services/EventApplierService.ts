@@ -448,6 +448,8 @@ export class EventApplierService {
       await this.deleteEntity(entityPair, eventGuid, formData.userId);
     } else if (formData.type === "enrol-in-program") {
       updatedEntity = await this.enrolInProgram(eventGuid, entityGuid, formData);
+    } else if (formData.type === "program-enrolment-applied") {
+      updatedEntity = await this.applyProgramEnrolment(eventGuid, entityGuid, formData);
     } else if (formData.type === "resolve-duplicate") {
       log.debug(
         `Resolving duplicate: ${JSON.stringify(formData)} with shouldDelete: ${formData.data.shouldDelete}`,
@@ -1026,6 +1028,118 @@ export class EventApplierService {
     await this.logAudit(formData.userId, formData.type, eventGuid, entityGuid, {
       programId,
       programName,
+    });
+    return entity;
+  }
+
+  /**
+   * Project a server-applied program enrolment back onto an entity. Triggered
+   * by the OpenSPP V2 adapter when a previously-submitted `assign_program`
+   * ChangeRequest transitions to `applied` on OpenSPP. The mobile pending
+   * chip flips to "enrolled" on the next sync because:
+   *   - the matching `(programId)` entry is removed from
+   *     `data.pendingProgramEnrolments[]`
+   *   - the program is appended to `data.enrolledPrograms[]`
+   *
+   * Idempotent on `programId`: re-applying the same applied-event is a no-op
+   * (the pending slot stays removed, the enrolled slot is not duplicated).
+   * This matches the "test the second sync" rule — if a re-pull leaks the
+   * same event, entity state is unchanged.
+   *
+   * Expected `formData.data` shape:
+   *   `{ programId: number, programName?: string, appliedAt?: string,
+   *      crId?: string, crName?: string }`
+   *
+   * @param eventGuid    GUID of the triggering form submission.
+   * @param entityGuid   Target entity (typically a household group).
+   * @param formData     Form submission carrying enrolment-applied metadata.
+   * @returns The updated entity with pending slot removed + enrolled slot added.
+   *
+   * @private
+   */
+  private async applyProgramEnrolment(
+    eventGuid: string,
+    entityGuid: string,
+    formData: FormSubmission,
+  ): Promise<EntityDoc> {
+    const data = formData.data as Record<string, unknown>;
+    const programIdRaw = data.programId;
+    const programId =
+      typeof programIdRaw === "number"
+        ? programIdRaw
+        : typeof programIdRaw === "string"
+          ? Number.parseInt(programIdRaw, 10)
+          : NaN;
+    if (!Number.isFinite(programId)) {
+      throw new AppError(
+        "INVALID_PROGRAM_ID",
+        "program-enrolment-applied event requires a numeric data.programId",
+      );
+    }
+    const programName = typeof data.programName === "string" ? data.programName : undefined;
+    const appliedAt =
+      typeof data.appliedAt === "string"
+        ? data.appliedAt
+        : (formData.timestamp ?? new Date().toISOString());
+    const crId = typeof data.crId === "string" ? data.crId : undefined;
+    const crName = typeof data.crName === "string" ? data.crName : undefined;
+
+    const entityPair = await this.entityStore.getEntity(entityGuid);
+    if (!entityPair) {
+      throw new AppError("ENTITY_NOT_FOUND", `Entity ${entityGuid} not found`);
+    }
+
+    const entity = entityPair.modified;
+    const entityData = entity.data as Record<string, unknown>;
+
+    // Drop matching pending entry (idempotent: missing entry is fine).
+    const pendingRaw = entityData.pendingProgramEnrolments;
+    const pending: Array<{ programId: number; programName?: string; enrolledAt?: string }> =
+      Array.isArray(pendingRaw)
+        ? (pendingRaw as Array<{ programId: number; programName?: string; enrolledAt?: string }>)
+            .filter((p) => p && typeof p === "object" && p.programId !== programId)
+        : [];
+    entityData.pendingProgramEnrolments = pending;
+
+    // Add to enrolled list (idempotent on programId).
+    const enrolledRaw = entityData.enrolledPrograms;
+    const enrolled: Array<{
+      programId: number;
+      programName?: string;
+      appliedAt: string;
+      crId?: string;
+      crName?: string;
+    }> = Array.isArray(enrolledRaw)
+      ? (enrolledRaw as Array<{
+          programId: number;
+          programName?: string;
+          appliedAt: string;
+          crId?: string;
+          crName?: string;
+        }>).slice()
+      : [];
+
+    if (!enrolled.some((p) => p.programId === programId)) {
+      enrolled.push({
+        programId,
+        ...(programName ? { programName } : {}),
+        appliedAt,
+        ...(crId ? { crId } : {}),
+        ...(crName ? { crName } : {}),
+      });
+    }
+    entityData.enrolledPrograms = enrolled;
+
+    entity.version += 1;
+    entity.lastUpdated = new Date().toISOString();
+
+    await this.entityStore.saveEntity(entityPair.initial, entity);
+    await this.logAudit(formData.userId, formData.type, eventGuid, entityGuid, {
+      programId,
+      programName,
+      appliedAt,
+      crId,
+      crName,
     });
     return entity;
   }

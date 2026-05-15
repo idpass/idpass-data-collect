@@ -59,4 +59,10 @@ export default [
       ],
     },
   },
+  // Node.js scripts in `scripts/` run via `node` directly — they need
+  // `process` / `Buffer` etc as ambient globals instead of the browser set.
+  {
+    files: ['scripts/**/*.{js,mjs,cjs}'],
+    languageOptions: { globals: { ...globals.node } },
+  },
 ]

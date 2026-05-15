@@ -31,11 +31,26 @@ const pendingEnrolments = computed<Array<{ programId: number; programName?: stri
   return Array.isArray(raw) ? (raw as Array<{ programId: number; programName?: string }>) : []
 })
 
+// Enrolled programmes — server-applied CRs project here via the
+// `program-enrolment-applied` event emitted by the OpenSPP V2 adapter.
+const enrolledEnrolments = computed<Array<{ programId: number; programName?: string; appliedAt?: string }>>(() => {
+  const raw = storedEntityData.value?.[0]?.modified?.data?.enrolledPrograms
+  return Array.isArray(raw)
+    ? (raw as Array<{ programId: number; programName?: string; appliedAt?: string }>)
+    : []
+})
+
 const isHousehold = computed(() => entityForm.value?.entityType === 'group')
 
 const enrolableProgams = computed<Program[]>(() => {
-  const enrolledIds = new Set(pendingEnrolments.value.map((p) => p.programId))
-  return programs.value.filter((p) => !enrolledIds.has(p.id))
+  // Exclude programmes that are pending OR already enrolled. Without the
+  // `enrolledPrograms` exclusion the enrol button would re-offer an applied
+  // programme as soon as its pending chip cleared.
+  const taken = new Set<number>([
+    ...pendingEnrolments.value.map((p) => p.programId),
+    ...enrolledEnrolments.value.map((p) => p.programId)
+  ])
+  return programs.value.filter((p) => !taken.has(p.id))
 })
 
 const enrolInProgram = async (program: Program) => {
@@ -183,11 +198,27 @@ const getEntityName = () => {
           <span class="text-subtitle-1 font-weight-bold">Programme Enrolment</span>
         </div>
 
+        <!-- Enrolled (server-applied) chips -->
+        <div v-if="enrolledEnrolments.length > 0" class="mb-3">
+          <v-chip
+            v-for="enrolment in enrolledEnrolments"
+            :key="`enrolled-${enrolment.programId}`"
+            class="mr-2 mb-2"
+            color="success"
+            variant="flat"
+            prepend-icon="mdi-check-circle"
+            label
+          >
+            {{ enrolment.programName || `Program #${enrolment.programId}` }}
+            <span class="text-caption ml-1 opacity-70">· enrolled</span>
+          </v-chip>
+        </div>
+
         <!-- Pending enrolments list -->
         <div v-if="pendingEnrolments.length > 0" class="mb-3">
           <v-chip
             v-for="enrolment in pendingEnrolments"
-            :key="enrolment.programId"
+            :key="`pending-${enrolment.programId}`"
             class="mr-2 mb-2"
             color="warning"
             variant="flat"
