@@ -75,14 +75,14 @@ const lastSyncSummary = computed(() => {
 })
 
 const panelBorderColor = computed(() => {
-  if (isSyncing.value) return '#BBDEFB'
-  if (!lastEvent.value) return '#E0E0E0'
+  if (isSyncing.value) return 'var(--status-info)'
+  if (!lastEvent.value) return 'transparent'
   const map: Record<string, string> = {
-    success: '#E8F5E9',
-    partial: '#FFF3E0',
-    failed: '#FFEBEE',
+    success: 'var(--status-success)',
+    partial: 'var(--status-warning)',
+    failed: 'var(--status-danger)',
   }
-  return map[lastEvent.value.status] || '#E0E0E0'
+  return map[lastEvent.value.status] || 'transparent'
 })
 
 const hasHistory = computed(() => lastEvent.value !== null)
@@ -295,7 +295,13 @@ watch(() => props.configId, () => {
 </script>
 
 <template>
-  <div v-if="hasExternalSync" class="sync-panel" :style="{ borderBottomColor: panelBorderColor }">
+  <v-card
+    v-if="hasExternalSync"
+    class="sync-panel"
+    :style="{ '--panel-accent': panelBorderColor }"
+    border="md"
+    elevation="0"
+  >
     <div class="sync-panel__bar">
       <div class="sync-panel__status">
         <span
@@ -411,22 +417,34 @@ watch(() => props.configId, () => {
         </tbody>
       </v-table>
     </div>
-  </div>
+  </v-card>
 </template>
 
 <style scoped>
 .sync-panel {
-  border-bottom: 2px solid #E0E0E0;
-  background: rgb(var(--v-theme-surface));
-  margin-bottom: var(--spacing-lg, 16px);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-md) var(--spacing-lg);
+  position: relative;
+  overflow: hidden;
+}
+
+.sync-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--panel-accent, transparent);
+  border-radius: var(--radius-xl) 0 0 var(--radius-xl);
 }
 
 .sync-panel__bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 0;
-  gap: 12px;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
 }
 
 .sync-panel__status {
@@ -479,7 +497,9 @@ watch(() => props.configId, () => {
 }
 
 .sync-panel__history {
-  padding: 0 0 8px;
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-light);
 }
 
 .sync-history-table thead th {
