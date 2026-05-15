@@ -75,6 +75,20 @@ const PROFILES = {
       address: 'Plot 4, Maseno Lane, North Farajaland',
     },
   },
+  tope: {
+    fileSlug: 'tope-bankole',
+    claim169Input: {
+      id: 'FJ-2026-TOPE-001',
+      version: '1',
+      language: 'en',
+      fullName: 'Tope Bankole',
+      firstName: 'Tope',
+      lastName: 'Bankole',
+      dateOfBirth: '1979-03-22',
+      gender: 2, // Female
+      address: '12 Kembe Crescent, Farajaland — Central',
+    },
+  },
 };
 
 const profileFlagIdx = process.argv.indexOf('--profile');
