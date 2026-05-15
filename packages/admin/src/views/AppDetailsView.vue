@@ -93,6 +93,9 @@ const app = ref<AppConfig | null>(null)
 const isLoading = ref(true)
 const error = ref<string | null>(null)
 const activeTab = ref<'entities' | 'forms' | 'integration' | 'mapping' | 'auth'>('entities')
+// Demo-mode: donor audience never touches the config-time tabs.
+// Toggle to false post-demo to restore Mapping + Auth tabs.
+const demoMode = ref(true)
 const showQrDialog = ref(false)
 const showAuthDialog = ref(false)
 const isDeleting = ref(false)
@@ -572,8 +575,8 @@ watch(
               <v-tab value="entities">Entities</v-tab>
               <v-tab value="forms">Forms</v-tab>
               <v-tab value="integration">Integration</v-tab>
-              <v-tab value="mapping">Field Mapping</v-tab>
-              <v-tab value="auth">Authentication</v-tab>
+              <v-tab v-if="!demoMode" value="mapping">Field Mapping</v-tab>
+              <v-tab v-if="!demoMode" value="auth">Authentication</v-tab>
             </v-tabs>
 
             <v-window v-model="activeTab" class="details-window">
@@ -763,7 +766,7 @@ watch(
                 </div>
               </v-window-item>
 
-              <v-window-item value="mapping">
+              <v-window-item v-if="!demoMode" value="mapping">
                 <div class="section-panel">
                   <div class="section-panel__header">
                     <p class="section-panel__subtitle">
@@ -827,7 +830,7 @@ watch(
                 </div>
               </v-window-item>
 
-              <v-window-item value="auth">
+              <v-window-item v-if="!demoMode" value="auth">
                 <div class="section-panel">
                   <div class="section-panel__header">
                     <p class="section-panel__subtitle">
@@ -920,11 +923,11 @@ watch(
               <div class="overview-card__details">
                 <div class="overview-card__row">
                   <span class="overview-card__row-label">Config ID</span>
-                  <span class="overview-card__row-value">{{ app.id }}</span>
+                  <span class="overview-card__row-value overview-card__row-value--mono">{{ app.id }}</span>
                 </div>
                 <div class="overview-card__row" v-if="app.artifactId">
                   <span class="overview-card__row-label">Artifact ID</span>
-                  <span class="overview-card__row-value">{{ app.artifactId }}</span>
+                  <span class="overview-card__row-value overview-card__row-value--mono">{{ app.artifactId }}</span>
                 </div>
                 <div class="overview-card__row">
                   <span class="overview-card__row-label">Version</span>
@@ -1060,8 +1063,10 @@ watch(
 }
 
 .details-header__title {
+  font-family: var(--font-family-display);
   font-size: clamp(1.75rem, 1.6rem + 0.5vw, 2.4rem);
   font-weight: 600;
+  letter-spacing: -0.015em;
   margin: 0;
   color: var(--text-main);
 }
@@ -1196,7 +1201,7 @@ watch(
 }
 
 .entity-guid {
-  font-family: monospace;
+  font-family: var(--font-family-mono);
   font-size: var(--font-size-sm);
   color: var(--text-main);
 }
@@ -1476,6 +1481,13 @@ watch(
 
 .overview-card__row-value--muted {
   color: var(--text-muted);
+}
+
+.overview-card__row-value--mono {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  font-weight: 400;
+  letter-spacing: 0.01em;
 }
 
 .overview-card__link {

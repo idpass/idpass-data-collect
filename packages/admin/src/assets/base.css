@@ -28,6 +28,8 @@ html {
 body {
   min-height: 100vh;
   background-color: var(--background);
+  background-image: radial-gradient(at top right, var(--brand-100), transparent 40%);
+  background-attachment: fixed;
   color: var(--text-main);
   transition: background-color var(--transition-slow), color var(--transition-slow);
   line-height: var(--line-height-relaxed);

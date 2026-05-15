@@ -88,6 +88,9 @@ describe('AppDetailsView', () => {
   describe('tabs', () => {
     it('renders all 5 tabs', async () => {
       const wrapper = await mountAndWait()
+      const vm = wrapper.vm as unknown as { demoMode: boolean }
+      vm.demoMode = false
+      await nextTick()
       const tabs = wrapper.findAllComponents({ name: 'v-tab' })
       const tabLabels = tabs.map((t) => t.text())
       expect(tabLabels).toContain('Entities')
@@ -95,6 +98,17 @@ describe('AppDetailsView', () => {
       expect(tabLabels).toContain('Integration')
       expect(tabLabels).toContain('Field Mapping')
       expect(tabLabels).toContain('Authentication')
+    })
+
+    it('hides Field Mapping and Authentication tabs in demo mode', async () => {
+      const wrapper = await mountAndWait()
+      const tabs = wrapper.findAllComponents({ name: 'v-tab' })
+      const tabLabels = tabs.map((t) => t.text())
+      expect(tabLabels).toContain('Entities')
+      expect(tabLabels).toContain('Forms')
+      expect(tabLabels).toContain('Integration')
+      expect(tabLabels).not.toContain('Field Mapping')
+      expect(tabLabels).not.toContain('Authentication')
     })
   })
 
@@ -182,7 +196,9 @@ describe('AppDetailsView', () => {
   describe('field mapping tab', () => {
     it('shows mapping count when configured', async () => {
       const wrapper = await mountAndWait()
-      const vm = wrapper.vm as unknown as { activeTab: string }
+      const vm = wrapper.vm as unknown as { activeTab: string; demoMode: boolean }
+      vm.demoMode = false
+      await nextTick()
       vm.activeTab = 'mapping'
       await nextTick()
       await nextTick()
@@ -194,7 +210,9 @@ describe('AppDetailsView', () => {
   describe('authentication tab', () => {
     it('shows self-service status when configured', async () => {
       const wrapper = await mountAndWait()
-      const vm = wrapper.vm as unknown as { activeTab: string }
+      const vm = wrapper.vm as unknown as { activeTab: string; demoMode: boolean }
+      vm.demoMode = false
+      await nextTick()
       vm.activeTab = 'auth'
       await nextTick()
       await nextTick()
@@ -204,7 +222,9 @@ describe('AppDetailsView', () => {
 
     it('shows auth provider when configured', async () => {
       const wrapper = await mountAndWait()
-      const vm = wrapper.vm as unknown as { activeTab: string }
+      const vm = wrapper.vm as unknown as { activeTab: string; demoMode: boolean }
+      vm.demoMode = false
+      await nextTick()
       vm.activeTab = 'auth'
       await nextTick()
       await nextTick()

@@ -39,6 +39,9 @@ const showArchived = ref(false)
 const isLoading = ref(false)
 const isRefreshing = ref(false)
 
+// Demo-safety: synthetic activity feed is hidden until backed by a real endpoint.
+const enableRecentActivity = ref(false)
+
 const sortByOptions = [
   { title: 'Name', value: 'name' },
   { title: 'ID', value: 'id' },
@@ -390,7 +393,13 @@ onBeforeUnmount(() => {
 
         <!-- Programs Grid -->
         <div v-else class="apps-grid">
-          <AppCard v-for="app in apps" :key="app.id" :app="app" @app-deleted="fetchApps" />
+          <AppCard
+            v-for="(app, i) in apps"
+            :key="app.id"
+            :app="app"
+            :style="{ '--i': i }"
+            @app-deleted="fetchApps"
+          />
         </div>
 
         <!-- Pagination -->
@@ -416,6 +425,7 @@ onBeforeUnmount(() => {
         />
 
         <RecentActivity
+          v-if="enableRecentActivity"
           :activities="recentActivities"
           :is-loading="isLoading"
           @activity-click="handleActivityClick"
@@ -543,8 +553,10 @@ onBeforeUnmount(() => {
 }
 
 .empty-state__title {
+  font-family: var(--font-family-display);
   font-size: var(--font-size-xl);
   font-weight: 600;
+  letter-spacing: -0.015em;
   margin: 0 0 var(--spacing-sm);
   color: var(--text-main);
 }
@@ -567,6 +579,28 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: var(--spacing-md);
   margin-top: var(--spacing-md);
+}
+
+.apps-grid > * {
+  animation: card-rise 280ms ease-out both;
+  animation-delay: calc(min(var(--i, 0), 12) * 50ms);
+}
+
+@keyframes card-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .apps-grid > * {
+    animation: none;
+  }
 }
 
 .pagination {
