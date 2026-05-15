@@ -41,6 +41,11 @@ const enrolledEnrolments = computed<Array<{ programId: number; programName?: str
 })
 
 const isHousehold = computed(() => entityForm.value?.entityType === 'group')
+// Programme Enrolment now targets the widow individual (the eligibility-bearing
+// person), not the household. Stays demo-narrative honest: disability is per-
+// person, not per-family. Gate the enrol card on the widow form specifically
+// so the dependent's individual page doesn't also offer enrolment.
+const isWidowApplicant = computed(() => entityForm.value?.name === 'widow')
 
 const enrolableProgams = computed<Program[]>(() => {
   // Exclude programmes that are pending OR already enrolled. Without the
@@ -185,9 +190,9 @@ const getEntityName = () => {
       </v-card-text>
     </v-card>
 
-    <!-- Programme Enrolment — standalone card, only shown for group entities with programmes configured -->
+    <!-- Program Enrollment — standalone card, only shown for the widow individual entity -->
     <v-card
-      v-if="isHousehold && programs.length > 0"
+      v-if="isWidowApplicant && programs.length > 0"
       class="mb-4 enrolment-card"
       elevation="0"
       rounded="lg"
@@ -195,7 +200,7 @@ const getEntityName = () => {
       <v-card-text class="pa-4">
         <div class="d-flex align-center ga-2 mb-3">
           <v-icon icon="mdi-seal" color="success" size="20" />
-          <span class="text-subtitle-1 font-weight-bold">Programme Enrolment</span>
+          <span class="text-subtitle-1 font-weight-bold">Program Enrollment</span>
         </div>
 
         <!-- Enrolled (server-applied) chips -->
@@ -241,13 +246,13 @@ const getEntityName = () => {
           class="enrol-btn"
           @click="openEnrolDialog = true"
         >
-          Enrol in Programme
+          Enroll in Program
         </v-btn>
 
         <!-- All enrolled state -->
         <div v-else class="d-flex align-center ga-2 pa-2 all-enrolled-banner rounded">
           <v-icon icon="mdi-check-circle" color="success" />
-          <span class="text-body-2 text-success font-weight-medium">All programmes enrolled</span>
+          <span class="text-body-2 text-success font-weight-medium">All programs enrolled</span>
         </div>
       </v-card-text>
     </v-card>
@@ -309,7 +314,7 @@ const getEntityName = () => {
 
   <v-dialog v-model="openEnrolDialog" max-width="500">
     <v-card rounded="lg">
-      <v-card-title class="pa-4">Enrol in Program</v-card-title>
+      <v-card-title class="pa-4">Enroll in Program</v-card-title>
       <v-card-text class="pa-4 pt-0">
         <v-alert v-if="enrolError" type="error" variant="tonal" class="mb-3" closable>
           {{ enrolError }}
