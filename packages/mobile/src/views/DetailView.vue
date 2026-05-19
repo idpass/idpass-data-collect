@@ -40,7 +40,17 @@ const enrolledEnrolments = computed<Array<{ programId: number; programName?: str
     : []
 })
 
-const isHousehold = computed(() => entityForm.value?.entityType === 'group')
+// Rejected programmes — operator $reject on the OpenSPP CR projects here via
+// the `program-enrolment-rejected` event emitted by the OpenSPP V2 adapter.
+// Rejection is non-terminal at the UX level: the program returns to the
+// enrolable list so the field worker can resubmit after fixing the reason.
+const rejectedEnrolments = computed<Array<{ programId: number; programName?: string; rejectedAt?: string; rejectionReason?: string }>>(() => {
+  const raw = storedEntityData.value?.[0]?.modified?.data?.rejectedPrograms
+  return Array.isArray(raw)
+    ? (raw as Array<{ programId: number; programName?: string; rejectedAt?: string; rejectionReason?: string }>)
+    : []
+})
+
 // Programme Enrolment now targets the widow individual (the eligibility-bearing
 // person), not the household. Stays demo-narrative honest: disability is per-
 // person, not per-family. Gate the enrol card on the widow form specifically
@@ -198,41 +208,56 @@ const getEntityName = () => {
       rounded="lg"
     >
       <v-card-text class="pa-4">
-        <div class="d-flex align-center ga-2 mb-3">
+        <div class="d-flex align-center ga-2 mb-3 enrolment-card__title">
           <v-icon icon="mdi-seal" color="success" size="20" />
           <span class="text-subtitle-1 font-weight-bold">Program Enrollment</span>
         </div>
 
-        <!-- Enrolled (server-applied) chips -->
-        <div v-if="enrolledEnrolments.length > 0" class="mb-3">
-          <v-chip
+        <!-- Status rows — one per program, consistent layout regardless of state. -->
+        <div class="enrolment-list">
+          <!-- Enrolled (server-applied) -->
+          <div
             v-for="enrolment in enrolledEnrolments"
             :key="`enrolled-${enrolment.programId}`"
-            class="mr-2 mb-2"
-            color="success"
-            variant="flat"
-            prepend-icon="mdi-check-circle"
-            label
+            class="enrolment-row enrolment-row--applied"
           >
-            {{ enrolment.programName || `Program #${enrolment.programId}` }}
-            <span class="text-caption ml-1 opacity-70">· enrolled</span>
-          </v-chip>
-        </div>
+            <v-icon icon="mdi-check-circle" color="success" size="20" />
+            <span class="enrolment-row__name">
+              {{ enrolment.programName || `Program #${enrolment.programId}` }}
+            </span>
+            <span class="enrolment-row__status">Enrolled</span>
+          </div>
 
-        <!-- Pending enrolments list -->
-        <div v-if="pendingEnrolments.length > 0" class="mb-3">
-          <v-chip
+          <!-- Pending sync -->
+          <div
             v-for="enrolment in pendingEnrolments"
             :key="`pending-${enrolment.programId}`"
-            class="mr-2 mb-2"
-            color="warning"
-            variant="flat"
-            prepend-icon="mdi-clock-outline"
-            label
+            class="enrolment-row enrolment-row--pending"
           >
-            {{ enrolment.programName || `Program #${enrolment.programId}` }}
-            <span class="text-caption ml-1 opacity-70">· pending sync</span>
-          </v-chip>
+            <v-icon icon="mdi-clock-outline" color="warning" size="20" />
+            <span class="enrolment-row__name">
+              {{ enrolment.programName || `Program #${enrolment.programId}` }}
+            </span>
+            <span class="enrolment-row__status">Pending sync</span>
+          </div>
+
+          <!-- Rejected -->
+          <div
+            v-for="enrolment in rejectedEnrolments"
+            :key="`rejected-${enrolment.programId}`"
+            class="enrolment-row enrolment-row--rejected"
+          >
+            <div class="enrolment-row__head">
+              <v-icon icon="mdi-close-circle" color="error" size="20" />
+              <span class="enrolment-row__name">
+                {{ enrolment.programName || `Program #${enrolment.programId}` }}
+              </span>
+              <span class="enrolment-row__status">Rejected</span>
+            </div>
+            <div v-if="enrolment.rejectionReason" class="enrolment-row__detail">
+              {{ enrolment.rejectionReason }}
+            </div>
+          </div>
         </div>
 
         <!-- CTA: enrol into remaining programmes -->
@@ -243,22 +268,33 @@ const getEntityName = () => {
           color="success"
           variant="flat"
           prepend-icon="mdi-clipboard-plus-outline"
-          class="enrol-btn"
+          class="enrol-btn mt-3"
           @click="openEnrolDialog = true"
         >
-          Enroll in Program
+          {{ enrolledEnrolments.length + pendingEnrolments.length + rejectedEnrolments.length > 0
+            ? 'Enroll in another program'
+            : 'Enroll in Program' }}
         </v-btn>
-
-        <!-- All enrolled state -->
-        <div v-else class="d-flex align-center ga-2 pa-2 all-enrolled-banner rounded">
-          <v-icon icon="mdi-check-circle" color="success" />
-          <span class="text-body-2 text-success font-weight-medium">All programs enrolled</span>
-        </div>
       </v-card-text>
     </v-card>
 
+    <template v-if="dependentForms.length > 0">
+      <div class="section-heading">Dependent Forms</div>
+      <v-list lines="two" rounded="lg" elevation="1" bg-color="surface" class="mb-4">
+        <v-list-item
+          v-for="form in dependentForms"
+          :key="form.name"
+          @click="router.push(route.path + '/' + form.name)"
+          append-icon="mdi-chevron-right"
+        >
+          <v-list-item-title class="font-weight-bold">{{ form.title }}</v-list-item-title>
+          <v-list-item-subtitle>{{ form.description || 'Capture additional linked information.' }}</v-list-item-subtitle>
+        </v-list-item>
+      </v-list>
+    </template>
+
     <template v-if="events.length > 0">
-      <div class="text-subtitle-2 font-weight-bold mb-2">Events</div>
+      <div class="section-heading">Events</div>
       <v-expansion-panels variant="accordion" class="mb-4">
         <v-expansion-panel v-for="event in events" :key="event.guid">
           <v-expansion-panel-title>
@@ -281,21 +317,6 @@ const getEntityName = () => {
           </v-expansion-panel-text>
         </v-expansion-panel>
       </v-expansion-panels>
-    </template>
-
-    <template v-if="dependentForms.length > 0">
-      <div class="text-subtitle-2 font-weight-bold mb-2">Dependent Forms</div>
-      <v-list lines="two" rounded="lg" elevation="1" bg-color="surface">
-        <v-list-item
-          v-for="form in dependentForms"
-          :key="form.name"
-          @click="router.push(route.path + '/' + form.name)"
-          append-icon="mdi-chevron-right"
-        >
-          <v-list-item-title class="font-weight-bold">{{ form.title }}</v-list-item-title>
-          <v-list-item-subtitle>{{ form.description || 'Capture additional linked information.' }}</v-list-item-subtitle>
-        </v-list-item>
-      </v-list>
     </template>
   </v-container>
 
@@ -348,14 +369,96 @@ const getEntityName = () => {
   border: 1.5px solid #86efac;
 }
 
+.enrolment-card__title {
+  letter-spacing: -0.005em;
+}
+
+/* Section heading rhythm — every top-level section (Dependent Forms, Events)
+ * sits at the same vertical cadence so the page reads as one stack with even
+ * gutters instead of the cramped run-on that the demo screenshot caught. */
+.section-heading {
+  margin: 24px 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.62);
+}
+
 .enrol-btn {
   font-weight: 700;
   letter-spacing: 0.02em;
 }
 
-.all-enrolled-banner {
-  background: #f0fdf4;
-  border: 1px solid #86efac;
+/* Status-row system: every program slot reads as the same shape regardless of
+ * state. Variant modifiers change colour, not layout — keeps the card visually
+ * stable as CRs transition pending → enrolled or pending → rejected. */
+.enrolment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.enrolment-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid transparent;
+  min-height: 44px;
+}
+
+.enrolment-row__name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.enrolment-row__status {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.enrolment-row--applied {
+  background: #ffffff;
+  border-color: #86efac;
+}
+.enrolment-row--applied .enrolment-row__status { color: #15803d; }
+
+.enrolment-row--pending {
+  background: #fffbeb;
+  border-color: #fcd34d;
+}
+.enrolment-row--pending .enrolment-row__status { color: #b45309; }
+
+.enrolment-row--rejected {
+  background: #fef2f2;
+  border-color: #fecaca;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 10px 12px 12px;
+}
+.enrolment-row--rejected .enrolment-row__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.enrolment-row--rejected .enrolment-row__status { color: #b91c1c; }
+.enrolment-row__detail {
+  font-size: 12.5px;
+  color: #7f1d1d;
+  margin-left: 30px;
+  line-height: 1.4;
 }
 
 .json-block {
