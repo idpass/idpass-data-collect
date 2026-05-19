@@ -93,18 +93,38 @@ body.barcode-scanner-active #dy-app {
   outline-offset: var(--focus-outline-offset);
 }
 
-/* Primary Button - Brand Orange with dark text for accessibility */
+/* Primary Button - Brand Orange with white text. The brand orange #ff6d37
+ * sits in a luminance range where white reads cleaner than dark text — the
+ * earlier "dark text for accessibility" comment turned out to be wrong in
+ * practice (looks muddy against the saturated orange in field testing). */
 .btn.btn-primary {
   background-color: var(--brand);
-  color: var(--text-main);
+  color: #ffffff;
 }
 
 .btn.btn-primary:hover {
   background-color: var(--brand-light);
+  color: #ffffff;
 }
 
 .btn.btn-primary:active {
   background-color: var(--brand-dark);
+  color: #ffffff;
+}
+
+/* Vuetify md3 blueprint sometimes computes the on-secondary contrast colour
+ * from luminance and lands on dark grey for our brand orange. Override the
+ * CSS variable so v-btn color="secondary" + bg-secondary chips render with
+ * white foreground content (icon + label). */
+.v-theme--idpass {
+  --v-theme-on-secondary: 255, 255, 255;
+}
+.v-theme--idpass .bg-secondary,
+.v-theme--idpass .v-btn.text-secondary,
+.v-theme--idpass .v-btn--variant-flat.bg-secondary,
+.v-theme--idpass .v-btn--variant-elevated.bg-secondary,
+.v-theme--idpass .v-btn--variant-tonal.bg-secondary {
+  color: #ffffff !important;
 }
 
 /* Secondary Button - Slate Blue (Trust) */

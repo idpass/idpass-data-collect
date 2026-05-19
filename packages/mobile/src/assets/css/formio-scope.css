@@ -402,7 +402,7 @@
   justify-content: center;
   background-color: var(--brand) !important;
   border-color: var(--brand) !important;
-  color: var(--text-main) !important;
+  color: #ffffff !important;
   font-family: var(--font-family);
   font-weight: 600;
   font-size: var(--font-size-base);
@@ -498,4 +498,216 @@
   background-color: var(--status-success-light);
   border-color: var(--status-success);
   color: var(--status-success-dark);
+}
+
+/* ---------------------------------------------------------------------------
+ * Refinements 2026-05-18 — visual rhythm pass for the demo
+ *
+ * Three fixes applied here so the form reads as one coherent control system:
+ *
+ *  1. Datetime "ghost border" — Formio renders the datetime as
+ *     `<input-group> <flatpickr-mobile-input> <input> <suffix-icon>`. When
+ *     flatpickr renders its mobile shim it leaves the OS-style date input
+ *     visible with its own border, producing a tiny empty box between the
+ *     real value and the calendar icon. Hide every visible `<input>` after
+ *     the first one in the group so only the dressed text input shows, and
+ *     blend the calendar suffix into the same frame with no inner divider.
+ *
+ *  2. Dropdown vs text-input height parity — `.choices__inner` (Choices.js
+ *     wrapper) wraps to two lines or grows when the highlighted label
+ *     wraps. Lock its height to exactly --touch-target with `box-sizing:
+ *     border-box`. Truncate long selected labels with ellipsis so the
+ *     control height never drifts.
+ *
+ *  3. Strip any inner shadow / inset border on input-group children that
+ *     the formio base CSS adds via the bootstrap 4 input-group cascade.
+ * ------------------------------------------------------------------------- */
+
+/* (1) Datetime: collapse to a single visible input + suffix frame */
+.formio-container .formio-component-datetime .input-group > input + input,
+.formio-container .formio-component-datetime .input-group > .flatpickr-input.flatpickr-mobile {
+  display: none !important;
+}
+.formio-container .formio-component-datetime .input-group > input:not([type='hidden']) {
+  border-right: 0;
+}
+.formio-container .formio-component-datetime .input-group-text {
+  background: var(--surface);
+  border-left: 0;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  padding: 0 0.875rem;
+  box-shadow: none;
+}
+.formio-container .formio-component-datetime .input-group-text i,
+.formio-container .formio-component-datetime .input-group-text .fa,
+.formio-container .formio-component-datetime .input-group-text .bi {
+  color: var(--text-muted);
+  font-size: 1.05rem;
+}
+
+/* (2) Choices.js parity with text inputs — exact height, no drift */
+.formio-container .choices__inner {
+  min-height: var(--touch-target);
+  height: var(--touch-target);
+  box-sizing: border-box;
+  line-height: calc(var(--touch-target) - 2px - 1.25rem);
+}
+.formio-container .choices__list--single {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0;
+}
+.formio-container .choices__list--single .choices__item {
+  display: block;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+}
+
+/* (3) Kill any latent inset shadow on grouped inputs */
+.formio-container .input-group > input,
+.formio-container .input-group > .form-control,
+.formio-container .input-group-text {
+  box-shadow: none !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * Claim-169 custom scanner field
+ *
+ * Rewritten so the card reads as one tight row:
+ *   [subtitle (issuer info)]                          [Scan ▢]
+ *
+ * The formio field label is already rendered ABOVE this card by the base
+ * Formio template — duplicating it inside leads to the "Scan MOSIP wallet QR
+ * (Claim-169)" appearing twice in screenshots. Subtitle now surfaces the
+ * trusted-issuer DID (useful) instead of repeating the title (redundant).
+ * Scan button is sized to its content, not stretched 100% like a form
+ * submit — reads as an action, not a field.
+ * ------------------------------------------------------------------------- */
+.formio-container .claim169-scanner {
+  background: var(--surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  box-shadow: none;
+}
+
+.formio-container .claim169-scanner__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.formio-container .claim169-scanner__copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.formio-container .claim169-scanner__subtitle {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+/* Scan button — flush rectangle, brand orange + white text, no max width
+ * override from the generic .btn.btn-primary form-submit rule. */
+.formio-container .claim169-scanner__btn {
+  flex-shrink: 0;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: auto !important;
+  min-height: 44px !important;
+  padding: 10px 18px !important;
+  border-radius: var(--radius-md) !important;
+  border: 0 !important;
+  background-color: var(--brand) !important;
+  color: #ffffff !important;
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+.formio-container .claim169-scanner__btn:hover {
+  background-color: var(--brand-dark) !important;
+}
+.formio-container .claim169-scanner__btn:active {
+  transform: translateY(1px);
+}
+.formio-container .claim169-scanner__btn.is-captured {
+  background-color: var(--status-success) !important;
+}
+.formio-container .claim169-scanner__btn-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* Captured identity panel */
+.formio-container .claim169-scanner__identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-light);
+}
+.formio-container .claim169-scanner__identity img,
+.formio-container .claim169-scanner__identity .rounded-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.formio-container .claim169-scanner__identity-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.formio-container .claim169-scanner__identity-name {
+  font-weight: 600;
+  color: var(--text-main);
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.formio-container .claim169-scanner__identity-id {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.formio-container .claim169-scanner__badges {
+  display: inline-flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+.formio-container .claim169-scanner__badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.formio-container .claim169-scanner__badge--ok { background: var(--status-success-light); color: var(--status-success-dark); }
+.formio-container .claim169-scanner__badge--warn { background: var(--status-warning-light); color: var(--status-warning-dark); }
+.formio-container .claim169-scanner__badge--err { background: var(--status-danger-light); color: var(--status-danger-dark); }
+
+@media (max-width: 380px) {
+  .formio-container .claim169-scanner__row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .formio-container .claim169-scanner__btn {
+    width: 100% !important;
+  }
 }
