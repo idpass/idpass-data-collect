@@ -1,6 +1,6 @@
 {
   "id": "uc3-widow-enrolment",
-  "name": "UC3 Widow Enrollment (Farajaland)",
+  "name": "UC3 Widow Enrollment",
   "description": "DCI demo (Friday 2026-05-15) — field agent intake of disabled-widow applications, pushed to OpenSPP via assign_program ChangeRequest workflow.",
   "version": "1.0.0",
   "syncServerUrl": "${DATACOLLECT_SYNC_URL}",
@@ -30,9 +30,9 @@
             "validate": { "required": true },
             "data": {
               "values": [
-                { "label": "Farajaland — North", "value": "farajaland-north" },
-                { "label": "Farajaland — South", "value": "farajaland-south" },
-                { "label": "Farajaland — Central", "value": "farajaland-central" }
+                { "label": "North District", "value": "north-district" },
+                { "label": "South District", "value": "south-district" },
+                { "label": "Central District", "value": "central-district" }
               ]
             }
           },
@@ -144,7 +144,7 @@
             "storeOriginalData": false,
             "trustedIssuers": [
               {
-                "issuerId": "did:web:demo-issuer.farajaland.gov",
+                "issuerId": "did:web:demo-issuer.example.gov",
                 "publicKey": {
                   "ed25519": "${UC3_ISSUER_ED25519_PUB_B64}"
                 }
@@ -240,11 +240,39 @@
       "name": "household",
       "data": [
         {
-          "id": "hh-uc3-demo-001",
-          "name": "Adeyemi Household",
-          "area": "farajaland-north",
-          "address": "Plot 4, Maseno Lane, North Farajaland",
+          "id": "hh-uc3-rivera",
+          "name": "Rivera Household",
+          "area": "north-district",
+          "address": "12 Kembe Crescent, North District",
           "phone": "+999-555-0001"
+        },
+        {
+          "id": "hh-uc3-cole",
+          "name": "Cole Household",
+          "area": "south-district",
+          "address": "7 Maseno Lane, South District",
+          "phone": "+999-555-0002"
+        },
+        {
+          "id": "hh-uc3-lee",
+          "name": "Lee Household",
+          "area": "central-district",
+          "address": "21 Tinka Road, Central District",
+          "phone": "+999-555-0003"
+        },
+        {
+          "id": "hh-uc3-brooks",
+          "name": "Brooks Household",
+          "area": "north-district",
+          "address": "4 Olive Walk, North District",
+          "phone": "+999-555-0004"
+        },
+        {
+          "id": "hh-uc3-hayes",
+          "name": "Hayes Household",
+          "area": "south-district",
+          "address": "33 Marsh Avenue, South District",
+          "phone": "+999-555-0005"
         }
       ]
     },
@@ -252,16 +280,52 @@
       "name": "widow",
       "data": [
         {
-          "id": "ind-uc3-widow-001",
-          "name": "Funke Adeyemi",
-          "first_name": "Funke",
-          "last_name": "Adeyemi",
-          "date_of_birth": "1982-06-14",
+          "id": "ind-uc3-widow-cole",
+          "uin": "IND-NSR-0004",
+          "name": "Morgan Cole",
+          "first_name": "Morgan",
+          "last_name": "Cole",
+          "date_of_birth": "1968-09-02",
           "gender": "female",
-          "national_id": "FJ-1982-0001",
+          "national_id": "IND-NSR-0004",
+          "marital_status": "widowed",
+          "employment_status": "unemployed",
+          "occupation": "small-plot farmer",
           "widow_status": "self_declared",
           "claim169_verified": "not_scanned",
-          "parentId": "hh-uc3-demo-001"
+          "parentId": "hh-uc3-cole"
+        },
+        {
+          "id": "ind-uc3-widow-lee",
+          "uin": "IND-NSR-0009",
+          "name": "Rin Lee",
+          "first_name": "Rin",
+          "last_name": "Lee",
+          "date_of_birth": "1953-05-30",
+          "gender": "female",
+          "national_id": "IND-NSR-0009",
+          "marital_status": "widowed",
+          "employment_status": "retired",
+          "occupation": "retired",
+          "widow_status": "self_declared",
+          "claim169_verified": "not_scanned",
+          "parentId": "hh-uc3-lee"
+        },
+        {
+          "id": "ind-uc3-widow-brooks",
+          "uin": "IND-NSR-0011",
+          "name": "Iris Brooks",
+          "first_name": "Iris",
+          "last_name": "Brooks",
+          "date_of_birth": "1957-11-12",
+          "gender": "female",
+          "national_id": "IND-NSR-0011",
+          "marital_status": "widowed",
+          "employment_status": "retired",
+          "occupation": "retired",
+          "widow_status": "self_declared",
+          "claim169_verified": "not_scanned",
+          "parentId": "hh-uc3-brooks"
         }
       ]
     },
@@ -269,22 +333,172 @@
       "name": "dependent",
       "data": [
         {
-          "id": "ind-uc3-dep-001",
-          "name": "Sade Adeyemi",
-          "first_name": "Sade",
-          "last_name": "Adeyemi",
-          "date_of_birth": "2012-02-09",
-          "relationship": "child",
-          "parentId": "hh-uc3-demo-001"
+          "id": "ind-uc3-dep-rivera-alex",
+          "uin": "IND-NSR-0001",
+          "name": "Alex Rivera",
+          "first_name": "Alex",
+          "last_name": "Rivera",
+          "date_of_birth": "1984-04-10",
+          "gender": "male",
+          "marital_status": "married",
+          "employment_status": "self employed",
+          "occupation": "wage labourer",
+          "relationship": "other_relative",
+          "parentId": "hh-uc3-rivera"
         },
         {
-          "id": "ind-uc3-dep-002",
-          "name": "Tunde Adeyemi",
-          "first_name": "Tunde",
-          "last_name": "Adeyemi",
-          "date_of_birth": "2015-11-23",
+          "id": "ind-uc3-dep-rivera-priya",
+          "uin": "IND-NSR-0002",
+          "name": "Priya Rivera",
+          "first_name": "Priya",
+          "last_name": "Rivera",
+          "date_of_birth": "1986-06-22",
+          "gender": "female",
+          "marital_status": "married",
+          "employment_status": "self employed",
+          "occupation": "petty trader",
+          "relationship": "other_relative",
+          "parentId": "hh-uc3-rivera"
+        },
+        {
+          "id": "ind-uc3-dep-rivera-noah",
+          "uin": "IND-NSR-0003",
+          "name": "Noah Rivera",
+          "first_name": "Noah",
+          "last_name": "Rivera",
+          "date_of_birth": "2017-01-15",
+          "gender": "male",
+          "marital_status": "single",
+          "employment_status": "student",
+          "occupation": "student",
           "relationship": "child",
-          "parentId": "hh-uc3-demo-001"
+          "parentId": "hh-uc3-rivera"
+        },
+        {
+          "id": "ind-uc3-dep-cole-leah",
+          "uin": "IND-NSR-0005",
+          "name": "Leah Cole",
+          "first_name": "Leah",
+          "last_name": "Cole",
+          "date_of_birth": "1998-02-10",
+          "gender": "female",
+          "marital_status": "single",
+          "employment_status": "employed",
+          "occupation": "shop assistant",
+          "relationship": "child",
+          "parentId": "hh-uc3-cole"
+        },
+        {
+          "id": "ind-uc3-dep-cole-nia",
+          "uin": "IND-NSR-0006",
+          "name": "Nia Cole",
+          "first_name": "Nia",
+          "last_name": "Cole",
+          "date_of_birth": "2019-11-01",
+          "gender": "female",
+          "marital_status": "single",
+          "employment_status": "student",
+          "occupation": "student",
+          "relationship": "child",
+          "parentId": "hh-uc3-cole"
+        },
+        {
+          "id": "ind-uc3-dep-lee-kim",
+          "uin": "IND-NSR-0007",
+          "name": "Kim Lee",
+          "first_name": "Kim",
+          "last_name": "Lee",
+          "date_of_birth": "1981-07-18",
+          "gender": "male",
+          "marital_status": "married",
+          "employment_status": "employed",
+          "occupation": "clerk",
+          "relationship": "child",
+          "parentId": "hh-uc3-lee"
+        },
+        {
+          "id": "ind-uc3-dep-lee-jun",
+          "uin": "IND-NSR-0008",
+          "name": "Jun Lee",
+          "first_name": "Jun",
+          "last_name": "Lee",
+          "date_of_birth": "1982-12-04",
+          "gender": "female",
+          "marital_status": "married",
+          "employment_status": "self employed",
+          "occupation": "tailor",
+          "relationship": "child",
+          "parentId": "hh-uc3-lee"
+        },
+        {
+          "id": "ind-uc3-dep-brooks-taylor",
+          "uin": "IND-NSR-0010",
+          "name": "Taylor Brooks",
+          "first_name": "Taylor",
+          "last_name": "Brooks",
+          "date_of_birth": "1990-03-25",
+          "gender": "other",
+          "marital_status": "single",
+          "employment_status": "unemployed",
+          "occupation": "none",
+          "relationship": "child",
+          "parentId": "hh-uc3-brooks"
+        },
+        {
+          "id": "ind-uc3-dep-brooks-reyn",
+          "uin": "IND-NSR-0012",
+          "name": "Reyn Brooks",
+          "first_name": "Reyn",
+          "last_name": "Brooks",
+          "date_of_birth": "2015-08-19",
+          "gender": "male",
+          "marital_status": "single",
+          "employment_status": "student",
+          "occupation": "student",
+          "relationship": "child",
+          "parentId": "hh-uc3-brooks"
+        },
+        {
+          "id": "ind-uc3-dep-hayes-sam",
+          "uin": "IND-NSR-0013",
+          "name": "Sam Hayes",
+          "first_name": "Sam",
+          "last_name": "Hayes",
+          "date_of_birth": "1987-01-05",
+          "gender": "female",
+          "marital_status": "married",
+          "employment_status": "self employed",
+          "occupation": "livestock keeper",
+          "relationship": "other_relative",
+          "parentId": "hh-uc3-hayes"
+        },
+        {
+          "id": "ind-uc3-dep-hayes-dev",
+          "uin": "IND-NSR-0014",
+          "name": "Dev Hayes",
+          "first_name": "Dev",
+          "last_name": "Hayes",
+          "date_of_birth": "1984-07-20",
+          "gender": "male",
+          "marital_status": "married",
+          "employment_status": "self employed",
+          "occupation": "livestock keeper",
+          "relationship": "other_relative",
+          "parentId": "hh-uc3-hayes"
+        },
+        {
+          "id": "ind-uc3-dep-hayes-asha",
+          "uin": "IND-NSR-0015",
+          "name": "Asha Hayes",
+          "first_name": "Asha",
+          "last_name": "Hayes",
+          "date_of_birth": "2011-06-14",
+          "gender": "female",
+          "marital_status": "single",
+          "employment_status": "student",
+          "occupation": "student",
+          "relationship": "child",
+          "parentId": "hh-uc3-hayes"
         }
       ]
     }

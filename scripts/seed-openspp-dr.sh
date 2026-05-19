@@ -6,8 +6,9 @@
 # registrant returns the existing assessment instead of creating a duplicate.
 #
 # Usage:
-#   ./scripts/seed-openspp-dr.sh "Funke Adeyemi"
-#   ./scripts/seed-openspp-dr.sh "Amaka Okonkwo"
+#   ./scripts/seed-openspp-dr.sh "Morgan Cole"
+#   ./scripts/seed-openspp-dr.sh "Rin Lee"
+#   ./scripts/seed-openspp-dr.sh "Iris Brooks"
 #
 # Adds a moderate-mobility disability assessment in `approved` state. Adjust
 # the SEVERITY_CODE / IMPAIRMENT_CODE env vars to vary.
@@ -20,7 +21,7 @@
 
 set -euo pipefail
 
-REGISTRANT_NAME="${1:-Funke Adeyemi}"
+REGISTRANT_NAME="${1:-Morgan Cole}"
 
 OPENSPP_URL="${OPENSPP_URL:-http://localhost:8069}"
 OPENSPP_DB="${OPENSPP_DB:-openspp}"

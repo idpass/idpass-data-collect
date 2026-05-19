@@ -1,18 +1,19 @@
 #!/usr/bin/env node
 /**
- * Mint a Claim-169 demo VC for the UC3 (widow-enrolment) Friday demo.
+ * Mint a Claim-169 demo VC for the UC3 (widow-enrolment) Monday demo.
  *
- * Profiles:
- *   amaka  — Amaka Okonkwo (offline-capture flow, household created live on stage)
- *   funke  — Funke Adeyemi (pre-seeded widow on the Adeyemi household; "self-declared" → verified)
+ * Profiles (all 3 widows from openg2p_demo_data.csv):
+ *   morgan — Morgan Cole   (Cole Household,   IND-NSR-0004, 1968-09-02)
+ *   rin    — Rin Lee       (Lee Household,    IND-NSR-0009, 1953-05-30)
+ *   iris   — Iris Brooks   (Brooks Household, IND-NSR-0011, 1957-11-12)
  *
  * Usage:
  *   node scripts/mint-uc3-demo-vc.mjs [--profile <name>] [--regen-keys]
  *
- * Default profile is `amaka` for backwards-compat with the existing demo
- * runbook. `--regen-keys` rotates the issuer keypair (otherwise the existing
- * keys at uc3-demo-artifacts/issuer-ed25519.{priv,pub}.b64 are reused, so the
- * minted VC still verifies against the tenant-config trusted issuer).
+ * Default profile is `morgan`. `--regen-keys` rotates the issuer keypair
+ * (otherwise the existing keys at uc3-demo-artifacts/issuer-ed25519.{priv,pub}.b64
+ * are reused, so the minted VC still verifies against the tenant-config
+ * trusted issuer).
  *
  * Per-profile artifacts (written under scripts/uc3-demo-artifacts/):
  *     <profile-id>-vc.qr.png       — scannable QR (12cm prints fine)
@@ -40,59 +41,59 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // Artifacts live at repo-root/scripts/uc3-demo-artifacts so the seed script
 // + runbook can locate them without knowing this file's location.
 const ARTIFACTS_DIR = join(__dirname, '..', '..', '..', 'scripts', 'uc3-demo-artifacts');
-const ISSUER_ID = 'did:web:demo-issuer.farajaland.gov';
+const ISSUER_ID = 'did:web:demo-issuer.example.gov';
 const REGEN_KEYS = process.argv.includes('--regen-keys');
 
 // Per-profile claim payloads. Add new entries here for future demo subjects.
 // Keep `id` aligned with the seed entity's national_id when one exists so
 // reviewers can correlate the scan target with the registry row.
 const PROFILES = {
-  amaka: {
-    fileSlug: 'amaka-okonkwo',
+  morgan: {
+    fileSlug: 'morgan-cole',
     claim169Input: {
-      id: 'FJ-2026-AMAKA-001',
+      id: 'IND-NSR-0004',
       version: '1',
       language: 'en',
-      fullName: 'Amaka Okonkwo',
-      firstName: 'Amaka',
-      lastName: 'Okonkwo',
-      dateOfBirth: '1984-09-12',
+      fullName: 'Morgan Cole',
+      firstName: 'Morgan',
+      lastName: 'Cole',
+      dateOfBirth: '1968-09-02',
       gender: 2, // Female
-      address: 'Plot 7, Maseno Lane, Farajaland — North',
+      address: '7 Maseno Lane, South District',
     },
   },
-  funke: {
-    fileSlug: 'funke-adeyemi',
+  rin: {
+    fileSlug: 'rin-lee',
     claim169Input: {
-      id: 'FJ-1982-0001',
+      id: 'IND-NSR-0009',
       version: '1',
       language: 'en',
-      fullName: 'Funke Adeyemi',
-      firstName: 'Funke',
-      lastName: 'Adeyemi',
-      dateOfBirth: '1982-06-14',
+      fullName: 'Rin Lee',
+      firstName: 'Rin',
+      lastName: 'Lee',
+      dateOfBirth: '1953-05-30',
       gender: 2, // Female
-      address: 'Plot 4, Maseno Lane, North Farajaland',
+      address: '21 Tinka Road, Central District',
     },
   },
-  tope: {
-    fileSlug: 'tope-bankole',
+  iris: {
+    fileSlug: 'iris-brooks',
     claim169Input: {
-      id: 'FJ-2026-TOPE-001',
+      id: 'IND-NSR-0011',
       version: '1',
       language: 'en',
-      fullName: 'Tope Bankole',
-      firstName: 'Tope',
-      lastName: 'Bankole',
-      dateOfBirth: '1979-03-22',
+      fullName: 'Iris Brooks',
+      firstName: 'Iris',
+      lastName: 'Brooks',
+      dateOfBirth: '1957-11-12',
       gender: 2, // Female
-      address: '12 Kembe Crescent, Farajaland — Central',
+      address: '4 Olive Walk, North District',
     },
   },
 };
 
 const profileFlagIdx = process.argv.indexOf('--profile');
-const PROFILE_KEY = profileFlagIdx >= 0 ? process.argv[profileFlagIdx + 1] : 'amaka';
+const PROFILE_KEY = profileFlagIdx >= 0 ? process.argv[profileFlagIdx + 1] : 'morgan';
 if (!PROFILES[PROFILE_KEY]) {
   console.error(`[mint-vc] unknown profile '${PROFILE_KEY}'. Available: ${Object.keys(PROFILES).join(', ')}`);
   process.exit(2);
