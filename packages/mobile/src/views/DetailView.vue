@@ -57,6 +57,49 @@ const rejectedEnrolments = computed<Array<{ programId: number; programName?: str
 // so the dependent's individual page doesn't also offer enrolment.
 const isWidowApplicant = computed(() => entityForm.value?.name === 'widow')
 
+// Provenance from Claim-169 scans (offline VC verification). Surfaces as a
+// chip on the header so auditors can tell field-verified records apart from
+// self-attested ones. `verifiedBy` is the issuer DID (the trust anchor).
+// `vcExpiry` lets us mark stale credentials in amber without hiding the
+// historical fact that a verification happened.
+const claim169Provenance = computed<{
+  verifiedBy: string
+  verifiedAt?: string
+  vcExpiry?: string
+  vcIssuedAt?: string
+  subjectId?: string
+  expired: boolean
+} | null>(() => {
+  const data = storedEntityData.value?.[0]?.modified?.data as Record<string, unknown> | undefined
+  if (!data) return null
+  const verifiedBy = typeof data.claim169_verifiedBy === 'string' ? data.claim169_verifiedBy : ''
+  if (!verifiedBy) return null
+  const vcExpiry = typeof data.claim169_vcExpiry === 'string' ? data.claim169_vcExpiry : undefined
+  const expired = vcExpiry ? new Date(vcExpiry).getTime() < Date.now() : false
+  return {
+    verifiedBy,
+    verifiedAt: typeof data.claim169_verifiedAt === 'string' ? data.claim169_verifiedAt : undefined,
+    vcExpiry,
+    vcIssuedAt: typeof data.claim169_vcIssuedAt === 'string' ? data.claim169_vcIssuedAt : undefined,
+    subjectId: typeof data.claim169_subjectId === 'string' ? data.claim169_subjectId : undefined,
+    expired,
+  }
+})
+
+const issuerShort = (did: string): string => {
+  const m = /^did:[^:]+:(.+)$/.exec(did)
+  return m ? m[1] : did
+}
+
+const formatProvenanceDate = (iso?: string): string => {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+const showProvenanceDialog = ref(false)
+
 const enrolableProgams = computed<Program[]>(() => {
   // Exclude programmes that are pending OR already enrolled. Without the
   // `enrolledPrograms` exclusion the enrol button would re-offer an applied
@@ -189,6 +232,18 @@ const getEntityName = () => {
               </v-chip>
               <v-chip size="x-small" variant="tonal">
                 Version {{ storedEntityData && storedEntityData[0] ? storedEntityData[0].modified.version : '' }}
+              </v-chip>
+              <v-chip
+                v-if="claim169Provenance"
+                size="x-small"
+                :color="claim169Provenance.expired ? 'warning' : 'success'"
+                variant="tonal"
+                prepend-icon="mdi-shield-check"
+                @click="showProvenanceDialog = true"
+                style="cursor: pointer"
+              >
+                Verified by {{ issuerShort(claim169Provenance.verifiedBy) }}
+                <template v-if="claim169Provenance.expired"> · VC expired</template>
               </v-chip>
             </div>
           </div>
@@ -361,9 +416,67 @@ const getEntityName = () => {
       </v-card-actions>
     </v-card>
   </v-dialog>
+
+  <!-- Provenance details. Tap the verified chip to see the full trust trail:
+       issuer DID, scan time, credential validity window. Audit-grade info
+       that an investigator can reproduce by re-scanning the original QR. -->
+  <v-dialog v-model="showProvenanceDialog" max-width="480">
+    <v-card v-if="claim169Provenance" rounded="lg">
+      <v-card-title class="d-flex align-center ga-2">
+        <v-icon icon="mdi-shield-check" :color="claim169Provenance.expired ? 'warning' : 'success'" />
+        Identity provenance
+      </v-card-title>
+      <v-card-text>
+        <div class="text-body-2 text-medium-emphasis mb-3">
+          Offline signature check against trusted issuer. No network was used.
+        </div>
+        <dl class="provenance-grid">
+          <dt>Issuer DID</dt>
+          <dd class="provenance-mono">{{ claim169Provenance.verifiedBy }}</dd>
+          <dt>Subject ID</dt>
+          <dd class="provenance-mono">{{ claim169Provenance.subjectId || '—' }}</dd>
+          <dt>Scanned at</dt>
+          <dd>{{ formatProvenanceDate(claim169Provenance.verifiedAt) }}</dd>
+          <dt>VC issued</dt>
+          <dd>{{ formatProvenanceDate(claim169Provenance.vcIssuedAt) }}</dd>
+          <dt>VC expires</dt>
+          <dd :class="{ 'text-warning': claim169Provenance.expired }">
+            {{ formatProvenanceDate(claim169Provenance.vcExpiry) }}
+            <span v-if="claim169Provenance.expired"> · Expired</span>
+          </dd>
+        </dl>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer />
+        <v-btn variant="text" @click="showProvenanceDialog = false">Close</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <style scoped>
+.provenance-grid {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  row-gap: 8px;
+  column-gap: 12px;
+  margin: 0;
+}
+.provenance-grid dt {
+  color: rgba(0, 0, 0, 0.6);
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+.provenance-grid dd {
+  margin: 0;
+  font-size: 0.9rem;
+  word-break: break-word;
+}
+.provenance-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+}
+
 .enrolment-card {
   background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
   border: 1.5px solid #86efac;

@@ -452,6 +452,8 @@ export class EventApplierService {
       updatedEntity = await this.applyProgramEnrolment(eventGuid, entityGuid, formData);
     } else if (formData.type === "program-enrolment-rejected") {
       updatedEntity = await this.rejectProgramEnrolment(eventGuid, entityGuid, formData);
+    } else if (formData.type === "claim169-verified") {
+      updatedEntity = await this.applyClaim169Verified(eventGuid, entityGuid, formData);
     } else if (formData.type === "resolve-duplicate") {
       log.debug(
         `Resolving duplicate: ${JSON.stringify(formData)} with shouldDelete: ${formData.data.shouldDelete}`,
@@ -1256,6 +1258,74 @@ export class EventApplierService {
       crId,
       crName,
       rejectionReason,
+    });
+    return entity;
+  }
+
+  /**
+   * Applies a `claim169-verified` event. Records that an operator scanned a
+   * Claim-169 verifiable credential against this entity and the signature
+   * verified offline against a trusted issuer. The event is provenance-only:
+   * it does not modify identity fields (those are already correct or filled
+   * by the form scanner's fieldMappings). It just stamps WHO vouched + WHEN
+   * + WHEN-the-credential-expires onto entity.data so downstream auditors
+   * can distinguish field-verified records from self-attested ones.
+   *
+   * Expected `formData.data`:
+   *   - `verifiedBy`     — issuer DID (e.g. did:web:demo-issuer.example.gov)
+   *   - `verifiedAt`     — ISO timestamp when the scan happened (defaults to event time)
+   *   - `vcIssuedAt`     — ISO of cwt.issuedAt (optional)
+   *   - `vcExpiry`       — ISO of cwt.expiresAt (optional)
+   *   - `subjectId`      — claim subject id (for cross-checks; not authoritative)
+   */
+  private async applyClaim169Verified(
+    eventGuid: string,
+    entityGuid: string,
+    formData: FormSubmission,
+  ): Promise<EntityDoc> {
+    const data = formData.data as Record<string, unknown>;
+    const verifiedBy = typeof data.verifiedBy === "string" ? data.verifiedBy : undefined;
+    if (!verifiedBy) {
+      throw new AppError(
+        "INVALID_CLAIM169_VERIFIED",
+        "claim169-verified event requires a string data.verifiedBy (issuer DID)",
+      );
+    }
+    const verifiedAt =
+      typeof data.verifiedAt === "string"
+        ? data.verifiedAt
+        : (formData.timestamp ?? new Date().toISOString());
+    const vcIssuedAt = typeof data.vcIssuedAt === "string" ? data.vcIssuedAt : undefined;
+    const vcExpiry = typeof data.vcExpiry === "string" ? data.vcExpiry : undefined;
+    const subjectId = typeof data.subjectId === "string" ? data.subjectId : undefined;
+
+    const entityPair = await this.entityStore.getEntity(entityGuid);
+    if (!entityPair) {
+      throw new AppError("ENTITY_NOT_FOUND", `Entity ${entityGuid} not found`);
+    }
+
+    const entity = entityPair.modified;
+    const entityData = entity.data as Record<string, unknown>;
+
+    entityData.claim169_verifiedBy = verifiedBy;
+    entityData.claim169_verifiedAt = verifiedAt;
+    if (vcIssuedAt) entityData.claim169_vcIssuedAt = vcIssuedAt;
+    if (vcExpiry) entityData.claim169_vcExpiry = vcExpiry;
+    if (subjectId) entityData.claim169_subjectId = subjectId;
+    // Coarse-grained signal used by older form configs; keep in sync with
+    // the structured fields above so legacy reports still flip correctly.
+    entityData.claim169_verified = "verified";
+
+    entity.version += 1;
+    entity.lastUpdated = new Date().toISOString();
+
+    await this.entityStore.saveEntity(entityPair.initial, entity);
+    await this.logAudit(formData.userId, formData.type, eventGuid, entityGuid, {
+      verifiedBy,
+      verifiedAt,
+      vcIssuedAt,
+      vcExpiry,
+      subjectId,
     });
     return entity;
   }

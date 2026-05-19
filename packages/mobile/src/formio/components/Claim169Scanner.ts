@@ -241,6 +241,30 @@ export default class Claim169Scanner extends getField() {
       });
     }
 
+    // 1b. Inject provenance fields onto the form's root data so the
+    // submission carries WHO verified, WHEN, and WHEN the credential
+    // expires — without requiring the tenant config to declare matching
+    // form components. EventApplier reads these flat keys to stamp
+    // entity.data; DetailView shows them as a provenance chip.
+    // Skipped silently when signature failed or VC is expired — we don't
+    // want to inscribe "verified" provenance on an unverifiable QR.
+    if (result.isVerified && !result.isExpired) {
+      const rootData = (this.root as { data?: Record<string, unknown> }).data;
+      if (rootData && typeof rootData === 'object') {
+        const epochToIso = (s?: number) =>
+          typeof s === 'number' && Number.isFinite(s) ? new Date(s * 1000).toISOString() : undefined;
+        rootData.claim169_verifiedBy = result.cwt?.issuer ?? '';
+        rootData.claim169_verifiedAt = new Date().toISOString();
+        const expIso = epochToIso(result.cwt?.expiresAt);
+        if (expIso) rootData.claim169_vcExpiry = expIso;
+        const issIso = epochToIso(result.cwt?.issuedAt);
+        if (issIso) rootData.claim169_vcIssuedAt = issIso;
+        if (result.identity?.id) rootData.claim169_subjectId = result.identity.id;
+        // Legacy coarse flag — keeps older report queries working.
+        rootData.claim169_verified = 'verified';
+      }
+    }
+
     // 2. Store original data if configured
     if (this.component.storeOriginalData) {
       this.setValue(result);

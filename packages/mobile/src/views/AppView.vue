@@ -18,6 +18,9 @@ import {
 } from '@/composables/useEntitySubmissions'
 import { Claim169ScannerService } from '@/services/Claim169ScannerService'
 import { registerIssuerKey } from '@/services/claim169Service'
+import { store } from '@/store'
+import { SyncLevel } from '@idpass/data-collect-core'
+import { v4 as uuidv4 } from 'uuid'
 
 const route = useRoute()
 const router = useRouter()
@@ -341,6 +344,30 @@ const onQuickScan = async () => {
   if (match) {
     const path = detailPath(match)
     if (path) {
+      // Stamp provenance on the entity before navigating. Async; not awaited
+      // so the navigation feels instant — failure here logs but doesn't block
+      // the agent's workflow.
+      const isoVerifiedAt = new Date().toISOString()
+      const epochToIso = (s?: number) =>
+        typeof s === 'number' && Number.isFinite(s) ? new Date(s * 1000).toISOString() : undefined
+      store.submitForm({
+        guid: uuidv4(),
+        entityGuid: match.guid,
+        type: 'claim169-verified',
+        data: {
+          verifiedBy: result.cwt?.issuer,
+          verifiedAt: isoVerifiedAt,
+          vcIssuedAt: epochToIso(result.cwt?.issuedAt),
+          vcExpiry: epochToIso(result.cwt?.expiresAt),
+          subjectId,
+        },
+        timestamp: isoVerifiedAt,
+        userId: 'mobile-quick-scan',
+        syncLevel: SyncLevel.LOCAL,
+      }).catch((err: unknown) => {
+        console.error('[quick-scan] failed to write provenance event', err)
+      })
+
       showSuccess(`Identity verified — opening ${match.modified.name ?? 'record'}`)
       router.push(path)
       return
