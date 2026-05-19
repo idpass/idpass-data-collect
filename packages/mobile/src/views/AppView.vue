@@ -437,7 +437,7 @@ watch(filterChips, (chips) => {
         clearable
         rounded="pill"
         single-line
-        class="flex-grow-1"
+        class="flex-grow-1 search-pill"
       />
       <v-btn
         icon="mdi-qrcode-scan"
@@ -544,6 +544,19 @@ watch(filterChips, (chips) => {
   /* Bottom nav is 56 px tall + safe-area inset on devices with gesture bars.
      Pad enough so list rows don't hide behind nav OR the FAB sitting above it. */
   padding-bottom: calc(56px + 72px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Vuetify `solo-filled` ships borderless. The flat fill blended into the page
+   background in field tests — agents weren't sure the search bar was tappable.
+   Override the inner .v-field surface with a 1px border so the pill reads as
+   an input field instead of a passive label. Focus state already swaps to the
+   brand color via Vuetify's :focus-within hook. */
+.search-pill :deep(.v-field) {
+  border: 1px solid var(--border-default, rgba(0, 0, 0, 0.18));
+  transition: border-color var(--transition-fast, 150ms ease);
+}
+.search-pill :deep(.v-field--focused) {
+  border-color: var(--brand, #ff6d37);
 }
 
 .app-view__fab {
