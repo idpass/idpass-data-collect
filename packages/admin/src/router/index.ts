@@ -140,6 +140,11 @@ const router = createRouter({
           component: () => import('../views/wizard/MappingStep.vue'),
         },
         {
+          path: 'programs',
+          name: 'wizard-programs',
+          component: () => import('../views/wizard/ProgramsStep.vue'),
+        },
+        {
           path: 'auth',
           name: 'wizard-auth',
           component: () => import('../views/wizard/AuthStep.vue'),

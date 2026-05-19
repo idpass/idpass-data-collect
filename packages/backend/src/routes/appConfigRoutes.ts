@@ -438,6 +438,56 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
     }),
   );
 
+  // JSON-body PATCH for editing only the programs[] linkage. Mobile reads
+  // programs from the public artifact, so regenerate after saving — this is
+  // the divergence from the syncScope PATCH.
+  // Body: `{ programs: AppProgram[] | null }` — null clears the list.
+  router.patch(
+    "/:id/programs",
+    adminAuth,
+    asyncHandler(async (req, res) => {
+      const { id } = req.params;
+      ensureValidConfigId(id);
+
+      const ProgramsPatchSchema = z.object({
+        programs: z
+          .array(
+            z.object({
+              id: z.number().int(),
+              name: z.string().min(1),
+              code: z.string().nullish(),
+            }),
+          )
+          .nullable(),
+      });
+      const parsed = ProgramsPatchSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res
+          .status(400)
+          .json({ error: "Invalid programs payload", details: parsed.error.issues });
+      }
+
+      const existing = await appConfigStore.getConfig(id);
+      const normalisedPrograms = parsed.data.programs?.map((p) => ({
+        id: p.id,
+        name: p.name,
+        ...(p.code ? { code: p.code } : {}),
+      }));
+      const updated: AppConfig = {
+        ...existing,
+        programs: normalisedPrograms,
+      };
+      await appConfigStore.saveConfig(updated);
+      await appInstanceStore.updateAppInstance(id);
+
+      const baseUrl = resolvePublicBaseUrl(req);
+      const persistedConfig = await appConfigStore.getConfig(id);
+      await generatePublicArtifacts(baseUrl, persistedConfig);
+
+      res.json({ status: "success", programs: persistedConfig.programs ?? [] });
+    }),
+  );
+
   router.delete(
     "/:id",
     adminAuth,

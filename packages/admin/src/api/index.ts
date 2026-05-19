@@ -158,6 +158,25 @@ export const updateAppSyncScope = async (
   return response.data
 }
 
+// Program offered for enrolment via OpenSPP `assign_program` CR workflow.
+// Mobile reads this from the public artifact to render the "Enroll in Program" picker.
+export interface AppProgram {
+  id: number
+  name: string
+  code?: string | null
+}
+
+// PATCH /api/apps/:id/programs — UC3 program-enrolment linkage.
+// Pass `null` to clear the list; pass an array to set/replace it. Triggers
+// public-artifact regeneration so mobile picks up the change on next pull.
+export const updateAppPrograms = async (
+  id: string,
+  programs: AppProgram[] | null,
+): Promise<{ status: 'success'; programs: AppProgram[] }> => {
+  const response = await api().patch(`${APPS_URL}/${id}/programs`, { programs })
+  return response.data
+}
+
 export const getAppConfigJsonUrl = (artifactId: string) => {
   api() // ensure initialized
   if (!artifactId) {

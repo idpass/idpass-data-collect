@@ -77,6 +77,13 @@ const steps = computed<StepDef[]>(() => [
           route: 'wizard-mapping',
           validate: () => draftStore.stepValidation.mapping,
         },
+        {
+          id: 'programs',
+          title: 'Programs',
+          icon: 'mdi-clipboard-list-outline',
+          route: 'wizard-programs',
+          validate: () => true,
+        },
       ]
     : []),
   {

@@ -37,6 +37,11 @@ const allValid = computed(() => {
   )
 })
 
+const isOpenSppAdapter = computed(() => {
+  const type = draftStore.draft.externalSync.type
+  return type === 'openspp-v1-adapter' || type === 'openspp-v2-adapter'
+})
+
 const syncTypeLabel = computed(() => {
   const typeMap: Record<string, string> = {
     'mock': 'Mock Registry Server',
@@ -242,6 +247,40 @@ const doSubmit = async () => {
             <span class="summary-field__value">
               {{ draftStore.draft.externalSync.fieldMappings.length }} mapping(s)
             </span>
+          </div>
+        </div>
+      </v-card>
+
+      <!-- Programs -->
+      <v-card
+        v-if="draftStore.draft.programs.length > 0 || isOpenSppAdapter"
+        class="summary-card"
+        variant="outlined"
+      >
+        <div class="summary-card__header" @click="goToStep('programs')">
+          <h3>Programs</h3>
+          <v-chip size="small" color="primary" variant="tonal">
+            {{ draftStore.draft.programs.length }}
+          </v-chip>
+          <v-spacer />
+          <v-btn icon="mdi-pencil" variant="text" size="small" />
+        </div>
+        <v-divider />
+        <div class="summary-card__body">
+          <div v-if="draftStore.draft.programs.length === 0" class="summary-empty">
+            No programs configured (mobile "Enroll in Program" picker will be hidden)
+          </div>
+          <div v-else>
+            <div
+              v-for="program in draftStore.draft.programs"
+              :key="program.id"
+              class="program-summary"
+            >
+              <v-icon icon="mdi-clipboard-list-outline" size="small" color="primary" />
+              <span class="program-summary__id">#{{ program.id }}</span>
+              <span>{{ program.name }}</span>
+              <v-chip v-if="program.code" size="x-small" variant="tonal">{{ program.code }}</v-chip>
+            </div>
           </div>
         </div>
       </v-card>
@@ -482,6 +521,20 @@ const doSubmit = async () => {
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) 0;
+}
+
+.program-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) 0;
+  font-size: var(--font-size-sm);
+}
+
+.program-summary__id {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--text-muted);
+  min-width: 44px;
 }
 
 .submit-section {

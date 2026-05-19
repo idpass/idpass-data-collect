@@ -16,8 +16,10 @@ import { useSnackBarStore } from '@/stores/snackBar'
 import DataDiagnostics from '@/components/DataDiagnostics.vue'
 import SyncStatusPanel from '@/components/SyncStatusPanel.vue'
 import SyncScopeCard from '@/components/SyncScopeCard.vue'
+import ProgramsCard from '@/components/ProgramsCard.vue'
 import { useFeatureFlag } from '@/composables/useFeatureFlag'
 import type { SyncScopePolicy } from '@idpass/data-collect-core'
+import type { AppProgram } from '@/api'
 
 interface EntityForm {
   name: string
@@ -72,6 +74,7 @@ interface AppConfig {
   authConfigs?: AuthConfig[]
   selfService?: SelfServiceConfig
   syncScope?: SyncScopePolicy | null
+  programs?: AppProgram[]
   createdAt?: string
   updatedAt?: string
 }
@@ -92,7 +95,7 @@ const router = useRouter()
 const app = ref<AppConfig | null>(null)
 const isLoading = ref(true)
 const error = ref<string | null>(null)
-const activeTab = ref<'entities' | 'forms' | 'integration' | 'mapping' | 'auth'>('entities')
+const activeTab = ref<'entities' | 'forms' | 'integration' | 'mapping' | 'auth' | 'programs'>('entities')
 // Demo-mode: donor audience never touches the config-time tabs.
 // Toggle to false post-demo to restore Mapping + Auth tabs.
 const demoMode = ref(true)
@@ -108,6 +111,16 @@ function onSyncScopeUpdated(policy: SyncScopePolicy | null) {
   if (!app.value) return
   app.value = { ...app.value, syncScope: policy }
 }
+
+function onProgramsUpdated(programs: AppProgram[]) {
+  if (!app.value) return
+  app.value = { ...app.value, programs }
+}
+
+const isOpenSppAdapter = computed(() => {
+  const type = app.value?.externalSync?.type
+  return type === 'openspp-v1-adapter' || type === 'openspp-v2-adapter'
+})
 
 const routeId = computed(() => route.params.id as string)
 
@@ -575,6 +588,7 @@ watch(
               <v-tab value="entities">Entities</v-tab>
               <v-tab value="forms">Forms</v-tab>
               <v-tab value="integration">Integration</v-tab>
+              <v-tab v-if="isOpenSppAdapter" value="programs">Programs</v-tab>
               <v-tab v-if="!demoMode" value="mapping">Field Mapping</v-tab>
               <v-tab v-if="!demoMode" value="auth">Authentication</v-tab>
             </v-tabs>
@@ -763,6 +777,26 @@ watch(
                       Configure Integration
                     </v-btn>
                   </div>
+                </div>
+              </v-window-item>
+
+              <v-window-item v-if="isOpenSppAdapter" value="programs">
+                <div class="section-panel">
+                  <div class="section-panel__header">
+                    <div>
+                      <h2 class="section-panel__title">Programs</h2>
+                      <p class="section-panel__subtitle">
+                        OpenSPP programs offered for enrolment via the
+                        <code>assign_program</code> ChangeRequest workflow. Mobile clients render
+                        the "Enroll in Program" picker from this list.
+                      </p>
+                    </div>
+                  </div>
+                  <ProgramsCard
+                    :app-id="app.id"
+                    :programs="app.programs ?? []"
+                    @update:programs="onProgramsUpdated"
+                  />
                 </div>
               </v-window-item>
 

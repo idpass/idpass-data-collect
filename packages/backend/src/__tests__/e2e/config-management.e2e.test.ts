@@ -469,6 +469,110 @@ describeIfPostgres("Config management e2e", () => {
     });
   });
 
+  describe("PATCH /api/apps/:id/programs", () => {
+    const patchId = "e2e-patch-programs";
+    const patchConfig: AppConfig = {
+      id: patchId,
+      name: "Patch Programs Config",
+      version: "1.0.0",
+      entityForms: [
+        {
+          id: "patch-form",
+          title: "Patch Form",
+          formio: { components: [] },
+          name: "Patch Form",
+          dependsOn: "",
+        },
+      ],
+    };
+
+    beforeAll(async () => {
+      const filePath = await writeTempConfig(patchConfig);
+      await request(app.httpServer)
+        .post("/api/apps")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .attach("config", filePath, { contentType: "application/json" });
+    });
+
+    afterAll(async () => {
+      await request(app.httpServer)
+        .delete(`/api/apps/${patchId}/purge`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .catch(() => {});
+    });
+
+    it("persists a programs list", async () => {
+      const programs = [
+        { id: 2, name: "Widow Disability Support", code: "widow-disability-support" },
+        { id: 7, name: "Maternity Allowance" },
+      ];
+      const res = await request(app.httpServer)
+        .patch(`/api/apps/${patchId}/programs`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ programs });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("success");
+      expect(res.body.programs).toEqual(programs);
+
+      const getRes = await request(app.httpServer)
+        .get(`/api/apps/${patchId}`)
+        .set("Authorization", `Bearer ${adminToken}`);
+      expect(getRes.body.programs).toEqual(programs);
+    });
+
+    it("clears the list when programs is null", async () => {
+      const res = await request(app.httpServer)
+        .patch(`/api/apps/${patchId}/programs`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ programs: null });
+
+      expect(res.status).toBe(200);
+      expect(res.body.programs).toEqual([]);
+
+      const getRes = await request(app.httpServer)
+        .get(`/api/apps/${patchId}`)
+        .set("Authorization", `Bearer ${adminToken}`);
+      expect(getRes.body.programs ?? []).toEqual([]);
+    });
+
+    it("rejects non-integer ids (400)", async () => {
+      const res = await request(app.httpServer)
+        .patch(`/api/apps/${patchId}/programs`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ programs: [{ id: "two", name: "Bad" }] });
+
+      expect(res.status).toBe(400);
+      expect(res.body).toHaveProperty("error");
+    });
+
+    it("rejects empty name (400)", async () => {
+      const res = await request(app.httpServer)
+        .patch(`/api/apps/${patchId}/programs`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ programs: [{ id: 1, name: "" }] });
+
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects when body has no programs key", async () => {
+      const res = await request(app.httpServer)
+        .patch(`/api/apps/${patchId}/programs`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({});
+
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects without admin auth (401)", async () => {
+      const res = await request(app.httpServer)
+        .patch(`/api/apps/${patchId}/programs`)
+        .send({ programs: null });
+
+      expect(res.status).toBe(401);
+    });
+  });
+
   describe("Config listing pagination", () => {
     const configs: AppConfig[] = [];
 
