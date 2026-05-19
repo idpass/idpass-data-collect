@@ -844,18 +844,25 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
     // Walk common identity fields on the entity. Order matters: cheaper /
     // more authoritative identifiers first so the first hit short-circuits.
-    tryAdd("national_id", data.national_id);
-    tryAdd("reg_id", data.reg_id);
-    tryAdd("registration_id", data.registration_id);
-    tryAdd("passport_id", data.passport_id);
-    tryAdd("uin", data.uin);
+    // OpenSPP id-type vocab codes are case-sensitive on the validator side
+    // but registries differ on casing convention (UIN vs uin, NATIONAL_ID vs
+    // national_id) — probe both casings so we don't miss the partner.
+    const bothCasings = (code: string, value: unknown) => {
+      tryAdd(code.toUpperCase(), value);
+      tryAdd(code.toLowerCase(), value);
+    };
+    bothCasings("UIN", data.uin);
+    bothCasings("NATIONAL_ID", data.national_id);
+    bothCasings("REG_ID", data.reg_id);
+    bothCasings("REGISTRATION_ID", data.registration_id);
+    bothCasings("PASSPORT_ID", data.passport_id);
     // The stored externalId is a single opaque string but the operator may
     // have registered it under any id-type on OpenSPP (depends on how the
     // upstream registry was bootstrapped). Probe every known system with it
     // — the first GET hit wins.
     if (storedExternalId) {
-      for (const code of ["national_id", "uin", "reg_id", "registration_id", "passport_id", "household_id"]) {
-        tryAdd(code, storedExternalId);
+      for (const code of ["UIN", "NATIONAL_ID", "REG_ID", "REGISTRATION_ID", "PASSPORT_ID", "HOUSEHOLD_ID"]) {
+        bothCasings(code, storedExternalId);
       }
       tryAdd(this.identifierType, storedExternalId);
     }
@@ -1011,14 +1018,19 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       candidates.push({ system, value });
     };
 
-    tryAdd("household_id", data.household_id);
-    tryAdd("reg_id", data.reg_id);
-    tryAdd("registration_id", data.registration_id);
+    // Probe both casings — OpenSPP vocab is case-sensitive on validate.
+    const bothCasings = (code: string, value: unknown) => {
+      tryAdd(code.toUpperCase(), value);
+      tryAdd(code.toLowerCase(), value);
+    };
+    bothCasings("HOUSEHOLD_ID", data.household_id);
+    bothCasings("REG_ID", data.reg_id);
+    bothCasings("REGISTRATION_ID", data.registration_id);
     // Same opaque-externalId logic as the individual sweep — probe each
     // known group system with the stored externalId.
     if (storedExternalId) {
-      for (const code of ["household_id", "reg_id", "registration_id"]) {
-        tryAdd(code, storedExternalId);
+      for (const code of ["HOUSEHOLD_ID", "REG_ID", "REGISTRATION_ID"]) {
+        bothCasings(code, storedExternalId);
       }
       tryAdd(this.groupIdentifierType, storedExternalId);
     }
