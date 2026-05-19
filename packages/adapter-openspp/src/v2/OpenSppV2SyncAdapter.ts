@@ -367,24 +367,31 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
         }
 
         if (fresh.status !== record.status) {
-          // For `applied` transitions on program-enrolment CRs, emit the
-          // projection event BEFORE persisting the terminal status. If the
-          // emit fails we leave the CR record in its pre-transition status so
-          // the next pull retries — once the metadata flips to `applied`,
+          // For `applied` and `rejected` transitions on program-enrolment CRs,
+          // emit the projection event BEFORE persisting the terminal status.
+          // If the emit fails we leave the CR record in its pre-transition
+          // status so the next pull retries — once the metadata flips terminal,
           // listInFlightCRs filters it out and the event would never re-emit.
           let projectionEmitted = false;
           let projectionError: unknown | null = null;
-          if (fresh.status === "applied") {
+          const isTerminalEnrolmentTransition =
+            fresh.status === "applied" || fresh.status === "rejected";
+
+          if (isTerminalEnrolmentTransition) {
             const programId = parseProgramEnrolmentDiscriminator(discriminator);
             if (programId !== null) {
               try {
-                await this.emitProgramEnrolmentApplied(entityGuid, programId, fresh);
+                if (fresh.status === "applied") {
+                  await this.emitProgramEnrolmentApplied(entityGuid, programId, fresh);
+                } else {
+                  await this.emitProgramEnrolmentRejected(entityGuid, programId, fresh);
+                }
                 projectionEmitted = true;
               } catch (emitErr) {
                 projectionError = emitErr;
                 log.warn(
-                  { entityGuid, reference: fresh.reference, programId, err: emitErr },
-                  "Failed to emit program-enrolment-applied event; keeping CR in-flight for retry",
+                  { entityGuid, reference: fresh.reference, programId, status: fresh.status, err: emitErr },
+                  `Failed to emit program-enrolment-${fresh.status} event; keeping CR in-flight for retry`,
                 );
                 errors.push({
                   entityGuid,
@@ -399,10 +406,10 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
             }
           }
 
-          // If this is an `applied` transition for a program-enrolment CR and
-          // the projection failed, do NOT persist the terminal status. Bump
-          // lastPolledAt only so observability survives.
-          if (fresh.status === "applied" && projectionError !== null && !projectionEmitted) {
+          // If this is a terminal program-enrolment transition and the
+          // projection failed, do NOT persist the terminal status. Bump
+          // lastPolledAt only so observability survives + retry on next pull.
+          if (isTerminalEnrolmentTransition && projectionError !== null && !projectionEmitted) {
             await setCR(
               this.eventStore,
               entityGuid,
@@ -431,7 +438,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
           if (fresh.status === "rejected") {
             log.warn(
-              { entityGuid, reference: fresh.reference, reason: fresh.rejectionReason },
+              { entityGuid, reference: fresh.reference, reason: fresh.rejectionReason, projectionEmitted },
               "Change request rejected by OpenSPP operator",
             );
             errors.push({
@@ -536,6 +543,59 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
         crName: fresh.reference,
       },
       timestamp: new Date().toISOString(),
+      userId: SYNC_USER_ID,
+      syncLevel: SyncLevel.EXTERNAL,
+    });
+  }
+
+  /**
+   * Emit a `program-enrolment-rejected` event locally for one
+   * `(entityGuid, programId)` pair. Mirrors
+   * {@link emitProgramEnrolmentApplied} for the rejection terminal state.
+   * Same EXTERNAL syncLevel + remote-event semantics so:
+   *   - the entity's `pendingProgramEnrolments[]` slot is dropped
+   *   - a `rejectedPrograms[]` entry is appended with the operator's reason
+   *   - mobile pulls the event via the standard /pull endpoint and the
+   *     DetailView re-offers the programme for re-submission
+   */
+  private async emitProgramEnrolmentRejected(
+    entityGuid: string,
+    programId: number,
+    fresh: { reference: string; rejectionReason?: string },
+  ): Promise<void> {
+    // Best-effort program name from the existing pending entry (same approach
+    // as the applied path — missing name is acceptable).
+    let programName: string | undefined;
+    try {
+      const pair = await this.eventApplierService.getEntityStore().getEntity(entityGuid);
+      const pending = (pair?.modified?.data as Record<string, unknown> | undefined)
+        ?.pendingProgramEnrolments;
+      if (Array.isArray(pending)) {
+        const entry = (pending as Array<{ programId?: unknown; programName?: unknown }>).find(
+          (p) => p && typeof p === "object" && p.programId === programId,
+        );
+        if (entry && typeof entry.programName === "string") {
+          programName = entry.programName;
+        }
+      }
+    } catch {
+      // Best-effort only; missing name is acceptable.
+    }
+
+    const rejectedAt = new Date().toISOString();
+    await this.eventApplierService.submitForm({
+      guid: uuidv4(),
+      entityGuid,
+      type: "program-enrolment-rejected",
+      data: {
+        programId,
+        ...(programName ? { programName } : {}),
+        rejectedAt,
+        crId: fresh.reference,
+        crName: fresh.reference,
+        ...(fresh.rejectionReason ? { rejectionReason: fresh.rejectionReason } : {}),
+      },
+      timestamp: rejectedAt,
       userId: SYNC_USER_ID,
       syncLevel: SyncLevel.EXTERNAL,
     });

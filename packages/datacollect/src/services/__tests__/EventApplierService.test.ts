@@ -789,3 +789,165 @@ describe("EventApplierService – program-enrolment-applied", () => {
     ).rejects.toMatchObject({ code: "INVALID_PROGRAM_ID" });
   });
 });
+
+describe("EventApplierService – program-enrolment-rejected", () => {
+  let entityStore: EntityStore;
+  let eventStore: EventStore;
+  let service: EventApplierService;
+
+  beforeEach(async () => {
+    entityStore = new EntityStoreImpl(new IndexedDbEntityStorageAdapter());
+    await entityStore.initialize();
+    eventStore = new EventStoreImpl(new IndexedDbEventStorageAdapter());
+    await eventStore.initialize();
+    service = new EventApplierService(eventStore, entityStore);
+  });
+
+  afterEach(async () => {
+    await entityStore.clearStore();
+    await eventStore.clearStore();
+  });
+
+  it("moves a programme from pending to rejected with reason", async () => {
+    const guid = uuidv4();
+    await service.submitForm(
+      makeForm({ entityGuid: guid, type: "create-group", data: { name: "Cole HH" } }),
+    );
+    await service.submitForm(
+      makeForm({
+        entityGuid: guid,
+        type: "enrol-in-program",
+        data: { programId: 2, programName: "Widow Disability Support" },
+      }),
+    );
+
+    await service.submitForm(
+      makeForm({
+        entityGuid: guid,
+        type: "program-enrolment-rejected",
+        syncLevel: SyncLevel.EXTERNAL,
+        userId: "openspp-v2-sync",
+        timestamp: "2099-01-01T00:00:00Z",
+        data: {
+          programId: 2,
+          programName: "Widow Disability Support",
+          rejectedAt: "2026-05-18T10:00:00Z",
+          crId: "CR/2026/00042",
+          rejectionReason: "Missing disability assessment",
+        },
+      }),
+    );
+
+    const pair = await entityStore.getEntity(guid);
+    const data = pair!.modified.data as Record<string, unknown>;
+    expect(data.pendingProgramEnrolments).toEqual([]);
+    expect(data.enrolledPrograms ?? []).toEqual([]);
+    const rejected = data.rejectedPrograms as Array<Record<string, unknown>>;
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]).toMatchObject({
+      programId: 2,
+      programName: "Widow Disability Support",
+      rejectedAt: "2026-05-18T10:00:00Z",
+      crId: "CR/2026/00042",
+      rejectionReason: "Missing disability assessment",
+    });
+  });
+
+  it("does NOT add to enrolledPrograms so re-enrol is possible", async () => {
+    const guid = uuidv4();
+    await service.submitForm(
+      makeForm({ entityGuid: guid, type: "create-group", data: { name: "HH" } }),
+    );
+    await service.submitForm(
+      makeForm({ entityGuid: guid, type: "enrol-in-program", data: { programId: 7 } }),
+    );
+    await service.submitForm(
+      makeForm({
+        entityGuid: guid,
+        type: "program-enrolment-rejected",
+        syncLevel: SyncLevel.EXTERNAL,
+        userId: "openspp-v2-sync",
+        timestamp: "2099-01-01T00:00:00Z",
+        data: { programId: 7 },
+      }),
+    );
+
+    const pair = await entityStore.getEntity(guid);
+    const data = pair!.modified.data as Record<string, unknown>;
+    expect(data.enrolledPrograms ?? []).toEqual([]);
+    expect((data.rejectedPrograms as unknown[]).length).toBe(1);
+  });
+
+  it("is idempotent on re-pull — re-applying the same event replaces in place (second-sync invariant)", async () => {
+    const guid = uuidv4();
+    await service.submitForm(
+      makeForm({ entityGuid: guid, type: "create-group", data: { name: "HH" } }),
+    );
+    await service.submitForm(
+      makeForm({ entityGuid: guid, type: "enrol-in-program", data: { programId: 9 } }),
+    );
+    const rejected = {
+      entityGuid: guid,
+      type: "program-enrolment-rejected" as const,
+      syncLevel: SyncLevel.EXTERNAL,
+      userId: "openspp-v2-sync",
+      timestamp: "2099-01-01T00:00:00Z",
+      data: { programId: 9, rejectionReason: "First reason" },
+    };
+    await service.submitForm(makeForm(rejected));
+    await service.submitForm(makeForm(rejected));
+
+    const pair = await entityStore.getEntity(guid);
+    const data = pair!.modified.data as Record<string, unknown>;
+    expect((data.rejectedPrograms as unknown[]).length).toBe(1);
+  });
+
+  it("only removes the matching pending entry — other pending programmes survive", async () => {
+    const guid = uuidv4();
+    await service.submitForm(
+      makeForm({ entityGuid: guid, type: "create-group", data: { name: "HH" } }),
+    );
+    await service.submitForm(
+      makeForm({ entityGuid: guid, type: "enrol-in-program", data: { programId: 1 } }),
+    );
+    await service.submitForm(
+      makeForm({ entityGuid: guid, type: "enrol-in-program", data: { programId: 2 } }),
+    );
+
+    await service.submitForm(
+      makeForm({
+        entityGuid: guid,
+        type: "program-enrolment-rejected",
+        syncLevel: SyncLevel.EXTERNAL,
+        userId: "openspp-v2-sync",
+        timestamp: "2099-01-01T00:00:00Z",
+        data: { programId: 1, rejectionReason: "bad form" },
+      }),
+    );
+
+    const pair = await entityStore.getEntity(guid);
+    const data = pair!.modified.data as Record<string, unknown>;
+    const pending = data.pendingProgramEnrolments as Array<{ programId: number }>;
+    expect(pending.map((p) => p.programId)).toEqual([2]);
+    const rejected = data.rejectedPrograms as Array<{ programId: number }>;
+    expect(rejected.map((p) => p.programId)).toEqual([1]);
+  });
+
+  it("rejects non-numeric programId", async () => {
+    const guid = uuidv4();
+    await service.submitForm(
+      makeForm({ entityGuid: guid, type: "create-group", data: { name: "HH" } }),
+    );
+    await expect(
+      service.submitForm(
+        makeForm({
+          entityGuid: guid,
+          type: "program-enrolment-rejected",
+          syncLevel: SyncLevel.EXTERNAL,
+          userId: "openspp-v2-sync",
+          data: { programId: "nope" },
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_PROGRAM_ID" });
+  });
+});

@@ -450,6 +450,8 @@ export class EventApplierService {
       updatedEntity = await this.enrolInProgram(eventGuid, entityGuid, formData);
     } else if (formData.type === "program-enrolment-applied") {
       updatedEntity = await this.applyProgramEnrolment(eventGuid, entityGuid, formData);
+    } else if (formData.type === "program-enrolment-rejected") {
+      updatedEntity = await this.rejectProgramEnrolment(eventGuid, entityGuid, formData);
     } else if (formData.type === "resolve-duplicate") {
       log.debug(
         `Resolving duplicate: ${JSON.stringify(formData)} with shouldDelete: ${formData.data.shouldDelete}`,
@@ -1140,6 +1142,120 @@ export class EventApplierService {
       appliedAt,
       crId,
       crName,
+    });
+    return entity;
+  }
+
+  /**
+   * Applies a `program-enrolment-rejected` event. Mirrors
+   * {@link applyProgramEnrolment} for the rejection terminal state of an
+   * OpenSPP `assign_program` ChangeRequest.
+   *
+   * Effects on the target entity's `data`:
+   *   1. Drops the matching entry from `pendingProgramEnrolments[]`
+   *      (idempotent — missing entries are tolerated).
+   *   2. Appends to `rejectedPrograms[]` (idempotent on `programId`):
+   *      `{ programId, programName?, rejectedAt, crId?, crName?, rejectionReason? }`.
+   *
+   * The program is **not** added to `enrolledPrograms`, so the mobile
+   * "Enroll in Program" picker will re-offer it on next render — the field
+   * worker can resubmit after correcting whatever caused the rejection.
+   *
+   * Expected `formData.data` shape:
+   *   `{ programId: number, programName?: string, rejectedAt?: string,
+   *      crId?: string, crName?: string, rejectionReason?: string }`
+   *
+   * @private
+   */
+  private async rejectProgramEnrolment(
+    eventGuid: string,
+    entityGuid: string,
+    formData: FormSubmission,
+  ): Promise<EntityDoc> {
+    const data = formData.data as Record<string, unknown>;
+    const programIdRaw = data.programId;
+    const programId =
+      typeof programIdRaw === "number"
+        ? programIdRaw
+        : typeof programIdRaw === "string"
+          ? Number.parseInt(programIdRaw, 10)
+          : NaN;
+    if (!Number.isFinite(programId)) {
+      throw new AppError(
+        "INVALID_PROGRAM_ID",
+        "program-enrolment-rejected event requires a numeric data.programId",
+      );
+    }
+    const programName = typeof data.programName === "string" ? data.programName : undefined;
+    const rejectedAt =
+      typeof data.rejectedAt === "string"
+        ? data.rejectedAt
+        : (formData.timestamp ?? new Date().toISOString());
+    const crId = typeof data.crId === "string" ? data.crId : undefined;
+    const crName = typeof data.crName === "string" ? data.crName : undefined;
+    const rejectionReason =
+      typeof data.rejectionReason === "string" && data.rejectionReason.length > 0
+        ? data.rejectionReason
+        : undefined;
+
+    const entityPair = await this.entityStore.getEntity(entityGuid);
+    if (!entityPair) {
+      throw new AppError("ENTITY_NOT_FOUND", `Entity ${entityGuid} not found`);
+    }
+
+    const entity = entityPair.modified;
+    const entityData = entity.data as Record<string, unknown>;
+
+    // Drop matching pending entry (idempotent: missing entry is fine).
+    const pendingRaw = entityData.pendingProgramEnrolments;
+    const pending: Array<{ programId: number; programName?: string; enrolledAt?: string }> =
+      Array.isArray(pendingRaw)
+        ? (pendingRaw as Array<{ programId: number; programName?: string; enrolledAt?: string }>)
+            .filter((p) => p && typeof p === "object" && p.programId !== programId)
+        : [];
+    entityData.pendingProgramEnrolments = pending;
+
+    // Add to rejected list (idempotent on programId — newer event replaces older).
+    const rejectedRaw = entityData.rejectedPrograms;
+    const rejected: Array<{
+      programId: number;
+      programName?: string;
+      rejectedAt: string;
+      crId?: string;
+      crName?: string;
+      rejectionReason?: string;
+    }> = Array.isArray(rejectedRaw)
+      ? (rejectedRaw as Array<{
+          programId: number;
+          programName?: string;
+          rejectedAt: string;
+          crId?: string;
+          crName?: string;
+          rejectionReason?: string;
+        }>).filter((p) => p && typeof p === "object" && p.programId !== programId)
+      : [];
+
+    rejected.push({
+      programId,
+      ...(programName ? { programName } : {}),
+      rejectedAt,
+      ...(crId ? { crId } : {}),
+      ...(crName ? { crName } : {}),
+      ...(rejectionReason ? { rejectionReason } : {}),
+    });
+    entityData.rejectedPrograms = rejected;
+
+    entity.version += 1;
+    entity.lastUpdated = new Date().toISOString();
+
+    await this.entityStore.saveEntity(entityPair.initial, entity);
+    await this.logAudit(formData.userId, formData.type, eventGuid, entityGuid, {
+      programId,
+      programName,
+      rejectedAt,
+      crId,
+      crName,
+      rejectionReason,
     });
     return entity;
   }
