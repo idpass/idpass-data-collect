@@ -845,14 +845,20 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     // Walk common identity fields on the entity. Order matters: cheaper /
     // more authoritative identifiers first so the first hit short-circuits.
     tryAdd("national_id", data.national_id);
-    tryAdd("national_id", storedExternalId);
     tryAdd("reg_id", data.reg_id);
     tryAdd("registration_id", data.registration_id);
     tryAdd("passport_id", data.passport_id);
     tryAdd("uin", data.uin);
-    // Also probe the stored externalId under the tenant's configured type
-    // (covers transient 404s under the original identifier).
-    if (storedExternalId) tryAdd(this.identifierType, storedExternalId);
+    // The stored externalId is a single opaque string but the operator may
+    // have registered it under any id-type on OpenSPP (depends on how the
+    // upstream registry was bootstrapped). Probe every known system with it
+    // — the first GET hit wins.
+    if (storedExternalId) {
+      for (const code of ["national_id", "uin", "reg_id", "registration_id", "passport_id", "household_id"]) {
+        tryAdd(code, storedExternalId);
+      }
+      tryAdd(this.identifierType, storedExternalId);
+    }
 
     for (const c of candidates) {
       const id = this.getClient().formatIdentifier(c.system, c.value);
@@ -1006,10 +1012,16 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     };
 
     tryAdd("household_id", data.household_id);
-    tryAdd("household_id", storedExternalId);
     tryAdd("reg_id", data.reg_id);
     tryAdd("registration_id", data.registration_id);
-    if (storedExternalId) tryAdd(this.groupIdentifierType, storedExternalId);
+    // Same opaque-externalId logic as the individual sweep — probe each
+    // known group system with the stored externalId.
+    if (storedExternalId) {
+      for (const code of ["household_id", "reg_id", "registration_id"]) {
+        tryAdd(code, storedExternalId);
+      }
+      tryAdd(this.groupIdentifierType, storedExternalId);
+    }
 
     for (const c of candidates) {
       const id = this.getClient().formatIdentifier(c.system, c.value);
