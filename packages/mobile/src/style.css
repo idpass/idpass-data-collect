@@ -120,7 +120,6 @@ body.barcode-scanner-active #dy-app {
   --v-theme-on-secondary: 255, 255, 255;
 }
 .v-theme--idpass .bg-secondary,
-.v-theme--idpass .v-btn.text-secondary,
 .v-theme--idpass .v-btn--variant-flat.bg-secondary,
 .v-theme--idpass .v-btn--variant-elevated.bg-secondary,
 .v-theme--idpass .v-btn--variant-tonal.bg-secondary {
