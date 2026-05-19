@@ -725,25 +725,145 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     if (externalId) {
       const identifier = this.getClient().formatIdentifier(system, externalId);
       // Fetch current versionId for optimistic locking (If-Match).
-      // Falls back to patching without If-Match if GET fails (e.g., 403 scope issue).
+      // `getIndividual` returns `null` on 404 → may indicate a stale stored
+      // externalId (target server redeployed, identifier-type mismatch,
+      // partner archived). Before assuming the partner is gone, attempt a
+      // discovery pass that probes the partner's other identity documents.
+      // Only POST when discovery also comes up empty — avoids creating
+      // duplicates when the partner exists under a different identifier
+      // type than the one we originally submitted.
       let versionId: string | undefined;
+      let remoteExists = true;
       try {
         const current = await this.getClient().getIndividual(identifier);
-        versionId = current?.meta?.versionId;
+        if (current === null) {
+          remoteExists = false;
+        } else {
+          versionId = current?.meta?.versionId;
+        }
       } catch (err) {
         log.warn({ guid, err }, "Could not fetch individual for optimistic locking, proceeding without If-Match");
       }
-      await this.getClient().patchIndividual(identifier, {
-        name: resource.name,
-        birthDate: resource.birthDate,
-        gender: resource.gender,
-        telecom: resource.telecom,
-        extension: resource.extension,
-      }, versionId);
+
+      if (!remoteExists) {
+        const discovered = await this.tryDiscoverIndividual(data, externalId);
+        if (discovered) {
+          log.info(
+            { guid, staleExternalId: externalId, discoveredIdentifier: discovered.identifier },
+            "Partner found under different identifier — rebinding externalId and patching via discovered identifier",
+          );
+          await this.saveExternalIdToEntity(guid, discovered.resource);
+          await this.getClient().patchIndividual(discovered.identifier, {
+            name: resource.name,
+            birthDate: resource.birthDate,
+            gender: resource.gender,
+            telecom: resource.telecom,
+            extension: resource.extension,
+          }, discovered.resource?.meta?.versionId);
+          return;
+        }
+
+        log.warn(
+          { guid, externalId },
+          "No matching partner found via discovery — creating new individual via POST",
+        );
+        const created = await this.getClient().createIndividual(resource);
+        await this.saveExternalIdToEntity(guid, created);
+        return;
+      }
+
+      try {
+        await this.getClient().patchIndividual(identifier, {
+          name: resource.name,
+          birthDate: resource.birthDate,
+          gender: resource.gender,
+          telecom: resource.telecom,
+          extension: resource.extension,
+        }, versionId);
+      } catch (err) {
+        // Race window: record vanished or identifier mismatch between GET +
+        // PATCH. Run discovery before falling back to POST.
+        const is404 = err instanceof Error && /Resource not found/i.test(err.message);
+        if (!is404) throw err;
+        const discovered = await this.tryDiscoverIndividual(data, externalId);
+        if (discovered) {
+          log.info(
+            { guid, staleExternalId: externalId, discoveredIdentifier: discovered.identifier },
+            "PATCH 404 — partner discovered under different identifier; rebinding + retrying PATCH",
+          );
+          await this.saveExternalIdToEntity(guid, discovered.resource);
+          await this.getClient().patchIndividual(discovered.identifier, {
+            name: resource.name,
+            birthDate: resource.birthDate,
+            gender: resource.gender,
+            telecom: resource.telecom,
+            extension: resource.extension,
+          }, discovered.resource?.meta?.versionId);
+          return;
+        }
+        log.warn({ guid, externalId }, "PATCH 404 + discovery empty — creating new individual via POST");
+        const created = await this.getClient().createIndividual(resource);
+        await this.saveExternalIdToEntity(guid, created);
+      }
     } else {
       const created = await this.getClient().createIndividual(resource);
       await this.saveExternalIdToEntity(guid, created);
     }
+  }
+
+  /**
+   * Probe OpenSPP for an existing partner that matches the entity by any of
+   * its known identity documents. Used as a recovery step before assuming
+   * a stored externalId is dead (and POSTing a duplicate).
+   *
+   * Tries each (system, value) candidate via GET — stops at the first hit.
+   * Candidates assembled from common identity fields on the entity data
+   * (national_id, reg_id, registration_id, passport_id, uin) plus the
+   * stored externalId probed under the tenant's configured identifierType.
+   * Errors per candidate are swallowed so a 403/network blip on one path
+   * doesn't kill the discovery sweep.
+   */
+  private async tryDiscoverIndividual(
+    data: Record<string, unknown>,
+    storedExternalId?: string,
+  ): Promise<{ resource: IndividualResource; identifier: string } | null> {
+    const seen = new Set<string>();
+    const candidates: Array<{ system: string; value: string }> = [];
+
+    const ensureNamespace = (code: string) =>
+      code.startsWith(this.identifierNamespace) ? code : `${this.identifierNamespace}${code}`;
+
+    const tryAdd = (code: string, value: unknown) => {
+      if (typeof value !== "string" || value.length === 0) return;
+      const system = ensureNamespace(code);
+      const key = `${system}|${value}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      candidates.push({ system, value });
+    };
+
+    // Walk common identity fields on the entity. Order matters: cheaper /
+    // more authoritative identifiers first so the first hit short-circuits.
+    tryAdd("national_id", data.national_id);
+    tryAdd("national_id", storedExternalId);
+    tryAdd("reg_id", data.reg_id);
+    tryAdd("registration_id", data.registration_id);
+    tryAdd("passport_id", data.passport_id);
+    tryAdd("uin", data.uin);
+    // Also probe the stored externalId under the tenant's configured type
+    // (covers transient 404s under the original identifier).
+    if (storedExternalId) tryAdd(this.identifierType, storedExternalId);
+
+    for (const c of candidates) {
+      const id = this.getClient().formatIdentifier(c.system, c.value);
+      try {
+        const found = await this.getClient().getIndividual(id);
+        if (found) return { resource: found, identifier: id };
+      } catch {
+        // ignore — try next candidate
+      }
+    }
+    return null;
   }
 
   private async pushGroup(
@@ -793,22 +913,114 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
     if (externalId) {
       const identifier = this.getClient().formatIdentifier(system, externalId);
+      // Same discovery-first 404 recovery as `pushIndividualDirect`.
       let versionId: string | undefined;
+      let remoteExists = true;
       try {
         const current = await this.getClient().getGroup(identifier);
-        versionId = current?.meta?.versionId;
+        if (current === null) {
+          remoteExists = false;
+        } else {
+          versionId = current?.meta?.versionId;
+        }
       } catch (err) {
         log.warn({ guid, err }, "Could not fetch group for optimistic locking, proceeding without If-Match");
       }
-      await this.getClient().patchGroup(identifier, {
-        name: resource.name,
-        groupType: resource.groupType,
-        extension: resource.extension,
-      }, versionId);
+
+      if (!remoteExists) {
+        const discovered = await this.tryDiscoverGroup(data, externalId);
+        if (discovered) {
+          log.info(
+            { guid, staleExternalId: externalId, discoveredIdentifier: discovered.identifier },
+            "Group found under different identifier — rebinding externalId and patching",
+          );
+          await this.saveExternalIdToEntity(guid, discovered.resource);
+          await this.getClient().patchGroup(discovered.identifier, {
+            name: resource.name,
+            groupType: resource.groupType,
+            extension: resource.extension,
+          }, discovered.resource?.meta?.versionId);
+          return;
+        }
+        log.warn({ guid, externalId }, "No matching group found via discovery — creating new group via POST");
+        const created = await this.getClient().createGroup(resource);
+        await this.saveExternalIdToEntity(guid, created);
+        return;
+      }
+
+      try {
+        await this.getClient().patchGroup(identifier, {
+          name: resource.name,
+          groupType: resource.groupType,
+          extension: resource.extension,
+        }, versionId);
+      } catch (err) {
+        const is404 = err instanceof Error && /Resource not found/i.test(err.message);
+        if (!is404) throw err;
+        const discovered = await this.tryDiscoverGroup(data, externalId);
+        if (discovered) {
+          log.info(
+            { guid, staleExternalId: externalId, discoveredIdentifier: discovered.identifier },
+            "PATCH 404 on group — discovered under different identifier; rebinding + retrying PATCH",
+          );
+          await this.saveExternalIdToEntity(guid, discovered.resource);
+          await this.getClient().patchGroup(discovered.identifier, {
+            name: resource.name,
+            groupType: resource.groupType,
+            extension: resource.extension,
+          }, discovered.resource?.meta?.versionId);
+          return;
+        }
+        log.warn({ guid, externalId }, "PATCH 404 + discovery empty — creating new group via POST");
+        const created = await this.getClient().createGroup(resource);
+        await this.saveExternalIdToEntity(guid, created);
+      }
     } else {
       const created = await this.getClient().createGroup(resource);
       await this.saveExternalIdToEntity(guid, created);
     }
+  }
+
+  /**
+   * Group counterpart of `tryDiscoverIndividual`. Same probe strategy:
+   * walk known identity fields on the group data + the stored externalId,
+   * GET each candidate, return the first hit.
+   */
+  private async tryDiscoverGroup(
+    data: Record<string, unknown>,
+    storedExternalId?: string,
+  ): Promise<{ resource: GroupResource; identifier: string } | null> {
+    const seen = new Set<string>();
+    const candidates: Array<{ system: string; value: string }> = [];
+
+    const ensureNamespace = (code: string) =>
+      code.startsWith(this.identifierNamespace) ? code : `${this.identifierNamespace}${code}`;
+
+    const tryAdd = (code: string, value: unknown) => {
+      if (typeof value !== "string" || value.length === 0) return;
+      const system = ensureNamespace(code);
+      const key = `${system}|${value}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      candidates.push({ system, value });
+    };
+
+    tryAdd("household_id", data.household_id);
+    tryAdd("household_id", storedExternalId);
+    tryAdd("reg_id", data.reg_id);
+    tryAdd("registration_id", data.registration_id);
+    if (storedExternalId) tryAdd(this.groupIdentifierType, storedExternalId);
+
+    for (const c of candidates) {
+      const id = this.getClient().formatIdentifier(c.system, c.value);
+      try {
+        const found = await this.getClient().getGroup(id);
+        if (found) return { resource: found, identifier: id };
+      } catch {
+        // ignore — try next
+      }
+    }
+    return null;
   }
 
   // ==================== Push Logic — Change Request mode ====================
