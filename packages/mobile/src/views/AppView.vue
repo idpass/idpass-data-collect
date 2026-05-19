@@ -16,6 +16,8 @@ import {
   type SubmissionRecord,
   type SubmissionStatus,
 } from '@/composables/useEntitySubmissions'
+import { Claim169ScannerService } from '@/services/Claim169ScannerService'
+import { registerIssuerKey } from '@/services/claim169Service'
 
 const route = useRoute()
 const router = useRouter()
@@ -256,6 +258,100 @@ const onPickNewForm = (form: NewEntityFormOption) => {
   router.push(`/app/${appId.value}/${form.name}/new`)
 }
 
+// Walks form components (depth-first) for a Claim-169 scanner config so the
+// quick-scan search uses the same trusted issuers as the in-form scanner.
+// Returns an empty list when no claim169Scanner component is configured —
+// the scan call still works (skips signature verification), but a field-agent
+// scanning an unsigned QR will get the unverified flag back in the result.
+type Claim169IssuerCfg = {
+  issuerId?: string
+  ed25519Key?: string
+  es256Key?: string
+  publicKey?: { ed25519?: string; es256?: string }
+}
+const findScannerTrustedIssuers = (): Claim169IssuerCfg[] => {
+  const walk = (components: unknown[]): Claim169IssuerCfg[] | null => {
+    for (const c of components) {
+      if (!c || typeof c !== 'object') continue
+      const node = c as { type?: string; trustedIssuers?: unknown; components?: unknown[] }
+      if (node.type === 'claim169Scanner' && Array.isArray(node.trustedIssuers)) {
+        return node.trustedIssuers as Claim169IssuerCfg[]
+      }
+      if (Array.isArray(node.components)) {
+        const found = walk(node.components)
+        if (found) return found
+      }
+    }
+    return null
+  }
+  for (const form of tenantapp.value?.entityForms ?? []) {
+    const components = (form.formio as { components?: unknown[] } | undefined)?.components
+    if (!Array.isArray(components)) continue
+    const found = walk(components)
+    if (found) return found
+  }
+  return []
+}
+
+const onQuickScan = async () => {
+  if (!tenantapp.value) return
+  const rawIssuers = findScannerTrustedIssuers()
+  const trustedIssuers = rawIssuers
+    .filter((i) => !!i.issuerId)
+    .map((i) => ({
+      issuerId: i.issuerId as string,
+      ed25519Key: i.ed25519Key || i.publicKey?.ed25519,
+      es256Key: i.es256Key || i.publicKey?.es256,
+    }))
+  // Register keys so decode-time signature verification can resolve the
+  // issuer — mirrors what the in-form scanner does on its first scan.
+  for (const iss of trustedIssuers) {
+    registerIssuerKey(iss.issuerId, { ed25519: iss.ed25519Key, es256: iss.es256Key })
+  }
+
+  const result = await Claim169ScannerService.scan({
+    title: 'Scan to find individual',
+    description: 'Point the camera at a Claim-169 QR to verify identity and jump to the record.',
+    trustedIssuers,
+  })
+  if (!result) return // user cancelled
+
+  if (!result.isVerified) {
+    showError('Signature did not verify against trusted issuers — refusing to act on this QR.')
+    return
+  }
+
+  const subjectId = result.identity?.id
+  if (!subjectId) {
+    showError('Scanned credential has no subject id.')
+    return
+  }
+
+  const subjectLower = subjectId.toLowerCase()
+  const match = allSubmissions.value.find((r) => {
+    const data = r.modified.data as Record<string, unknown>
+    return (
+      (typeof data.national_id === 'string' && data.national_id === subjectId) ||
+      (typeof data.uin === 'string' && data.uin === subjectId) ||
+      (typeof data.externalId === 'string' && data.externalId === subjectId) ||
+      (typeof r.modified.name === 'string' && r.modified.name.toLowerCase() === subjectLower)
+    )
+  })
+
+  if (match) {
+    const path = detailPath(match)
+    if (path) {
+      showSuccess(`Identity verified — opening ${match.modified.name ?? 'record'}`)
+      router.push(path)
+      return
+    }
+  }
+  // No local hit: drop the id into the search box so the agent sees an empty
+  // list and can choose to create a new record via the FAB.
+  searchTerm.value = subjectId
+  showError(`No matching record found for ${subjectId}. Showing search results.`)
+}
+
 // Reset filter when the chip is no longer represented (e.g., after deletion).
 watch(filterChips, (chips) => {
   if (chips.some((c) => c.value === activeFilter.value)) return
@@ -329,19 +425,29 @@ watch(filterChips, (chips) => {
       </v-col>
     </v-row>
 
-    <v-text-field
-      v-model="searchTerm"
-      prepend-inner-icon="mdi-magnify"
-      placeholder="Search by name, ID, village..."
-      variant="solo-filled"
-      flat
-      density="compact"
-      hide-details
-      clearable
-      rounded="pill"
-      single-line
-      class="mb-3"
-    />
+    <div class="d-flex align-center ga-2 mb-3">
+      <v-text-field
+        v-model="searchTerm"
+        prepend-inner-icon="mdi-magnify"
+        placeholder="Search by name, ID, village..."
+        variant="solo-filled"
+        flat
+        density="compact"
+        hide-details
+        clearable
+        rounded="pill"
+        single-line
+        class="flex-grow-1"
+      />
+      <v-btn
+        icon="mdi-qrcode-scan"
+        color="secondary"
+        variant="flat"
+        size="default"
+        :title="'Scan Claim-169 to verify identity and jump to the record'"
+        @click="onQuickScan"
+      />
+    </div>
 
     <EntityTypeFilter
       v-if="filterChips.length > 1"
