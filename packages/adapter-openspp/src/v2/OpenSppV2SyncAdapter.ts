@@ -1668,17 +1668,27 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   // ==================== Identifier Extraction ====================
 
   private extractIdentifier(individual: IndividualResource): string | undefined {
-    const matchingId = individual.identifier?.find(
-      (id) => this.isOpenSppIdentifier(id.system),
-    );
-    return matchingId?.value;
+    return this.extractMatchingId(individual)?.value;
   }
 
   private extractGroupIdentifier(group: GroupResource): string | undefined {
-    const matchingId = group.identifier?.find(
+    return this.extractMatchingId(group)?.value;
+  }
+
+  /**
+   * Return the first identifier on the resource whose `system` lives under
+   * the configured OpenSPP namespace. Caller decides whether it wants the
+   * value alone, or both `system` + `value` (for learning which vocab code
+   * the partner actually carries — see {@link saveExternalIdToEntity}).
+   */
+  private extractMatchingId(
+    resource: IndividualResource | GroupResource,
+  ): { system: string; value: string } | undefined {
+    const matchingId = resource.identifier?.find(
       (id) => this.isOpenSppIdentifier(id.system),
     );
-    return matchingId?.value;
+    if (!matchingId) return undefined;
+    return { system: matchingId.system, value: matchingId.value };
   }
 
   /**
@@ -1827,20 +1837,25 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
         return;
       }
 
-      const identifier =
-        created.type === "Individual"
-          ? this.extractIdentifier(created as IndividualResource)
-          : this.extractGroupIdentifier(created as GroupResource);
-      if (!identifier) {
+      const matching = this.extractMatchingId(created);
+      if (!matching) {
         return;
       }
+      // Persist the vocab code (e.g. `UIN`, `HOUSEHOLD_ID`) that OpenSPP
+      // actually carries this partner under. `resolveIdentifierSystem` reads
+      // `data.identifierType` ahead of the tenant default, so next push
+      // skips the discovery sweep and PATCHes the right URI directly.
+      const learnedCode = matching.system.startsWith(this.identifierNamespace)
+        ? matching.system.slice(this.identifierNamespace.length)
+        : matching.system;
 
       const updatedEntity = {
         ...entityPair.modified,
-        externalId: identifier,
+        externalId: matching.value,
         data: {
           ...entityPair.modified.data,
-          externalId: identifier,
+          externalId: matching.value,
+          identifierType: learnedCode,
         },
       };
 
