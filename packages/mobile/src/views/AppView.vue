@@ -18,6 +18,7 @@ import {
 } from '@/composables/useEntitySubmissions'
 import { Claim169ScannerService } from '@/services/Claim169ScannerService'
 import { registerIssuerKey } from '@/services/claim169Service'
+import { useClaim169Config } from '@/composables/useClaim169Config'
 import { store } from '@/store'
 import { SyncLevel } from '@idpass/data-collect-core'
 import { v4 as uuidv4 } from 'uuid'
@@ -29,6 +30,7 @@ const tenantapp = ref<TenantAppData>()
 const topLevelForms = ref<EntityForm[]>([])
 const isOffline = ref(false)
 const tenantStore = useTenantStore()
+const claim169Config = useClaim169Config()
 const syncService = useSyncService()
 const { submissions: allSubmissions, load: loadAllSubmissions } = useEntitySubmissions()
 let networkCleanup: (() => void) | null = null
@@ -261,51 +263,13 @@ const onPickNewForm = (form: NewEntityFormOption) => {
   router.push(`/app/${appId.value}/${form.name}/new`)
 }
 
-// Walks form components (depth-first) for a Claim-169 scanner config so the
-// quick-scan search uses the same trusted issuers as the in-form scanner.
-// Returns an empty list when no claim169Scanner component is configured —
-// the scan call still works (skips signature verification), but a field-agent
-// scanning an unsigned QR will get the unverified flag back in the result.
-type Claim169IssuerCfg = {
-  issuerId?: string
-  ed25519Key?: string
-  es256Key?: string
-  publicKey?: { ed25519?: string; es256?: string }
-}
-const findScannerTrustedIssuers = (): Claim169IssuerCfg[] => {
-  const walk = (components: unknown[]): Claim169IssuerCfg[] | null => {
-    for (const c of components) {
-      if (!c || typeof c !== 'object') continue
-      const node = c as { type?: string; trustedIssuers?: unknown; components?: unknown[] }
-      if (node.type === 'claim169Scanner' && Array.isArray(node.trustedIssuers)) {
-        return node.trustedIssuers as Claim169IssuerCfg[]
-      }
-      if (Array.isArray(node.components)) {
-        const found = walk(node.components)
-        if (found) return found
-      }
-    }
-    return null
-  }
-  for (const form of tenantapp.value?.entityForms ?? []) {
-    const components = (form.formio as { components?: unknown[] } | undefined)?.components
-    if (!Array.isArray(components)) continue
-    const found = walk(components)
-    if (found) return found
-  }
-  return []
-}
-
 const onQuickScan = async () => {
   if (!tenantapp.value) return
-  const rawIssuers = findScannerTrustedIssuers()
-  const trustedIssuers = rawIssuers
-    .filter((i) => !!i.issuerId)
-    .map((i) => ({
-      issuerId: i.issuerId as string,
-      ed25519Key: i.ed25519Key || i.publicKey?.ed25519,
-      es256Key: i.es256Key || i.publicKey?.es256,
-    }))
+  const trustedIssuers = claim169Config.value.trustedIssuers.map((i) => ({
+    issuerId: i.issuerId,
+    ed25519Key: i.publicKey.ed25519,
+    es256Key: i.publicKey.es256,
+  }))
   // Register keys so decode-time signature verification can resolve the
   // issuer — mirrors what the in-form scanner does on its first scan.
   for (const iss of trustedIssuers) {
@@ -467,6 +431,7 @@ watch(filterChips, (chips) => {
         class="flex-grow-1 search-pill"
       />
       <v-btn
+        v-if="claim169Config.enabled"
         icon="mdi-qrcode-scan"
         color="secondary"
         variant="flat"
