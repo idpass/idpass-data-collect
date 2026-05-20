@@ -48,6 +48,11 @@ export interface Program {
   code?: string
 }
 
+export interface Claim169Config {
+  enabled: boolean
+  trustedIssuers: TrustedIssuer[]
+}
+
 export interface Config {
   id: string
   name: string
@@ -59,12 +64,17 @@ export interface Config {
   syncServerUrl: string
   externalSync?: ExternalSync
   authConfigs?: Record<string, unknown>[]
-  trustedIssuers?: TrustedIssuer[]
   /**
    * Programs available for enrolment via the OpenSPP `assign_program` CR
    * workflow. Empty/omitted hides the mobile "Enrol in Program" action.
    */
   programs?: Program[]
+  /**
+   * Tenant-level Claim-169 configuration. Replaces the legacy top-level
+   * `trustedIssuers` field (schema v2). Form-embedded `claim169Scanner`
+   * components still keep their own embedded trustedIssuers list.
+   */
+  claim169?: Claim169Config
 }
 
 export interface TrustedIssuer {

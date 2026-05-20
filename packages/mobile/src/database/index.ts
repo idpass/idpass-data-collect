@@ -49,8 +49,10 @@ import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election'
 addRxPlugin(RxDBLeaderElectionPlugin)
 
 // Required for any collection whose schema version is > 0. The tenantapps
-// collection bumped to v1 to add the optional `programs[]` field — without
-// this plugin RxDB throws "function must be overwritten by a plugin" on init.
+// collection bumped to v1 to add `programs[]`, then v2 to introduce the
+// tenant-level `claim169` block (and drop legacy top-level `trustedIssuers`).
+// Without this plugin RxDB throws "function must be overwritten by a plugin"
+// on init.
 import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema'
 addRxPlugin(RxDBMigrationSchemaPlugin)
 
@@ -261,7 +263,15 @@ export async function getDatabase(): Promise<RxDatabase> {
       tenantapps: {
         schema: TenantAppSchema,
         migrationStrategies: {
-          1: (oldDoc) => oldDoc // v0 → v1: optional `programs` array added; no data transform needed.
+          1: (oldDoc) => oldDoc, // v0 → v1: optional `programs` array added; no data transform needed.
+          2: (oldDoc: Record<string, unknown>) => {
+            // v1 → v2: introduce tenant-level claim169 block, drop legacy
+            // top-level `trustedIssuers` (never wired from the wizard).
+            // Operator wires claim169 via the new admin tab; default disabled.
+            oldDoc.claim169 = { enabled: false, trustedIssuers: [] }
+            delete oldDoc.trustedIssuers
+            return oldDoc
+          }
         }
       }
     })
