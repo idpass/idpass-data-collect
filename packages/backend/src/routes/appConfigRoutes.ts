@@ -501,6 +501,71 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
     }),
   );
 
+  // JSON-body PATCH for editing only the claim169 block. Mobile reads
+  // claim169 from the public artifact, so regenerate after saving (same
+  // pattern as the programs PATCH).
+  // Body: `{ claim169: Claim169Config | null }` — null clears the block.
+  router.patch(
+    "/:id/claim169",
+    adminAuth,
+    asyncHandler(async (req, res) => {
+      const { id } = req.params;
+      ensureValidConfigId(id);
+
+      const Claim169PatchSchema = z.object({
+        claim169: z
+          .object({
+            enabled: z.boolean(),
+            trustedIssuers: z.array(z.object({
+              issuerId: z.string().min(1),
+              publicKey: z.object({
+                ed25519: z.string().nullish(),
+                es256: z.string().nullish(),
+              }),
+            })),
+          })
+          .nullable(),
+      });
+      const parsed = Claim169PatchSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res
+          .status(400)
+          .json({ error: "Invalid claim169 payload", details: parsed.error.issues });
+      }
+
+      // Zod `.nullish()` lets clients omit `ed25519`/`es256` as either `null`
+      // or `undefined`; normalise to `undefined` so the persisted shape
+      // matches the `Claim169Config` interface (which omits the field
+      // entirely when no key is provided).
+      const normalisedClaim169 = parsed.data.claim169
+        ? {
+            enabled: parsed.data.claim169.enabled,
+            trustedIssuers: parsed.data.claim169.trustedIssuers.map((issuer) => ({
+              issuerId: issuer.issuerId,
+              publicKey: {
+                ...(issuer.publicKey.ed25519 ? { ed25519: issuer.publicKey.ed25519 } : {}),
+                ...(issuer.publicKey.es256 ? { es256: issuer.publicKey.es256 } : {}),
+              },
+            })),
+          }
+        : null;
+
+      const existing = await appConfigStore.getConfig(id);
+      const updated: AppConfig = {
+        ...existing,
+        claim169: normalisedClaim169,
+      };
+      await appConfigStore.saveConfig(updated);
+      await appInstanceStore.updateAppInstance(id);
+
+      const baseUrl = resolvePublicBaseUrl(req);
+      const persistedConfig = await appConfigStore.getConfig(id);
+      await generatePublicArtifacts(baseUrl, persistedConfig);
+
+      res.json({ status: "success", claim169: persistedConfig.claim169 ?? null });
+    }),
+  );
+
   router.delete(
     "/:id",
     adminAuth,
