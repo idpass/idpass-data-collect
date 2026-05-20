@@ -234,7 +234,7 @@ watch(() => Claim169ScannerService.isOpen.value, async (isOpen) => {
                   This credential is no longer valid.
                 </template>
                 <template v-else>
-                  Signature checked against trusted issuer · no network used.
+                  Signature checked against trusted issuer.
                 </template>
               </div>
             </div>
