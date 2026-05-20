@@ -192,28 +192,6 @@ export interface Claim169Config {
   trustedIssuers: Claim169TrustedIssuer[]
 }
 
-// Discovered OpenSPP program option surfaced by `/api/openspp/programs/discover`.
-// Used by the admin program picker to populate AppProgram[] without manual entry.
-export interface OpenSppProgramOption {
-  id: number
-  name: string
-  code?: string
-  state: string
-  targetType: 'individual' | 'group'
-}
-
-// POST /api/openspp/programs/discover — probes OpenSPP for available programs
-// using ad-hoc credentials (not persisted). Used during program-picker UI.
-export const discoverOpenSppPrograms = async (args: {
-  url: string
-  clientId: string
-  clientSecret: string
-  filter?: { status?: 'active' | 'ended'; targetType?: 'individual' | 'group'; name?: string }
-}): Promise<{ programs: OpenSppProgramOption[]; total: number; truncated: boolean }> => {
-  const response = await api().post('/api/openspp/programs/discover', args)
-  return response.data
-}
-
 // PATCH /api/apps/:id/claim169 — Claim-169 trust anchors + enable flag.
 // Pass `null` to clear the block; pass a `Claim169Config` to set/replace it.
 // Triggers public-artifact regeneration so mobile picks up the change on next pull.
