@@ -17,9 +17,10 @@ import DataDiagnostics from '@/components/DataDiagnostics.vue'
 import SyncStatusPanel from '@/components/SyncStatusPanel.vue'
 import SyncScopeCard from '@/components/SyncScopeCard.vue'
 import ProgramsCard from '@/components/ProgramsCard.vue'
+import Claim169Card from '@/components/Claim169Card.vue'
 import { useFeatureFlag } from '@/composables/useFeatureFlag'
 import type { SyncScopePolicy } from '@idpass/data-collect-core'
-import type { AppProgram } from '@/api'
+import type { AppProgram, Claim169Config } from '@/api'
 
 interface EntityForm {
   name: string
@@ -75,6 +76,7 @@ interface AppConfig {
   selfService?: SelfServiceConfig
   syncScope?: SyncScopePolicy | null
   programs?: AppProgram[]
+  claim169?: Claim169Config | null
   createdAt?: string
   updatedAt?: string
 }
@@ -95,7 +97,7 @@ const router = useRouter()
 const app = ref<AppConfig | null>(null)
 const isLoading = ref(true)
 const error = ref<string | null>(null)
-const activeTab = ref<'entities' | 'forms' | 'integration' | 'mapping' | 'auth' | 'programs'>('entities')
+const activeTab = ref<'entities' | 'forms' | 'integration' | 'mapping' | 'auth' | 'programs' | 'claim169'>('entities')
 // Demo-mode: donor audience never touches the config-time tabs.
 // Toggle to false post-demo to restore Mapping + Auth tabs.
 const demoMode = ref(true)
@@ -116,6 +118,14 @@ function onProgramsUpdated(programs: AppProgram[]) {
   if (!app.value) return
   app.value = { ...app.value, programs }
 }
+
+const editableClaim169 = computed<Claim169Config>({
+  get: () => app.value?.claim169 ?? { enabled: false, trustedIssuers: [] },
+  set: (value) => {
+    if (!app.value) return
+    app.value = { ...app.value, claim169: value }
+  },
+})
 
 const isOpenSppAdapter = computed(() => {
   const type = app.value?.externalSync?.type
@@ -589,6 +599,7 @@ watch(
               <v-tab value="forms">Forms</v-tab>
               <v-tab value="integration">Integration</v-tab>
               <v-tab v-if="isOpenSppAdapter" value="programs">Programs</v-tab>
+              <v-tab v-if="isOpenSppAdapter" value="claim169">Claim-169</v-tab>
               <v-tab v-if="!demoMode" value="mapping">Field Mapping</v-tab>
               <v-tab v-if="!demoMode" value="auth">Authentication</v-tab>
             </v-tabs>
@@ -798,6 +809,22 @@ watch(
                     :external-sync="app.externalSync ?? null"
                     @update:programs="onProgramsUpdated"
                   />
+                </div>
+              </v-window-item>
+
+              <v-window-item v-if="isOpenSppAdapter" value="claim169">
+                <div class="section-panel">
+                  <div class="section-panel__header">
+                    <div>
+                      <h2 class="section-panel__title">Claim-169</h2>
+                      <p class="section-panel__subtitle">
+                        Tenant-level trust anchors for Claim-169 verifiable
+                        identity attestations. Mobile clients require at least one
+                        trusted issuer to verify signed credentials.
+                      </p>
+                    </div>
+                  </div>
+                  <Claim169Card :app-id="app.id" v-model="editableClaim169" />
                 </div>
               </v-window-item>
 
