@@ -145,17 +145,9 @@ export interface SelfServiceConfig {
  * Program enrolment offering surfaced to mobile clients via tenant config.
  * The `id` is the OpenSPP `spp.program` primary key sent as
  * `detail.program_id` on `assign_program` ChangeRequest pushes.
- *
- * `id` is optional because OpenSPP V2 API deliberately hides Odoo PKs (see
- * spp_api_v2/services/program_service.py). When the operator can supply a
- * numeric key (manual entry or via the `spp_program_id` extension), it
- * lands here. When only the URN is available, callers fall back to
- * `identifier` to round-trip the selection — the assign_program CR push
- * cannot succeed without a numeric `id` until OpenSPP exposes one.
  */
 export interface AppProgram {
-  id?: number;
-  identifier?: string;
+  id: number;
   name: string;
   code?: string;
 }

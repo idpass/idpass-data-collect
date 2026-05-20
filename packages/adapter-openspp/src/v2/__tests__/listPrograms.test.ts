@@ -51,27 +51,22 @@ describe("OpenSppV2Client.listPrograms", () => {
     mockAxios.restore();
   });
 
-  it("returns mapped programs from /Program with real V2 shape", async () => {
+  it("returns mapped programs from /Program", async () => {
     ({ client, mock: mockAxios } = buildClient());
     mockAxios.onGet("/api/v2/spp/Program").reply(200, {
       data: [
         {
-          type: "Program",
-          identifier: [{ system: "urn:openspp:program", value: "widow-disability" }],
-          active: true,
+          id: 3,
           name: "Widow Disability Support",
-          programType: {
-            coding: [
-              { system: "urn:openspp:vocab:program-type", code: "cash-transfer" },
-            ],
-          },
+          code: "widow-disability",
+          state: "active",
           targetType: "individual",
         },
         {
-          type: "Program",
-          identifier: [{ system: "urn:openspp:program", value: "ect-2024" }],
-          active: false,
-          name: "Elderly Cash Transfer (closed)",
+          id: 7,
+          name: "Elderly Cash Transfer",
+          code: "ect-2024",
+          state: "active",
           targetType: "individual",
         },
       ],
@@ -83,70 +78,22 @@ describe("OpenSppV2Client.listPrograms", () => {
 
     expect(result.programs).toHaveLength(2);
     expect(result.programs[0]).toEqual({
-      id: undefined,
-      identifier: "urn:openspp:program|widow-disability",
+      id: 3,
       name: "Widow Disability Support",
-      code: "cash-transfer",
+      code: "widow-disability",
       state: "active",
       targetType: "individual",
     });
-    // active:false maps to state:ended
-    expect(result.programs[1].state).toBe("ended");
     expect(result.hasMore).toBe(false);
     expect(result.nextLastId).toBeUndefined();
   });
 
-  it("parses numeric identifier value into id when present", async () => {
-    ({ client, mock: mockAxios } = buildClient());
-    mockAxios.onGet("/api/v2/spp/Program").reply(200, {
-      data: [
-        {
-          type: "Program",
-          identifier: [{ system: "urn:openspp:program:pk", value: "42" }],
-          active: true,
-          name: "Tagged Program",
-          targetType: "individual",
-        },
-      ],
-      meta: { total: 1, count: 1, offset: 0 },
-      links: {},
-    });
-
-    const result = await client.listPrograms();
-
-    expect(result.programs[0].id).toBe(42);
-    expect(result.programs[0].identifier).toBe("urn:openspp:program:pk|42");
-  });
-
-  it("hasMore stays false when last item lacks numeric identifier (cursor unavailable)", async () => {
+  it("flags hasMore + nextLastId when result fills the page", async () => {
     ({ client, mock: mockAxios } = buildClient());
     const data = Array.from({ length: 100 }, (_, i) => ({
-      type: "Program",
-      identifier: [{ system: "urn:openspp:program", value: `program-${i + 1}` }],
-      active: true,
+      id: i + 1,
       name: `Program ${i + 1}`,
-      targetType: "individual",
-    }));
-    mockAxios.onGet("/api/v2/spp/Program").reply(200, {
-      data,
-      meta: { total: 250, count: 100, offset: 0 },
-      links: {},
-    });
-
-    const result = await client.listPrograms();
-
-    // Page is exactly `count` but no numeric cursor → adapter stops paging.
-    expect(result.hasMore).toBe(false);
-    expect(result.nextLastId).toBeUndefined();
-  });
-
-  it("hasMore + nextLastId set when last item has a numeric identifier", async () => {
-    ({ client, mock: mockAxios } = buildClient());
-    const data = Array.from({ length: 100 }, (_, i) => ({
-      type: "Program",
-      identifier: [{ system: "urn:openspp:program:pk", value: String(i + 1) }],
-      active: true,
-      name: `Program ${i + 1}`,
+      state: "active",
       targetType: "individual",
     }));
     mockAxios.onGet("/api/v2/spp/Program").reply(200, {

@@ -33,22 +33,8 @@ vi.mock('@/api', () => ({
 const vuetify = createVuetify({ components, directives })
 
 const PROGRAMS = [
-  {
-    id: 3,
-    identifier: 'urn:openspp:program|widow-support',
-    name: 'Widow Support',
-    code: 'widow',
-    state: 'active',
-    targetType: 'individual' as const,
-  },
-  {
-    id: 7,
-    identifier: 'urn:openspp:program|elderly-cash',
-    name: 'Elderly Cash',
-    code: 'ect',
-    state: 'active',
-    targetType: 'individual' as const,
-  },
+  { id: 3, name: 'Widow Support', code: 'widow', state: 'active', targetType: 'individual' as const },
+  { id: 7, name: 'Elderly Cash', code: 'ect', state: 'active', targetType: 'individual' as const },
 ]
 
 let activeWrapper: VueWrapper | null = null
@@ -57,7 +43,7 @@ function mountDialog(
   props: {
     modelValue?: boolean
     creds?: { url: string; clientId: string; clientSecret: string }
-    linkedIdentifiers?: string[]
+    linkedIds?: number[]
   } = {},
 ) {
   const wrapper = mount(ProgramDiscoverDialog, {
@@ -65,7 +51,7 @@ function mountDialog(
     props: {
       modelValue: true,
       creds: { url: 'http://x', clientId: 'c', clientSecret: 's' },
-      linkedIdentifiers: [],
+      linkedIds: [],
       ...props,
     },
     global: {
@@ -87,59 +73,71 @@ describe('ProgramDiscoverDialog', () => {
     document.body.innerHTML = ''
   })
 
-  const ID_3 = 'urn:openspp:program|widow-support'
-  const ID_7 = 'urn:openspp:program|elderly-cash'
-  // CSS.escape isn't available in jsdom; use attribute-selector quotes instead.
-  const ROW_3 = `[data-test="row-${ID_3}"]`
-  const ROW_7 = `[data-test="row-${ID_7}"]`
-
   it('fetches programs on mount + pre-checks already-linked', async () => {
     mockDiscover.mockResolvedValue({ programs: PROGRAMS, total: 2, truncated: false })
-    mountDialog({ linkedIdentifiers: [ID_3] })
+    mountDialog({ linkedIds: [3] })
     await flushPromises()
 
     expect(mockDiscover).toHaveBeenCalled()
     const rows = document.querySelectorAll('.program-row')
     expect(rows).toHaveLength(2)
 
-    const row3Checkbox = document.querySelector(`${ROW_3} input[type=checkbox]`) as HTMLInputElement | null
-    const row7Checkbox = document.querySelector(`${ROW_7} input[type=checkbox]`) as HTMLInputElement | null
+    // Row 3 is pre-checked, row 7 is not.
+    const row3Checkbox = document.querySelector(
+      '[data-test="row-3"] input[type=checkbox]',
+    ) as HTMLInputElement | null
+    const row7Checkbox = document.querySelector(
+      '[data-test="row-7"] input[type=checkbox]',
+    ) as HTMLInputElement | null
     expect(row3Checkbox?.checked).toBe(true)
     expect(row7Checkbox?.checked).toBe(false)
   })
 
-  it('emits save with diff (added + removed identifiers)', async () => {
+  it('emits save with diff (added + removed ids)', async () => {
     mockDiscover.mockResolvedValue({ programs: PROGRAMS, total: 2, truncated: false })
-    const wrapper = mountDialog({ linkedIdentifiers: [ID_3] })
+    const wrapper = mountDialog({ linkedIds: [3] })
     await flushPromises()
 
-    const row7Checkbox = document.querySelector(`${ROW_7} input[type=checkbox]`) as HTMLInputElement | null
+    // Check row 7 (add it).
+    const row7Checkbox = document.querySelector(
+      '[data-test="row-7"] input[type=checkbox]',
+    ) as HTMLInputElement | null
     expect(row7Checkbox).toBeTruthy()
     row7Checkbox!.checked = true
     row7Checkbox!.dispatchEvent(new Event('change', { bubbles: true }))
     await flushPromises()
 
-    const row3Checkbox = document.querySelector(`${ROW_3} input[type=checkbox]`) as HTMLInputElement | null
+    // Uncheck row 3 (remove it).
+    const row3Checkbox = document.querySelector(
+      '[data-test="row-3"] input[type=checkbox]',
+    ) as HTMLInputElement | null
     expect(row3Checkbox).toBeTruthy()
     row3Checkbox!.checked = false
     row3Checkbox!.dispatchEvent(new Event('change', { bubbles: true }))
     await flushPromises()
 
-    const saveBtn = document.querySelector('[data-test="save-btn"]') as HTMLElement | null
+    const saveBtn = document.querySelector(
+      '[data-test="save-btn"]',
+    ) as HTMLElement | null
     expect(saveBtn).toBeTruthy()
     saveBtn!.click()
     await flushPromises()
 
     const emitted = wrapper.emitted('save')
     expect(emitted).toBeTruthy()
-    const payload = emitted![0][0] as { programs: { id?: number; identifier: string }[] }
-    expect(payload.programs.find((p) => p.identifier === ID_7)).toBeTruthy()
-    expect(payload.programs.find((p) => p.identifier === ID_3)).toBeUndefined()
+    expect(emitted![0][0]).toEqual(
+      expect.objectContaining({
+        programs: expect.arrayContaining([expect.objectContaining({ id: 7 })]),
+      }),
+    )
+    // Row 3 was unchecked so it should NOT be in the payload.
+    const payload = emitted![0][0] as { programs: { id: number }[] }
+    expect(payload.programs.find((p) => p.id === 3)).toBeUndefined()
   })
 
   it('shows error banner on backend failure', async () => {
     mockDiscover.mockRejectedValue(new Error('openspp_auth_failed'))
-    mountDialog({ linkedIdentifiers: [] })
+    mountDialog({ linkedIds: [] })
     await flushPromises()
 
     const banner = document.querySelector('[data-test="error-banner"]')

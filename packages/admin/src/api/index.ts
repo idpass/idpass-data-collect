@@ -160,13 +160,8 @@ export const updateAppSyncScope = async (
 
 // Program offered for enrolment via OpenSPP `assign_program` CR workflow.
 // Mobile reads this from the public artifact to render the "Enroll in Program" picker.
-//
-// `id` is optional because OpenSPP V2 Program API hides Odoo PKs. When the
-// integer id isn't available, `identifier` (URN-style `system|value`) carries
-// the durable selection key; backend validation requires at least one.
 export interface AppProgram {
-  id?: number
-  identifier?: string
+  id: number
   name: string
   code?: string | null
 }
@@ -199,15 +194,8 @@ export interface Claim169Config {
 
 // Discovered OpenSPP program option surfaced by `/api/openspp/programs/discover`.
 // Used by the admin program picker to populate AppProgram[] without manual entry.
-//
-// `id` is best-effort: OpenSPP V2 deliberately hides Odoo primary keys. We only
-// receive a numeric `id` when the operator has tagged programs with a numeric
-// identifier (e.g. via spp_program_id). Otherwise consumers fall back to
-// `identifier` (URN of form `system|value`) — the same string the adapter sends
-// downstream when constructing assign_program CR payloads.
 export interface OpenSppProgramOption {
-  id?: number
-  identifier: string
+  id: number
   name: string
   code?: string
   state: string

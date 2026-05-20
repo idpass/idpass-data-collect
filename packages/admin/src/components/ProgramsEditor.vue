@@ -43,18 +43,12 @@ const canDiscover = computed(
     !!props.creds.clientSecret,
 )
 
-// Stable selection key. Prefer the URN identifier (always present from V2
-// discovery); fall back to the numeric id as a string when only legacy
-// manually-entered rows exist.
-const rowKey = (p: AppProgram | OpenSppProgramOption): string =>
-  p.identifier && p.identifier.length > 0 ? p.identifier : String(p.id ?? '')
+const linkedIds = computed(() => props.modelValue.map((p) => p.id))
 
-const linkedIdentifiers = computed(() => props.modelValue.map((p) => rowKey(p)).filter((k) => k.length > 0))
-
-const remove = (key: string) => {
+const remove = (id: number) => {
   emit(
     'update:modelValue',
-    props.modelValue.filter((p) => rowKey(p) !== key),
+    props.modelValue.filter((p) => p.id !== id),
   )
 }
 
@@ -62,8 +56,7 @@ const onDiscoverSave = (payload: { programs: OpenSppProgramOption[] }) => {
   emit(
     'update:modelValue',
     payload.programs.map((p) => ({
-      ...(p.id !== undefined ? { id: p.id } : {}),
-      ...(p.identifier ? { identifier: p.identifier } : {}),
+      id: p.id,
       name: p.name,
       ...(p.code ? { code: p.code } : {}),
     })),
@@ -96,28 +89,19 @@ const onDiscoverSave = (payload: { programs: OpenSppProgramOption[] }) => {
     <v-list v-else density="compact">
       <v-list-item
         v-for="p in modelValue"
-        :key="rowKey(p)"
-        :data-test="`row-${rowKey(p)}`"
+        :key="p.id"
+        :data-test="`row-${p.id}`"
       >
         <v-list-item-title>
-          <span class="font-weight-medium">{{ p.name }}</span>
-          <span v-if="p.id !== undefined" class="text-caption text-medium-emphasis ml-2">
-            #{{ p.id }}
-          </span>
-          <span v-if="p.code" class="text-caption text-medium-emphasis ml-2">
-            &middot; {{ p.code }}
-          </span>
+          {{ p.id }} &middot; {{ p.name }}<span v-if="p.code"> &middot; {{ p.code }}</span>
         </v-list-item-title>
-        <v-list-item-subtitle v-if="p.identifier" class="font-monospace text-caption">
-          {{ p.identifier }}
-        </v-list-item-subtitle>
         <template #append>
           <v-btn
             icon="mdi-close"
             variant="text"
             size="x-small"
-            :data-test="`remove-${rowKey(p)}`"
-            @click="remove(rowKey(p))"
+            :data-test="`remove-${p.id}`"
+            @click="remove(p.id)"
           />
         </template>
       </v-list-item>
@@ -126,7 +110,7 @@ const onDiscoverSave = (payload: { programs: OpenSppProgramOption[] }) => {
     <ProgramDiscoverDialog
       v-model="dialogOpen"
       :creds="creds"
-      :linked-identifiers="linkedIdentifiers"
+      :linked-ids="linkedIds"
       @save="onDiscoverSave"
     />
   </div>

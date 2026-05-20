@@ -28,7 +28,6 @@ import type {
   StudioFieldsResponse,
   Identifier,
   ProgramResource,
-  OpenSppV2ProgramRaw,
 } from "./types";
 import type {
   ChangeRequestCreate,
@@ -321,39 +320,24 @@ export class OpenSppV2Client {
     if (opts.lastId !== undefined) params._lastId = opts.lastId;
 
     try {
-      const response = await this.httpClient.get<SearchResult<OpenSppV2ProgramRaw>>(
+      const response = await this.httpClient.get<SearchResult<ProgramResource>>(
         "/api/v2/spp/Program",
         { headers: this.getAuthHeaders(), params },
       );
       const data = response.data.data ?? [];
-      const programs: ProgramResource[] = data.map((p) => {
-        const primary = p.identifier?.[0];
-        const identifier = primary ? `${primary.system}|${primary.value}` : "";
-        // OpenSPP V2 deliberately hides Odoo PKs (see program_service.py).
-        // If the operator has tagged programs with a numeric identifier
-        // (e.g. via the spp_program_id extension) we honour it; otherwise
-        // `id` is undefined and consumers must round-trip via `identifier`.
-        const parsedId =
-          primary && /^\d+$/.test(primary.value) ? Number.parseInt(primary.value, 10) : undefined;
-        const code = p.programType?.coding?.[0]?.code;
-        return {
-          id: parsedId,
-          identifier,
-          name: p.name,
-          code,
-          state: p.active ? "active" : "ended",
-          targetType: p.targetType,
-        };
-      });
+      const programs: ProgramResource[] = data.map((p) => ({
+        id: p.id,
+        name: p.name,
+        code: p.code,
+        state: p.state,
+        targetType: p.targetType,
+      }));
       // Heuristic: over-reports hasMore when the last page is exactly `count` rows.
       // A precise check would require `meta.total`; we accept the false positive
       // because the next call will simply return an empty page.
       const hasMore = data.length === count;
-      // V2 cursor needs an integer offset. When the last row carries no numeric
-      // id (most installs without spp_program_id) cursor pagination silently
-      // breaks — log and stop paging rather than re-issuing the same query.
-      const lastNumeric = hasMore ? programs[programs.length - 1]?.id : undefined;
-      return { programs, hasMore: hasMore && lastNumeric !== undefined, nextLastId: lastNumeric };
+      const nextLastId = hasMore ? data[data.length - 1]?.id : undefined;
+      return { programs, hasMore, nextLastId };
     } catch (error) {
       throw this.handleApiError(error, "Failed to list programs");
     }
