@@ -176,19 +176,6 @@ export interface GroupResource {
   meta?: ResourceMeta;
 }
 
-/**
- * Subset of OpenSPP V2 Program resource exposed by `GET /Program`.
- * We only project the fields the wizard picker needs — drop currency,
- * eligibility config, dates etc. (full Pydantic Program model is far larger).
- */
-export interface ProgramResource {
-  id: number;
-  name: string;
-  code?: string;
-  state: string;
-  targetType: 'individual' | 'group';
-}
-
 // ==================== Search Result (ADR-019) ====================
 
 /**
