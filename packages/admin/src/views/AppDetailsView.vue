@@ -806,7 +806,6 @@ watch(
                   <ProgramsCard
                     :app-id="app.id"
                     :programs="app.programs ?? []"
-                    :external-sync="app.externalSync ?? null"
                     @update:programs="onProgramsUpdated"
                   />
                 </div>

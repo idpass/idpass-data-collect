@@ -18,26 +18,17 @@
 -->
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch } from 'vue'
 import { AxiosError } from 'axios'
 import { updateAppPrograms, type AppProgram } from '@/api'
 import ProgramsEditor from './ProgramsEditor.vue'
 
-interface ExternalSyncSummary {
-  type?: string
-  url?: string
-  adapterConfig?: Record<string, string | number | boolean | undefined> | null
-}
-
 interface Props {
   appId: string
   programs: AppProgram[]
-  externalSync?: ExternalSyncSummary | null
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  externalSync: () => ({}),
-})
+const props = defineProps<Props>()
 
 const emit = defineEmits<{
   (e: 'update:programs', programs: AppProgram[]): void
@@ -64,19 +55,15 @@ const closeEdit = () => {
   showEdit.value = false
 }
 
-const adapterType = computed(() => props.externalSync?.type)
-
-const creds = computed(() => {
-  const cfg = props.externalSync?.adapterConfig ?? {}
-  return {
-    url: props.externalSync?.url ?? '',
-    clientId: String(cfg?.clientId ?? ''),
-    clientSecret: String(cfg?.clientSecret ?? ''),
-  }
-})
+const isDraftValid = () =>
+  draft.value.every((p) => Number.isInteger(p.id) && p.id > 0 && p.name.trim().length > 0)
 
 const onSave = async () => {
   errorMessage.value = null
+  if (!isDraftValid()) {
+    errorMessage.value = 'Every program needs a positive integer id and non-empty name.'
+    return
+  }
   saving.value = true
   try {
     const payload = draft.value.map((p) => ({
@@ -142,8 +129,8 @@ const onSave = async () => {
         </ul>
 
         <p v-else class="programs-card__hint">
-          Pick OpenSPP programs that field workers can enroll widows into. The mobile
-          "Enroll in Program" picker stays hidden until at least one entry is linked.
+          Add the OpenSPP program ids that field workers can enroll widows into. The mobile
+          "Enroll in Program" picker stays hidden until at least one entry is added.
         </p>
       </div>
     </v-card-text>
@@ -166,9 +153,9 @@ const onSave = async () => {
             {{ errorMessage }}
           </v-alert>
           <ProgramsEditor
-            v-model="draft"
-            :adapter-type="adapterType"
-            :creds="creds"
+            :programs="draft"
+            :disabled="saving"
+            @update:programs="(v) => (draft = v)"
           />
         </v-card-text>
         <v-card-actions>
