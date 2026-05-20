@@ -33,6 +33,7 @@ import { createAppConfigRoutes } from "./routes/appConfigRoutes";
 import { createConflictRouter } from "./routes/conflictRoutes";
 import { createEntitiesRouter } from "./routes/entitiesRoute";
 import { createOpenSppFieldRoutes } from "./routes/opensppFieldRoutes";
+import { createOpenSppRoutes } from "./routes/openSppRoutes";
 import { createPotentialDuplicatesRoute } from "./routes/potentialDuplicatesRoute";
 import { createSyncRouter } from "./routes/syncRoute";
 import { createUserRoutes } from "./routes/userRoutes";
@@ -206,6 +207,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   app.use("/api/sync", createSyncRouter(appInstanceStore, config.postgresUrl, telemetryStore));
   app.use("/api/users", createUserRoutes(userStore));
   app.use("/api/openspp-fields", createOpenSppFieldRoutes());
+  app.use("/api/openspp", createOpenSppRoutes());
   app.use("/api/potential-duplicates", createPotentialDuplicatesRoute(appInstanceStore));
   app.use("/api/auth", createSelfServiceRouter(otpStore, appInstanceStore, reviewStore));
   app.use("/api/reviews", createReviewRoutes(appInstanceStore, reviewStore, userStore));
