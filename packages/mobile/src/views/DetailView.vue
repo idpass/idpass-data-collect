@@ -51,11 +51,14 @@ const rejectedEnrolments = computed<Array<{ programId: number; programName?: str
     : []
 })
 
-// Programme Enrolment now targets the widow individual (the eligibility-bearing
-// person), not the household. Stays demo-narrative honest: disability is per-
-// person, not per-family. Gate the enrol card on the widow form specifically
-// so the dependent's individual page doesn't also offer enrolment.
-const isWidowApplicant = computed(() => entityForm.value?.name === 'widow')
+// Programme Enrolment targets individual entities (the eligibility-bearing
+// person), not groups. The OpenSPP `assign_program` CR's `program_id` is a
+// Many2one on the registrant partner — only individuals have program
+// memberships. Future refinement: once the discovery branch surfaces the
+// program `targetType`, filter per-program (some programs target groups, e.g.
+// household-level subsidies). For now we surface the enrol card on every
+// individual entity and rely on the OpenSPP side to reject mismatched pushes.
+const canEnrolInProgram = computed(() => entityForm.value?.entityType === 'individual')
 
 // Provenance from Claim-169 scans (offline VC verification). Surfaces as a
 // chip on the header so auditors can tell field-verified records apart from
@@ -257,7 +260,7 @@ const getEntityName = () => {
 
     <!-- Program Enrollment — standalone card, only shown for the widow individual entity -->
     <v-card
-      v-if="isWidowApplicant && programs.length > 0"
+      v-if="canEnrolInProgram && programs.length > 0"
       class="mb-4 enrolment-card"
       elevation="0"
       rounded="lg"
