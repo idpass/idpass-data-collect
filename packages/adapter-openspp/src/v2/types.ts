@@ -185,7 +185,7 @@ export interface ProgramResource {
   id: number;
   name: string;
   code?: string;
-  state: string;
+  state: 'active' | 'ended' | 'draft' | string;
   targetType: 'individual' | 'group';
 }
 

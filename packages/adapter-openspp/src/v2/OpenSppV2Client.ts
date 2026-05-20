@@ -295,7 +295,7 @@ export class OpenSppV2Client {
    * picker — operator chooses which programs the tenant offers for enrolment.
    *
    * Filters honoured: status (active/ended), targetType (individual/group),
-   * name (ilike search), count (page size; OpenSPP max=100), lastId (cursor).
+   * name (server does ilike match), count (page size; OpenSPP max=100), lastId (cursor).
    * Returns a flat `programs[]` (transformed from the full V2 Program shape
    * down to picker fields only) plus pagination hints.
    */
@@ -332,6 +332,9 @@ export class OpenSppV2Client {
         state: p.state,
         targetType: p.targetType,
       }));
+      // Heuristic: over-reports hasMore when the last page is exactly `count` rows.
+      // A precise check would require `meta.total`; we accept the false positive
+      // because the next call will simply return an empty page.
       const hasMore = data.length === count;
       const nextLastId = hasMore ? data[data.length - 1]?.id : undefined;
       return { programs, hasMore, nextLastId };
