@@ -84,6 +84,17 @@ const steps = computed<StepDef[]>(() => [
           route: 'wizard-programs',
           validate: () => true,
         },
+        {
+          id: 'claim169',
+          title: 'Claim-169',
+          icon: 'mdi-shield-check-outline',
+          route: 'wizard-claim169',
+          validate: () => {
+            const c = draftStore.draft.claim169
+            // Incomplete if enabled with no issuers; valid otherwise (disabled is fine).
+            return !c.enabled || c.trustedIssuers.length > 0
+          },
+        },
       ]
     : []),
   {

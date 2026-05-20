@@ -145,6 +145,11 @@ const router = createRouter({
           component: () => import('../views/wizard/ProgramsStep.vue'),
         },
         {
+          path: 'claim169',
+          name: 'wizard-claim169',
+          component: () => import('../views/wizard/Claim169Step.vue'),
+        },
+        {
           path: 'auth',
           name: 'wizard-auth',
           component: () => import('../views/wizard/AuthStep.vue'),

@@ -285,6 +285,59 @@ const doSubmit = async () => {
         </div>
       </v-card>
 
+      <!-- Claim-169 -->
+      <v-card
+        v-if="isOpenSppAdapter && (draftStore.draft.claim169.enabled || draftStore.draft.claim169.trustedIssuers.length > 0)"
+        class="summary-card"
+        variant="outlined"
+      >
+        <div class="summary-card__header" @click="goToStep('claim169')">
+          <h3>Claim-169</h3>
+          <v-chip
+            size="small"
+            :color="draftStore.draft.claim169.enabled ? 'success' : 'grey'"
+            variant="tonal"
+          >
+            {{ draftStore.draft.claim169.enabled ? 'Enabled' : 'Disabled' }}
+          </v-chip>
+          <v-chip size="small" color="primary" variant="tonal">
+            {{ draftStore.draft.claim169.trustedIssuers.length }}
+          </v-chip>
+          <v-spacer />
+          <v-btn icon="mdi-pencil" variant="text" size="small" />
+        </div>
+        <v-divider />
+        <div class="summary-card__body">
+          <div v-if="draftStore.draft.claim169.trustedIssuers.length === 0" class="summary-empty">
+            No trusted issuers configured
+          </div>
+          <div v-else>
+            <div
+              v-for="(iss, index) in draftStore.draft.claim169.trustedIssuers"
+              :key="index"
+              class="claim169-issuer-summary"
+            >
+              <v-icon icon="mdi-shield-key-outline" size="small" color="primary" />
+              <span class="claim169-issuer-summary__id">{{ iss.issuerId }}</span>
+              <v-chip
+                v-if="iss.publicKey.ed25519"
+                size="x-small"
+                variant="tonal"
+              >
+                ed25519
+              </v-chip>
+              <v-chip
+                v-if="iss.publicKey.es256"
+                size="x-small"
+                variant="tonal"
+              >
+                es256
+              </v-chip>
+            </div>
+          </div>
+        </div>
+      </v-card>
+
       <!-- Authentication -->
       <v-card class="summary-card" variant="outlined">
         <div class="summary-card__header" @click="goToStep('auth')">
@@ -535,6 +588,21 @@ const doSubmit = async () => {
   font-family: var(--font-mono, ui-monospace, monospace);
   color: var(--text-muted);
   min-width: 44px;
+}
+
+.claim169-issuer-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) 0;
+  font-size: var(--font-size-sm);
+}
+
+.claim169-issuer-summary__id {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--text-main);
+  word-break: break-all;
+  flex: 1;
 }
 
 .submit-section {
