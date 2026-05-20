@@ -4,6 +4,17 @@
   "description": "DCI demo (Friday 2026-05-15) — field agent intake of disabled-widow applications, pushed to OpenSPP via assign_program ChangeRequest workflow.",
   "version": "1.0.0",
   "syncServerUrl": "${DATACOLLECT_SYNC_URL}",
+  "claim169": {
+    "enabled": true,
+    "trustedIssuers": [
+      {
+        "issuerId": "did:web:demo-issuer.example.gov",
+        "publicKey": {
+          "ed25519": "${UC3_ISSUER_ED25519_PUB_B64}"
+        }
+      }
+    ]
+  },
   "entityForms": [
     {
       "id": "household",
