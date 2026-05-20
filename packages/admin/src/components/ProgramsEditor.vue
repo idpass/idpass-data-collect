@@ -18,111 +18,101 @@
 -->
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import type { AppProgram } from '@/api'
+import { ref, computed } from 'vue'
+import ProgramDiscoverDialog from './ProgramDiscoverDialog.vue'
+import type { AppProgram, OpenSppProgramOption } from '@/api'
 
 interface Props {
-  programs: AppProgram[]
-  disabled?: boolean
+  modelValue: AppProgram[]
+  adapterType?: string
+  creds: { url: string; clientId: string; clientSecret: string }
 }
 
-const props = withDefaults(defineProps<Props>(), { disabled: false })
-
+const props = defineProps<Props>()
 const emit = defineEmits<{
-  (e: 'update:programs', programs: AppProgram[]): void
+  (e: 'update:modelValue', v: AppProgram[]): void
 }>()
 
-const list = computed({
-  get: () => props.programs,
-  set: (v: AppProgram[]) => emit('update:programs', v),
-})
+const dialogOpen = ref(false)
 
-const addRow = () => {
-  list.value = [...list.value, { id: 0, name: '', code: '' }]
+const canDiscover = computed(
+  () =>
+    props.adapterType === 'openspp-v2-adapter' &&
+    !!props.creds.url &&
+    !!props.creds.clientId &&
+    !!props.creds.clientSecret,
+)
+
+const linkedIds = computed(() => props.modelValue.map((p) => p.id))
+
+const remove = (id: number) => {
+  emit(
+    'update:modelValue',
+    props.modelValue.filter((p) => p.id !== id),
+  )
 }
 
-const removeRow = (idx: number) => {
-  list.value = list.value.filter((_, i) => i !== idx)
+const onDiscoverSave = (payload: { programs: OpenSppProgramOption[] }) => {
+  emit(
+    'update:modelValue',
+    payload.programs.map((p) => ({
+      id: p.id,
+      name: p.name,
+      ...(p.code ? { code: p.code } : {}),
+    })),
+  )
 }
-
-const updateRow = (idx: number, patch: Partial<AppProgram>) => {
-  list.value = list.value.map((row, i) => (i === idx ? { ...row, ...patch } : row))
-}
-
-const idError = (row: AppProgram) =>
-  !Number.isInteger(row.id) || row.id <= 0 ? 'Positive integer required' : undefined
-
-const nameError = (row: AppProgram) => (!row.name.trim() ? 'Name is required' : undefined)
 </script>
 
 <template>
   <div class="programs-editor">
-    <p v-if="list.length === 0" class="empty-hint">
-      No programs configured. The mobile "Enroll in Program" picker stays hidden until at least one
-      entry is added.
-    </p>
-
-    <div
-      v-for="(row, idx) in list"
-      :key="idx"
-      class="program-row"
-      data-testid="program-row"
-    >
-      <v-text-field
-        :model-value="row.id || null"
-        type="number"
-        label="OpenSPP program id"
-        density="compact"
-        variant="outlined"
-        hide-details="auto"
-        :disabled="disabled"
-        :error-messages="idError(row)"
-        class="program-row__id"
-        @update:model-value="(v) => updateRow(idx, { id: parseInt(String(v ?? '0'), 10) || 0 })"
-      />
-      <v-text-field
-        :model-value="row.name"
-        label="Display name"
-        density="compact"
-        variant="outlined"
-        hide-details="auto"
-        :disabled="disabled"
-        :error-messages="nameError(row)"
-        class="program-row__name"
-        @update:model-value="(v) => updateRow(idx, { name: String(v ?? '') })"
-      />
-      <v-text-field
-        :model-value="row.code ?? ''"
-        label="Code (optional)"
-        density="compact"
-        variant="outlined"
-        hide-details
-        :disabled="disabled"
-        class="program-row__code"
-        @update:model-value="(v) => updateRow(idx, { code: String(v ?? '') })"
-      />
+    <div class="d-flex justify-space-between align-center mb-3">
+      <div class="text-subtitle-1 font-weight-bold">Programs offered for enrolment</div>
       <v-btn
-        icon="mdi-delete"
-        variant="text"
-        color="error"
+        color="primary"
+        variant="flat"
         size="small"
-        :disabled="disabled"
-        :aria-label="`Remove program ${idx + 1}`"
-        @click="removeRow(idx)"
-      />
+        prepend-icon="mdi-magnify"
+        :disabled="!canDiscover"
+        :title="canDiscover ? '' : 'Configure the OpenSPP integration step first.'"
+        data-test="discover-btn"
+        @click="dialogOpen = true"
+      >
+        Choose programs from OpenSPP
+      </v-btn>
     </div>
 
-    <v-btn
-      color="primary"
-      variant="tonal"
-      size="small"
-      prepend-icon="mdi-plus"
-      :disabled="disabled"
-      class="programs-editor__add"
-      @click="addRow"
-    >
-      Add program
-    </v-btn>
+    <div v-if="modelValue.length === 0" class="text-medium-emphasis text-center py-4">
+      No programs linked yet.
+    </div>
+
+    <v-list v-else density="compact">
+      <v-list-item
+        v-for="p in modelValue"
+        :key="p.id"
+        :data-test="`row-${p.id}`"
+      >
+        <v-list-item-title>
+          {{ p.id }} &middot; {{ p.name }}<span v-if="p.code"> &middot; {{ p.code }}</span>
+        </v-list-item-title>
+        <template #append>
+          <v-btn
+            icon="mdi-close"
+            variant="text"
+            size="x-small"
+            :data-test="`remove-${p.id}`"
+            @click="remove(p.id)"
+          />
+        </template>
+      </v-list-item>
+    </v-list>
+
+    <ProgramDiscoverDialog
+      v-model="dialogOpen"
+      :creds="creds"
+      :linked-ids="linkedIds"
+      @save="onDiscoverSave"
+    />
   </div>
 </template>
 
@@ -130,29 +120,5 @@ const nameError = (row: AppProgram) => (!row.name.trim() ? 'Name is required' : 
 .programs-editor {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md, 12px);
-}
-
-.empty-hint {
-  font-size: var(--font-size-sm);
-  color: var(--text-muted);
-  margin: 0 0 var(--spacing-sm) 0;
-}
-
-.program-row {
-  display: grid;
-  grid-template-columns: 140px 1fr 160px 40px;
-  gap: var(--spacing-sm, 8px);
-  align-items: start;
-}
-
-.programs-editor__add {
-  align-self: flex-start;
-}
-
-@media (max-width: 600px) {
-  .program-row {
-    grid-template-columns: 1fr;
-  }
 }
 </style>

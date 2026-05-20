@@ -18,29 +18,34 @@
 -->
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useProgramDraftStore } from '@/stores/programDraft'
 import ProgramsEditor from '@/components/ProgramsEditor.vue'
-import type { AppProgram } from '@/api'
 
 const draftStore = useProgramDraftStore()
 
-const onUpdate = (programs: AppProgram[]) => {
-  draftStore.draft.programs = programs
-}
+const creds = computed(() => {
+  const cfg = draftStore.draft.externalSync.adapterConfig ?? {}
+  return {
+    url: draftStore.draft.externalSync.url ?? '',
+    clientId: String(cfg.clientId ?? ''),
+    clientSecret: String(cfg.clientSecret ?? ''),
+  }
+})
 </script>
 
 <template>
   <div class="programs-step">
     <p class="step-description">
       Programs offered for enrolment via the OpenSPP <code>assign_program</code> ChangeRequest
-      workflow. Each entry needs the OpenSPP <code>spp.program</code> primary key (the integer id
-      sent as <code>detail.program_id</code> on the CR) and a display name shown to field workers.
-      Leave the list empty to hide the mobile "Enroll in Program" picker.
+      workflow. Pick from the OpenSPP catalogue using the discovery dialog &mdash; manual entry is
+      no longer supported. Leave the list empty to hide the mobile "Enroll in Program" picker.
     </p>
 
     <ProgramsEditor
-      :programs="draftStore.draft.programs"
-      @update:programs="onUpdate"
+      v-model="draftStore.draft.programs"
+      :adapter-type="draftStore.draft.externalSync.type"
+      :creds="creds"
     />
 
     <v-alert
@@ -49,8 +54,8 @@ const onUpdate = (programs: AppProgram[]) => {
       density="compact"
       class="mt-6"
     >
-      Find the program id in OpenSPP under <strong>Programs &rarr; Configuration</strong>. The id is
-      the numeric value at the end of the URL on the program detail page.
+      The "Choose programs from OpenSPP" button stays disabled until the OpenSPP integration step is
+      configured with a URL, client id, and client secret.
     </v-alert>
   </div>
 </template>

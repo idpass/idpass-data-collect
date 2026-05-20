@@ -29,6 +29,7 @@ const mockUpdateAppPrograms = vi.fn()
 
 vi.mock('@/api', () => ({
   updateAppPrograms: (...args: unknown[]) => mockUpdateAppPrograms(...args),
+  discoverOpenSppPrograms: vi.fn().mockResolvedValue({ programs: [], total: 0, truncated: false }),
 }))
 
 const vuetify = createVuetify({ components, directives })
@@ -103,24 +104,6 @@ describe('ProgramsCard', () => {
     const emitted = wrapper.emitted('update:programs')
     expect(emitted).toBeTruthy()
     expect(emitted![0][0]).toEqual(programs)
-  })
-
-  it('blocks save with inline error when a row has empty name', async () => {
-    const wrapper = mountCard({ programs: [{ id: 1, name: '' }] })
-
-    await wrapper.find('[data-testid="programs-edit-btn"]').trigger('click')
-    await flushPromises()
-
-    const saveBtn = document.querySelector(
-      '[data-testid="programs-save-btn"]',
-    ) as HTMLElement | null
-    saveBtn!.click()
-    await flushPromises()
-
-    expect(mockUpdateAppPrograms).not.toHaveBeenCalled()
-    const errorAlert = document.querySelector('[data-testid="programs-error"]')
-    expect(errorAlert).toBeTruthy()
-    expect(errorAlert!.textContent).toContain('positive integer id')
   })
 
   it('shows API error in inline alert when save fails', async () => {
