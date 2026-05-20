@@ -9,7 +9,6 @@ import { SyncLevel, FormClassifier } from '@idpass/data-collect-core'
 import { v4 as uuidv4 } from 'uuid'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useNetworkStatus } from '@/composables/useNetworkStatus'
 
 const route = useRoute()
 const router = useRouter()
@@ -18,7 +17,6 @@ const tenantapp = ref<TenantAppData>()
 const entityForm = ref<EntityForm>()
 const storedEntityData = ref<unknown>()
 const formio = ref<unknown>()
-const { isOffline } = useNetworkStatus()
 
 const navigateToDetail = () => {
   const appId = route.params.id as string
@@ -114,12 +112,6 @@ const onFormError = (error: unknown) => {
 
 <template>
   <v-container v-if="storedEntityData" fluid class="pa-4">
-    <div v-if="isOffline" class="d-flex justify-end align-center mb-3">
-      <v-chip size="x-small" color="warning" variant="tonal" prepend-icon="mdi-wifi-off">
-        Offline
-      </v-chip>
-    </div>
-
     <v-card elevation="0" class="form-shell">
       <v-card-text class="px-5 pt-5 pb-2">
         <div class="d-flex align-center justify-space-between ga-3">

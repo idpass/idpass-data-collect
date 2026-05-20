@@ -4,7 +4,6 @@ import { TenantAppData } from '@/schemas/tenantApp.schema'
 import { EntityForm } from '@/utils/formIoUtils'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useNetworkStatus } from '@/composables/useNetworkStatus'
 import {
   useEntitySubmissions,
   type SubmissionRecord,
@@ -18,7 +17,6 @@ const tenantapp = ref<TenantAppData>()
 const entityForm = ref<EntityForm>()
 const { submissions: allSubmissions, load: loadAllSubmissions } = useEntitySubmissions()
 const submissions = ref<SubmissionRecord[]>([])
-const { isOffline } = useNetworkStatus()
 
 const searchTerm = ref('')
 
@@ -127,9 +125,6 @@ const formatTimestamp = (timestamp: string) => {
     <div class="d-flex justify-end align-center mb-4">
       <div class="d-flex align-center ga-2">
         <v-chip size="small" color="info" variant="tonal">{{ entityForm?.displayTemplate || 'Form' }}</v-chip>
-        <v-chip v-if="isOffline" size="x-small" color="warning" variant="tonal" prepend-icon="mdi-wifi-off">
-          Offline
-        </v-chip>
       </div>
     </div>
 

@@ -8,7 +8,6 @@ import { SyncLevel, FormClassifier } from '@idpass/data-collect-core'
 import { v4 as uuidv4 } from 'uuid'
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useNetworkStatus } from '@/composables/useNetworkStatus'
 
 const props = defineProps<{
   id: string
@@ -25,7 +24,6 @@ const formio = ref<unknown>()
 const isGroup = ref(false)
 const entityTypeLabel = ref('')
 
-const { isOffline } = useNetworkStatus()
 
 type FormSubmissionEvent = {
   data: Record<string, unknown>
@@ -101,12 +99,6 @@ const onSubmit = async (submission: FormSubmissionEvent) => {
 
 <template>
   <v-container v-if="tenantapp && formio" fluid class="pa-4">
-    <div v-if="isOffline" class="d-flex justify-end align-center mb-3">
-      <v-chip size="x-small" color="warning" variant="tonal" prepend-icon="mdi-wifi-off">
-        Offline
-      </v-chip>
-    </div>
-
     <v-card elevation="0" class="form-shell">
       <v-card-text class="px-5 pt-5 pb-2">
         <div class="d-flex align-center justify-space-between ga-3">

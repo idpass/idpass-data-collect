@@ -8,7 +8,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { v4 as uuidv4 } from 'uuid'
 import type { FormSubmission, EntityDoc } from '@idpass/data-collect-core'
 import { SyncLevel } from '@idpass/data-collect-core'
-import { useNetworkStatus } from '@/composables/useNetworkStatus'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,7 +21,6 @@ const openEnrolDialog = ref(false)
 const events = ref<FormSubmission[]>([])
 const enrolBusy = ref(false)
 const enrolError = ref<string | null>(null)
-const { isOffline } = useNetworkStatus()
 
 const programs = computed<Program[]>(() => tenantapp.value?.programs ?? [])
 
@@ -217,12 +215,6 @@ const getEntityName = () => {
 
 <template>
   <v-container v-if="tenantapp && storedEntityData" fluid class="pa-4">
-    <div v-if="isOffline" class="d-flex justify-end align-center mb-4">
-      <v-chip size="x-small" color="warning" variant="tonal" prepend-icon="mdi-wifi-off">
-        Offline
-      </v-chip>
-    </div>
-
     <!-- Entity header -->
     <v-card elevation="2" class="mb-4">
       <v-card-text>
