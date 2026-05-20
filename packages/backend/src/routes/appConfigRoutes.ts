@@ -86,10 +86,18 @@ const AppConfigSchema = z.object({
    * `detail.program_id` on the CR.
    */
   programs: z.array(z.object({
-    id: z.number().int(),
+    // `id` is optional because OpenSPP V2 Program API hides Odoo PKs.
+    // `identifier` (URN-style `system|value`) is the durable fallback key
+    // when no numeric id is available. At least one of the two must be
+    // present so the entry is round-trippable.
+    id: z.number().int().nullish(),
+    identifier: z.string().nullish(),
     name: z.string().min(1),
     code: z.string().nullish(),
-  })).nullish(),
+  }).refine(
+    (p) => p.id !== null && p.id !== undefined || (typeof p.identifier === "string" && p.identifier.length > 0),
+    { message: "AppProgram requires either id or identifier" },
+  )).nullish(),
   /**
    * Claim-169 tenant-level trust anchors + enable flag. See type Claim169Config.
    */
@@ -465,11 +473,20 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
       const ProgramsPatchSchema = z.object({
         programs: z
           .array(
-            z.object({
-              id: z.number().int(),
-              name: z.string().min(1),
-              code: z.string().nullish(),
-            }),
+            z
+              .object({
+                // See main AppConfigSchema for the `id`/`identifier` rationale.
+                id: z.number().int().nullish(),
+                identifier: z.string().nullish(),
+                name: z.string().min(1),
+                code: z.string().nullish(),
+              })
+              .refine(
+                (p) =>
+                  (p.id !== null && p.id !== undefined) ||
+                  (typeof p.identifier === "string" && p.identifier.length > 0),
+                { message: "AppProgram requires either id or identifier" },
+              ),
           )
           .nullable(),
       });
@@ -482,7 +499,8 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
 
       const existing = await appConfigStore.getConfig(id);
       const normalisedPrograms = parsed.data.programs?.map((p) => ({
-        id: p.id,
+        ...(p.id !== null && p.id !== undefined ? { id: p.id } : {}),
+        ...(p.identifier ? { identifier: p.identifier } : {}),
         name: p.name,
         ...(p.code ? { code: p.code } : {}),
       }));

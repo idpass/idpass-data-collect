@@ -177,12 +177,35 @@ export interface GroupResource {
 }
 
 /**
- * Subset of OpenSPP V2 Program resource exposed by `GET /Program`.
- * We only project the fields the wizard picker needs — drop currency,
- * eligibility config, dates etc. (full Pydantic Program model is far larger).
+ * Raw shape OpenSPP V2 `GET /Program` actually returns (after Pydantic
+ * camelCase serialisation). The Pydantic model deliberately hides the Odoo
+ * `spp.program.id` primary key ("NO database IDs exposed" — see
+ * spp_api_v2/services/program_service.py). We model what's on the wire so
+ * the listPrograms transform stays type-safe.
+ */
+export interface OpenSppV2ProgramRaw {
+  type?: 'Program';
+  identifier: Array<{ system: string; value: string }>;
+  active: boolean;
+  name: string;
+  description?: string | null;
+  programType?: {
+    coding?: Array<{ system?: string; code?: string; display?: string }>;
+    text?: string;
+  };
+  targetType: 'individual' | 'group';
+}
+
+/**
+ * Picker-shaped Program returned by `listPrograms`. `identifier` carries the
+ * primary URN-style identifier (`system|value`) so consumers can re-use it
+ * for downstream CR payloads. `id` is best-effort: if OpenSPP exposes a
+ * numeric identifier we surface it here; otherwise it's left undefined and
+ * the consumer falls back to `identifier`.
  */
 export interface ProgramResource {
-  id: number;
+  id?: number;
+  identifier: string;
   name: string;
   code?: string;
   state: 'active' | 'ended' | 'draft' | string;

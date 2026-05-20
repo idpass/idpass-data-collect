@@ -24,7 +24,12 @@ import { discoverOpenSppPrograms, type OpenSppProgramOption } from '@/api'
 interface Props {
   modelValue: boolean
   creds: { url: string; clientId: string; clientSecret: string }
-  linkedIds: number[]
+  /**
+   * Identifiers (URN-style `system|value`) of programs already linked on the
+   * tenant. Used to pre-check rows. Identifier is the durable key because
+   * OpenSPP V2 hides Odoo PKs (`id` may be undefined per option).
+   */
+  linkedIdentifiers: string[]
 }
 
 const props = defineProps<Props>()
@@ -39,7 +44,7 @@ const error = ref<string | null>(null)
 const programs = ref<OpenSppProgramOption[]>([])
 const truncated = ref(false)
 const nameFilter = ref('')
-const selected = ref<Set<number>>(new Set(props.linkedIds))
+const selected = ref<Set<string>>(new Set(props.linkedIdentifiers))
 
 const fetchPrograms = async () => {
   loading.value = true
@@ -64,22 +69,22 @@ watch(
   () => props.modelValue,
   (open) => {
     if (open) {
-      selected.value = new Set(props.linkedIds)
+      selected.value = new Set(props.linkedIdentifiers)
       fetchPrograms()
     }
   },
   { immediate: true },
 )
 
-const toggle = (id: number, checked: boolean) => {
+const toggle = (identifier: string, checked: boolean) => {
   const next = new Set(selected.value)
-  if (checked) next.add(id)
-  else next.delete(id)
+  if (checked) next.add(identifier)
+  else next.delete(identifier)
   selected.value = next
 }
 
 const onSave = () => {
-  const chosen = programs.value.filter((p) => selected.value.has(p.id))
+  const chosen = programs.value.filter((p) => selected.value.has(p.identifier))
   emit('save', { programs: chosen })
   emit('update:modelValue', false)
 }
@@ -125,9 +130,8 @@ const onCancel = () => emit('update:modelValue', false)
           <thead>
             <tr>
               <th></th>
-              <th>ID</th>
+              <th>Identifier</th>
               <th>Name</th>
-              <th>Code</th>
               <th>State</th>
               <th>Target</th>
             </tr>
@@ -135,20 +139,22 @@ const onCancel = () => emit('update:modelValue', false)
           <tbody>
             <tr
               v-for="p in programs"
-              :key="p.id"
-              :data-test="`row-${p.id}`"
+              :key="p.identifier"
+              :data-test="`row-${p.identifier}`"
               class="program-row"
             >
               <td>
                 <input
                   type="checkbox"
-                  :checked="selected.has(p.id)"
-                  @change="(e) => toggle(p.id, (e.target as HTMLInputElement).checked)"
+                  :checked="selected.has(p.identifier)"
+                  @change="(e) => toggle(p.identifier, (e.target as HTMLInputElement).checked)"
                 />
               </td>
-              <td>{{ p.id }}</td>
+              <td>
+                <span class="font-monospace text-caption">{{ p.identifier }}</span>
+                <span v-if="p.id !== undefined" class="text-caption text-medium-emphasis ml-2">#{{ p.id }}</span>
+              </td>
               <td>{{ p.name }}</td>
-              <td>{{ p.code ?? '—' }}</td>
               <td>{{ p.state }}</td>
               <td>{{ p.targetType }}</td>
             </tr>
