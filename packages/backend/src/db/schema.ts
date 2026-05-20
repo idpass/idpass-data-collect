@@ -100,6 +100,7 @@ export const appConfigs = pgTable("app_configs", {
   archivedAt: timestamp("archived_at"),
   programs: jsonb("programs"),
   syncServerUrl: text("sync_server_url"),
+  claim169: jsonb("claim169"),
 });
 
 /**

@@ -152,6 +152,24 @@ export interface AppProgram {
   code?: string;
 }
 
+/**
+ * Claim-169 identity verification config carried at the tenant level.
+ * Powers the mobile AppView "scan-as-search" feature and the verify-confirm
+ * overlay. `enabled` false hides the quick-scan button entirely.
+ * `trustedIssuers` is the operator-curated list of issuer DIDs whose
+ * signatures the device accepts offline (no network call at verify time).
+ */
+export interface Claim169Config {
+  enabled: boolean;
+  trustedIssuers: Array<{
+    issuerId: string;
+    publicKey: {
+      ed25519?: string;
+      es256?: string;
+    };
+  }>;
+}
+
 export interface AppConfig {
   id: string;
   artifactId?: string;
@@ -171,6 +189,11 @@ export interface AppConfig {
    * workflow. Empty/omitted hides the mobile "Enrol in Program" action.
    */
   programs?: AppProgram[];
+  /**
+   * Claim-169 trust anchors + enable flag. See {@link Claim169Config}.
+   * Null/undefined means feature off; mobile resolver returns enabled:false.
+   */
+  claim169?: Claim169Config | null;
   /**
    * Backend URL the mobile/admin clients call for sync push + pull. Stored
    * per-tenant so a single backend can serve tenants whose clients connect

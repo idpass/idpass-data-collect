@@ -91,6 +91,19 @@ const AppConfigSchema = z.object({
     code: z.string().nullish(),
   })).nullish(),
   /**
+   * Claim-169 tenant-level trust anchors + enable flag. See type Claim169Config.
+   */
+  claim169: z.object({
+    enabled: z.boolean().default(false),
+    trustedIssuers: z.array(z.object({
+      issuerId: z.string().min(1),
+      publicKey: z.object({
+        ed25519: z.string().nullish(),
+        es256: z.string().nullish(),
+      }),
+    })).default([]),
+  }).nullish(),
+  /**
    * Backend sync endpoint the mobile/admin clients use for this tenant.
    * Persisted (was previously accepted-but-dropped). Mobile reads it from
    * the downloaded tenant config to construct its sync URLs; without it the

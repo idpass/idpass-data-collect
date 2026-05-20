@@ -51,6 +51,7 @@ function mapRowToAppConfig(row: AppConfigRow, artifactId: string): AppConfig {
     archivedAt: row.archivedAt ?? null,
     programs: (row.programs ?? undefined) as AppConfig["programs"],
     syncServerUrl: row.syncServerUrl ?? undefined,
+    claim169: (row.claim169 ?? undefined) as AppConfig["claim169"],
   } as AppConfig;
 }
 
@@ -89,6 +90,7 @@ export class AppConfigStoreImpl implements AppConfigStore {
       await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS sync_scope JSONB`);
       await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS programs JSONB`);
       await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS sync_server_url TEXT`);
+      await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS claim169 JSONB`);
     } catch (error) {
       throw new Error(`Failed to initialize database: ${error}`);
     }
@@ -167,6 +169,7 @@ export class AppConfigStoreImpl implements AppConfigStore {
         syncScope: config.syncScope ?? null,
         programs: config.programs ? JSON.stringify(config.programs) : null,
         syncServerUrl: config.syncServerUrl ?? null,
+        claim169: config.claim169 ? JSON.stringify(config.claim169) : null,
       };
       await this.db
         .insert(appConfigs)
@@ -187,6 +190,7 @@ export class AppConfigStoreImpl implements AppConfigStore {
             syncScope: config.syncScope ?? null,
             programs: config.programs ? JSON.stringify(config.programs) : null,
             syncServerUrl: config.syncServerUrl ?? null,
+            claim169: config.claim169 ? JSON.stringify(config.claim169) : null,
             archivedAt: null,
           },
         });
