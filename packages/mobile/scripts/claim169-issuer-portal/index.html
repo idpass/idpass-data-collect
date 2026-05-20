@@ -299,6 +299,42 @@
     transition: background-color 120ms ease;
   }
   .download-actions a:hover { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-ink); }
+  .download-actions button.id-card-btn {
+    font-family: var(--sans);
+    font-size: 12.5px;
+    padding: 7px 14px;
+    border-radius: 4px;
+    border: 1px solid var(--brand);
+    color: #fff;
+    background: var(--brand);
+    cursor: pointer;
+    transition: background-color 120ms ease;
+  }
+  .download-actions button.id-card-btn:hover { background: var(--brand-ink); border-color: var(--brand-ink); }
+
+  /* ---- ID card preview --------------------------------------------------- */
+  .id-card-wrap {
+    margin: 18px 0;
+    display: flex;
+    justify-content: center;
+  }
+  /* Display canvas at half print resolution. Print/export resolution
+     stays at 1016x638 (ISO/IEC 7810 ID-1 at 300dpi) for crisp scans. */
+  #id-card-canvas {
+    width: 508px;
+    height: 320px;
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  }
+  .id-card-caption {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 6px;
+  }
 
   /* ---- issuer card sidebar ----------------------------------------------- */
   .issuer-card {
@@ -449,10 +485,17 @@
         <b>Issued:</b> <span id="meta-iat"></span><br />
         <b>Expires:</b> <span id="meta-exp"></span>
       </div>
+
+      <div class="id-card-wrap">
+        <canvas id="id-card-canvas" width="1016" height="638" aria-label="Mock national ID card with Claim-169 QR"></canvas>
+      </div>
+      <div class="id-card-caption">Mock national ID card &middot; back-of-card QR carries the Claim-169 VC</div>
+
       <div class="download-actions">
-        <a id="dl-qr" download="claim169-vc.qr.png">Download PNG</a>
-        <a id="dl-raw" download="claim169-vc.raw">Download raw VC</a>
-        <a id="dl-json" download="claim169-vc.json">Download JSON</a>
+        <button type="button" class="id-card-btn" id="dl-id-card">Download ID card</button>
+        <a id="dl-qr" download="claim169-vc.qr.png">QR only (PNG)</a>
+        <a id="dl-raw" download="claim169-vc.raw">Raw VC</a>
+        <a id="dl-json" download="claim169-vc.json">JSON</a>
       </div>
     </div>
   </section>
@@ -597,6 +640,13 @@
       document.getElementById('dl-json').href = URL.createObjectURL(jsonBlob);
       document.getElementById('dl-json').download = slugBase + '-vc.json';
 
+      // Render the mock ID card on canvas. Same canvas is exported on the
+      // "Download ID card" button click — single source of truth for what's
+      // shown + what's saved.
+      await renderIdCard(data);
+      const dlIdCardBtn = document.getElementById('dl-id-card');
+      dlIdCardBtn.onclick = () => exportIdCard(slugBase);
+
       output.classList.add('visible');
       output.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (err) {
@@ -607,6 +657,162 @@
       submitBtn.textContent = 'Issue & sign';
     }
   });
+
+  // ---- ID card renderer ---------------------------------------------------
+  // Draws a back-of-card style ID with the Claim-169 QR onto the visible
+  // canvas. ISO/IEC 7810 ID-1 aspect (85.60 x 53.98 mm) rendered at 300dpi
+  // so the QR scans cleanly when printed at 1:1.
+  async function renderIdCard(data) {
+    const canvas = document.getElementById('id-card-canvas');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width;   // 1016
+    const H = canvas.height;  // 638
+
+    // Background card
+    ctx.fillStyle = '#fdfcf8';
+    ctx.fillRect(0, 0, W, H);
+
+    // Header band
+    const headerH = 78;
+    ctx.fillStyle = '#1a2540';
+    ctx.fillRect(0, 0, W, headerH);
+    ctx.fillStyle = '#ff6d37';
+    ctx.fillRect(0, headerH, W, 5);
+
+    // Header text
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '600 22px "IBM Plex Sans", system-ui, sans-serif';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('NATIONAL IDENTITY CARD', 36, headerH / 2 - 6);
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = '400 12px "IBM Plex Mono", ui-monospace, monospace';
+    ctx.fillText('Demo Authority · National Social Registry', 36, headerH / 2 + 16);
+
+    // Layout: left = photo + identity fields, right = QR
+    const pad = 36;
+    const photoX = pad;
+    const photoY = headerH + 30;
+    const photoW = 180;
+    const photoH = 230;
+
+    // Photo placeholder — silhouette
+    ctx.fillStyle = '#e8e4d8';
+    ctx.fillRect(photoX, photoY, photoW, photoH);
+    ctx.strokeStyle = '#c8c2b0';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(photoX, photoY, photoW, photoH);
+    // Silhouette glyph
+    ctx.fillStyle = '#c8c2b0';
+    const cx = photoX + photoW / 2;
+    const cy = photoY + photoH / 2 - 18;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 32, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 80, 56, 38, 0, Math.PI, 0, true);
+    ctx.fill();
+    ctx.fillStyle = '#9b9582';
+    ctx.font = '400 9px "IBM Plex Mono", ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('PHOTO', cx, photoY + photoH - 18);
+    ctx.textAlign = 'left';
+
+    // Identity fields — right of photo
+    const fx = photoX + photoW + 28;
+    const id = data.claim169Input;
+    const fullName = id.firstName + ' ' + id.lastName;
+    const dob = id.dateOfBirth || '—';
+    const sexCode = id.gender;
+    const sex = sexCode === 1 ? 'Male' : sexCode === 2 ? 'Female' : sexCode === 3 ? 'Other' : '—';
+    const uin = id.id || '—';
+    const addr = id.address || '';
+
+    const labelStyle = (y) => {
+      ctx.fillStyle = '#6b6757';
+      ctx.font = '500 10px "IBM Plex Mono", ui-monospace, monospace';
+      ctx.textBaseline = 'top';
+      return y;
+    };
+    const valueStyle = (y) => {
+      ctx.fillStyle = '#1a2540';
+      ctx.font = '500 18px "IBM Plex Sans", system-ui, sans-serif';
+      ctx.textBaseline = 'top';
+      return y;
+    };
+
+    let y = photoY;
+    labelStyle(y); ctx.fillText('FULL NAME', fx, y); y += 14;
+    valueStyle(y); ctx.fillText(fullName, fx, y); y += 36;
+    labelStyle(y); ctx.fillText('UIN', fx, y); y += 14;
+    ctx.fillStyle = '#1a2540';
+    ctx.font = '500 16px "IBM Plex Mono", ui-monospace, monospace';
+    ctx.fillText(uin, fx, y); y += 32;
+    labelStyle(y); ctx.fillText('DATE OF BIRTH', fx, y);
+    labelStyle(y); ctx.fillText('SEX', fx + 220, y); y += 14;
+    valueStyle(y); ctx.fillText(dob, fx, y);
+    valueStyle(y); ctx.fillText(sex, fx + 220, y); y += 36;
+    if (addr) {
+      labelStyle(y); ctx.fillText('ADDRESS', fx, y); y += 14;
+      ctx.fillStyle = '#1a2540';
+      ctx.font = '400 13px "IBM Plex Sans", system-ui, sans-serif';
+      ctx.fillText(addr.length > 38 ? addr.slice(0, 36) + '…' : addr, fx, y);
+    }
+
+    // QR — right edge
+    const qrSize = 260;
+    const qrX = W - pad - qrSize;
+    const qrY = headerH + 36;
+
+    // QR backdrop + dashed inner border (matches the on-page qr-frame vibe)
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(qrX - 10, qrY - 10, qrSize + 20, qrSize + 20);
+    ctx.strokeStyle = '#d4cfbb';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(qrX - 10, qrY - 10, qrSize + 20, qrSize + 20);
+
+    await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, qrX, qrY, qrSize, qrSize);
+        resolve();
+      };
+      img.onerror = reject;
+      img.src = data.qrPngDataUrl;
+    });
+
+    ctx.fillStyle = '#6b6757';
+    ctx.font = '400 10px "IBM Plex Mono", ui-monospace, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Scan with DataCollect mobile', qrX + qrSize / 2, qrY + qrSize + 6);
+    ctx.textAlign = 'left';
+
+    // Footer band
+    const footerY = H - 56;
+    ctx.fillStyle = '#f4efe1';
+    ctx.fillRect(0, footerY, W, 56);
+    ctx.fillStyle = '#6b6757';
+    ctx.font = '400 11px "IBM Plex Mono", ui-monospace, monospace';
+    const issuedIso = new Date(data.cwtMetaInput.issuedAt * 1000).toISOString().slice(0, 10);
+    const expiresIso = new Date(data.cwtMetaInput.expiresAt * 1000).toISOString().slice(0, 10);
+    ctx.fillText('Issued: ' + issuedIso + '   Expires: ' + expiresIso, 36, footerY + 16);
+    ctx.fillText(data.issuerId, 36, footerY + 34);
+  }
+
+  function exportIdCard(slugBase) {
+    const canvas = document.getElementById('id-card-canvas');
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = slugBase + '-id-card.png';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }, 'image/png');
+  }
 
   loadIssuer();
 </script>
