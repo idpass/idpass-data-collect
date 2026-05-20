@@ -27,6 +27,7 @@ import type {
   SearchResult,
   StudioFieldsResponse,
   Identifier,
+  ProgramResource,
 } from "./types";
 import type {
   ChangeRequestCreate,
@@ -286,6 +287,56 @@ export class OpenSppV2Client {
       return response.data;
     } catch (error) {
       throw this.handleApiError(error, "Failed to search individuals");
+    }
+  }
+
+  /**
+   * List programs registered on OpenSPP. Used by the admin wizard's Programs
+   * picker — operator chooses which programs the tenant offers for enrolment.
+   *
+   * Filters honoured: status (active/ended), targetType (individual/group),
+   * name (ilike search), count (page size; OpenSPP max=100), lastId (cursor).
+   * Returns a flat `programs[]` (transformed from the full V2 Program shape
+   * down to picker fields only) plus pagination hints.
+   */
+  async listPrograms(opts: {
+    status?: 'active' | 'ended';
+    targetType?: 'individual' | 'group';
+    name?: string;
+    count?: number;
+    lastId?: number;
+  } = {}): Promise<{
+    programs: ProgramResource[];
+    hasMore: boolean;
+    nextLastId?: number;
+  }> {
+    await this.authenticate();
+
+    const count = Math.min(opts.count ?? 100, 100);
+    const params: Record<string, string | number> = { _count: count };
+    if (opts.status) params.status = opts.status;
+    if (opts.targetType) params.targetType = opts.targetType;
+    if (opts.name) params.name = opts.name;
+    if (opts.lastId !== undefined) params._lastId = opts.lastId;
+
+    try {
+      const response = await this.httpClient.get<SearchResult<ProgramResource>>(
+        "/api/v2/spp/Program",
+        { headers: this.getAuthHeaders(), params },
+      );
+      const data = response.data.data ?? [];
+      const programs: ProgramResource[] = data.map((p) => ({
+        id: p.id,
+        name: p.name,
+        code: p.code,
+        state: p.state,
+        targetType: p.targetType,
+      }));
+      const hasMore = data.length === count;
+      const nextLastId = hasMore ? data[data.length - 1]?.id : undefined;
+      return { programs, hasMore, nextLastId };
+    } catch (error) {
+      throw this.handleApiError(error, "Failed to list programs");
     }
   }
 
