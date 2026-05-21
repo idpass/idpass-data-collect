@@ -203,6 +203,74 @@ describe("InternalSyncManager", () => {
     });
   });
 
+  describe("getUnsyncedEventsCount / hasUnsyncedEvents filter by syncLevel", () => {
+    const makeEvent = (guid: string, syncLevel: SyncLevel): FormSubmission => ({
+      guid,
+      entityGuid: `entity-${guid}`,
+      type: "create-individual",
+      data: {},
+      timestamp: "2025-01-01T00:00:00.000Z",
+      userId: "user-1",
+      syncLevel,
+    });
+
+    test("getUnsyncedEventsCount counts only LOCAL events", async () => {
+      (mockEventStore.getEventsSince as jest.Mock).mockResolvedValue([
+        makeEvent("a", 0 as SyncLevel),
+        makeEvent("b", 1 as SyncLevel),
+        makeEvent("c", 2 as SyncLevel),
+        makeEvent("d", 0 as SyncLevel),
+      ]);
+
+      const manager = new InternalSyncManager(
+        mockEventStore,
+        mockEntityStore,
+        mockEventApplierService,
+        "http://localhost:3000",
+        mockAuthStorage,
+        "test-config",
+      );
+
+      expect(await manager.getUnsyncedEventsCount()).toBe(2);
+    });
+
+    test("hasUnsyncedEvents returns false when only REMOTE/EXTERNAL events past watermark", async () => {
+      (mockEventStore.getEventsSince as jest.Mock).mockResolvedValue([
+        makeEvent("a", 1 as SyncLevel),
+        makeEvent("b", 2 as SyncLevel),
+      ]);
+
+      const manager = new InternalSyncManager(
+        mockEventStore,
+        mockEntityStore,
+        mockEventApplierService,
+        "http://localhost:3000",
+        mockAuthStorage,
+        "test-config",
+      );
+
+      expect(await manager.hasUnsyncedEvents()).toBe(false);
+    });
+
+    test("hasUnsyncedEvents returns true when at least one LOCAL event past watermark", async () => {
+      (mockEventStore.getEventsSince as jest.Mock).mockResolvedValue([
+        makeEvent("a", 1 as SyncLevel),
+        makeEvent("b", 0 as SyncLevel),
+      ]);
+
+      const manager = new InternalSyncManager(
+        mockEventStore,
+        mockEntityStore,
+        mockEventApplierService,
+        "http://localhost:3000",
+        mockAuthStorage,
+        "test-config",
+      );
+
+      expect(await manager.hasUnsyncedEvents()).toBe(true);
+    });
+  });
+
   describe("duplicate check integration", () => {
     test("sync should be blocked when potential duplicates exist", async () => {
       (mockEntityStore.getPotentialDuplicates as jest.Mock).mockResolvedValue([

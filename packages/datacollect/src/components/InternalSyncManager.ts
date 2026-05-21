@@ -23,6 +23,7 @@ import {
   EventStore,
   EntityStore,
   AuthStorageAdapter,
+  SyncLevel,
 } from "../interfaces/types";
 import { EventApplierService } from "../services/EventApplierService";
 import { createSyncMachine } from "./internalSync/syncMachine";
@@ -143,11 +144,16 @@ export class InternalSyncManager {
 
   /**
    * Gets the count of events waiting to be synchronized with the server.
+   *
+   * Only LOCAL events count as pending. REMOTE (pulled from /pull) and
+   * EXTERNAL (pulled from external adapter) events have already been
+   * delivered to the server, so including them inflates the count during
+   * first sync.
    */
   async getUnsyncedEventsCount(): Promise<number> {
     const lastSyncTimestamp = await this.eventStore.getLastLocalSyncTimestamp();
     const result = await this.eventStore.getEventsSince(lastSyncTimestamp);
-    return result.length;
+    return result.filter((event) => event.syncLevel === SyncLevel.LOCAL).length;
   }
 
   /**
@@ -157,7 +163,7 @@ export class InternalSyncManager {
     const lastSyncTimestamp =
       (await this.eventStore.getLastLocalSyncTimestamp()) || new Date(0);
     const result = await this.eventStore.getEventsSince(lastSyncTimestamp);
-    return result.length > 0;
+    return result.some((event) => event.syncLevel === SyncLevel.LOCAL);
   }
 
   /**
