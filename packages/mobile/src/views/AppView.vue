@@ -352,29 +352,27 @@ watch(filterChips, (chips) => {
 
 <template>
   <v-container v-if="tenantapp" fluid class="pa-4 app-view">
-    <div class="d-flex justify-end align-center mb-4">
-      <div class="d-flex ga-2">
-        <v-btn
-          prepend-icon="mdi-sync"
-          color="secondary"
-          variant="flat"
-          size="small"
-          :disabled="syncService.isSyncing || isOffline"
-          :loading="syncService.isSyncing"
-          :title="isOffline ? 'Sync requires an online connection' : 'Sync with server'"
-          @click="onSync"
-        >
-          Sync
-        </v-btn>
-        <v-btn
-          prepend-icon="mdi-logout"
-          variant="tonal"
-          size="small"
-          @click="onLogout"
-        >
-          Logout
-        </v-btn>
-      </div>
+    <div class="d-flex justify-space-between align-center mb-4">
+      <v-btn
+        prepend-icon="mdi-sync"
+        color="secondary"
+        variant="flat"
+        size="small"
+        :disabled="syncService.isSyncing || isOffline"
+        :loading="syncService.isSyncing"
+        :title="isOffline ? 'Sync requires an online connection' : 'Sync with server'"
+        @click="onSync"
+      >
+        Sync
+      </v-btn>
+      <v-btn
+        prepend-icon="mdi-logout"
+        variant="tonal"
+        size="small"
+        @click="onLogout"
+      >
+        Logout
+      </v-btn>
     </div>
 
     <v-card elevation="2" class="mb-4">
