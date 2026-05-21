@@ -523,12 +523,17 @@
  *     the formio base CSS adds via the bootstrap 4 input-group cascade.
  * ------------------------------------------------------------------------- */
 
-/* (1) Datetime: collapse to a single visible input + suffix frame */
-.formio-container .formio-component-datetime .input-group > input + input,
-.formio-container .formio-component-datetime .input-group > .flatpickr-input.flatpickr-mobile {
+/* (1) Datetime: hide the OS-native mobile shim that flatpickr injects
+ * alongside the visible text input. Earlier version used
+ * `.input-group > input + input` which hid every visible input after the
+ * Formio-internal hidden one, collapsing the whole control to just the
+ * calendar suffix. Target the mobile shim by class only. */
+.formio-container .formio-component-datetime .input-group > .flatpickr-mobile,
+.formio-container .formio-component-datetime .input-group > .flatpickr-mobileInput,
+.formio-container .formio-component-datetime .input-group > input.flatpickr-mobile {
   display: none !important;
 }
-.formio-container .formio-component-datetime .input-group > input:not([type='hidden']) {
+.formio-container .formio-component-datetime .input-group > input:not([type='hidden']):not(.flatpickr-mobile) {
   border-right: 0;
 }
 .formio-container .formio-component-datetime .input-group-text {
