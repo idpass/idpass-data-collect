@@ -98,9 +98,6 @@ const app = ref<AppConfig | null>(null)
 const isLoading = ref(true)
 const error = ref<string | null>(null)
 const activeTab = ref<'entities' | 'forms' | 'integration' | 'mapping' | 'auth' | 'programs' | 'claim169'>('entities')
-// Demo-mode: donor audience never touches the config-time tabs.
-// Toggle to false post-demo to restore Mapping + Auth tabs.
-const demoMode = ref(true)
 const showQrDialog = ref(false)
 const showAuthDialog = ref(false)
 const isDeleting = ref(false)
@@ -600,8 +597,8 @@ watch(
               <v-tab value="integration">Integration</v-tab>
               <v-tab v-if="isOpenSppAdapter" value="programs">Programs</v-tab>
               <v-tab v-if="isOpenSppAdapter" value="claim169">Claim-169</v-tab>
-              <v-tab v-if="!demoMode" value="mapping">Field Mapping</v-tab>
-              <v-tab v-if="!demoMode" value="auth">Authentication</v-tab>
+              <v-tab value="mapping">Field Mapping</v-tab>
+              <v-tab value="auth">Authentication</v-tab>
             </v-tabs>
 
             <v-window v-model="activeTab" class="details-window">
@@ -827,7 +824,7 @@ watch(
                 </div>
               </v-window-item>
 
-              <v-window-item v-if="!demoMode" value="mapping">
+              <v-window-item value="mapping">
                 <div class="section-panel">
                   <div class="section-panel__header">
                     <p class="section-panel__subtitle">
@@ -891,7 +888,7 @@ watch(
                 </div>
               </v-window-item>
 
-              <v-window-item v-if="!demoMode" value="auth">
+              <v-window-item value="auth">
                 <div class="section-panel">
                   <div class="section-panel__header">
                     <p class="section-panel__subtitle">

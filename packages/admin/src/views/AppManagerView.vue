@@ -8,7 +8,6 @@ import {
 } from '@/api'
 import AppCard from '@/components/AppCard.vue'
 import OverviewPanel from '@/components/OverviewPanel.vue'
-import RecentActivity, { type ActivityItem } from '@/components/RecentActivity.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSnackBarStore } from '@/stores/snackBar'
 import { AxiosError } from 'axios'
@@ -39,9 +38,6 @@ const showArchived = ref(false)
 const isLoading = ref(false)
 const isRefreshing = ref(false)
 
-// Demo-safety: synthetic activity feed is hidden until backed by a real endpoint.
-const enableRecentActivity = ref(false)
-
 const sortByOptions = [
   { title: 'Name', value: 'name' },
   { title: 'ID', value: 'id' },
@@ -62,20 +58,6 @@ const totalEntities = computed(() =>
   apps.value.reduce((sum, app) => sum + (app.entitiesCount || 0), 0),
 )
 const localOnlyCount = computed(() => Math.max(totalApps.value - syncEnabledCount.value, 0))
-
-// Generate recent activity from apps data
-const recentActivities = computed<ActivityItem[]>(() => {
-  // Create activity items from apps - this is a simplified version
-  // In a full implementation, this would come from a dedicated API endpoint
-  return apps.value.slice(0, 10).map((app, index) => ({
-    id: `activity-${app.id}-${index}`,
-    programId: app.id,
-    programName: app.name,
-    type: 'entity_created' as const,
-    description: `${app.entitiesCount || 0} entities in ${app.name}`,
-    timestamp: new Date(Date.now() - index * 3600000).toISOString(),
-  }))
-})
 
 let searchDebounce: ReturnType<typeof setTimeout> | undefined
 
@@ -236,10 +218,6 @@ const confirmImportOverwrite = () => {
 const cancelDuplicateConfirm = () => {
   showDuplicateConfirm.value = false
   pendingImportJson.value = null
-}
-
-const handleActivityClick = (activity: ActivityItem) => {
-  router.push({ name: 'app-details', params: { id: activity.programId } })
 }
 
 onMounted(() => {
@@ -424,12 +402,6 @@ onBeforeUnmount(() => {
           :is-loading="isLoading"
         />
 
-        <RecentActivity
-          v-if="enableRecentActivity"
-          :activities="recentActivities"
-          :is-loading="isLoading"
-          @activity-click="handleActivityClick"
-        />
       </aside>
     </div>
 
