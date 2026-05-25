@@ -33,14 +33,14 @@ describe('useClaim169Config', () => {
 
   it('returns enabled=false when tenant has no claim169 block', () => {
     const tenantStore = useTenantStore()
-    ;(tenantStore as any).tenant = { id: 'x', claim169: undefined }
+    ;(tenantStore as { tenant: unknown }).tenant ={ id: 'x', claim169: undefined }
     const result = useClaim169Config()
     expect(result.value.enabled).toBe(false)
   })
 
   it('returns enabled=false when block exists but disabled', () => {
     const tenantStore = useTenantStore()
-    ;(tenantStore as any).tenant = {
+    ;(tenantStore as { tenant: unknown }).tenant ={
       id: 'x',
       claim169: { enabled: false, trustedIssuers: [{ issuerId: 'x', publicKey: {} }] }
     }
@@ -50,7 +50,7 @@ describe('useClaim169Config', () => {
 
   it('returns enabled=false when issuers list is empty', () => {
     const tenantStore = useTenantStore()
-    ;(tenantStore as any).tenant = {
+    ;(tenantStore as { tenant: unknown }).tenant ={
       id: 'x',
       claim169: { enabled: true, trustedIssuers: [] }
     }
@@ -60,7 +60,7 @@ describe('useClaim169Config', () => {
 
   it('returns enabled=true with issuers when fully configured', () => {
     const tenantStore = useTenantStore()
-    ;(tenantStore as any).tenant = {
+    ;(tenantStore as { tenant: unknown }).tenant ={
       id: 'x',
       claim169: {
         enabled: true,

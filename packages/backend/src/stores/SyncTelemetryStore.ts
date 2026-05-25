@@ -17,7 +17,7 @@
  * under the License.
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { Pool } from "pg";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
@@ -82,21 +82,31 @@ export class SyncTelemetryStore {
   }
 
   /**
-   * Resolve the path to the canonical telemetry migration SQL. Resolves
-   * through the package's `.` export entry (always defined) rather than its
-   * `package.json` subpath (which would require the host to declare
-   * `"./package.json"` in exports — fragile across legacy installs).
+   * Resolve the path to the canonical telemetry migration SQL.
    *
-   * From `dist/cjs/index.js` walk two levels up to reach the package root
-   * (datacollect/), then descend into the `drizzle/` folder. Works for both
-   * workspace symlink (dev) and a published install (node_modules).
+   * `require.resolve` returns different layouts depending on how the
+   * consumer was loaded:
+   *   - published / built: `<pkgRoot>/dist/cjs/index.js`        → 3 ups = pkgRoot
+   *   - jest with `moduleNameMapper` pointing at source:
+   *     `<pkgRoot>/src/index.ts`                                → 2 ups = pkgRoot
+   *
+   * Counting fixed ancestors is fragile across those layouts. Walk up from
+   * the resolved entry until a directory contains `drizzle/`, the canonical
+   * marker of the package root.
    */
   private static migrationPath(): string {
-    // require.resolve returns `<pkgRoot>/dist/cjs/index.js`; the package root
-    // is two directories up from that file.
-    const mainEntry = require.resolve("@idpass/data-collect-core");
-    const pkgRoot = dirname(dirname(dirname(mainEntry)));
-    return resolve(pkgRoot, "drizzle/0001_add_sync_telemetry.sql");
+    let dir = dirname(require.resolve("@idpass/data-collect-core"));
+    for (let i = 0; i < 8; i++) {
+      if (existsSync(resolve(dir, "drizzle"))) {
+        return resolve(dir, "drizzle/0001_add_sync_telemetry.sql");
+      }
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+    throw new Error(
+      "Could not locate @idpass/data-collect-core drizzle directory from require.resolve entry",
+    );
   }
 
   /**
