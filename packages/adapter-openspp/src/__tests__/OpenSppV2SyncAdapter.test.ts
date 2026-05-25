@@ -227,6 +227,15 @@ describe("OpenSppV2SyncAdapter", () => {
       };
       eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
 
+      // Adapter probes GET first to fetch current versionId for optimistic
+      // locking; only PATCHes when the remote actually exists. A null GET
+      // sends the push down the discovery-then-POST recovery path.
+      mockV2ClientImplementation.getIndividual.mockResolvedValueOnce({
+        type: "Individual",
+        identifier: [{ system: "urn:openspp:vocab:id-type#system_id", value: "individual-1" }],
+        meta: { versionId: "remote-version-1" },
+      });
+
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
       const result = await adapter.pushData();
       expect(result).toEqual({ pushed: 1, failed: 0, skipped: 0, errors: [] });
@@ -239,7 +248,7 @@ describe("OpenSppV2SyncAdapter", () => {
         expect.objectContaining({
           name: expect.objectContaining({ family: "Smith" }),
         }),
-        undefined,
+        "remote-version-1",
       );
       expect(mockV2ClientImplementation.createIndividual).not.toHaveBeenCalled();
     });
@@ -398,6 +407,14 @@ describe("OpenSppV2SyncAdapter", () => {
       };
       eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
 
+      // GET first to fetch versionId; mock the existence so the push hits the
+      // PATCH branch instead of the discovery-then-POST recovery path.
+      mockV2ClientImplementation.getGroup.mockResolvedValueOnce({
+        type: "Group",
+        identifier: [{ system: "urn:openspp:vocab:id-type#system_id", value: "group-1" }],
+        meta: { versionId: "remote-group-version-1" },
+      });
+
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
       const result = await adapter.pushData();
       expect(result).toEqual({ pushed: 1, failed: 0, skipped: 0, errors: [] });
@@ -408,7 +425,7 @@ describe("OpenSppV2SyncAdapter", () => {
       expect(mockV2ClientImplementation.patchGroup).toHaveBeenCalledWith(
         "urn:openspp:vocab:id-type#system_id|group-1",
         expect.objectContaining({ name: "New Name" }),
-        undefined,
+        "remote-group-version-1",
       );
     });
   });
