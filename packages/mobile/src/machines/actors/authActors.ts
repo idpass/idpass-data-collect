@@ -128,10 +128,7 @@ export const handleDefaultLogin = fromPromise<DefaultLoginResult, { context: Aut
   if (isAuthenticated) {
     await mobileAuthStorage.setLastProvider('default', appId || undefined)
     const redirectUrl = appId ? `/app/${appId}` : '/'
-    // Replace, not push: leaving /app/:id/login on the history stack lets the
-    // global back button bounce an already-authenticated user back to the
-    // login screen.
-    await router.replace(redirectUrl)
+    await router.push(redirectUrl)
   }
   return { isAuthenticated }
 })
