@@ -173,7 +173,9 @@ export async function loginAndNavigateToApp(page: Page) {
   await page.fill('input[type="email"]', 'test@example.com')
   await page.fill('input[type="password"]', 'password123')
   await page.click('button[type="submit"]')
-  await page.waitForURL(`**/app/${TEST_APP_ID}`, { timeout: 15000 })
-  // Wait for auto-sync on mount to finish so the sync button becomes enabled
-  await page.locator('button:has-text("Sync")').waitFor({ state: 'visible', timeout: 10000 })
+  // Wait for AppView to render. The Sync button only exists there — using it
+  // as the landing signal avoids the URL-glob race on CI where the auth
+  // machine briefly bounces the user back to /login between push and the
+  // router guard's auth re-check.
+  await page.locator('button:has-text("Sync")').waitFor({ state: 'visible', timeout: 25000 })
 }
