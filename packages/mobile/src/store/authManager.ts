@@ -172,7 +172,14 @@ export const useAuthManagerStore = defineStore('authManager', () => {
 
       const platform = detectPlatform()
 
-      await initialize(targetAppId)
+      // Only (re)initialize when not already bound to this appId. Calling
+      // `initialize` unconditionally throws away the auth machine that the
+      // login flow just transitioned to `authenticated`, creating a window
+      // where `isAuthenticated()` reads stale state and bounces the user
+      // back to /login. Router guard already ensures init for fresh routes.
+      if (!isInitialized.value || appId.value !== targetAppId) {
+        await initialize(targetAppId)
+      }
       const isAppAuthenticated = authManager.value
         ? await authManager.value.isAuthenticated()
         : false
