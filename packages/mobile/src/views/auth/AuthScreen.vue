@@ -89,7 +89,10 @@ const handleOAuthCallback = async () => {
 
     const isAuthenticated = authManager.isAuthenticated
     if (isAuthenticated) {
-      await router.push(`/app/${appId}`)
+      // Replace so /callback and any prior /app/:id/login do not sit in
+      // history — back from /app/:id would otherwise return to the OAuth
+      // callback or login screen for an already-authenticated user.
+      await router.replace(`/app/${appId}`)
     } else {
       throw new Error('Authentication failed after callback processing')
     }
