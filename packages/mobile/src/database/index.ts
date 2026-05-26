@@ -56,8 +56,11 @@ addRxPlugin(RxDBLeaderElectionPlugin)
 import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema'
 addRxPlugin(RxDBMigrationSchemaPlugin)
 
-// dev-mode
-const isDevelop = import.meta.env.DEV && import.meta.env.VITE_DEVELOP
+// Dev/e2e mode. Gate on VITE_DEVELOP alone (not import.meta.env.DEV) so
+// `vite build --mode development` with VITE_DEVELOP=true also enables
+// RxDB dev plugins + window.db exposure. Production builds without the
+// env var still tree-shake the dev paths out.
+const isDevelop = import.meta.env.VITE_DEVELOP === 'true'
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode'
 if (isDevelop) {
   addRxPlugin(RxDBDevModePlugin)
@@ -275,8 +278,8 @@ export async function getDatabase(): Promise<RxDatabase> {
         }
       }
     })
-    if (import.meta.env.DEV && import.meta.env.VITE_DEVELOP) {
-      ;(window as unknown as { db: RxDatabase }).db = dbInstance // write to window for debugging
+    if (isDevelop) {
+      ;(window as unknown as { db: RxDatabase }).db = dbInstance // write to window for debugging + e2e seed
     }
   } catch (error) {
     console.error('Error adding collections:', error)

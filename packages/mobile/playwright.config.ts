@@ -19,20 +19,21 @@
 
 import { defineConfig } from '@playwright/test'
 
+// Serve a pre-built static bundle by default — deterministic across local
+// and CI, no Vite on-demand compile flake on cold starts. Set
+// `PLAYWRIGHT_DEV_SERVER=1` to switch to the dev server when iterating
+// locally with HMR.
+const useDevServer = !!process.env.PLAYWRIGHT_DEV_SERVER
+
 export default defineConfig({
   testDir: './e2e',
-  // CI cold-starts Vite per run; the first test on each worker can spend
-  // 20-40s waiting for on-demand chunk compilation before AppView mounts.
-  // Local typically reuses a warm dev server (much faster). Extra headroom
-  // + one retry on CI absorbs the cold-compile flake without masking real
-  // regressions (a real bug would fail both attempts).
-  timeout: process.env.CI ? 90_000 : 30_000,
-  retries: process.env.CI ? 1 : 0,
+  timeout: 30_000,
+  retries: 0,
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:8081',
     headless: true,
     screenshot: 'only-on-failure',
-    trace: process.env.CI ? 'retain-on-failure' : 'off',
+    trace: 'retain-on-failure',
   },
   projects: [
     {
@@ -41,10 +42,13 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'VITE_DEVELOP=true pnpm dev:web',
+    command: useDevServer
+      ? 'VITE_DEVELOP=true pnpm dev:web'
+      : 'pnpm run build:web:e2e && pnpm run preview:web',
     port: 8081,
     reuseExistingServer: !process.env.CI,
-    // First Vite compile on CI can take longer than the default 60s.
+    // Static build + preview-server boot: build takes 30-60s, preview boots
+    // instantly. Give plenty of headroom so a slow CI runner has room.
     timeout: 180_000,
   },
 })
