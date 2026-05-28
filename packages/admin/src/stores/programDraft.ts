@@ -19,7 +19,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import { getApp, getApps as getAppsApi, createApp as createAppApi, updateApp as updateAppApi, type FieldMapping } from '@/api'
+import { getApp, getApps as getAppsApi, createApp as createAppApi, updateApp as updateAppApi, type FieldMapping, type AppProgram, type Claim169Config } from '@/api'
 import type { OpenSppV2Field } from '@/api/opensppV2'
 import type { ExternalSyncField } from '@idpass/data-collect-core'
 
@@ -65,6 +65,10 @@ export interface ProgramDraft {
   externalSync: ExternalSync
   authConfigs: AuthConfig[]
   selfService: SelfServiceConfig
+  /** Programs offered for enrolment via OpenSPP `assign_program` CR workflow. */
+  programs: AppProgram[]
+  /** Claim-169 identity verification config (trust anchors + enable flag). */
+  claim169: Claim169Config
   /** Cached OpenSPP V2 fields for mapping UI */
   opensppV2Fields?: OpenSppV2Field[]
 }
@@ -127,6 +131,8 @@ const getEmptyDraft = (): ProgramDraft => ({
     languages: [],
     requireReview: false,
   },
+  programs: [],
+  claim169: { enabled: false, trustedIssuers: [] },
   opensppV2Fields: [],
 })
 
@@ -295,6 +301,8 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
               languages: [],
               requireReview: false,
             },
+        programs: config.programs ?? [],
+        claim169: config.claim169 ?? { enabled: false, trustedIssuers: [] },
       }
       errors.value = getEmptyErrors()
       mode.value = 'edit'
@@ -338,6 +346,8 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
               languages: [],
               requireReview: false,
             },
+        programs: config.programs ?? [],
+        claim169: config.claim169 ?? { enabled: false, trustedIssuers: [] },
       }
       errors.value = getEmptyErrors()
       mode.value = 'copy'
@@ -625,6 +635,10 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
         externalSync: draft.value.externalSync,
         authConfigs: draft.value.authConfigs,
         selfService: { ...draft.value.selfService },
+        programs: draft.value.programs,
+        claim169: draft.value.claim169.enabled || draft.value.claim169.trustedIssuers.length > 0
+          ? draft.value.claim169
+          : null,
       }
 
       const formData = new FormData()

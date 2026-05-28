@@ -26,7 +26,10 @@ vi.mock('@/utils/device')
 vi.mock('@/utils/getSyncServerByAppId')
 vi.mock('@capacitor/app')
 vi.mock('@/router', () => ({
-  default: { push: vi.fn().mockResolvedValue(undefined) },
+  default: {
+    push: vi.fn().mockResolvedValue(undefined),
+    replace: vi.fn().mockResolvedValue(undefined),
+  },
 }))
 
 // Mock IndexedDB-related modules from idpass-data-collect with proper implementations
@@ -355,7 +358,7 @@ describe('AuthManager Store', () => {
       await authManagerStore.handleDefaultLogin()
 
       expect(mockMobileAuthStorage.setLastProvider).toHaveBeenCalledWith('default', 'test-app-id')
-      expect(router.push).toHaveBeenCalledWith('/app/test-app-id')
+      expect(router.replace).toHaveBeenCalledWith('/app/test-app-id')
     })
 
     it('should not redirect if not authenticated', async () => {
@@ -455,7 +458,7 @@ describe('AuthManager Store', () => {
       const result = await authManagerStore.checkAuthenticationStatus('test-app-id')
 
       expect(result.isAuthenticated).toBe(false)
-      expect(result.error).toBe('No tenant or auth configuration found')
+      expect(result.error).toBe('No tenant configuration found')
     })
 
     it('should handle errors', async () => {

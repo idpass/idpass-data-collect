@@ -17,6 +17,30 @@
  * under the License.
  */
 
-export { OpenSppV2Client, PreconditionFailedError, ConflictError } from "./OpenSppV2Client";
+export {
+  OpenSppV2Client,
+  PreconditionFailedError,
+  ConflictError,
+  ChangeRequestRevisionNeededError,
+} from "./OpenSppV2Client";
 export { default as OpenSppV2SyncAdapter } from "./OpenSppV2SyncAdapter";
 export * from "./types";
+export type {
+  ChangeRequestType,
+  RegistrantRef,
+  ChangeRequestStatus,
+  ChangeRequestCreate,
+  ChangeRequestUpdate,
+  ChangeRequestResponse,
+} from "./ChangeRequestTypes";
+export {
+  DEFAULT_CR_TYPE_MAP,
+  resolveCRTypeCode,
+} from "./OpenSppV2AdapterOptions";
+export type {
+  ChangeRequestSubmitMode,
+  EventTypeKey,
+  OpenSppV2AdapterOptions,
+} from "./OpenSppV2AdapterOptions";
+export { CR_KEY_PREFIX, getCR, setCR, deleteCR, listInFlightCRs } from "./changeRequestStore";
+export type { CRRecord } from "./changeRequestStore";

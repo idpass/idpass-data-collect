@@ -178,7 +178,7 @@ onMounted(() => {
 
 <style scoped>
 .entity-guid {
-  font-family: monospace;
+  font-family: var(--font-family-mono);
   font-size: var(--font-size-sm);
 }
 

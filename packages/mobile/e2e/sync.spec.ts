@@ -59,7 +59,7 @@ test.describe('Sync Flow', () => {
     // AppView renders stat cards with class text-overline for labels
     await expect(page.locator('.text-overline:has-text("Synced")')).toBeVisible()
     await expect(page.locator('.text-overline:has-text("Pending")')).toBeVisible()
-    await expect(page.locator('.text-overline:has-text("Forms")')).toBeVisible()
+    await expect(page.locator('.text-overline:has-text("Records")')).toBeVisible()
   })
 
   test('should show error when sync fails', async ({ page }) => {

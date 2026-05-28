@@ -157,16 +157,29 @@ export const useAuthManagerStore = defineStore('authManager', () => {
       const tenantStore = useTenantStore()
       const tenant = await tenantStore.getTenant(targetAppId)
 
-      if (!tenant || !tenant._data.authConfigs) {
+      if (!tenant) {
         return {
           isAuthenticated: false,
-          error: 'No tenant or auth configuration found'
+          error: 'No tenant configuration found'
         }
       }
 
+      // Tenants without OAuth providers still authenticate via the backend's
+      // default email+password flow. AuthManager.isAuthenticated() handles
+      // both paths — a default token in IndexedDB is sufficient. Previously
+      // we required `authConfigs` to be present, which silently blocked all
+      // password-only tenants and bounced them back to /login.
+
       const platform = detectPlatform()
 
-      await initialize(targetAppId)
+      // Only (re)initialize when not already bound to this appId. Calling
+      // `initialize` unconditionally throws away the auth machine that the
+      // login flow just transitioned to `authenticated`, creating a window
+      // where `isAuthenticated()` reads stale state and bounces the user
+      // back to /login. Router guard already ensures init for fresh routes.
+      if (!isInitialized.value || appId.value !== targetAppId) {
+        await initialize(targetAppId)
+      }
       const isAppAuthenticated = authManager.value
         ? await authManager.value.isAuthenticated()
         : false

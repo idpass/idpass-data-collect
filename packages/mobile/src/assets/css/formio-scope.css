@@ -1,10 +1,15 @@
 /*
- * Formio Bootstrap Isolation
- * Bootstrap CSS is loaded ONLY within .formio-container,
- * preventing conflicts with Vuetify's global styles.
+ * Formio Bootstrap Isolation + Humanitarian Tech Polish
  *
- * The @layer directive gives Bootstrap lower cascade priority than
- * Vuetify and app styles, so .formio-container overrides always win.
+ * Bootstrap CSS is loaded ONLY within .formio-container, preventing conflicts
+ * with Vuetify's global styles. The @layer directive gives Bootstrap lower
+ * cascade priority than Vuetify and app styles, so .formio-container overrides
+ * always win.
+ *
+ * Everything below the @layer block enforces a single, consistent visual
+ * treatment for every Formio input — text, textarea, native select, Choices.js
+ * dropdown, datetime, and phone mask — so the form reads as one coherent
+ * component on mobile rather than a stack of fighting widgets.
  */
 
 @layer formio-bootstrap {
@@ -12,103 +17,702 @@
   @import 'font-awesome/css/font-awesome.min.css';
 }
 
-/* Brand-themed overrides for Formio form elements */
+/* ---------------------------------------------------------------------------
+ * Layout: vertical rhythm
+ * ------------------------------------------------------------------------- */
 
-/* Touch targets for Formio form inputs */
-.formio-container input:not([type="checkbox"]):not([type="radio"]),
+.formio-container,
+.formio-container .formio-form,
+.formio-container .formio-component {
+  font-family: var(--font-family);
+  color: var(--text-main);
+}
+
+.formio-container .formio-component {
+  margin-bottom: 0.75rem;
+}
+
+.formio-container .formio-component:last-of-type {
+  margin-bottom: 0;
+}
+
+/* The submit button sits in its own component block; give it room above. */
+.formio-container .formio-component-button {
+  margin-top: 1.25rem;
+  margin-bottom: 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * Labels — uniform across every input
+ * ------------------------------------------------------------------------- */
+
+.formio-container .form-label,
+.formio-container .control-label,
+.formio-container .col-form-label {
+  display: block;
+  color: var(--text-main);
+  font-family: var(--font-family);
+  font-weight: 500;
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+  margin-bottom: 0.375rem;
+}
+
+/* Required asterisk — brand orange, no spacing weirdness */
+.formio-container .field-required:after,
+.formio-container .control-label--required:after {
+  content: ' *';
+  color: var(--brand-dark);
+  font-weight: 600;
+}
+
+/* Helper / description text */
+.formio-container .form-text,
+.formio-container .formio-errors .help-block {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * Inputs — outlined, 48px, brand focus ring
+ * Applies to: <input>, <textarea>, <select> (native), AND Choices.js wrapper.
+ *
+ * NOTE on display/width:
+ *   `display: block; width: 100%` is what the screenshot demo expects for the
+ *   top-level inputs. But Bootstrap's `.input-group` lays its children out as
+ *   flex items — forcing `width: 100%` on the inner <input> breaks the row
+ *   (the calendar suffix wraps to its own line). We therefore only force
+ *   block+100% on inputs that are NOT inside an `.input-group`. Inputs that
+ *   live inside a group keep `flex: 1 1 auto` so the suffix stays aligned.
+ * ------------------------------------------------------------------------- */
+
+.formio-container input:not([type='checkbox']):not([type='radio']):not([type='file']):not(.input-group input),
 .formio-container textarea,
-.formio-container select {
+.formio-container select,
+.formio-container > .form-control,
+.formio-container .formio-component > .form-control,
+.formio-container .choices__inner {
+  display: block;
+  width: 100%;
+}
+
+.formio-container input:not([type='checkbox']):not([type='radio']):not([type='file']),
+.formio-container textarea,
+.formio-container select,
+.formio-container .form-control,
+.formio-container .choices__inner {
   min-height: var(--touch-target);
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: 0.625rem 0.875rem;
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-default);
+  border-radius: var(--radius-md);
+  background-color: var(--surface);
+  color: var(--text-main);
   font-family: var(--font-family);
   font-size: var(--font-size-base);
-  color: var(--text-main);
-  background-color: var(--surface);
+  line-height: 1.4;
+  box-shadow: none;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    background-color var(--transition-fast);
+}
+
+/* Inputs inside .input-group flex sensibly with the suffix */
+.formio-container .input-group > input,
+.formio-container .input-group > .form-control {
+  flex: 1 1 auto;
+  width: 1%;
+  min-width: 0;
+}
+
+.formio-container textarea,
+.formio-container .form-control textarea {
+  min-height: calc(var(--touch-target) * 1.5);
+  resize: vertical;
+}
+
+.formio-container input::placeholder,
+.formio-container textarea::placeholder,
+.formio-container .form-control::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
 }
 
 .formio-container input:focus,
 .formio-container textarea:focus,
-.formio-container select:focus {
+.formio-container select:focus,
+.formio-container .form-control:focus {
   outline: none;
   border-color: var(--brand);
   box-shadow: var(--focus-ring);
+  background-color: var(--surface);
 }
 
-/* Formio submit button styling */
-.formio-container .btn-primary {
-  background-color: var(--brand) !important;
-  border-color: var(--brand) !important;
-  color: var(--text-main) !important;
-  min-height: var(--touch-target);
-  font-weight: 500;
-  border-radius: 9999px;
-  padding: var(--spacing-sm) var(--spacing-lg);
-  transition: background-color var(--transition-fast);
-}
+/* ---------------------------------------------------------------------------
+ * Choices.js dropdown — make it look exactly like the inputs above
+ *
+ * Formio renders Select widgets via Choices.js. The visible affordance is
+ * .choices__inner (a div), not the (hidden) <select>. Without the rules
+ * below the wrapper renders nearly invisibly on top of the card surface —
+ * only the dark CSS-triangle chevron from formio.full.min.css is visible,
+ * which is the exact "broken Area dropdown" symptom from the demo screenshot.
+ * ------------------------------------------------------------------------- */
 
-.formio-container .btn-primary:hover,
-.formio-container .btn-primary:focus {
-  background-color: var(--brand-light) !important;
-  border-color: var(--brand-light) !important;
-}
-
-.formio-container .btn-primary:active {
-  background-color: var(--brand-dark) !important;
-  border-color: var(--brand-dark) !important;
-}
-
-/* Formio form control overrides */
-.formio-container .form-control {
-  border-color: var(--border-default);
-  border-radius: var(--radius-default);
-  min-height: var(--touch-target);
+.formio-container .choices {
+  margin-bottom: 0 !important;
   font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  position: relative;
 }
 
-.formio-container .form-control:focus {
+.formio-container .choices__inner {
+  display: flex;
+  align-items: center;
+  padding: 0.625rem 2.25rem 0.625rem 0.875rem; /* room for chevron */
+  background-color: var(--surface);
+  font-size: var(--font-size-base);
+  overflow: visible;
+}
+
+/* Hide the per-item "remove" (×) button — clutters the field and the user
+ * can already pick a different option from the dropdown. */
+.formio-container .choices .choices__button {
+  display: none !important;
+}
+
+/* Hide the formio autocomplete fallback input that sits AFTER .choices.
+ * Without this it inherits our 48px-tall input style and pushes the next
+ * field 48px down. The hidden <input class="choices__input"> inside the
+ * widget is already hidden by formio. */
+.formio-container input.formio-select-autocomplete-input {
+  display: none !important;
+}
+
+.formio-container .choices.is-focused .choices__inner,
+.formio-container .choices.is-open .choices__inner,
+.formio-container .choices:focus-within .choices__inner {
   border-color: var(--brand);
   box-shadow: var(--focus-ring);
 }
 
-.formio-container .form-control::placeholder {
-  color: var(--text-muted);
+.formio-container .choices__list--single {
+  padding: 0;
+  width: 100%;
 }
 
-/* Formio label styling */
-.formio-container .form-label,
-.formio-container .control-label {
+.formio-container .choices__list--single .choices__item {
+  width: 100%;
   color: var(--text-main);
-  font-weight: 500;
-  font-size: var(--font-size-sm);
-  margin-bottom: var(--spacing-xs);
 }
 
-/* Formio validation messages */
-.formio-container .formio-errors .error {
-  color: var(--status-danger);
-  font-size: var(--font-size-sm);
+.formio-container .choices__placeholder {
+  color: var(--text-muted);
+  opacity: 1;
 }
 
-/* Formio secondary/cancel buttons */
+/* Replace the default dark CSS-triangle with a tinted SVG chevron that
+ * lines up with the input frame and signals affordance on the mobile demo. */
+.formio-container .choices[data-type*='select-one']:after {
+  content: '';
+  width: 0.75rem;
+  height: 0.75rem;
+  border: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2364748B'><path fill-rule='evenodd' d='M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.06l3.71-3.83a.75.75 0 1 1 1.08 1.04l-4.25 4.39a.75.75 0 0 1-1.08 0L5.21 8.27a.75.75 0 0 1 .02-1.06z' clip-rule='evenodd'/></svg>");
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-position: center;
+  right: 0.875rem;
+  top: 50%;
+  margin-top: -0.375rem;
+  transition: transform var(--transition-fast);
+}
+
+.formio-container .choices[data-type*='select-one'].is-open:after {
+  transform: rotate(180deg);
+  margin-top: -0.375rem;
+}
+
+/* Dropdown menu */
+.formio-container .choices__list--dropdown {
+  background: var(--surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-floating);
+  margin-top: 0.25rem;
+  z-index: 50;
+}
+
+.formio-container .choices__list--dropdown .choices__item {
+  padding: 0.625rem 0.875rem;
+  color: var(--text-main);
+  font-size: var(--font-size-base);
+}
+
+.formio-container .choices__list--dropdown .choices__item--selectable.is-highlighted {
+  background-color: var(--brand-100);
+  color: var(--text-main);
+}
+
+/* ---------------------------------------------------------------------------
+ * Native <select> fallback (when widget != choicesjs)
+ * ------------------------------------------------------------------------- */
+
+.formio-container select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 2.25rem;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2364748B'><path fill-rule='evenodd' d='M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.06l3.71-3.83a.75.75 0 1 1 1.08 1.04l-4.25 4.39a.75.75 0 0 1-1.08 0L5.21 8.27a.75.75 0 0 1 .02-1.06z' clip-rule='evenodd'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 0.875rem center;
+  background-size: 0.75rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * Input groups (phone-mask, datetime, prefix/suffix)
+ * Bootstrap's .input-group is flex — we keep that, but unify the frame so
+ * input + suffix read as ONE outlined control. The visible input loses its
+ * right radius; the suffix gets the right radius.
+ * ------------------------------------------------------------------------- */
+
+.formio-container .input-group {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  position: relative;
+}
+
+/* Hide the formio "hidden mirror" input that flatpickr adds first.
+ * Without this the input-group lays out three children. */
+.formio-container .input-group > input[type='hidden'] {
+  display: none !important;
+}
+
+.formio-container .input-group > input,
+.formio-container .input-group > .form-control {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.formio-container .input-group > input + input,
+.formio-container .input-group > input + .form-control,
+.formio-container .input-group > .form-control + input,
+.formio-container .input-group > .form-control + .form-control {
+  /* When two inputs sit next to each other (rare), keep the LAST one rounded. */
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  border-left: 0;
+}
+
+.formio-container .input-group-append,
+.formio-container .input-group-prepend {
+  display: flex;
+  align-items: stretch;
+}
+
+.formio-container .input-group .input-group-text {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.875rem;
+  background: var(--surface);
+  border: 1px solid var(--border-default);
+  border-left: 0;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  color: var(--text-muted);
+  min-height: var(--touch-target);
+  font-size: var(--font-size-base);
+  white-space: nowrap;
+}
+
+.formio-container .input-group-prepend .input-group-text {
+  border-left: 1px solid var(--border-default);
+  border-right: 0;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+}
+
+/* When the group is focused (within), brand-tint the whole frame */
+.formio-container .input-group:focus-within > input,
+.formio-container .input-group:focus-within > .form-control {
+  border-color: var(--brand);
+  box-shadow: var(--focus-ring);
+  position: relative;
+  z-index: 1;
+}
+
+.formio-container .input-group:focus-within .input-group-text {
+  border-color: var(--brand);
+}
+
+/* Phone-mask: the masked placeholder should still read as muted */
+.formio-container .formio-component-phoneNumber input::placeholder {
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+/* Flatpickr (datetime) calendar icon */
+.formio-container .formio-component-datetime .input-group-text .fa-calendar,
+.formio-container .formio-component-datetime .input-group-text i {
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * Radio / checkbox — touch-friendly
+ * ------------------------------------------------------------------------- */
+
+.formio-container .form-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: var(--touch-target);
+  padding-left: 0;
+  margin-bottom: 0.25rem;
+}
+
+.formio-container .form-check-input {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: 0;
+  accent-color: var(--brand);
+  border-color: var(--border-default);
+}
+
+.formio-container .form-check-input:focus {
+  box-shadow: var(--focus-ring);
+  border-color: var(--brand);
+}
+
+.formio-container .form-check-label {
+  margin-bottom: 0;
+  font-weight: 400;
+  color: var(--text-main);
+  font-size: var(--font-size-base);
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------------------
+ * Submit button — brand orange, full-width inside form card
+ * ------------------------------------------------------------------------- */
+
+.formio-container .btn-primary,
+.formio-container button[type='submit'].btn {
+  width: 100%;
+  min-height: var(--touch-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--brand) !important;
+  border-color: var(--brand) !important;
+  color: #ffffff !important;
+  font-family: var(--font-family);
+  font-weight: 600;
+  font-size: var(--font-size-base);
+  letter-spacing: 0.01em;
+  border-radius: var(--radius-full);
+  padding: 0.75rem 1.25rem;
+  box-shadow: var(--shadow-subtle);
+  transition:
+    background-color var(--transition-fast),
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.formio-container .btn-primary:hover,
+.formio-container button[type='submit'].btn:hover {
+  background-color: var(--brand-light) !important;
+  border-color: var(--brand-light) !important;
+  box-shadow: var(--shadow-card);
+}
+
+.formio-container .btn-primary:active,
+.formio-container button[type='submit'].btn:active {
+  background-color: var(--brand-dark) !important;
+  border-color: var(--brand-dark) !important;
+  transform: translateY(1px);
+  box-shadow: var(--shadow-subtle);
+}
+
+.formio-container .btn-primary:focus-visible,
+.formio-container button[type='submit'].btn:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.formio-container .btn-primary:disabled,
+.formio-container .btn-primary[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Secondary / cancel buttons */
 .formio-container .btn-secondary {
+  width: 100%;
+  min-height: var(--touch-target);
   background-color: var(--primary) !important;
   border-color: var(--primary) !important;
   color: var(--primary-foreground) !important;
-  min-height: var(--touch-target);
-  border-radius: 9999px;
+  border-radius: var(--radius-full);
+  font-weight: 500;
 }
 
-/* Formio alert styles */
+/* ---------------------------------------------------------------------------
+ * Validation messages
+ * ------------------------------------------------------------------------- */
+
+.formio-container .formio-errors .error,
+.formio-container .invalid-feedback,
+.formio-container .formio-error-wrapper .control-label {
+  color: var(--status-danger);
+  font-size: var(--font-size-xs);
+  margin-top: 0.25rem;
+}
+
+.formio-container .has-error .form-control,
+.formio-container .formio-error-wrapper .form-control,
+.formio-container .is-invalid {
+  border-color: var(--status-danger);
+}
+
+.formio-container .has-error .form-control:focus,
+.formio-container .formio-error-wrapper .form-control:focus,
+.formio-container .is-invalid:focus {
+  box-shadow: 0 0 0 3px rgba(229, 62, 62, 0.18);
+}
+
+/* ---------------------------------------------------------------------------
+ * Alerts
+ * ------------------------------------------------------------------------- */
+
+.formio-container .alert {
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  font-size: var(--font-size-sm);
+}
+
 .formio-container .alert-danger {
   background-color: var(--status-danger-light);
   border-color: var(--status-danger);
-  color: var(--status-danger);
+  color: var(--status-danger-dark);
 }
 
 .formio-container .alert-success {
   background-color: var(--status-success-light);
   border-color: var(--status-success);
-  color: var(--status-success);
+  color: var(--status-success-dark);
+}
+
+/* ---------------------------------------------------------------------------
+ * Refinements 2026-05-18 — visual rhythm pass for the demo
+ *
+ * Three fixes applied here so the form reads as one coherent control system:
+ *
+ *  1. Datetime "ghost border" — Formio renders the datetime as
+ *     `<input-group> <flatpickr-mobile-input> <input> <suffix-icon>`. When
+ *     flatpickr renders its mobile shim it leaves the OS-style date input
+ *     visible with its own border, producing a tiny empty box between the
+ *     real value and the calendar icon. Hide every visible `<input>` after
+ *     the first one in the group so only the dressed text input shows, and
+ *     blend the calendar suffix into the same frame with no inner divider.
+ *
+ *  2. Dropdown vs text-input height parity — `.choices__inner` (Choices.js
+ *     wrapper) wraps to two lines or grows when the highlighted label
+ *     wraps. Lock its height to exactly --touch-target with `box-sizing:
+ *     border-box`. Truncate long selected labels with ellipsis so the
+ *     control height never drifts.
+ *
+ *  3. Strip any inner shadow / inset border on input-group children that
+ *     the formio base CSS adds via the bootstrap 4 input-group cascade.
+ * ------------------------------------------------------------------------- */
+
+/* (1) Datetime: hide the OS-native mobile shim that flatpickr injects
+ * alongside the visible text input. Earlier version used
+ * `.input-group > input + input` which hid every visible input after the
+ * Formio-internal hidden one, collapsing the whole control to just the
+ * calendar suffix. Target the mobile shim by class only. */
+.formio-container .formio-component-datetime .input-group > .flatpickr-mobile,
+.formio-container .formio-component-datetime .input-group > .flatpickr-mobileInput,
+.formio-container .formio-component-datetime .input-group > input.flatpickr-mobile {
+  display: none !important;
+}
+.formio-container .formio-component-datetime .input-group > input:not([type='hidden']):not(.flatpickr-mobile) {
+  border-right: 0;
+}
+.formio-container .formio-component-datetime .input-group-text {
+  background: var(--surface);
+  border-left: 0;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  padding: 0 0.875rem;
+  box-shadow: none;
+}
+.formio-container .formio-component-datetime .input-group-text i,
+.formio-container .formio-component-datetime .input-group-text .fa,
+.formio-container .formio-component-datetime .input-group-text .bi {
+  color: var(--text-muted);
+  font-size: 1.05rem;
+}
+
+/* (2) Choices.js parity with text inputs — exact height, no drift */
+.formio-container .choices__inner {
+  min-height: var(--touch-target);
+  height: var(--touch-target);
+  box-sizing: border-box;
+  line-height: calc(var(--touch-target) - 2px - 1.25rem);
+}
+.formio-container .choices__list--single {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding: 0;
+}
+.formio-container .choices__list--single .choices__item {
+  display: block;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+}
+
+/* (3) Kill any latent inset shadow on grouped inputs */
+.formio-container .input-group > input,
+.formio-container .input-group > .form-control,
+.formio-container .input-group-text {
+  box-shadow: none !important;
+}
+
+/* ---------------------------------------------------------------------------
+ * Claim-169 custom scanner field
+ *
+ * Rewritten so the card reads as one tight row:
+ *   [subtitle (issuer info)]                          [Scan ▢]
+ *
+ * The formio field label is already rendered ABOVE this card by the base
+ * Formio template — duplicating it inside leads to the "Scan MOSIP wallet QR
+ * (Claim-169)" appearing twice in screenshots. Subtitle now surfaces the
+ * trusted-issuer DID (useful) instead of repeating the title (redundant).
+ * Scan button is sized to its content, not stretched 100% like a form
+ * submit — reads as an action, not a field.
+ * ------------------------------------------------------------------------- */
+.formio-container .claim169-scanner {
+  background: var(--surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  box-shadow: none;
+}
+
+.formio-container .claim169-scanner__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.formio-container .claim169-scanner__copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.formio-container .claim169-scanner__subtitle {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+/* Scan button — flush rectangle, brand orange + white text, no max width
+ * override from the generic .btn.btn-primary form-submit rule. */
+.formio-container .claim169-scanner__btn {
+  flex-shrink: 0;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: auto !important;
+  min-height: 44px !important;
+  padding: 10px 18px !important;
+  border-radius: var(--radius-md) !important;
+  border: 0 !important;
+  background-color: var(--brand) !important;
+  color: #ffffff !important;
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
+}
+.formio-container .claim169-scanner__btn:hover {
+  background-color: var(--brand-dark) !important;
+}
+.formio-container .claim169-scanner__btn:active {
+  transform: translateY(1px);
+}
+.formio-container .claim169-scanner__btn.is-captured {
+  background-color: var(--status-success) !important;
+}
+.formio-container .claim169-scanner__btn-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* Captured identity panel */
+.formio-container .claim169-scanner__identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-light);
+}
+.formio-container .claim169-scanner__identity img,
+.formio-container .claim169-scanner__identity .rounded-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.formio-container .claim169-scanner__identity-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.formio-container .claim169-scanner__identity-name {
+  font-weight: 600;
+  color: var(--text-main);
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.formio-container .claim169-scanner__identity-id {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+.formio-container .claim169-scanner__badges {
+  display: inline-flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+.formio-container .claim169-scanner__badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.formio-container .claim169-scanner__badge--ok { background: var(--status-success-light); color: var(--status-success-dark); }
+.formio-container .claim169-scanner__badge--warn { background: var(--status-warning-light); color: var(--status-warning-dark); }
+.formio-container .claim169-scanner__badge--err { background: var(--status-danger-light); color: var(--status-danger-dark); }
+
+@media (max-width: 380px) {
+  .formio-container .claim169-scanner__row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .formio-container .claim169-scanner__btn {
+    width: 100% !important;
+  }
 }

@@ -6,9 +6,8 @@ import { EntityForm } from '@/utils/formIoUtils'
 import FormioWrapper from '@/components/FormioWrapper.vue'
 import { SyncLevel, FormClassifier } from '@idpass/data-collect-core'
 import { v4 as uuidv4 } from 'uuid'
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useNetworkStatus } from '@/composables/useNetworkStatus'
 
 const props = defineProps<{
   id: string
@@ -25,24 +24,6 @@ const formio = ref<unknown>()
 const isGroup = ref(false)
 const entityTypeLabel = ref('')
 
-const nameFieldLabel = computed(() => {
-  if (!entityForm.value?.nameField || !entityForm.value?.formio) return ''
-  const formio = entityForm.value.formio as { components?: unknown[] }
-  if (!formio.components) return entityForm.value.nameField
-  const findLabel = (components: unknown[]): string => {
-    for (const comp of components) {
-      if (!comp || typeof comp !== 'object') continue
-      const c = comp as { key?: string; label?: string; components?: unknown[]; columns?: Array<{ components?: unknown[] }> }
-      if (c.key === entityForm.value!.nameField) return c.label || c.key
-      if (Array.isArray(c.components)) { const r = findLabel(c.components); if (r) return r }
-      if (Array.isArray(c.columns)) { for (const col of c.columns) { if (Array.isArray(col.components)) { const r = findLabel(col.components); if (r) return r } } }
-    }
-    return ''
-  }
-  return findLabel(formio.components)
-})
-
-const { isOffline } = useNetworkStatus()
 
 type FormSubmissionEvent = {
   data: Record<string, unknown>
@@ -118,34 +99,69 @@ const onSubmit = async (submission: FormSubmissionEvent) => {
 
 <template>
   <v-container v-if="tenantapp && formio" fluid class="pa-4">
-    <div class="d-flex justify-end align-center mb-4">
-      <div class="d-flex align-center ga-2">
-        <v-chip size="small" color="info" variant="tonal">
-          {{ entityForm?.displayTemplate || entityTypeLabel }}
-        </v-chip>
-        <v-chip v-if="isOffline" size="x-small" color="warning" variant="tonal" prepend-icon="mdi-wifi-off">
-          Offline
-        </v-chip>
-      </div>
-    </div>
-
-    <v-card elevation="2" class="mb-4">
-      <v-card-text>
-        <div class="text-h6 font-weight-bold">{{ entityForm?.title }}</div>
-        <p class="text-body-2 text-medium-emphasis mt-1">
-          {{ entityForm?.description || 'Collect information using this form.' }}
-        </p>
+    <v-card elevation="0" class="form-shell">
+      <v-card-text class="px-5 pt-5 pb-2">
+        <div class="d-flex align-center justify-space-between ga-3">
+          <div class="form-title-block">
+            <h2 class="form-title">{{ entityForm?.title }}</h2>
+            <p class="form-subtitle">
+              {{ entityForm?.description || 'Collect information using this form.' }}
+            </p>
+          </div>
+          <v-chip
+            v-if="entityForm?.displayTemplate || entityTypeLabel"
+            size="x-small"
+            variant="flat"
+            class="form-type-chip"
+          >
+            {{ entityForm?.displayTemplate || entityTypeLabel }}
+          </v-chip>
+        </div>
       </v-card-text>
-    </v-card>
-
-    <v-chip v-if="nameFieldLabel" size="small" variant="tonal" color="info" prepend-icon="mdi-badge-account-horizontal" class="mb-3">
-      Display name: {{ nameFieldLabel }}
-    </v-chip>
-
-    <v-card elevation="2">
-      <v-card-text>
+      <v-divider class="mx-5" />
+      <v-card-text class="px-5 pt-4 pb-5">
         <FormioWrapper :form="formio" @submit="onSubmit" />
       </v-card-text>
     </v-card>
   </v-container>
 </template>
+
+<style scoped>
+.form-shell {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.form-title-block {
+  min-width: 0;
+  flex: 1;
+}
+
+.form-title {
+  margin: 0;
+  color: var(--text-main);
+  font-family: var(--font-family);
+  font-size: 1.375rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.form-subtitle {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  line-height: 1.4;
+}
+
+.form-type-chip {
+  background: var(--brand-100) !important;
+  color: var(--brand-dark) !important;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-size: 0.625rem !important;
+}
+</style>

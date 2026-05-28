@@ -19,6 +19,7 @@
 
 import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
+import type { SyncScopeOverride } from "@idpass/data-collect-core";
 import { AppInstanceStore, Role, UserStore } from "../types";
 import { createLogger } from "../utils/logger";
 
@@ -29,7 +30,14 @@ export interface DecodedPayload {
   email: string;
   role?: Role;
   tenantIds?: string[];
-  roleAssignments?: Array<{ tenantId: string; role: string; areaId?: string }>;
+  // Phase 2 (#947): JWT now carries `syncScopeOverride` so scopeContext
+  // middleware can narrow tenant scope without an extra DB round-trip.
+  roleAssignments?: Array<{
+    tenantId: string;
+    role: string;
+    areaId?: string;
+    syncScopeOverride?: SyncScopeOverride;
+  }>;
 }
 
 export interface AuthenticatedRequest extends Request {

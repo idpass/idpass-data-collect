@@ -21,6 +21,7 @@ import { randomBytes } from "crypto";
 import { Pool } from "pg";
 import { eq, isNull, sql } from "drizzle-orm";
 import { drizzle, NodePgDatabase } from "drizzle-orm/node-postgres";
+import type { SyncScopePolicy } from "@idpass/data-collect-core";
 import { AppConfig, AppConfigStore } from "../types";
 import { appConfigs } from "../db/schema";
 
@@ -46,7 +47,11 @@ function mapRowToAppConfig(row: AppConfigRow, artifactId: string): AppConfig {
     externalSync: row.externalSync,
     authConfigs: row.authConfigs,
     selfService: row.selfService ?? undefined,
+    syncScope: (row.syncScope ?? undefined) as SyncScopePolicy | undefined,
     archivedAt: row.archivedAt ?? null,
+    programs: (row.programs ?? undefined) as AppConfig["programs"],
+    syncServerUrl: row.syncServerUrl ?? undefined,
+    claim169: (row.claim169 ?? undefined) as AppConfig["claim169"],
   } as AppConfig;
 }
 
@@ -82,6 +87,10 @@ export class AppConfigStoreImpl implements AppConfigStore {
       await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS artifact_id TEXT`);
       await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS self_service JSONB`);
       await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP`);
+      await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS sync_scope JSONB`);
+      await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS programs JSONB`);
+      await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS sync_server_url TEXT`);
+      await this.pool.query(`ALTER TABLE app_configs ADD COLUMN IF NOT EXISTS claim169 JSONB`);
     } catch (error) {
       throw new Error(`Failed to initialize database: ${error}`);
     }
@@ -157,6 +166,10 @@ export class AppConfigStoreImpl implements AppConfigStore {
         externalSync: config.externalSync ?? null,
         authConfigs: JSON.stringify(config.authConfigs),
         selfService: config.selfService ? JSON.stringify(config.selfService) : null,
+        syncScope: config.syncScope ?? null,
+        programs: config.programs ? JSON.stringify(config.programs) : null,
+        syncServerUrl: config.syncServerUrl ?? null,
+        claim169: config.claim169 ? JSON.stringify(config.claim169) : null,
       };
       await this.db
         .insert(appConfigs)
@@ -174,6 +187,10 @@ export class AppConfigStoreImpl implements AppConfigStore {
             externalSync: config.externalSync ?? null,
             authConfigs: JSON.stringify(config.authConfigs),
             selfService: config.selfService ? JSON.stringify(config.selfService) : null,
+            syncScope: config.syncScope ?? null,
+            programs: config.programs ? JSON.stringify(config.programs) : null,
+            syncServerUrl: config.syncServerUrl ?? null,
+            claim169: config.claim169 ? JSON.stringify(config.claim169) : null,
             archivedAt: null,
           },
         });

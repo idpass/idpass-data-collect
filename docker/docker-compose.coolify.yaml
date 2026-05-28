@@ -15,11 +15,16 @@ services:
       - internal
     command: ["postgres"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-admin} -d $${POSTGRES_DB:-datacollect}"]
+      # Target the always-present `postgres` system database rather than
+      # `${POSTGRES_DB}` — the user-facing DB may not exist yet while the
+      # /docker-entrypoint-initdb.d scripts are still running on first init,
+      # which would cause `pg_isready -d datacollect` to report unhealthy and
+      # break the sync-server `depends_on { condition: service_healthy }` gate.
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-admin} -d postgres"]
       interval: 5s
       timeout: 3s
-      start_period: 30s
-      retries: 10
+      start_period: 60s
+      retries: 20
 
   sync-server:
     build:
@@ -29,16 +34,21 @@ services:
     restart: unless-stopped
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - POSTGRES=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@dc-postgres:5432/${POSTGRES_DB:-datacollect}
-      - POSTGRES_TEST=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin}@dc-postgres:5432/${POSTGRES_DB:-datacollect}_test
-      - JWT_SECRET=${JWT_SECRET:-staging-secret-change-me}
+      # POSTGRES_PASSWORD, JWT_SECRET and ADMIN_PASSWORD have NO weak defaults on
+      # purpose. `${VAR:?msg}` makes compose abort with the message when the
+      # variable is empty/unset, which is safer than silently falling back to
+      # a weak default like "admin" — the backend enforces password policy
+      # and would refuse to start anyway.
+      - POSTGRES=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@dc-postgres:5432/${POSTGRES_DB:-datacollect}
+      - POSTGRES_TEST=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@dc-postgres:5432/${POSTGRES_DB:-datacollect}_test
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be at least 32 characters}
       - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@datacollect.lan}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD must satisfy backend policy (>=8 chars, upper+lower+digit+special)}
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
       - EXTERNAL_SYNC_ENABLED=${EXTERNAL_SYNC_ENABLED:-false}
-    ports:
-      - "${SYNC_SERVER_PORT:-3000}:3000"
+    expose:
+      - "3000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,8 +70,8 @@ services:
       args:
         - VITE_API_URL=${ADMIN_API_URL:-http://localhost:3000}
     restart: unless-stopped
-    ports:
-      - "4173:80"
+    expose:
+      - "80"
     depends_on:
       - sync-server
     networks:
@@ -76,8 +86,8 @@ services:
       args:
         - VITE_API_URL=${WEB_API_URL:-http://localhost:3000}
     restart: unless-stopped
-    ports:
-      - "5174:80"
+    expose:
+      - "80"
     depends_on:
       - sync-server
     networks:
@@ -104,8 +114,8 @@ services:
       - MOCK_UI_PASSWORD=${MOCK_UI_PASSWORD:-admin}
       - MOCK_SESSION_COOKIE_SECURE=${MOCK_SESSION_COOKIE_SECURE:-true}
       - MOCK_CORS_ALLOWED_ORIGINS=${MOCK_CORS_ALLOWED_ORIGINS:-*}
-    ports:
-      - "${MOCK_SERVER_PORT:-9999}:9999"
+    expose:
+      - "9999"
     volumes:
       - mock-registry-data:/data
     networks:

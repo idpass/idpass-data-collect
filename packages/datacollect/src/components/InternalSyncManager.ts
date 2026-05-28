@@ -17,19 +17,20 @@
  * under the License.
  */
 
-import axios from "axios";
+import axios, { type AxiosInstance } from "axios";
 import { createActor, type AnyActorRef } from "xstate";
 import {
   EventStore,
   EntityStore,
   AuthStorageAdapter,
+  SyncLevel,
 } from "../interfaces/types";
 import { EventApplierService } from "../services/EventApplierService";
 import { createSyncMachine } from "./internalSync/syncMachine";
-import { SelectiveSyncOptions, ReauthenticateCallback } from "./internalSync/types";
+import { SelectiveSyncOptions, ReauthenticateCallback, PurgeOutOfScopeCallback } from "./internalSync/types";
 
 // Re-export for backwards compatibility
-export type { SelectiveSyncOptions, ReauthenticateCallback } from "./internalSync/types";
+export type { SelectiveSyncOptions, ReauthenticateCallback, PurgeOutOfScopeCallback } from "./internalSync/types";
 
 /**
  * Manages bidirectional synchronization between local DataCollect instances and the remote sync server.
@@ -53,6 +54,9 @@ export class InternalSyncManager {
   /** Entity store reference for checkIfDuplicatesExist */
   private entityStore: EntityStore;
 
+  /** Internal axios instance — exposed at TS-level for test inspection only. */
+  private axiosInstance: AxiosInstance;
+
   /**
    * Whether a sync operation is currently running (read-only accessor).
    */
@@ -69,6 +73,8 @@ export class InternalSyncManager {
     authStorage: AuthStorageAdapter,
     configId: string = "default",
     reauthenticate?: ReauthenticateCallback,
+    deviceId?: string,
+    purgeOutOfScope?: PurgeOutOfScopeCallback,
   ) {
     this.eventStore = eventStore;
     this.entityStore = entityStore;
@@ -79,6 +85,15 @@ export class InternalSyncManager {
         "Content-Type": "application/json",
       },
     });
+
+    if (deviceId) {
+      axiosInstance.interceptors.request.use((config) => {
+        (config.headers as unknown as Record<string, string>)["X-Device-Id"] = deviceId;
+        return config;
+      });
+    }
+
+    this.axiosInstance = axiosInstance;
 
     const machine = createSyncMachine(
       (syncId: string) => {
@@ -106,6 +121,7 @@ export class InternalSyncManager {
         axiosInstance,
         configId,
         reauthenticate,
+        purgeOutOfScope,
       },
     });
 
@@ -128,11 +144,16 @@ export class InternalSyncManager {
 
   /**
    * Gets the count of events waiting to be synchronized with the server.
+   *
+   * Only LOCAL events count as pending. REMOTE (pulled from /pull) and
+   * EXTERNAL (pulled from external adapter) events have already been
+   * delivered to the server, so including them inflates the count during
+   * first sync.
    */
   async getUnsyncedEventsCount(): Promise<number> {
     const lastSyncTimestamp = await this.eventStore.getLastLocalSyncTimestamp();
     const result = await this.eventStore.getEventsSince(lastSyncTimestamp);
-    return result.length;
+    return result.filter((event) => event.syncLevel === SyncLevel.LOCAL).length;
   }
 
   /**
@@ -142,7 +163,7 @@ export class InternalSyncManager {
     const lastSyncTimestamp =
       (await this.eventStore.getLastLocalSyncTimestamp()) || new Date(0);
     const result = await this.eventStore.getEventsSince(lastSyncTimestamp);
-    return result.length > 0;
+    return result.some((event) => event.syncLevel === SyncLevel.LOCAL);
   }
 
   /**

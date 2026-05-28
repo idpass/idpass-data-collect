@@ -1,0 +1,110 @@
+/*
+ * Licensed to the Association pour la cooperation numerique (ACN) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ACN licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import type { Request, Response, NextFunction, RequestHandler } from "express";
+import { resolveEffectiveScope, computeScopeHash } from "@idpass/data-collect-core";
+import type { EffectiveScope, SyncScopeOverride } from "@idpass/data-collect-core";
+import type { AppInstanceStore, RoleAssignment } from "../types";
+import { AuthenticatedRequest } from "./authentication";
+
+export interface RequestScope {
+  effective: EffectiveScope;
+  hash: string;
+  tenantId: string;
+}
+
+export type ScopeAwareRequest = AuthenticatedRequest & { scope?: RequestScope };
+
+export interface ScopeContextOptions {
+  /** Where to read `configId` from. `"body"` requires `bodyParser.json()` to have run earlier in the chain. */
+  source?: "query" | "body";
+  /**
+   * When set, the middleware falls back to this configId instead of returning
+   * 400 if the body/query value is missing or non-string. Provided so that
+   * pre-Phase-3 clients which omit `configId` on `/push` continue to work
+   * (the legacy fallback was `"default"`). The 400 response still fires when
+   * neither the request value nor `defaultConfigId` is provided.
+   */
+  defaultConfigId?: string;
+}
+
+/**
+ * Resolve an `EffectiveScope` for the authenticated user against the
+ * requested `configId`, attach it to `req.scope`, and forward.
+ *
+ * Pre-conditions:
+ * - JWT auth middleware has populated `req.user` (with `roleAssignments`)
+ * - `validateTenantAccess` has confirmed the user can read the tenant
+ * - When `options.source === "body"`, a JSON body parser must have run earlier
+ *   in the middleware chain (this middleware does NOT parse the body itself).
+ *
+ * Post-conditions:
+ * - `req.scope.effective` is the merged tenant + assignment policy
+ * - `req.scope.hash` is the canonical SHA-256 of the effective scope
+ *
+ * Errors:
+ * - 400 when `configId` (from query or body, per `options.source`) is missing or non-string
+ * - 404 when the tenant config can't be loaded
+ */
+export function createScopeContextMiddleware(
+  appInstanceStore: AppInstanceStore,
+  options: ScopeContextOptions = {},
+): RequestHandler {
+  const source = options.source ?? "query";
+  const defaultConfigId = options.defaultConfigId;
+  return async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const raw =
+        source === "body"
+          ? (req.body as { configId?: unknown } | undefined)?.configId
+          : req.query.configId;
+      let configId: string;
+      if (typeof raw === "string" && raw.length > 0) {
+        configId = raw;
+      } else if (defaultConfigId !== undefined) {
+        configId = defaultConfigId;
+      } else {
+        return res.status(400).json({ status: "error", message: "configId is required" });
+      }
+      const appInstance = await appInstanceStore.getAppInstance(configId);
+      if (!appInstance) {
+        return res.status(404).json({ status: "error", message: "App instance not found" });
+      }
+
+      const user = (req as AuthenticatedRequest).user;
+      const assignment = (user?.roleAssignments ?? []).find((a) => a.tenantId === configId);
+      const override = pickOverride(assignment);
+
+      const effective = resolveEffectiveScope(appInstance.config.syncScope, override);
+      const hash = computeScopeHash(effective);
+
+      (req as ScopeAwareRequest).scope = { effective, hash, tenantId: configId };
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
+}
+
+function pickOverride(assignment: RoleAssignment | undefined): SyncScopeOverride | undefined {
+  if (!assignment) return undefined;
+  if (assignment.syncScopeOverride) return assignment.syncScopeOverride;
+  if (assignment.areaId) return { areaIds: [assignment.areaId] };
+  return undefined;
+}

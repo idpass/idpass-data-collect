@@ -13,6 +13,40 @@ const errorMessage = ref('')
 const showError = ref(false)
 const webQrInput = ref('')
 const isWebProcessing = ref(false)
+// Holds the decoded VC pending the operator's confirmation. We stage it here
+// rather than resolving the promise immediately so the agent sees WHO signed
+// it, WHEN it expires, and whether it's still valid before they commit. Same
+// pattern as a payment-confirmation screen — verify-decode-confirm-commit.
+const pendingResult = ref<VerifiedIdentity | null>(null)
+
+const formatDate = (epochSec?: number): string => {
+  if (!epochSec) return '—'
+  const d = new Date(epochSec * 1000)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+const issuerShort = (did?: string): string => {
+  if (!did) return 'Unknown issuer'
+  // did:web:demo-issuer.example.gov → demo-issuer.example.gov
+  const m = /^did:[^:]+:(.+)$/.exec(did)
+  return m ? m[1] : did
+}
+
+const confirmAndComplete = () => {
+  if (!pendingResult.value) return
+  if (pendingResult.value.isExpired) return
+  if (!pendingResult.value.isVerified) return
+  Claim169ScannerService.complete(pendingResult.value)
+  pendingResult.value = null
+}
+
+const rejectAndRescan = () => {
+  pendingResult.value = null
+  if (isNative.value) {
+    setTimeout(() => startScan(), 100)
+  }
+}
 
 const displayError = (message: string, duration = 5000) => {
   errorMessage.value = message
@@ -58,7 +92,7 @@ const handleWebSubmit = async () => {
   isWebProcessing.value = true
   try {
     const result = await processQrContent(raw)
-    Claim169ScannerService.complete(result)
+    pendingResult.value = result
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     displayError(`Invalid QR data: ${msg}`)
@@ -91,7 +125,8 @@ const startScan = async () => {
 
     try {
       const verifiedIdentity = await processQrContent(content)
-      Claim169ScannerService.complete(verifiedIdentity)
+      pendingResult.value = verifiedIdentity
+      isProcessing.value = false
     } catch (decodeError) {
       const errorMsg = decodeError instanceof Error ? decodeError.message : String(decodeError)
       displayError(`Invalid QR code: ${errorMsg}`)
@@ -117,13 +152,15 @@ watch(() => Claim169ScannerService.isOpen.value, async (isOpen) => {
     errorMessage.value = ''
     showError.value = false
     isProcessing.value = false
-    
+    pendingResult.value = null
+
     // Auto-start scanning if native
     if (isNative.value) {
       setTimeout(() => startScan(), 100)
     }
   } else {
     await cleanup()
+    pendingResult.value = null
   }
 })
 </script>
@@ -159,7 +196,96 @@ watch(() => Claim169ScannerService.isOpen.value, async (isOpen) => {
 
       <!-- Main content -->
       <div class="scanner-content">
-        <div v-if="isNative && !isScanning && !isProcessing" class="scanner-instructions">
+        <!-- Confirmation panel: shows after a successful decode so the agent
+             can see WHO signed the credential, WHEN it expires, and whether
+             it's still valid before committing. Refusal here means no
+             identity claim leaks into the form. -->
+        <div v-if="pendingResult" class="confirm-panel">
+          <div
+            class="confirm-status"
+            :class="{
+              'confirm-status--ok': pendingResult.isVerified && !pendingResult.isExpired,
+              'confirm-status--bad': !pendingResult.isVerified || pendingResult.isExpired,
+            }"
+          >
+            <svg class="confirm-icon" viewBox="0 0 24 24" focusable="false">
+              <path
+                v-if="pendingResult.isVerified && !pendingResult.isExpired"
+                d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"
+                fill="currentColor"
+              />
+              <path
+                v-else
+                d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"
+                fill="currentColor"
+              />
+            </svg>
+            <div>
+              <div class="confirm-status__title">
+                <template v-if="!pendingResult.isVerified">Signature did not verify</template>
+                <template v-else-if="pendingResult.isExpired">Credential expired</template>
+                <template v-else>Identity verified offline</template>
+              </div>
+              <div class="confirm-status__subtitle">
+                <template v-if="!pendingResult.isVerified">
+                  No trusted issuer key matched this QR.
+                </template>
+                <template v-else-if="pendingResult.isExpired">
+                  This credential is no longer valid.
+                </template>
+                <template v-else>
+                  Signature checked against trusted issuer.
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <dl class="confirm-meta">
+            <div class="confirm-meta__row">
+              <dt>Subject</dt>
+              <dd>{{ pendingResult.identity.fullName || pendingResult.identity.id || '—' }}</dd>
+            </div>
+            <div v-if="pendingResult.identity.dateOfBirth" class="confirm-meta__row">
+              <dt>Date of birth</dt>
+              <dd>{{ pendingResult.identity.dateOfBirth }}</dd>
+            </div>
+            <div class="confirm-meta__row">
+              <dt>Subject ID</dt>
+              <dd class="confirm-meta__mono">{{ pendingResult.identity.id || '—' }}</dd>
+            </div>
+            <div class="confirm-meta__row">
+              <dt>Issuer</dt>
+              <dd class="confirm-meta__mono">{{ issuerShort(pendingResult.cwt.issuer) }}</dd>
+            </div>
+            <div class="confirm-meta__row">
+              <dt>Issued</dt>
+              <dd>{{ formatDate(pendingResult.cwt.issuedAt) }}</dd>
+            </div>
+            <div class="confirm-meta__row">
+              <dt>Expires</dt>
+              <dd :class="{ 'confirm-meta__expired': pendingResult.isExpired }">
+                {{ formatDate(pendingResult.cwt.expiresAt) }}
+                <span v-if="pendingResult.isExpired"> · Expired</span>
+              </dd>
+            </div>
+          </dl>
+
+          <div class="confirm-actions">
+            <button class="back-link" type="button" @click="rejectAndRescan">
+              Scan again
+            </button>
+            <button
+              class="scan-button"
+              type="button"
+              :disabled="!pendingResult.isVerified || pendingResult.isExpired"
+              @click="confirmAndComplete"
+            >
+              Use this identity
+            </button>
+          </div>
+        </div>
+
+        <div v-else-if="isNative && !isScanning && !isProcessing" class="scanner-instructions">
           <div class="qr-icon">
             <svg viewBox="0 0 24 24" focusable="false">
               <path
@@ -341,6 +467,111 @@ watch(() => Claim169ScannerService.isOpen.value, async (isOpen) => {
   align-items: center;
   text-align: center;
   max-width: 320px;
+}
+
+/* Verify-decode-confirm-commit panel. Pattern from payment confirmations:
+   show the operator the trust chain before they act on the data. */
+.confirm-panel {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 0.5rem 0.25rem;
+}
+
+.confirm-status {
+  display: flex;
+  gap: 0.875rem;
+  align-items: flex-start;
+  padding: 1rem 1rem;
+  border-radius: 14px;
+}
+
+.confirm-status--ok {
+  background: rgba(16, 185, 129, 0.08);
+  color: #047857;
+}
+
+.confirm-status--bad {
+  background: rgba(220, 38, 38, 0.08);
+  color: #b91c1c;
+}
+
+.confirm-icon {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.confirm-status__title {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.confirm-status__subtitle {
+  font-size: 0.85rem;
+  margin-top: 2px;
+  color: inherit;
+  opacity: 0.85;
+}
+
+.confirm-meta {
+  display: grid;
+  gap: 0.5rem;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  padding: 0.875rem 1rem;
+  margin: 0;
+}
+
+.confirm-meta__row {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  align-items: baseline;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.confirm-meta__row dt {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.confirm-meta__row dd {
+  margin: 0;
+  color: #111827;
+  word-break: break-word;
+}
+
+.confirm-meta__mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+}
+
+.confirm-meta__expired {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.confirm-actions .scan-button {
+  flex: 1;
+  justify-content: center;
+}
+
+.confirm-actions .scan-button:disabled {
+  background: #d1d5db;
+  cursor: not-allowed;
+  opacity: 1;
 }
 
 .qr-icon {

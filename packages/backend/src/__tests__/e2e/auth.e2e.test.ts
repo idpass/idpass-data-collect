@@ -170,5 +170,36 @@ describeIfPostgres("Auth e2e", () => {
 
       expect(loginRes.status).toBe(401);
     });
+
+    it("POST /api/users persists syncScopeOverride on a role assignment (#947)", async () => {
+      const email = `scope-${Date.now()}@test.lan`;
+      const res = await request(app.httpServer)
+        .post("/api/users")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({
+          email,
+          password: "Scope-password-123!",
+          role: "USER",
+          tenantIds: ["tenant-x"],
+          roleAssignments: [
+            {
+              tenantId: "tenant-x",
+              role: "FIELD_AGENT",
+              syncScopeOverride: {
+                areaIds: ["DIST-001"],
+                entityTypes: ["individual"],
+              },
+            },
+          ],
+        });
+
+      expect(res.status).toBe(201);
+
+      const fetched = await app.userStore.getUser(email);
+      expect(fetched?.roleAssignments?.[0].syncScopeOverride).toEqual({
+        areaIds: ["DIST-001"],
+        entityTypes: ["individual"],
+      });
+    });
   });
 });

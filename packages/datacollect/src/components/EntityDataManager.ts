@@ -751,6 +751,45 @@ export class EntityDataManager {
   }
 
   /**
+   * Drops local entities outside `keepGuids` and any events targeting them.
+   *
+   * Used by the client when the server advertises a new scope hash on
+   * `/pull` — out-of-scope entities are purged before the next pull's events
+   * are applied. Returns counts for telemetry / UI surfacing.
+   *
+   * Purge does NOT generate `delete-entity` events. It is a local data-
+   * minimization operation, not a state change visible to the server.
+   *
+   * @param keepGuids The entity guids that should remain after the purge.
+   * @returns Counts of purged entities and events.
+   *
+   * @example
+   * ```typescript
+   * // After receiving a new scopeHash on /pull, retain only allowed entities.
+   * const allowed = pullResponse.scope?.allowedEntityGuids ?? [];
+   * const result = await manager.purgeEntitiesNotIn(allowed);
+   * console.log(`Removed ${result.purgedEntities} entities and ${result.purgedEvents} events.`);
+   * ```
+   */
+  async purgeEntitiesNotIn(
+    keepGuids: readonly string[],
+  ): Promise<{ purgedEntities: number; purgedEvents: number }> {
+    const keep = new Set(keepGuids);
+    const allEntities = await this.entityStore.getAllEntities();
+    const toPurge = allEntities
+      .map((pair) => pair.modified.guid)
+      .filter((guid) => !keep.has(guid));
+
+    let purgedEvents = 0;
+    for (const guid of toPurge) {
+      purgedEvents += await this.eventStore.deleteEventsForEntity(guid);
+      await this.entityStore.deleteEntity(guid);
+    }
+
+    return { purgedEntities: toPurge.length, purgedEvents };
+  }
+
+  /**
    * Saves multiple audit log entries to the event store.
    *
    * @param auditLogs Array of audit log entries to save.

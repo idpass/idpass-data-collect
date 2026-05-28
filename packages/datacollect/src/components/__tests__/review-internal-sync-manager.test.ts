@@ -43,6 +43,15 @@ function createMockEventStore(): EventStore {
     setLastPushExternalSyncTimestamp: jest.fn(),
     isEventExisted: jest.fn().mockResolvedValue(false),
     getAuditTrailByEntityGuid: jest.fn().mockResolvedValue([]),
+    deleteEventsForEntity: jest.fn().mockResolvedValue(0),
+    getLastScopeHash: jest.fn().mockResolvedValue(null),
+    setLastScopeHash: jest.fn().mockResolvedValue(undefined),
+    getLastScope: jest.fn().mockResolvedValue(null),
+    setLastScope: jest.fn().mockResolvedValue(undefined),
+    getMetadataValue: jest.fn().mockResolvedValue(null),
+    setMetadataValue: jest.fn().mockResolvedValue(undefined),
+    deleteMetadataValue: jest.fn().mockResolvedValue(undefined),
+    listMetadataKeys: jest.fn().mockResolvedValue([]),
     clearStore: jest.fn(),
     closeConnection: jest.fn(),
   };
@@ -191,6 +200,74 @@ describe("InternalSyncManager", () => {
       // directly on the event object from the API response, which mutates
       // the original array in place
       expect(serverEvents[0].syncLevel).toBe(originalSyncLevel);
+    });
+  });
+
+  describe("getUnsyncedEventsCount / hasUnsyncedEvents filter by syncLevel", () => {
+    const makeEvent = (guid: string, syncLevel: SyncLevel): FormSubmission => ({
+      guid,
+      entityGuid: `entity-${guid}`,
+      type: "create-individual",
+      data: {},
+      timestamp: "2025-01-01T00:00:00.000Z",
+      userId: "user-1",
+      syncLevel,
+    });
+
+    test("getUnsyncedEventsCount counts only LOCAL events", async () => {
+      (mockEventStore.getEventsSince as jest.Mock).mockResolvedValue([
+        makeEvent("a", 0 as SyncLevel),
+        makeEvent("b", 1 as SyncLevel),
+        makeEvent("c", 2 as SyncLevel),
+        makeEvent("d", 0 as SyncLevel),
+      ]);
+
+      const manager = new InternalSyncManager(
+        mockEventStore,
+        mockEntityStore,
+        mockEventApplierService,
+        "http://localhost:3000",
+        mockAuthStorage,
+        "test-config",
+      );
+
+      expect(await manager.getUnsyncedEventsCount()).toBe(2);
+    });
+
+    test("hasUnsyncedEvents returns false when only REMOTE/EXTERNAL events past watermark", async () => {
+      (mockEventStore.getEventsSince as jest.Mock).mockResolvedValue([
+        makeEvent("a", 1 as SyncLevel),
+        makeEvent("b", 2 as SyncLevel),
+      ]);
+
+      const manager = new InternalSyncManager(
+        mockEventStore,
+        mockEntityStore,
+        mockEventApplierService,
+        "http://localhost:3000",
+        mockAuthStorage,
+        "test-config",
+      );
+
+      expect(await manager.hasUnsyncedEvents()).toBe(false);
+    });
+
+    test("hasUnsyncedEvents returns true when at least one LOCAL event past watermark", async () => {
+      (mockEventStore.getEventsSince as jest.Mock).mockResolvedValue([
+        makeEvent("a", 1 as SyncLevel),
+        makeEvent("b", 0 as SyncLevel),
+      ]);
+
+      const manager = new InternalSyncManager(
+        mockEventStore,
+        mockEntityStore,
+        mockEventApplierService,
+        "http://localhost:3000",
+        mockAuthStorage,
+        "test-config",
+      );
+
+      expect(await manager.hasUnsyncedEvents()).toBe(true);
     });
   });
 

@@ -39,11 +39,13 @@ const tenantappsDb = database.tenantapps.find()
 const tenantappsSub = tenantappsDb.$.subscribe((results) => {
   tenantapps.value = results
   results.forEach(app => {
-    if (app.trustedIssuers) {
-      app.trustedIssuers.forEach(issuer => {
-        registerIssuerKey(issuer.issuerId, issuer.publicKey)
+    const issuers = app.claim169?.trustedIssuers ?? []
+    issuers.forEach(issuer => {
+      registerIssuerKey(issuer.issuerId, {
+        ed25519: issuer.publicKey.ed25519,
+        es256: issuer.publicKey.es256,
       })
-    }
+    })
   })
 })
 
@@ -193,7 +195,13 @@ const saveTenantApp = async (config: TenantAppData, sourceUrl = '') => {
       syncServerUrl: config.syncServerUrl,
       externalSync: config.externalSync,
       authConfigs: config.authConfigs,
-      trustedIssuers: config.trustedIssuers,
+      claim169: config.claim169 ?? { enabled: false, trustedIssuers: [] },
+      // Without this the Enrol-in-Program picker silently disappears after
+      // any version-bump re-import: the explicit patch payload overrides
+      // existing fields, and any field NOT listed here is left untouched
+      // ⇒ stays at its prior value, including `undefined` for fresh
+      // installs that didn't carry programs the first time.
+      programs: config.programs,
     })
     return
   }

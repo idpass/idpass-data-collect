@@ -48,8 +48,19 @@ addRxPlugin(RxDBCleanupPlugin)
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election'
 addRxPlugin(RxDBLeaderElectionPlugin)
 
-// dev-mode
-const isDevelop = import.meta.env.DEV && import.meta.env.VITE_DEVELOP
+// Required for any collection whose schema version is > 0. The tenantapps
+// collection bumped to v1 to add `programs[]`, then v2 to introduce the
+// tenant-level `claim169` block (and drop legacy top-level `trustedIssuers`).
+// Without this plugin RxDB throws "function must be overwritten by a plugin"
+// on init.
+import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema'
+addRxPlugin(RxDBMigrationSchemaPlugin)
+
+// Dev/e2e mode. Gate on VITE_DEVELOP alone (not import.meta.env.DEV) so
+// `vite build --mode development` with VITE_DEVELOP=true also enables
+// RxDB dev plugins + window.db exposure. Production builds without the
+// env var still tree-shake the dev paths out.
+const isDevelop = import.meta.env.VITE_DEVELOP === 'true'
 import { RxDBDevModePlugin } from 'rxdb/plugins/dev-mode'
 if (isDevelop) {
   addRxPlugin(RxDBDevModePlugin)
@@ -253,11 +264,22 @@ export async function getDatabase(): Promise<RxDatabase> {
         schema: keySchema
       },
       tenantapps: {
-        schema: TenantAppSchema
+        schema: TenantAppSchema,
+        migrationStrategies: {
+          1: (oldDoc) => oldDoc, // v0 → v1: optional `programs` array added; no data transform needed.
+          2: (oldDoc: Record<string, unknown>) => {
+            // v1 → v2: introduce tenant-level claim169 block, drop legacy
+            // top-level `trustedIssuers` (never wired from the wizard).
+            // Operator wires claim169 via the new admin tab; default disabled.
+            oldDoc.claim169 = { enabled: false, trustedIssuers: [] }
+            delete oldDoc.trustedIssuers
+            return oldDoc
+          }
+        }
       }
     })
-    if (import.meta.env.DEV && import.meta.env.VITE_DEVELOP) {
-      ;(window as unknown as { db: RxDatabase }).db = dbInstance // write to window for debugging
+    if (isDevelop) {
+      ;(window as unknown as { db: RxDatabase }).db = dbInstance // write to window for debugging + e2e seed
     }
   } catch (error) {
     console.error('Error adding collections:', error)

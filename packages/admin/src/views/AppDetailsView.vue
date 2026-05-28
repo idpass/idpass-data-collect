@@ -15,6 +15,12 @@ import { useAuthStore } from '@/stores/auth'
 import { useSnackBarStore } from '@/stores/snackBar'
 import DataDiagnostics from '@/components/DataDiagnostics.vue'
 import SyncStatusPanel from '@/components/SyncStatusPanel.vue'
+import SyncScopeCard from '@/components/SyncScopeCard.vue'
+import ProgramsCard from '@/components/ProgramsCard.vue'
+import Claim169Card from '@/components/Claim169Card.vue'
+import { useFeatureFlag } from '@/composables/useFeatureFlag'
+import type { SyncScopePolicy } from '@idpass/data-collect-core'
+import type { AppProgram, Claim169Config } from '@/api'
 
 interface EntityForm {
   name: string
@@ -68,6 +74,9 @@ interface AppConfig {
   externalSync?: ExternalSyncConfig
   authConfigs?: AuthConfig[]
   selfService?: SelfServiceConfig
+  syncScope?: SyncScopePolicy | null
+  programs?: AppProgram[]
+  claim169?: Claim169Config | null
   createdAt?: string
   updatedAt?: string
 }
@@ -88,13 +97,37 @@ const router = useRouter()
 const app = ref<AppConfig | null>(null)
 const isLoading = ref(true)
 const error = ref<string | null>(null)
-const activeTab = ref<'entities' | 'forms' | 'integration' | 'mapping' | 'auth'>('entities')
+const activeTab = ref<'entities' | 'forms' | 'integration' | 'mapping' | 'auth' | 'programs' | 'claim169'>('entities')
 const showQrDialog = ref(false)
 const showAuthDialog = ref(false)
 const isDeleting = ref(false)
 const qrError = ref(false)
 const entityRecords = ref<Record<string, unknown[]>>({})
 const syncPanelRef = ref<InstanceType<typeof SyncStatusPanel> | null>(null)
+const scopedSyncEnabled = useFeatureFlag('scopedSync')
+
+function onSyncScopeUpdated(policy: SyncScopePolicy | null) {
+  if (!app.value) return
+  app.value = { ...app.value, syncScope: policy }
+}
+
+function onProgramsUpdated(programs: AppProgram[]) {
+  if (!app.value) return
+  app.value = { ...app.value, programs }
+}
+
+const editableClaim169 = computed<Claim169Config>({
+  get: () => app.value?.claim169 ?? { enabled: false, trustedIssuers: [] },
+  set: (value) => {
+    if (!app.value) return
+    app.value = { ...app.value, claim169: value }
+  },
+})
+
+const isOpenSppAdapter = computed(() => {
+  const type = app.value?.externalSync?.type
+  return type === 'openspp-v1-adapter' || type === 'openspp-v2-adapter'
+})
 
 const routeId = computed(() => route.params.id as string)
 
@@ -501,6 +534,19 @@ watch(
                 @click="router.push({ name: 'duplicates', params: { id: routeId } })"
               />
               <v-list-item
+                v-if="scopedSyncEnabled"
+                data-testid="app-details-devices-link"
+                prepend-icon="mdi-cellphone-link"
+                title="View device sync activity"
+                @click="router.push({ name: 'devices', params: { configId: app.id } })"
+              />
+              <v-list-item
+                prepend-icon="mdi-merge"
+                title="Conflicts"
+                data-testid="app-details-conflicts-link"
+                @click="router.push({ name: 'conflicts', params: { id: routeId } })"
+              />
+              <v-list-item
                 prepend-icon="mdi-content-copy"
                 title="Duplicate Config"
                 @click="duplicateConfig"
@@ -535,6 +581,13 @@ watch(
         @request-credentials="showAuthDialog = true"
       />
 
+      <SyncScopeCard
+        v-if="scopedSyncEnabled"
+        :app-id="app.id"
+        :policy="app.syncScope ?? null"
+        @update:policy="onSyncScopeUpdated"
+      />
+
       <div class="details-grid">
         <div>
           <v-card class="details-content" border="md" elevation="0">
@@ -542,6 +595,8 @@ watch(
               <v-tab value="entities">Entities</v-tab>
               <v-tab value="forms">Forms</v-tab>
               <v-tab value="integration">Integration</v-tab>
+              <v-tab v-if="isOpenSppAdapter" value="programs">Programs</v-tab>
+              <v-tab v-if="isOpenSppAdapter" value="claim169">Claim-169</v-tab>
               <v-tab value="mapping">Field Mapping</v-tab>
               <v-tab value="auth">Authentication</v-tab>
             </v-tabs>
@@ -733,6 +788,42 @@ watch(
                 </div>
               </v-window-item>
 
+              <v-window-item v-if="isOpenSppAdapter" value="programs">
+                <div class="section-panel">
+                  <div class="section-panel__header">
+                    <div>
+                      <h2 class="section-panel__title">Programs</h2>
+                      <p class="section-panel__subtitle">
+                        OpenSPP programs offered for enrolment via the
+                        <code>assign_program</code> ChangeRequest workflow. Mobile clients render
+                        the "Enroll in Program" picker from this list.
+                      </p>
+                    </div>
+                  </div>
+                  <ProgramsCard
+                    :app-id="app.id"
+                    :programs="app.programs ?? []"
+                    @update:programs="onProgramsUpdated"
+                  />
+                </div>
+              </v-window-item>
+
+              <v-window-item v-if="isOpenSppAdapter" value="claim169">
+                <div class="section-panel">
+                  <div class="section-panel__header">
+                    <div>
+                      <h2 class="section-panel__title">Claim-169</h2>
+                      <p class="section-panel__subtitle">
+                        Tenant-level trust anchors for Claim-169 verifiable
+                        identity attestations. Mobile clients require at least one
+                        trusted issuer to verify signed credentials.
+                      </p>
+                    </div>
+                  </div>
+                  <Claim169Card :app-id="app.id" v-model="editableClaim169" />
+                </div>
+              </v-window-item>
+
               <v-window-item value="mapping">
                 <div class="section-panel">
                   <div class="section-panel__header">
@@ -890,11 +981,11 @@ watch(
               <div class="overview-card__details">
                 <div class="overview-card__row">
                   <span class="overview-card__row-label">Config ID</span>
-                  <span class="overview-card__row-value">{{ app.id }}</span>
+                  <span class="overview-card__row-value overview-card__row-value--mono">{{ app.id }}</span>
                 </div>
                 <div class="overview-card__row" v-if="app.artifactId">
                   <span class="overview-card__row-label">Artifact ID</span>
-                  <span class="overview-card__row-value">{{ app.artifactId }}</span>
+                  <span class="overview-card__row-value overview-card__row-value--mono">{{ app.artifactId }}</span>
                 </div>
                 <div class="overview-card__row">
                   <span class="overview-card__row-label">Version</span>
@@ -1030,8 +1121,10 @@ watch(
 }
 
 .details-header__title {
+  font-family: var(--font-family-display);
   font-size: clamp(1.75rem, 1.6rem + 0.5vw, 2.4rem);
   font-weight: 600;
+  letter-spacing: -0.015em;
   margin: 0;
   color: var(--text-main);
 }
@@ -1166,7 +1259,7 @@ watch(
 }
 
 .entity-guid {
-  font-family: monospace;
+  font-family: var(--font-family-mono);
   font-size: var(--font-size-sm);
   color: var(--text-main);
 }
@@ -1446,6 +1539,13 @@ watch(
 
 .overview-card__row-value--muted {
   color: var(--text-muted);
+}
+
+.overview-card__row-value--mono {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  font-weight: 400;
+  letter-spacing: 0.01em;
 }
 
 .overview-card__link {

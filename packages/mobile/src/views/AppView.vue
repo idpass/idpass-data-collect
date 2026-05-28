@@ -1,40 +1,58 @@
 <script setup lang="ts">
 import { TenantAppData } from '@/schemas/tenantApp.schema'
 import { EntityForm } from '@/utils/formIoUtils'
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useTenantStore } from '@/store/tenant'
 import { isOnline, onNetworkChange } from '@/utils/networkUtils'
 import { useErrorHandler } from '@/composables/useErrorHandler'
 import { useSnackbar } from '@/composables/useSnackbar'
 import { useSyncService } from '@/store/syncService'
+import SyncScopeBadge from '@/components/SyncScopeBadge.vue'
+import EntityTypeFilter, { type EntityTypeChip } from '@/components/EntityTypeFilter.vue'
+import NewEntitySheet, { type NewEntityFormOption } from '@/components/NewEntitySheet.vue'
+import {
+  useEntitySubmissions,
+  type SubmissionRecord,
+  type SubmissionStatus,
+} from '@/composables/useEntitySubmissions'
+import { Claim169ScannerService } from '@/services/Claim169ScannerService'
+import { registerIssuerKey } from '@/services/claim169Service'
+import { useClaim169Config } from '@/composables/useClaim169Config'
+import { store } from '@/store'
+import { SyncLevel } from '@idpass/data-collect-core'
+import { v4 as uuidv4 } from 'uuid'
 
 const route = useRoute()
 const router = useRouter()
 
 const tenantapp = ref<TenantAppData>()
-const highLevelEntities = ref<EntityForm[]>([])
+const topLevelForms = ref<EntityForm[]>([])
 const isOffline = ref(false)
 const tenantStore = useTenantStore()
+const claim169Config = useClaim169Config()
 const syncService = useSyncService()
+const { submissions: allSubmissions, load: loadAllSubmissions } = useEntitySubmissions()
 let networkCleanup: (() => void) | null = null
 const { showError, showSuccess } = useSnackbar()
 const { handleError, handleAuthError } = useErrorHandler(route.params.id as string)
 
+const searchTerm = ref('')
+const activeFilter = ref<string>('all')
+const showNewSheet = ref(false)
+
+const appId = computed(() => route.params.id as string)
+
 const statsSummary = computed(() => ({
   synced: syncService.syncedCount,
   pending: syncService.pendingCount,
-  total: syncService.totalEntities
+  total: syncService.totalEntities,
 }))
 
 const syncWithErrorHandling = async (): Promise<boolean> => {
-  const appId = route.params.id as string
-  const success = await syncService.startSync(appId)
+  const success = await syncService.startSync(appId.value)
   if (!success && syncService.lastSyncError) {
-    const errorResult = await handleError(
-      new Error(syncService.lastSyncError),
-      appId
-    )
+    const errorResult = await handleError(new Error(syncService.lastSyncError), appId.value)
     if (errorResult.handled) {
       showError(errorResult.message)
     }
@@ -52,14 +70,18 @@ onMounted(async () => {
     }
   })
 
-  const tenant = await tenantStore.getTenant(route.params.id as string)
+  const tenant = await tenantStore.getTenant(appId.value)
   tenantapp.value = tenant
-  highLevelEntities.value = tenantapp.value.entityForms.filter((entity) => !entity.dependsOn)
+  topLevelForms.value = tenantapp.value.entityForms.filter((entity) => !entity.dependsOn)
 
+  await loadAllSubmissions()
   await syncService.refreshCounts()
 
   if (!isOffline.value) {
     await syncWithErrorHandling()
+    // Re-load submissions after the post-mount sync so the list reflects any
+    // server-side updates without the user having to pull-to-refresh.
+    await loadAllSubmissions()
   }
 })
 
@@ -70,7 +92,7 @@ onUnmounted(() => {
 })
 
 const onLogout = async () => {
-  await handleAuthError(route.params.id as string)
+  await handleAuthError(appId.value)
 }
 
 const onSync = async () => {
@@ -78,14 +100,14 @@ const onSync = async () => {
     showError('Sync requires an online connection. Please check your network and try again.')
     return
   }
-
-  const syncSuccess = await syncWithErrorHandling()
-  if (syncSuccess) {
+  const ok = await syncWithErrorHandling()
+  if (ok) {
+    await loadAllSubmissions()
     showSuccess('Sync completed successfully!')
   }
 }
 
-const formattedVersion = computed(() => `v${tenantapp.value?.version ?? '\u2014'}`)
+const formattedVersion = computed(() => `v${tenantapp.value?.version ?? '—'}`)
 
 const statusLabel = computed(() => {
   if (isOffline.value) return 'Offline mode'
@@ -103,35 +125,254 @@ const statusColor = computed(() => {
 const stats = computed(() => [
   { label: 'Synced', value: statsSummary.value.synced, hint: 'records available', color: 'success' },
   { label: 'Pending', value: statsSummary.value.pending, hint: 'waiting to sync', color: 'warning' },
-  { label: 'Forms', value: highLevelEntities.value.length, hint: 'ready to collect', color: 'info' },
+  { label: 'Records', value: allSubmissions.value.length, hint: 'collected so far', color: 'info' },
 ])
+
+const formByName = computed(
+  () => new Map((tenantapp.value?.entityForms ?? []).map((f) => [f.name, f])),
+)
+
+const resolveForm = (record: SubmissionRecord): EntityForm | undefined => {
+  const entityName = record.modified.data.entityName as string | undefined
+  if (entityName) {
+    const exact = formByName.value.get(entityName)
+    if (exact) return exact
+    const lower = entityName.toLowerCase()
+    for (const f of tenantapp.value?.entityForms ?? []) {
+      if (
+        f.name.toLowerCase() === lower ||
+        f.name.includes(entityName) ||
+        entityName.includes(f.name)
+      ) {
+        return f
+      }
+    }
+  }
+  const t = record.modified.type
+  if (t) {
+    for (const f of tenantapp.value?.entityForms ?? []) {
+      if (f.entityType === t) return f
+    }
+  }
+  return undefined
+}
+
+const parentByGuid = computed(() => {
+  const map = new Map<string, SubmissionRecord>()
+  for (const r of allSubmissions.value) {
+    map.set(r.guid, r)
+  }
+  return map
+})
+
+const detailPath = (record: SubmissionRecord): string => {
+  const form = resolveForm(record)
+  if (!form) return ''
+  const parentGuid = record.modified.data.parentGuid as string | undefined
+  if (parentGuid) {
+    const parent = parentByGuid.value.get(parentGuid)
+    const parentForm = parent ? resolveForm(parent) : undefined
+    if (parent && parentForm) {
+      return `/app/${appId.value}/${parentForm.name}/${parent.guid}/${form.name}/${record.guid}/detail`
+    }
+  }
+  return `/app/${appId.value}/${form.name}/${record.guid}/detail`
+}
+
+const submissionsWithForm = computed(() =>
+  allSubmissions.value.map((record) => {
+    const form = resolveForm(record)
+    return {
+      record,
+      formName: form?.name ?? '',
+      formTitle: form?.title ?? 'Unknown',
+    }
+  }),
+)
+
+const chipCounts = computed(() => {
+  const map = new Map<string, number>()
+  for (const entry of submissionsWithForm.value) {
+    if (!entry.formName) continue
+    map.set(entry.formName, (map.get(entry.formName) ?? 0) + 1)
+  }
+  return map
+})
+
+const filterChips = computed<EntityTypeChip[]>(() => {
+  const chips: EntityTypeChip[] = [
+    { value: 'all', label: 'All', count: submissionsWithForm.value.length },
+  ]
+  for (const f of tenantapp.value?.entityForms ?? []) {
+    const count = chipCounts.value.get(f.name) ?? 0
+    if (count === 0) continue
+    chips.push({ value: f.name, label: f.title || f.name, count })
+  }
+  return chips
+})
+
+const filteredEntries = computed(() => {
+  const term = searchTerm.value.trim().toLowerCase()
+  return submissionsWithForm.value.filter((entry) => {
+    if (activeFilter.value !== 'all' && entry.formName !== activeFilter.value) return false
+    if (!term) return true
+    const data = entry.record.modified.data
+    const name = (
+      (data._displayName || data.name || entry.record.modified.name || '') as string
+    ).toLowerCase()
+    if (name.includes(term)) return true
+    return JSON.stringify(data).toLowerCase().includes(term)
+  })
+})
+
+const newFormOptions = computed<NewEntityFormOption[]>(() =>
+  topLevelForms.value.map((f) => ({
+    name: f.name,
+    title: f.title || f.name,
+    description: f.description,
+  })),
+)
+
+const statusConfig = (status: SubmissionStatus) => {
+  switch (status) {
+    case 'synced':
+      return { label: 'Synced', color: 'success', icon: 'mdi-check-circle' }
+    case 'pending':
+      return { label: 'Pending', color: 'info', icon: 'mdi-cloud-upload' }
+    case 'draft':
+      return { label: 'Draft', color: 'warning', icon: 'mdi-note-outline' }
+    default:
+      return { label: 'Unknown', color: 'default', icon: 'mdi-help-circle' }
+  }
+}
+
+const formatTimestamp = (timestamp: string) => {
+  if (!timestamp) return '—'
+  const d = new Date(timestamp)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleString()
+}
+
+const onOpenDetail = (record: SubmissionRecord) => {
+  const path = detailPath(record)
+  if (!path) return
+  router.push(path)
+}
+
+const onPickNewForm = (form: NewEntityFormOption) => {
+  router.push(`/app/${appId.value}/${form.name}/new`)
+}
+
+const onQuickScan = async () => {
+  if (!tenantapp.value) return
+  const trustedIssuers = claim169Config.value.trustedIssuers.map((i) => ({
+    issuerId: i.issuerId,
+    ed25519Key: i.publicKey.ed25519,
+    es256Key: i.publicKey.es256,
+  }))
+  // Register keys so decode-time signature verification can resolve the
+  // issuer — mirrors what the in-form scanner does on its first scan.
+  for (const iss of trustedIssuers) {
+    registerIssuerKey(iss.issuerId, { ed25519: iss.ed25519Key, es256: iss.es256Key })
+  }
+
+  const result = await Claim169ScannerService.scan({
+    title: 'Scan to find individual',
+    description: 'Point the camera at a Claim-169 QR to verify identity and jump to the record.',
+    trustedIssuers,
+  })
+  if (!result) return // user cancelled
+
+  if (!result.isVerified) {
+    showError('Signature did not verify against trusted issuers — refusing to act on this QR.')
+    return
+  }
+
+  const subjectId = result.identity?.id
+  if (!subjectId) {
+    showError('Scanned credential has no subject id.')
+    return
+  }
+
+  const subjectLower = subjectId.toLowerCase()
+  const match = allSubmissions.value.find((r) => {
+    const data = r.modified.data as Record<string, unknown>
+    return (
+      (typeof data.national_id === 'string' && data.national_id === subjectId) ||
+      (typeof data.uin === 'string' && data.uin === subjectId) ||
+      (typeof data.externalId === 'string' && data.externalId === subjectId) ||
+      (typeof r.modified.name === 'string' && r.modified.name.toLowerCase() === subjectLower)
+    )
+  })
+
+  if (match) {
+    const path = detailPath(match)
+    if (path) {
+      // Stamp provenance on the entity before navigating. Async; not awaited
+      // so the navigation feels instant — failure here logs but doesn't block
+      // the agent's workflow.
+      const isoVerifiedAt = new Date().toISOString()
+      const epochToIso = (s?: number) =>
+        typeof s === 'number' && Number.isFinite(s) ? new Date(s * 1000).toISOString() : undefined
+      store.submitForm({
+        guid: uuidv4(),
+        entityGuid: match.guid,
+        type: 'claim169-verified',
+        data: {
+          verifiedBy: result.cwt?.issuer,
+          verifiedAt: isoVerifiedAt,
+          vcIssuedAt: epochToIso(result.cwt?.issuedAt),
+          vcExpiry: epochToIso(result.cwt?.expiresAt),
+          subjectId,
+        },
+        timestamp: isoVerifiedAt,
+        userId: 'mobile-quick-scan',
+        syncLevel: SyncLevel.LOCAL,
+      }).catch((err: unknown) => {
+        console.error('[quick-scan] failed to write provenance event', err)
+      })
+
+      showSuccess(`Identity verified — opening ${match.modified.name ?? 'record'}`)
+      router.push(path)
+      return
+    }
+  }
+  // No local hit: drop the id into the search box so the agent sees an empty
+  // list and can choose to create a new record via the FAB.
+  searchTerm.value = subjectId
+  showError(`No matching record found for ${subjectId}. Showing search results.`)
+}
+
+// Reset filter when the chip is no longer represented (e.g., after deletion).
+watch(filterChips, (chips) => {
+  if (chips.some((c) => c.value === activeFilter.value)) return
+  activeFilter.value = 'all'
+})
 </script>
 
 <template>
-  <v-container v-if="tenantapp" fluid class="pa-4">
-    <div class="d-flex justify-end align-center mb-4">
-      <div class="d-flex ga-2">
-        <v-btn
-          prepend-icon="mdi-sync"
-          color="secondary"
-          variant="flat"
-          size="small"
-          :disabled="syncService.isSyncing || isOffline"
-          :loading="syncService.isSyncing"
-          :title="isOffline ? 'Sync requires an online connection' : 'Sync with server'"
-          @click="onSync"
-        >
-          Sync
-        </v-btn>
-        <v-btn
-          prepend-icon="mdi-logout"
-          variant="tonal"
-          size="small"
-          @click="onLogout"
-        >
-          Logout
-        </v-btn>
-      </div>
+  <v-container v-if="tenantapp" fluid class="pa-4 app-view">
+    <div class="d-flex justify-space-between align-center mb-4">
+      <v-btn
+        prepend-icon="mdi-sync"
+        color="secondary"
+        variant="flat"
+        size="small"
+        :disabled="syncService.isSyncing || isOffline"
+        :loading="syncService.isSyncing"
+        :title="isOffline ? 'Sync requires an online connection' : 'Sync with server'"
+        @click="onSync"
+      >
+        Sync
+      </v-btn>
+      <v-btn
+        prepend-icon="mdi-logout"
+        variant="tonal"
+        size="small"
+        @click="onLogout"
+      >
+        Logout
+      </v-btn>
     </div>
 
     <v-card elevation="2" class="mb-4">
@@ -143,10 +384,22 @@ const stats = computed(() => [
           </div>
           <v-chip size="small" color="primary" variant="tonal">{{ formattedVersion }}</v-chip>
         </div>
-        <div class="mt-3">
-          <v-chip size="small" :color="statusColor" variant="tonal" :prepend-icon="isOffline ? 'mdi-wifi-off' : syncService.isSynced ? 'mdi-check-circle' : 'mdi-sync'">
+        <div class="mt-3 d-flex flex-wrap ga-2">
+          <v-chip
+            size="small"
+            :color="statusColor"
+            variant="tonal"
+            :prepend-icon="
+              isOffline
+                ? 'mdi-wifi-off'
+                : syncService.isSynced
+                ? 'mdi-check-circle'
+                : 'mdi-sync'
+            "
+          >
             {{ statusLabel }}
           </v-chip>
+          <SyncScopeBadge :app-id="appId" />
         </div>
       </v-card-text>
     </v-card>
@@ -161,23 +414,180 @@ const stats = computed(() => [
       </v-col>
     </v-row>
 
-    <div class="text-subtitle-2 font-weight-bold mb-2">Forms ({{ highLevelEntities.length }})</div>
+    <div class="d-flex align-center ga-2 mb-3">
+      <v-text-field
+        v-model="searchTerm"
+        prepend-inner-icon="mdi-magnify"
+        placeholder="Search by name, ID, village..."
+        variant="solo-filled"
+        flat
+        density="compact"
+        hide-details
+        clearable
+        rounded="pill"
+        single-line
+        class="flex-grow-1 search-pill"
+      />
+      <v-btn
+        v-if="claim169Config.enabled"
+        icon="mdi-qrcode-scan"
+        color="secondary"
+        variant="flat"
+        size="default"
+        :title="'Scan Claim-169 to verify identity and jump to the record'"
+        @click="onQuickScan"
+      />
+    </div>
 
-    <v-list lines="two" rounded="lg" elevation="1" bg-color="surface">
+    <EntityTypeFilter
+      v-if="filterChips.length > 1"
+      v-model="activeFilter"
+      :chips="filterChips"
+      class="mb-3"
+    />
+
+    <div class="text-caption text-medium-emphasis mb-2">
+      {{ filteredEntries.length }} {{ filteredEntries.length === 1 ? 'entry' : 'entries' }}
+      <template v-if="searchTerm || activeFilter !== 'all'"> matching filter</template>
+    </div>
+
+    <v-list
+      v-if="filteredEntries.length"
+      lines="two"
+      rounded="lg"
+      elevation="1"
+      bg-color="surface"
+    >
       <v-list-item
-        v-for="entity in highLevelEntities"
-        :key="entity.name"
-        @click="router.push(`/app/${tenantapp.id}/${entity.name}`)"
-        append-icon="mdi-chevron-right"
+        v-for="entry in filteredEntries"
+        :key="entry.record.guid"
+        :style="{ '--i': filteredEntries.indexOf(entry) }"
+        class="entity-row"
+        @click="onOpenDetail(entry.record)"
       >
-        <v-list-item-title class="font-weight-bold">{{ entity.title }}</v-list-item-title>
-        <v-list-item-subtitle>{{ entity.description || 'Tap to start collecting' }}</v-list-item-subtitle>
         <template #prepend>
-          <v-chip size="x-small" color="info" variant="tonal" class="mr-3">
-            {{ entity.displayTemplate || 'Form' }}
-          </v-chip>
+          <v-icon
+            :icon="statusConfig(entry.record.status).icon"
+            :color="statusConfig(entry.record.status).color"
+            class="mr-3"
+          />
+        </template>
+        <v-list-item-title class="font-weight-bold">
+          {{
+            entry.record.modified.data._displayName ||
+              entry.record.modified.data.name ||
+              entry.record.modified.name ||
+              'Untitled record'
+          }}
+        </v-list-item-title>
+        <v-list-item-subtitle>
+          <span class="entity-row__meta">
+            <v-chip size="x-small" variant="tonal" color="primary" class="entity-row__chip">
+              {{ entry.formTitle }}
+            </v-chip>
+            Updated {{ formatTimestamp(entry.record.modified.lastUpdated) }}
+          </span>
+        </v-list-item-subtitle>
+        <template #append>
+          <div class="d-flex align-center ga-2">
+            <v-chip
+              size="x-small"
+              :color="statusConfig(entry.record.status).color"
+              variant="tonal"
+            >
+              {{ statusConfig(entry.record.status).label }}
+            </v-chip>
+            <v-icon icon="mdi-chevron-right" size="small" color="medium-emphasis" />
+          </div>
         </template>
       </v-list-item>
     </v-list>
+
+    <v-empty-state
+      v-else
+      icon="mdi-inbox-outline"
+      title="No records yet"
+      text="Tap + to start collecting."
+    />
+
+    <v-btn
+      icon="mdi-plus"
+      color="primary"
+      class="app-view__fab"
+      elevation="3"
+      size="large"
+      aria-label="New entry"
+      @click="showNewSheet = true"
+    />
+
+    <NewEntitySheet
+      v-model="showNewSheet"
+      :forms="newFormOptions"
+      @select="onPickNewForm"
+    />
   </v-container>
 </template>
+
+<style scoped>
+.app-view {
+  position: relative;
+  /* Bottom nav is 56 px tall + safe-area inset on devices with gesture bars.
+     Pad enough so list rows don't hide behind nav OR the FAB sitting above it. */
+  padding-bottom: calc(56px + 72px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Vuetify `solo-filled` ships borderless. The flat fill blended into the page
+   background in field tests — agents weren't sure the search bar was tappable.
+   Override the inner .v-field surface with a 1px border so the pill reads as
+   an input field instead of a passive label. Focus state already swaps to the
+   brand color via Vuetify's :focus-within hook. */
+.search-pill :deep(.v-field) {
+  border: 1px solid var(--border-default, rgba(0, 0, 0, 0.18));
+  transition: border-color var(--transition-fast, 150ms ease);
+}
+.search-pill :deep(.v-field--focused) {
+  border-color: var(--brand, #ff6d37);
+}
+
+.app-view__fab {
+  position: fixed;
+  right: 20px;
+  /* Sit above v-bottom-navigation (56 px) + safe-area gesture bar + 16 px gap. */
+  bottom: calc(56px + 16px + env(safe-area-inset-bottom, 0px));
+  /* Vuetify v-bottom-navigation uses z-index ~1004; FAB must clear that. */
+  z-index: 1010;
+}
+
+.entity-row {
+  animation: entity-row-fade 240ms ease both;
+  animation-delay: calc(min(var(--i, 0), 12) * 50ms);
+}
+
+.entity-row__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.entity-row__chip {
+  margin-right: 4px;
+}
+
+@keyframes entity-row-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .entity-row {
+    animation: none;
+  }
+}
+</style>

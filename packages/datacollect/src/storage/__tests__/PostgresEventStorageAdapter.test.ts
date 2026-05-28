@@ -769,4 +769,77 @@ describeTenantTests("PostgresEventStorageAdapter - Tenant Tests", () => {
     await defaultAdapter.clearStore();
     await defaultAdapter.closeConnection();
   });
+
+  describe("generic metadata accessor", () => {
+    test("getMetadataValue returns null on miss", async () => {
+      expect(await tenant1Adapter.getMetadataValue("missing")).toBeNull();
+    });
+
+    test("setMetadataValue / getMetadataValue round-trips and upserts", async () => {
+      await tenant1Adapter.setMetadataValue("foo", "bar");
+      expect(await tenant1Adapter.getMetadataValue("foo")).toBe("bar");
+      await tenant1Adapter.setMetadataValue("foo", "baz");
+      expect(await tenant1Adapter.getMetadataValue("foo")).toBe("baz");
+    });
+
+    test("deleteMetadataValue removes a row and is a no-op when absent", async () => {
+      await tenant1Adapter.setMetadataValue("foo", "bar");
+      await tenant1Adapter.deleteMetadataValue("foo");
+      expect(await tenant1Adapter.getMetadataValue("foo")).toBeNull();
+      await expect(tenant1Adapter.deleteMetadataValue("foo")).resolves.toBeUndefined();
+    });
+
+    test("listMetadataKeys filters by prefix", async () => {
+      await tenant1Adapter.setMetadataValue("cr:alpha", "{}");
+      await tenant1Adapter.setMetadataValue("cr:beta", "{}");
+      await tenant1Adapter.setMetadataValue("other:gamma", "{}");
+
+      const keys = await tenant1Adapter.listMetadataKeys("cr:");
+      expect(keys.sort()).toEqual(["cr:alpha", "cr:beta"]);
+    });
+
+    test("metadata is tenant-isolated (listMetadataKeys does not bleed)", async () => {
+      // Use tenant1Adapter and tenant2Adapter directly — they're already
+      // initialised on different tenants. Writing the same key under each
+      // must yield distinct rows.
+      await tenant1Adapter.setMetadataValue("cr:shared-key", "from-a");
+      await tenant2Adapter.setMetadataValue("cr:shared-key", "from-b");
+      await tenant1Adapter.setMetadataValue("cr:only-a", "x");
+      await tenant2Adapter.setMetadataValue("cr:only-b", "y");
+
+      expect(await tenant1Adapter.getMetadataValue("cr:shared-key")).toBe("from-a");
+      expect(await tenant2Adapter.getMetadataValue("cr:shared-key")).toBe("from-b");
+
+      const keysA = await tenant1Adapter.listMetadataKeys("cr:");
+      const keysB = await tenant2Adapter.listMetadataKeys("cr:");
+      expect(keysA.sort()).toEqual(["cr:only-a", "cr:shared-key"]);
+      expect(keysB.sort()).toEqual(["cr:only-b", "cr:shared-key"]);
+
+      // Delete on tenant1 must not touch tenant2.
+      await tenant1Adapter.deleteMetadataValue("cr:shared-key");
+      expect(await tenant1Adapter.getMetadataValue("cr:shared-key")).toBeNull();
+      expect(await tenant2Adapter.getMetadataValue("cr:shared-key")).toBe("from-b");
+    });
+
+    test("empty string is a legitimate value (not coerced to null)", async () => {
+      await tenant1Adapter.setMetadataValue("blank", "");
+      expect(await tenant1Adapter.getMetadataValue("blank")).toBe("");
+    });
+
+    test("listMetadataKeys treats LIKE metacharacters in prefix as literals", async () => {
+      // Without LIKE-escape, a prefix containing `%` would behave like a
+      // wildcard and silently match unrelated keys (e.g. `cr:abc`).
+      await tenant1Adapter.setMetadataValue("cr:abc", "{}");
+      await tenant1Adapter.setMetadataValue("cr:%literal", "{}");
+      await tenant1Adapter.setMetadataValue("cr:_under", "{}");
+
+      // `cr:%` should match only the literal-`%` key, not `cr:abc`.
+      const percentMatches = await tenant1Adapter.listMetadataKeys("cr:%");
+      expect(percentMatches).toEqual(["cr:%literal"]);
+
+      // `cr:_` should match only the literal-`_` key, not all single-chars.
+      const underscoreMatches = await tenant1Adapter.listMetadataKeys("cr:_");
+      expect(underscoreMatches).toEqual(["cr:_under"]);
+    });
+  });
 });

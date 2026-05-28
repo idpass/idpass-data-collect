@@ -21,8 +21,10 @@
 import {
   AuthConfig,
   AuthManager,
+  DeviceIdentity,
   EntityDataManager,
   EntityStoreImpl,
+  EventStore,
   EventStoreImpl,
   IndexedDbEventStorageAdapter,
   IndexedDbEntityStorageAdapter,
@@ -37,6 +39,20 @@ const REFRESH_TOKEN_KEY_PREFIX = 'sync_refresh_'
 export let store: EntityDataManager
 
 const storeCache = new Map<string, EntityDataManager>()
+// Per-app EventStore handles. EntityDataManager keeps `eventStore` private, so
+// composables that need to read scope metadata (`getLastScope()`) go through
+// this cache. Populated alongside `storeCache` inside `initStore`.
+const eventStoreCache = new Map<string, EventStore>()
+
+/**
+ * Returns the EventStore associated with an app id, or `null` if `initStore`
+ * has not yet been called for that id. Intended for read-only consumers in the
+ * UI layer (e.g. the sync-scope badge composable) — do not use to mutate
+ * persisted state.
+ */
+export function getEventStore(appId: string): EventStore | null {
+  return eventStoreCache.get(appId) ?? null
+}
 
 /**
  * Store refresh token in secure storage for silent re-authentication.
@@ -69,11 +85,16 @@ export const initStore = async (
 
   const authStorage = new IndexedDbAuthStorageAdapter(appId)
   const authManagerInstance = new AuthManager(authConfigs, syncServerUrl, authStorage)
+  // authStorage.initialize() MUST complete before AuthManager.initialize(),
+  // because the latter calls authStorage.getUsername() which silently returns
+  // "" when the IndexedDB connection is not yet established. That stale empty
+  // username then causes handleDefaultLogin's isAuthenticated() check to race
+  // and reject the freshly-stored token, bouncing the user back to /login.
+  await authStorage.initialize()
   await Promise.all([
     entityStore.initialize(),
     eventStore.initialize(),
-    authManagerInstance?.initialize(),
-    authStorage.initialize()
+    authManagerInstance?.initialize()
   ])
 
   // Silent re-authentication callback: uses refresh token stored in SecureStorage
@@ -98,6 +119,25 @@ export const initStore = async (
   }
 
   const eventApplierService = new EventApplierService(eventStore, entityStore)
+  const deviceIdentity = new DeviceIdentity()
+  const deviceId = await deviceIdentity.getOrCreateDeviceId()
+
+  // Late-bound EDM reference: InternalSyncManager needs a purgeOutOfScope
+  // callback at construction time, but EDM is built after ISM (because EDM's
+  // constructor takes ISM). The closure below captures `edmRef` which is
+  // populated immediately after `store` is created. Scope rotation cannot
+  // fire before sync runs, so the post-init assignment is always in place
+  // by the time the callback is invoked.
+  let edmRef: EntityDataManager | null = null
+  const purgeOutOfScope = async (keep: readonly string[]) => {
+    if (!edmRef) {
+      throw new Error(
+        'purgeOutOfScope: EntityDataManager not yet initialised — sync rolled back to retry',
+      )
+    }
+    await edmRef.purgeEntitiesNotIn(keep)
+  }
+
   const internalSyncManager = new InternalSyncManager(
     eventStore,
     entityStore,
@@ -105,7 +145,9 @@ export const initStore = async (
     syncServerUrl,
     authStorage,
     appId,
-    reauthenticate
+    reauthenticate,
+    deviceId,
+    purgeOutOfScope,
   )
 
   store = new EntityDataManager(
@@ -116,7 +158,9 @@ export const initStore = async (
     internalSyncManager,
     authManagerInstance
   )
+  edmRef = store
   storeCache.set(appId, store)
+  eventStoreCache.set(appId, eventStore)
 }
 
 export const closeStore = async (appId: string) => {
@@ -124,5 +168,6 @@ export const closeStore = async (appId: string) => {
     const store = storeCache.get(appId)
     await store.closeConnection()
     storeCache.delete(appId)
+    eventStoreCache.delete(appId)
   }
 }

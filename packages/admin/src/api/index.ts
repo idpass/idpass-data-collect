@@ -18,7 +18,11 @@
  */
 
 import { useAuthStore } from '@/stores/auth'
+import type { SyncScopePolicy, SyncScopeOverride } from '@idpass/data-collect-core'
 import axios, { type AxiosInstance } from 'axios'
+import type { ConflictRecord } from '@idpass/data-collect-core'
+
+export type { ConflictRecord }
 
 const API_URL = import.meta.env.VITE_API_URL
 const APPS_URL = '/api/apps'
@@ -29,6 +33,7 @@ const SYNC_EVENTS_URL = '/api/sync/events'
 const USERS_URL = '/api/users'
 const REVIEWS_URL = '/api/reviews'
 const DUPLICATES_URL = '/api/potential-duplicates'
+const CONFLICTS_URL = '/api/conflicts'
 const ATTACHMENTS_URL = '/api/attachments'
 
 export let instance: AxiosInstance | null = null
@@ -143,6 +148,61 @@ export const purgeApp = async (id: string) => {
   return response.data
 }
 
+// PATCH /api/apps/:id/syncScope — bounded sync scope (#947).
+// Pass `null` to clear the policy; pass a `SyncScopePolicy` to set/replace it.
+export const updateAppSyncScope = async (
+  id: string,
+  syncScope: SyncScopePolicy | null,
+): Promise<{ status: 'success'; syncScope: SyncScopePolicy | null }> => {
+  const response = await api().patch(`${APPS_URL}/${id}/syncScope`, { syncScope })
+  return response.data
+}
+
+// Program offered for enrolment via OpenSPP `assign_program` CR workflow.
+// Mobile reads this from the public artifact to render the "Enroll in Program" picker.
+export interface AppProgram {
+  id: number
+  name: string
+  code?: string | null
+}
+
+// PATCH /api/apps/:id/programs — UC3 program-enrolment linkage.
+// Pass `null` to clear the list; pass an array to set/replace it. Triggers
+// public-artifact regeneration so mobile picks up the change on next pull.
+export const updateAppPrograms = async (
+  id: string,
+  programs: AppProgram[] | null,
+): Promise<{ status: 'success'; programs: AppProgram[] }> => {
+  const response = await api().patch(`${APPS_URL}/${id}/programs`, { programs })
+  return response.data
+}
+
+// Claim-169 identity verification config carried at the tenant level.
+// Structure mirrors backend `Claim169Config` — keep in sync.
+export interface Claim169TrustedIssuer {
+  issuerId: string
+  publicKey: {
+    ed25519?: string
+    es256?: string
+  }
+}
+
+export interface Claim169Config {
+  enabled: boolean
+  trustedIssuers: Claim169TrustedIssuer[]
+}
+
+// PATCH /api/apps/:id/claim169 — Claim-169 trust anchors + enable flag.
+// Pass `null` to clear the block; pass a `Claim169Config` to set/replace it.
+// Triggers public-artifact regeneration so mobile picks up the change on next pull.
+export const updateAppClaim169 = async (
+  id: string,
+  claim169: Claim169Config | null,
+): Promise<{ status: 'success'; claim169: Claim169Config | null }> => {
+  const response = await api().patch(`${APPS_URL}/${id}/claim169`, { claim169 })
+  return response.data
+}
+
 export const getAppConfigJsonUrl = (artifactId: string) => {
   api() // ensure initialized
   if (!artifactId) {
@@ -232,16 +292,34 @@ export const retrySyncJob = async (jobId: string) => {
   return response.data as { jobId: string; status: string }
 }
 
+// Per-assignment role binding. `syncScopeOverride` (#947) narrows the tenant
+// `syncScope` policy for this specific role grant; omitted = inherit tenant default.
+export interface AdminRoleAssignment {
+  programId: string
+  role: string
+  areaId?: string
+  syncScopeOverride?: SyncScopeOverride
+}
+
 export const getUsers = async (): Promise<{
   id: string
   email: string
   role: string
   programIds?: string[]
-  roleAssignments?: Array<{ programId: string; role: string; areaId?: string }>
+  roleAssignments?: AdminRoleAssignment[]
 }[]> => {
   const response = await api().get(USERS_URL)
   return response.data.map(
-    (user: { tenantIds?: string[]; roleAssignments?: Array<{ tenantId: string; role: string; areaId?: string }>; [key: string]: unknown }) => {
+    (user: {
+      tenantIds?: string[]
+      roleAssignments?: Array<{
+        tenantId: string
+        role: string
+        areaId?: string
+        syncScopeOverride?: SyncScopeOverride
+      }>
+      [key: string]: unknown
+    }) => {
       const { tenantIds, roleAssignments, ...rest } = user
       return {
         ...rest,
@@ -257,7 +335,7 @@ export const createUser = async (user: {
   password: string
   role: string
   programIds?: string[]
-  roleAssignments?: Array<{ programId: string; role: string; areaId?: string }>
+  roleAssignments?: AdminRoleAssignment[]
 }) => {
   // Backend expects tenantIds and roleAssignments with tenantId
   const { programIds, roleAssignments, ...rest } = user
@@ -275,7 +353,7 @@ export const updateUser = async (user: {
   password?: string
   role: string
   programIds?: string[]
-  roleAssignments?: Array<{ programId: string; role: string; areaId?: string }>
+  roleAssignments?: AdminRoleAssignment[]
 }) => {
   // Backend expects tenantIds and roleAssignments with tenantId
   const { programIds, roleAssignments, ...rest } = user
@@ -479,6 +557,39 @@ export const resolveDuplicate = async (params: {
   return response.data
 }
 
+// --- Conflicts ---
+
+export const getConflicts = async (
+  configId: string,
+): Promise<{ conflicts: ConflictRecord[]; unresolvedCount: number }> => {
+  const response = await api().get(CONFLICTS_URL, { params: { configId } })
+  return response.data
+}
+
+export const getConflict = async (
+  guid: string,
+  configId: string,
+): Promise<ConflictRecord> => {
+  const response = await api().get(`${CONFLICTS_URL}/${encodeURIComponent(guid)}`, {
+    params: { configId },
+  })
+  return response.data.conflict
+}
+
+export const resolveConflict = async (params: {
+  guid: string
+  configId: string
+  resolution: 'local' | 'remote' | 'merged'
+  mergedData?: Record<string, unknown>
+}): Promise<ConflictRecord> => {
+  const response = await api().post(
+    `${CONFLICTS_URL}/${encodeURIComponent(params.guid)}/resolve`,
+    { resolution: params.resolution, mergedData: params.mergedData },
+    { params: { configId: params.configId } },
+  )
+  return response.data.conflict
+}
+
 // --- Attachments ---
 
 export interface AttachmentMetadata {
@@ -557,4 +668,24 @@ export const getCurrentUser = async (): Promise<{
       }),
     ),
   }
+}
+
+// --- Admin — devices ---
+
+const ADMIN_DEVICES_URL = '/api/admin/devices'
+
+export interface DeviceSyncSummary {
+  tenantId: string
+  userId: string
+  deviceId: string
+  lastPullAt: string | null
+  lastPushAt: string | null
+  totalPulled: number
+  totalPushed: number
+  lastScopeHash: string | null
+}
+
+export const getDevices = async (configId: string): Promise<DeviceSyncSummary[]> => {
+  const response = await api().get(ADMIN_DEVICES_URL, { params: { configId } })
+  return response.data
 }

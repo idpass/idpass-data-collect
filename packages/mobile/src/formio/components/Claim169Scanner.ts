@@ -106,33 +106,48 @@ export default class Claim169Scanner extends getField() {
   render(_content: string) {
     const value = this.dataValue || this.getValue();
     const isCaptured = value && value.identity;
-    const label = this.escapeHtml(this.component.label || 'Scan Identity');
+
+    // Pull a meaningful subtitle from config instead of the generic
+    // "Scan a Claim-169 QR code". Prefer the trusted issuer DID (lets reviewers
+    // see WHO this scanner accepts credentials from). Fall back to the issuer
+    // count if no human-readable id is configured.
+    const issuers = Array.isArray(this.component.trustedIssuers)
+      ? this.component.trustedIssuers
+      : [];
+    const firstIssuerId = issuers.length > 0 && typeof issuers[0]?.issuerId === 'string'
+      ? issuers[0].issuerId
+      : null;
+    const subtitle = isCaptured
+      ? 'Identity verified offline'
+      : firstIssuerId
+        ? `Trusted issuer: ${this.escapeHtml(firstIssuerId)}${issuers.length > 1 ? ` (+${issuers.length - 1} more)` : ''}`
+        : `Verifies offline against ${issuers.length || 'configured'} trusted issuer(s)`;
 
     return super.render(`
-      <div class="card card-body bg-light">
-        <div class="d-flex align-items-center justify-content-between">
-          <div>
-            <div class="fw-bold mb-1">${label}</div>
-            <div class="text-muted small">
-              ${isCaptured ? 'Identity scanned and verified' : 'Scan a Claim-169 QR code'}
-            </div>
+      <div class="claim169-scanner card card-body">
+        <div class="claim169-scanner__row">
+          <div class="claim169-scanner__copy">
+            <div class="claim169-scanner__subtitle">${subtitle}</div>
           </div>
-          <button class="btn ${isCaptured ? 'btn-success' : 'btn-primary'}" ref="scanButton">
-            <i class="fa ${isCaptured ? 'fa-check' : 'fa-qrcode'} me-2"></i>
-            ${isCaptured ? 'Rescan' : 'Scan'}
+          <button
+            type="button"
+            class="claim169-scanner__btn ${isCaptured ? 'is-captured' : ''}"
+            ref="scanButton"
+            aria-label="${isCaptured ? 'Rescan identity' : 'Scan identity QR'}"
+          >
+            <i class="fa ${isCaptured ? 'fa-check' : 'fa-qrcode'} claim169-scanner__btn-icon"></i>
+            <span>${isCaptured ? 'Rescan' : 'Scan'}</span>
           </button>
         </div>
         ${isCaptured ? `
-          <div class="mt-3 pt-3 border-top">
-            <div class="d-flex align-items-center">
-              ${this.renderPhoto(value)}
-              <div class="ms-3">
-                <div class="fw-bold">${this.escapeHtml(value.identity.fullName || 'Unknown Name')}</div>
-                <div class="text-muted small text-truncate" style="max-width: 200px;">
-                  ID: ${this.escapeHtml(value.identity.id || 'N/A')}
-                </div>
-                ${value.isVerified ? '<span class="badge bg-success">Verified</span>' : '<span class="badge bg-warning text-dark">Unverified</span>'}
-                ${value.isExpired ? '<span class="badge bg-danger">Expired</span>' : ''}
+          <div class="claim169-scanner__identity">
+            ${this.renderPhoto(value)}
+            <div class="claim169-scanner__identity-meta">
+              <div class="claim169-scanner__identity-name">${this.escapeHtml(value.identity.fullName || 'Unknown Name')}</div>
+              <div class="claim169-scanner__identity-id">ID: ${this.escapeHtml(value.identity.id || 'N/A')}</div>
+              <div class="claim169-scanner__badges">
+                ${value.isVerified ? '<span class="claim169-scanner__badge claim169-scanner__badge--ok">Verified</span>' : '<span class="claim169-scanner__badge claim169-scanner__badge--warn">Unverified</span>'}
+                ${value.isExpired ? '<span class="claim169-scanner__badge claim169-scanner__badge--err">Expired</span>' : ''}
               </div>
             </div>
           </div>
@@ -224,6 +239,30 @@ export default class Claim169Scanner extends getField() {
           }
         }
       });
+    }
+
+    // 1b. Inject provenance fields onto the form's root data so the
+    // submission carries WHO verified, WHEN, and WHEN the credential
+    // expires — without requiring the tenant config to declare matching
+    // form components. EventApplier reads these flat keys to stamp
+    // entity.data; DetailView shows them as a provenance chip.
+    // Skipped silently when signature failed or VC is expired — we don't
+    // want to inscribe "verified" provenance on an unverifiable QR.
+    if (result.isVerified && !result.isExpired) {
+      const rootData = (this.root as { data?: Record<string, unknown> }).data;
+      if (rootData && typeof rootData === 'object') {
+        const epochToIso = (s?: number) =>
+          typeof s === 'number' && Number.isFinite(s) ? new Date(s * 1000).toISOString() : undefined;
+        rootData.claim169_verifiedBy = result.cwt?.issuer ?? '';
+        rootData.claim169_verifiedAt = new Date().toISOString();
+        const expIso = epochToIso(result.cwt?.expiresAt);
+        if (expIso) rootData.claim169_vcExpiry = expIso;
+        const issIso = epochToIso(result.cwt?.issuedAt);
+        if (issIso) rootData.claim169_vcIssuedAt = issIso;
+        if (result.identity?.id) rootData.claim169_subjectId = result.identity.id;
+        // Legacy coarse flag — keeps older report queries working.
+        rootData.claim169_verified = 'verified';
+      }
     }
 
     // 2. Store original data if configured

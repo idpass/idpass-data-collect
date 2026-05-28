@@ -18,6 +18,7 @@
  */
 
 import { AuditLogEntry, EventStorageAdapter, FormSubmission, SyncLevel } from "../interfaces/types";
+import type { EffectiveScopeBody } from "../interfaces/scope";
 import { createLogger } from "../utils/logger";
 
 const log = createLogger("IndexedDbEventStorageAdapter");
@@ -717,6 +718,140 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
   }
 
   /**
+   * Retrieves the last advertised scope hash from the server, or `null` if never seen.
+   *
+   * @returns A Promise that resolves with the scope hash string, or `null` if no hash exists.
+   * @throws {Error} If IndexedDB is not initialized or the retrieval operation fails.
+   */
+  async getLastScopeHash(): Promise<string | null> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+    return new Promise<string | null>((resolve, reject) => {
+      const tx = this.db!.transaction("syncTimestamp", "readonly");
+      const req = tx.objectStore("syncTimestamp").get("scope_hash");
+      req.onsuccess = () => {
+        const row = req.result as { id: string; value?: string } | undefined;
+        resolve(row?.value ?? null);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  /**
+   * Persists the latest scope hash (called after a successful pull).
+   *
+   * @param hash The scope hash string to save.
+   * @returns A Promise that resolves when the hash is successfully saved.
+   * @throws {Error} If IndexedDB is not initialized or the save operation fails.
+   */
+  async setLastScopeHash(hash: string): Promise<void> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+    return new Promise<void>((resolve, reject) => {
+      const tx = this.db!.transaction("syncTimestamp", "readwrite");
+      tx.objectStore("syncTimestamp").put({ id: "scope_hash", value: hash });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  }
+
+  /**
+   * Retrieves the last persisted effective scope body (areaIds/entityTypes/timeWindow + hash),
+   * or `null` if none has been observed yet. Stored as a JSON string under the
+   * `"scope_body"` key in the `syncTimestamp` object store.
+   *
+   * @returns A Promise that resolves with the parsed scope body, or `null` if absent.
+   * @throws {Error} If IndexedDB is not initialized or the retrieval fails.
+   */
+  async getLastScope(): Promise<EffectiveScopeBody | null> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+    return new Promise<EffectiveScopeBody | null>((resolve, reject) => {
+      const tx = this.db!.transaction("syncTimestamp", "readonly");
+      const req = tx.objectStore("syncTimestamp").get("scope_body");
+      req.onsuccess = () => {
+        const row = req.result as { id: string; value?: string } | undefined;
+        if (!row?.value) {
+          resolve(null);
+          return;
+        }
+        try {
+          resolve(JSON.parse(row.value) as EffectiveScopeBody);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  /**
+   * Persists the latest effective scope body advertised by the server. Called
+   * after a successful pull, alongside `setLastScopeHash`. The body is stored
+   * as a JSON string under the `"scope_body"` key in the `syncTimestamp`
+   * object store. Resolves on `transaction.oncomplete` so callers see the
+   * write committed before the Promise settles.
+   *
+   * @param scope The effective scope body to persist.
+   * @returns A Promise that resolves when the body is successfully saved.
+   * @throws {Error} If IndexedDB is not initialized or the save operation fails.
+   */
+  async setLastScope(scope: EffectiveScopeBody): Promise<void> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+    const value = JSON.stringify(scope);
+    return new Promise<void>((resolve, reject) => {
+      const tx = this.db!.transaction("syncTimestamp", "readwrite");
+      tx.objectStore("syncTimestamp").put({ id: "scope_body", value });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  }
+
+  /**
+   * Deletes all events whose `entityGuid` matches the given guid.
+   *
+   * Used during client-side scope-purge — when an entity falls outside the
+   * effective sync scope, its events would otherwise be orphans. This is a
+   * local data-minimization operation; it does NOT generate `delete-entity`
+   * events and is invisible to the server.
+   *
+   * @param entityGuid The entity guid whose events should be removed.
+   * @returns A Promise that resolves with the number of events deleted.
+   * @throws {Error} If IndexedDB is not initialized or the deletion fails.
+   */
+  async deleteEventsForEntity(entityGuid: string): Promise<number> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+    return new Promise<number>((resolve, reject) => {
+      const tx = this.db!.transaction("events", "readwrite");
+      const store = tx.objectStore("events");
+      const index = store.index("entityGuid");
+      const cursorReq = index.openCursor(IDBKeyRange.only(entityGuid));
+      let count = 0;
+      cursorReq.onsuccess = () => {
+        const cursor = cursorReq.result;
+        if (cursor) {
+          cursor.delete();
+          count++;
+          cursor.continue();
+        }
+      };
+      cursorReq.onerror = () => reject(cursorReq.error);
+      tx.oncomplete = () => resolve(count);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  }
+
+  /**
    * Checks if an event with the given GUID exists in the event store.
    *
    * @param guid The GUID of the event to check.
@@ -819,6 +954,107 @@ export class IndexedDbEventStorageAdapter implements EventStorageAdapter {
           resolve(auditTrail);
         }
       };
+    });
+  }
+
+  /**
+   * Generic key-value metadata accessor. Reuses the existing `syncTimestamp`
+   * object store, which is already a `{ id, value }` key/value table — the
+   * same store that holds scope-hash, push-watermark, hash-anchor, etc.
+   * Returns `null` when the key is absent (do not return empty-string
+   * sentinel — empty string is a legitimate stored value).
+   *
+   * @param key The metadata key.
+   * @returns The stored value, or `null` if the key does not exist.
+   */
+  async getMetadataValue(key: string): Promise<string | null> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+    return new Promise<string | null>((resolve, reject) => {
+      const tx = this.db!.transaction("syncTimestamp", "readonly");
+      const req = tx.objectStore("syncTimestamp").get(key);
+      req.onsuccess = () => {
+        const row = req.result as { id: string; value?: string } | undefined;
+        resolve(row?.value ?? null);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  /**
+   * Persist (upsert) a metadata value under `key` in the `syncTimestamp`
+   * store. Resolves on `transaction.oncomplete` so callers see the write
+   * committed before the Promise settles.
+   *
+   * @param key The metadata key.
+   * @param value The value to store.
+   */
+  async setMetadataValue(key: string, value: string): Promise<void> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+    return new Promise<void>((resolve, reject) => {
+      const tx = this.db!.transaction("syncTimestamp", "readwrite");
+      tx.objectStore("syncTimestamp").put({ id: key, value });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  }
+
+  /**
+   * Delete the metadata row for `key`. No-op if absent. Resolves on
+   * `transaction.oncomplete`.
+   *
+   * @param key The metadata key to remove.
+   */
+  async deleteMetadataValue(key: string): Promise<void> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+    return new Promise<void>((resolve, reject) => {
+      const tx = this.db!.transaction("syncTimestamp", "readwrite");
+      tx.objectStore("syncTimestamp").delete(key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  }
+
+  /**
+   * List metadata keys whose name starts with `prefix`. Uses a key-range cursor
+   * over the `syncTimestamp` object store (whose `keyPath` is `id`) so the
+   * scan visits only the prefix-matching subset of the keyspace instead of
+   * walking every row. The upper bound `prefix + "￿"` exploits the fact
+   * that no DataCollect-issued metadata key contains `U+FFFF`.
+   *
+   * Resolves on `transaction.oncomplete`.
+   *
+   * @param prefix Key prefix to filter on (e.g. `"cr:"`).
+   */
+  async listMetadataKeys(prefix: string): Promise<string[]> {
+    if (!this.db) {
+      throw new Error("IndexedDB is not initialized");
+    }
+    const db = this.db;
+    return new Promise<string[]>((resolve, reject) => {
+      const tx = db.transaction("syncTimestamp", "readonly");
+      const store = tx.objectStore("syncTimestamp");
+      const range = IDBKeyRange.bound(prefix, prefix + "￿", false, false);
+      const req = store.openKeyCursor(range);
+      const keys: string[] = [];
+      req.onsuccess = (event) => {
+        const cursor = (event.target as IDBRequest<IDBCursor | null>).result;
+        if (cursor) {
+          if (typeof cursor.key === "string") keys.push(cursor.key);
+          cursor.continue();
+        }
+      };
+      req.onerror = () => reject(req.error);
+      tx.oncomplete = () => resolve(keys);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
     });
   }
 }

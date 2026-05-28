@@ -83,6 +83,10 @@ describe("OpenSppV2SyncAdapter", () => {
       setLastPushExternalSyncTimestamp: jest.fn(),
       getLastPullExternalSyncTimestamp: jest.fn().mockResolvedValue("1970-01-01T00:00:00.000Z"),
       setLastPullExternalSyncTimestamp: jest.fn(),
+      getMetadataValue: jest.fn().mockResolvedValue(null),
+      setMetadataValue: jest.fn(),
+      deleteMetadataValue: jest.fn(),
+      listMetadataKeys: jest.fn().mockResolvedValue([]),
     } as unknown as jest.Mocked<EventStore>;
 
     const mockEntityStore = {
@@ -223,6 +227,15 @@ describe("OpenSppV2SyncAdapter", () => {
       };
       eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
 
+      // Adapter probes GET first to fetch current versionId for optimistic
+      // locking; only PATCHes when the remote actually exists. A null GET
+      // sends the push down the discovery-then-POST recovery path.
+      mockV2ClientImplementation.getIndividual.mockResolvedValueOnce({
+        type: "Individual",
+        identifier: [{ system: "urn:openspp:vocab:id-type#system_id", value: "individual-1" }],
+        meta: { versionId: "remote-version-1" },
+      });
+
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
       const result = await adapter.pushData();
       expect(result).toEqual({ pushed: 1, failed: 0, skipped: 0, errors: [] });
@@ -235,7 +248,7 @@ describe("OpenSppV2SyncAdapter", () => {
         expect.objectContaining({
           name: expect.objectContaining({ family: "Smith" }),
         }),
-        undefined,
+        "remote-version-1",
       );
       expect(mockV2ClientImplementation.createIndividual).not.toHaveBeenCalled();
     });
@@ -394,6 +407,14 @@ describe("OpenSppV2SyncAdapter", () => {
       };
       eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
 
+      // GET first to fetch versionId; mock the existence so the push hits the
+      // PATCH branch instead of the discovery-then-POST recovery path.
+      mockV2ClientImplementation.getGroup.mockResolvedValueOnce({
+        type: "Group",
+        identifier: [{ system: "urn:openspp:vocab:id-type#system_id", value: "group-1" }],
+        meta: { versionId: "remote-group-version-1" },
+      });
+
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
       const result = await adapter.pushData();
       expect(result).toEqual({ pushed: 1, failed: 0, skipped: 0, errors: [] });
@@ -404,7 +425,7 @@ describe("OpenSppV2SyncAdapter", () => {
       expect(mockV2ClientImplementation.patchGroup).toHaveBeenCalledWith(
         "urn:openspp:vocab:id-type#system_id|group-1",
         expect.objectContaining({ name: "New Name" }),
-        undefined,
+        "remote-group-version-1",
       );
     });
   });
@@ -957,6 +978,99 @@ describe("OpenSppV2SyncAdapter", () => {
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, legacyConfig);
       await adapter.authenticate();
       expect(mockV2ClientImplementation.authenticate).toHaveBeenCalled();
+    });
+
+    describe("submitVia option", () => {
+      // Reading a private field is intentional — A2 only wires the option
+      // into the ctor; A4 will exercise it via push behaviour. Until then,
+      // tests verify the wiring via the stored field directly.
+      const readSubmitVia = (a: OpenSppV2SyncAdapter): unknown =>
+        (a as unknown as { submitVia: unknown }).submitVia;
+      const readCRTypeMap = (a: OpenSppV2SyncAdapter): unknown =>
+        (a as unknown as { changeRequestTypeMap: unknown }).changeRequestTypeMap;
+
+      it("defaults submitVia to 'direct' when not provided", () => {
+        adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+        expect(readSubmitVia(adapter)).toBe("direct");
+      });
+
+      it("preserves explicit submitVia: 'change-request'", () => {
+        const crConfig: ExternalSyncConfig = {
+          ...config,
+          adapterConfig: {
+            ...(config.adapterConfig ?? {}),
+            submitVia: "change-request",
+          },
+        };
+        adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, crConfig);
+        expect(readSubmitVia(adapter)).toBe("change-request");
+      });
+
+      it("treats unknown submitVia values as 'direct'", () => {
+        const weirdConfig: ExternalSyncConfig = {
+          ...config,
+          adapterConfig: {
+            ...(config.adapterConfig ?? {}),
+            submitVia: "auto",
+          },
+        };
+        adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, weirdConfig);
+        expect(readSubmitVia(adapter)).toBe("direct");
+      });
+
+      it("reads submitVia via legacy extraFields", () => {
+        const legacyConfig: ExternalSyncConfig = {
+          type: "openspp-v2-adapter",
+          url: "http://legacy.openspp.com",
+          extraFields: [
+            { name: "clientId", value: "x" },
+            { name: "clientSecret", value: "y" },
+            { name: "submitVia", value: "change-request" },
+          ],
+        };
+        adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, legacyConfig);
+        expect(readSubmitVia(adapter)).toBe("change-request");
+      });
+
+      it("defaults changeRequestTypeMap to {} when absent", () => {
+        adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+        expect(readCRTypeMap(adapter)).toEqual({});
+      });
+
+      it("preserves an inline changeRequestTypeMap object on config", () => {
+        const override = { "update-individual": "custom_edit" };
+        const overrideConfig = {
+          ...config,
+          changeRequestTypeMap: override,
+        } as ExternalSyncConfig;
+        adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, overrideConfig);
+        expect(readCRTypeMap(adapter)).toEqual(override);
+      });
+
+      it("parses a JSON-stringified changeRequestTypeMap from adapterConfig", () => {
+        const override = { "delete-entity": "custom_archive_group" };
+        const stringConfig: ExternalSyncConfig = {
+          ...config,
+          adapterConfig: {
+            ...(config.adapterConfig ?? {}),
+            changeRequestTypeMap: JSON.stringify(override),
+          },
+        };
+        adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, stringConfig);
+        expect(readCRTypeMap(adapter)).toEqual(override);
+      });
+
+      it("returns {} for an unparseable changeRequestTypeMap string", () => {
+        const broken: ExternalSyncConfig = {
+          ...config,
+          adapterConfig: {
+            ...(config.adapterConfig ?? {}),
+            changeRequestTypeMap: "not-json",
+          },
+        };
+        adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, broken);
+        expect(readCRTypeMap(adapter)).toEqual({});
+      });
     });
   });
 });
