@@ -1,0 +1,74 @@
+{
+  "display": "form",
+  "components": [
+    {
+      "type": "textfield",
+      "key": "firstName",
+      "label": "First Name",
+      "input": true,
+      "tableView": true,
+      "validate": { "required": true }
+    },
+    {
+      "type": "textfield",
+      "key": "lastName",
+      "label": "Last Name",
+      "input": true,
+      "tableView": true
+    },
+    {
+      "type": "datetime",
+      "key": "dateOfBirth",
+      "label": "Date of Birth",
+      "input": true,
+      "format": "yyyy-MM-dd",
+      "enableTime": false
+    },
+    {
+      "type": "number",
+      "key": "householdSize",
+      "label": "Household Size",
+      "input": true,
+      "validate": { "min": 1 }
+    },
+    {
+      "type": "select",
+      "key": "gender",
+      "label": "Gender",
+      "input": true,
+      "data": {
+        "values": [
+          { "label": "Female", "value": "female" },
+          { "label": "Male", "value": "male" },
+          { "label": "Other", "value": "other" }
+        ]
+      }
+    },
+    {
+      "type": "phoneNumber",
+      "key": "phone",
+      "label": "Phone Number",
+      "input": true
+    },
+    {
+      "type": "textarea",
+      "key": "notes",
+      "label": "Notes",
+      "input": true,
+      "rows": 4
+    },
+    {
+      "type": "hidden",
+      "key": "tenantId",
+      "input": true
+    },
+    {
+      "type": "button",
+      "key": "submit",
+      "label": "Submit",
+      "input": true,
+      "action": "submit",
+      "theme": "primary"
+    }
+  ]
+}
