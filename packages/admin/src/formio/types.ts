@@ -17,19 +17,22 @@
  * under the License.
  */
 
-declare module '@formio/js' {
-  export interface FormioBuilderInstance {
-    schema: { components: unknown[]; [key: string]: unknown }
-    setForm(schema: object): Promise<void>
-    on(event: 'change' | 'saveComponent' | 'updateComponent' | 'deleteComponent' | 'removeComponent', handler: () => void): void
-    destroy(): Promise<void> | void
-  }
+// Narrow interface for the subset of the Form.io builder runtime API the
+// admin app consumes. Defined locally rather than augmenting the published
+// `@formio/js` types — that package re-exports `Formio` as a class and types
+// `Formio.builder()` as `Promise<any>`, which collides with any augmentation
+// we attempt. We cast at the call site (see FormioBuilder.vue).
 
-  export const Formio: {
-    builder(
-      element: HTMLElement,
-      schema: object,
-      options?: Record<string, unknown>,
-    ): Promise<FormioBuilderInstance>
-  }
+export type FormioBuilderEvent =
+  | 'change'
+  | 'saveComponent'
+  | 'updateComponent'
+  | 'deleteComponent'
+  | 'removeComponent'
+
+export interface FormioBuilderInstance {
+  schema: { components: unknown[]; [key: string]: unknown }
+  setForm(schema: object): Promise<void>
+  on(event: FormioBuilderEvent, handler: () => void): void
+  destroy(): Promise<void> | void
 }

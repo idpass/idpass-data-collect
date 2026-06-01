@@ -39,7 +39,9 @@ const builderInstance = {
   destroy: vi.fn(),
 }
 
-const builderMock = vi.fn(async () => builderInstance)
+const builderMock = vi.fn<
+  (element: HTMLElement, schema: object, options?: object) => Promise<typeof builderInstance>
+>(async () => builderInstance)
 
 vi.mock('@formio/js', () => ({
   Formio: {

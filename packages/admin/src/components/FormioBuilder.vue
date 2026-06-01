@@ -15,8 +15,9 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Formio, type FormioBuilderInstance } from '@formio/js'
+import { Formio } from '@formio/js'
 import { loadBuilderAssets } from '@/formio/loadBuilderAssets'
+import type { FormioBuilderInstance } from '@/formio/types'
 
 const props = defineProps<{
   modelValue: object
@@ -67,7 +68,11 @@ async function applySchema(next: object): Promise<void> {
 onMounted(async () => {
   if (!mountEl.value) return
   loadBuilderAssets()
-  builder = await Formio.builder(mountEl.value, cloneSchema(props.modelValue), {})
+  builder = (await Formio.builder(
+    mountEl.value,
+    cloneSchema(props.modelValue),
+    {},
+  )) as unknown as FormioBuilderInstance
   for (const event of [
     'saveComponent',
     'updateComponent',
