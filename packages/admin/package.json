@@ -18,6 +18,7 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
+    "@formio/js": "5.3.6",
     "@idpass/data-collect-core": "workspace:*",
     "axios": "^1.13.5",
     "js-yaml": "^4.1.1",
