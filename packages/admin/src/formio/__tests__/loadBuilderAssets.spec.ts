@@ -26,18 +26,25 @@ describe('loadBuilderAssets', () => {
     __resetForTests()
   })
 
-  it('injects Form.io builder stylesheets exactly once', () => {
+  it('injects Bootstrap + Font Awesome stylesheets exactly once (Form.io CSS bundled via Vite)', () => {
     loadBuilderAssets()
     loadBuilderAssets()
     loadBuilderAssets()
     const links = document.head.querySelectorAll('link[data-formio-builder-asset]')
-    expect(links.length).toBe(3)
+    expect(links.length).toBe(2)
   })
 
-  it('marks injected links with the data attribute', () => {
+  it('marks injected links with the data attribute and includes both expected URLs', () => {
     loadBuilderAssets()
     const links = document.head.querySelectorAll('link[data-formio-builder-asset]')
-    expect(links.length).toBeGreaterThan(0)
+    expect(links.length).toBe(2)
+    const hrefs = Array.from(links).map((l) => l.getAttribute('href') ?? '')
+    expect(hrefs).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('bootstrap'),
+        expect.stringContaining('font-awesome'),
+      ]),
+    )
     links.forEach((link) => {
       expect(link.getAttribute('rel')).toBe('stylesheet')
     })
