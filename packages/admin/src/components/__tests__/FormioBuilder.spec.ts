@@ -105,4 +105,51 @@ describe('FormioBuilder', () => {
     await flushPromises()
     expect(builderInstance.destroy).toHaveBeenCalledTimes(1)
   })
+
+  it('calls setForm when modelValue prop changes after mount', async () => {
+    const initial = { components: [] }
+    const wrapper = mount(FormioBuilder, {
+      props: { modelValue: initial },
+      global: { plugins: [vuetify] },
+    })
+    await flushPromises()
+    builderInstance.setForm.mockClear()
+    await wrapper.setProps({
+      modelValue: { components: [{ type: 'textfield', key: 'new', label: 'New' }] },
+    })
+    await flushPromises()
+    expect(builderInstance.setForm).toHaveBeenCalledTimes(1)
+    const calls = builderInstance.setForm.mock.calls as unknown as object[][]
+    expect(calls[0][0]).toEqual({
+      components: [{ type: 'textfield', key: 'new', label: 'New' }],
+    })
+  })
+
+  it('suppresses the change echo triggered by setForm', async () => {
+    const initial = { components: [] }
+    const wrapper = mount(FormioBuilder, {
+      props: { modelValue: initial },
+      global: { plugins: [vuetify] },
+    })
+    await flushPromises()
+    // Simulate the parent pushing a new schema. The watcher calls setForm,
+    // which under @formio/js fires `change`. The wrapper must NOT re-emit
+    // that echo back to the parent.
+    builderInstance.setForm.mockImplementationOnce((async (...args: unknown[]) => {
+      const [s] = args as [object]
+      builderInstance.schema = JSON.parse(JSON.stringify(s))
+      handlers.get('change')?.forEach((h) => h())
+    }) as () => Promise<void>)
+    await wrapper.setProps({
+      modelValue: { components: [{ type: 'textfield', key: 'x' }] },
+    })
+    await flushPromises()
+    const emittedAfter = (wrapper.emitted('update:modelValue') ?? []).length
+    // Reset: no emit should have happened after the prop-driven setForm.
+    // (Earlier emits during mount, if any, would only count as 0 or 1 baseline.)
+    // We assert by checking emit count did not grow due to the synthetic
+    // change echo above.
+    const baselineMount = 0
+    expect(emittedAfter).toBe(baselineMount)
+  })
 })
