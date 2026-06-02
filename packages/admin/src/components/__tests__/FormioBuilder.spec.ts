@@ -154,4 +154,48 @@ describe('FormioBuilder', () => {
     const baselineMount = 0
     expect(emittedAfter).toBe(baselineMount)
   })
+
+  it('does not call setForm when modelValue is our own emitted echo', async () => {
+    const initial = { components: [] }
+    const wrapper = mount(FormioBuilder, {
+      props: { modelValue: initial },
+      global: { plugins: [vuetify] },
+    })
+    await flushPromises()
+    builderInstance.schema = { components: [{ type: 'textfield', key: 'x' }] }
+    // Simulate a user edit inside the builder: fire `change`. The wrapper
+    // should emit the new schema. The parent then re-binds it to modelValue —
+    // simulated here via setProps. The wrapper must NOT call setForm again,
+    // because that would re-render the builder from its own current state.
+    handlers.get('change')?.forEach((h) => h())
+    await flushPromises()
+    const emitted = wrapper.emitted('update:modelValue')
+    expect(emitted).toBeTruthy()
+    const echoed = emitted![emitted!.length - 1][0]
+    builderInstance.setForm.mockClear()
+    await wrapper.setProps({ modelValue: echoed as object })
+    await flushPromises()
+    expect(builderInstance.setForm).not.toHaveBeenCalled()
+  })
+
+  it('destroys builder created during mount even if unmounted before mount resolves', async () => {
+    // Block the Formio.builder() promise so we can unmount mid-flight.
+    let resolveBuilder: (v: typeof builderInstance) => void = () => {}
+    const pending = new Promise<typeof builderInstance>((resolve) => {
+      resolveBuilder = resolve
+    })
+    builderMock.mockImplementationOnce(() => pending)
+    const wrapper = mount(FormioBuilder, {
+      props: { modelValue: { components: [] } },
+      global: { plugins: [vuetify] },
+    })
+    // Unmount before Formio.builder() resolves.
+    wrapper.unmount()
+    // Now resolve the in-flight builder.
+    resolveBuilder(builderInstance)
+    await flushPromises()
+    // The created builder must have been destroyed despite never being assigned
+    // to the component's `builder` ref.
+    expect(builderInstance.destroy).toHaveBeenCalledTimes(1)
+  })
 })

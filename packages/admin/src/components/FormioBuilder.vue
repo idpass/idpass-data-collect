@@ -29,18 +29,26 @@ const emit = defineEmits<{
 
 const mountEl = ref<HTMLDivElement | null>(null)
 let builder: FormioBuilderInstance | null = null
+let cancelled = false
 
-// Suppress emits that originate from our own programmatic `setForm` call.
-// Form.io fires `change` (and possibly related events) synchronously during
-// the setForm rebuild; we drain those echo emissions to avoid feedback loops
-// where parent props -> setForm -> change -> emit -> parent props.
+// Suppress emits originating from our own programmatic `setForm` call. Form.io
+// fires `change` synchronously during the setForm rebuild; we drain those echo
+// emissions to avoid feedback loops where parent props -> setForm -> change ->
+// emit -> parent props.
 let suppressing = false
 
 // If `props.modelValue` updates before `Formio.builder(...)` resolves, the
-// watcher will see `builder == null` and capture the pending value here;
-// onMounted re-applies it once the builder is ready. Without this, the
-// in-flight update is silently dropped.
+// watcher will see `builder == null` and queue the pending value here;
+// `onMounted` re-applies it once the builder is ready.
 let pendingSchema: object | null = null
+
+// Track the last schema we emitted (as a JSON string). Used to suppress the
+// echo path where Form.io's own `change` event causes us to emit, the parent
+// updates the `modelValue` prop, our deep watcher fires, and would otherwise
+// trigger a redundant `setForm` that re-renders the whole canvas on every
+// keystroke. If the incoming `modelValue` matches our last emit, it's our own
+// echo and we skip the `setForm` round-trip.
+let lastEmittedSchema: string | null = null
 
 function cloneSchema<T>(value: T): T {
   return JSON.parse(JSON.stringify(value))
@@ -48,7 +56,9 @@ function cloneSchema<T>(value: T): T {
 
 function emitCurrentSchema(): void {
   if (!builder || suppressing) return
-  emit('update:modelValue', cloneSchema(builder.schema))
+  const next = cloneSchema(builder.schema)
+  lastEmittedSchema = JSON.stringify(next)
+  emit('update:modelValue', next)
 }
 
 async function applySchema(next: object): Promise<void> {
@@ -56,11 +66,13 @@ async function applySchema(next: object): Promise<void> {
     pendingSchema = cloneSchema(next)
     return
   }
+  // Skip setForm if this update is just our own emit echoing back via v-model.
+  if (lastEmittedSchema !== null && JSON.stringify(next) === lastEmittedSchema) {
+    return
+  }
   suppressing = true
   await builder.setForm(cloneSchema(next))
-  // Drain any synchronous echo events queued by setForm. A single microtask
-  // boundary covers Form.io 5.3.6's emit-once behaviour and any future
-  // burst-emit variation.
+  // Drain any synchronous echo events queued by setForm.
   await Promise.resolve()
   suppressing = false
 }
@@ -68,11 +80,19 @@ async function applySchema(next: object): Promise<void> {
 onMounted(async () => {
   if (!mountEl.value) return
   loadBuilderAssets()
-  builder = (await Formio.builder(
+  const instance = (await Formio.builder(
     mountEl.value,
     cloneSchema(props.modelValue),
     {},
   )) as unknown as FormioBuilderInstance
+  // The component may have unmounted while we were awaiting Formio.builder().
+  // If so, destroy the just-created instance and bail — no handlers registered,
+  // no DOM left attached to anything.
+  if (cancelled) {
+    await instance.destroy()
+    return
+  }
+  builder = instance
   for (const event of [
     'saveComponent',
     'updateComponent',
@@ -101,6 +121,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  cancelled = true
   // Vue does not await async unmount hooks; fire-and-forget.
   builder?.destroy()
   builder = null
