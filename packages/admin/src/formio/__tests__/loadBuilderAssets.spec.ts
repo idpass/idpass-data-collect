@@ -17,36 +17,20 @@
  * under the License.
  */
 
-import { afterEach, describe, expect, it } from 'vitest'
-import { __resetForTests, loadBuilderAssets } from '../loadBuilderAssets'
+import { describe, expect, it } from 'vitest'
+import { loadBuilderAssets } from '../loadBuilderAssets'
 
 describe('loadBuilderAssets', () => {
-  afterEach(() => {
-    document.head.querySelectorAll('link[data-formio-builder-asset]').forEach((el) => el.remove())
-    __resetForTests()
-  })
-
-  it('injects Bootstrap + Font Awesome stylesheets exactly once (Form.io CSS bundled via Vite)', () => {
+  it('injects no CDN stylesheets — all builder styling is bundled (#1059 Phase B)', () => {
     loadBuilderAssets()
     loadBuilderAssets()
-    loadBuilderAssets()
-    const links = document.head.querySelectorAll('link[data-formio-builder-asset]')
-    expect(links.length).toBe(2)
-  })
-
-  it('marks injected links with the data attribute and includes both expected URLs', () => {
-    loadBuilderAssets()
-    const links = document.head.querySelectorAll('link[data-formio-builder-asset]')
-    expect(links.length).toBe(2)
-    const hrefs = Array.from(links).map((l) => l.getAttribute('href') ?? '')
-    expect(hrefs).toEqual(
-      expect.arrayContaining([
-        expect.stringContaining('bootstrap'),
-        expect.stringContaining('font-awesome'),
-      ]),
+    // Phase A injected Bootstrap 4 + Font Awesome <link> tags from CDNs, which
+    // leaked unscoped Bootstrap into the Vuetify dashboard. Guard against any
+    // regression to runtime <link> injection.
+    expect(document.head.querySelectorAll('link[data-formio-builder-asset]').length).toBe(0)
+    const externalLinks = Array.from(document.head.querySelectorAll('link[rel="stylesheet"]')).filter(
+      (l) => (l.getAttribute('href') ?? '').startsWith('http'),
     )
-    links.forEach((link) => {
-      expect(link.getAttribute('rel')).toBe('stylesheet')
-    })
+    expect(externalLinks).toEqual([])
   })
 })

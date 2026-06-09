@@ -17,44 +17,28 @@
  * under the License.
  */
 
-// Side-effect import: Vite bundles and emits the Form.io builder CSS as a
-// hashed asset linked from the chunk that imports this module. The CSS is
-// only included in chunks that need the builder, so admin views that never
-// import this module pay no cost. Replaces the previous broken
-// `new URL('@formio/js/dist/formio.full.min.css', import.meta.url)` pattern,
-// which does not resolve bare specifiers at build time.
+// Side-effect imports: Vite bundles all builder styling into hashed assets
+// linked from the chunk that imports this module, so admin views that never
+// open the builder pay no cost — and nothing is fetched from a CDN (the
+// Phase A concession this replaces; CDN links also leaked unscoped Bootstrap
+// into the Vuetify dashboard and broke its styles, #1059).
+//
+// - formio.full.min.css: Form.io's own builder/dialog/choices/flatpickr styles
+//   (prefixed selectors, safe to load globally).
+// - font-awesome: glyphs used by Form.io component icons (.fa-* only, safe
+//   globally; fonts are bundled and hashed by Vite).
+// - builder-theme.scss: Bootstrap 4 compiled with ID PASS design-token
+//   variables and scoped under .formio-builder-host / .formio-dialog, plus
+//   the ID PASS builder chrome. See that file for the scoping rationale.
 import '@formio/js/dist/formio.full.min.css'
-
-// Phase A concession: Form.io's builder UI also needs Bootstrap 4 + Font
-// Awesome 4 glyphs for layout. They are still loaded from CDN to match the
-// versions used by packages/admin/public/formio-builder.html. Scoping +
-// bundling these is deferred to Phase B (#1059). No fallback if CDN is
-// unreachable — same failure mode as the current iframe.
-const BUILDER_STYLESHEETS = [
-  'https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.css',
-] as const
-
-let injected = false
+import 'font-awesome/css/font-awesome.css'
+import './builder-theme.scss'
 
 /**
- * Inject the Form.io builder runtime stylesheets (BS4 + FA4) as `<link>` tags
- * in `document.head`. Idempotent within a module instance — safe to call from
- * every builder mount.
+ * Kept as the single entry point the builder component calls before mounting.
+ * All stylesheets are now static side-effect imports above (bundled, scoped),
+ * so there is nothing left to do at runtime. Idempotent by construction.
  */
 export function loadBuilderAssets(): void {
-  if (injected) return
-  for (const href of BUILDER_STYLESHEETS) {
-    const link = document.createElement('link')
-    link.rel = 'stylesheet'
-    link.href = href
-    link.dataset.formioBuilderAsset = 'true'
-    document.head.appendChild(link)
-  }
-  injected = true
-}
-
-// Test-only reset hook.
-export function __resetForTests(): void {
-  injected = false
+  // Intentionally empty — styling is applied via the imports above.
 }
