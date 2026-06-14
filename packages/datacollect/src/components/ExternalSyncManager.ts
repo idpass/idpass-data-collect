@@ -49,6 +49,73 @@ export interface SyncOptions {
 }
 
 /**
+ * Build the flat adapter config object that a V2 adapter's `configSchema` is
+ * validated against, from an {@link ExternalSyncConfig}. Merges `url`, the
+ * preferred `adapterConfig` map, and the legacy `extraFields` (without
+ * overriding keys already set by `adapterConfig`).
+ *
+ * Shared by {@link ExternalSyncManager.initialize} and
+ * {@link validateExternalSyncConfig} so validation done ahead of time (e.g. in
+ * the backend create/update endpoints) matches what `initialize` will check —
+ * preventing drift between the two call sites.
+ */
+export function buildAdapterConfig(config: ExternalSyncConfig): Record<string, unknown> {
+  const adapterConfig: Record<string, unknown> = {
+    url: config.url,
+    ...config.adapterConfig,
+  };
+  if (config.extraFields) {
+    for (const field of config.extraFields) {
+      if (!(field.name in adapterConfig)) {
+        adapterConfig[field.name] = field.value;
+      }
+    }
+  }
+  return adapterConfig;
+}
+
+/**
+ * Result of {@link validateExternalSyncConfig}.
+ */
+export type ExternalSyncConfigValidation =
+  | { valid: true }
+  | { valid: false; message: string };
+
+/**
+ * Validate an {@link ExternalSyncConfig} against the target adapter's schema
+ * WITHOUT instantiating stores or opening connections — safe to call before
+ * persisting a config.
+ *
+ * Mirrors the validation branch of {@link ExternalSyncManager.initialize}:
+ * - Unknown / legacy adapter types (not in the V2 registry) are treated as
+ *   valid here; `initialize` only logs "external sync disabled" for them and
+ *   does not throw.
+ * - V2 adapters with a `configSchema` are validated against the assembled
+ *   adapter config (see {@link buildAdapterConfig}).
+ *
+ * @returns `{ valid: true }` or `{ valid: false, message }` with the schema error.
+ */
+export function validateExternalSyncConfig(
+  config: ExternalSyncConfig,
+): ExternalSyncConfigValidation {
+  if (!adapterRegistry.has(config.type)) {
+    return { valid: true };
+  }
+  const descriptor = adapterRegistry.describe(config.type);
+  if (!descriptor.configSchema || typeof descriptor.configSchema.safeParse !== "function") {
+    return { valid: true };
+  }
+  const result = descriptor.configSchema.safeParse(buildAdapterConfig(config));
+  if (result.success) {
+    return { valid: true };
+  }
+  return {
+    valid: false,
+    message: `Invalid config for adapter "${config.type}": ${result.error.message}`,
+  };
+}
+
+/**
  * Error thrown when a sync is requested while another is already in progress.
  */
 export class SyncAlreadyInProgressError extends Error {
@@ -201,31 +268,14 @@ export class ExternalSyncManager {
         eventApplierService: this.eventApplierService,
         syncConfig: this.config,
       });
-      const descriptor = v2.descriptor();
-
-      // Build config object from ExternalSyncConfig for validation
-      const adapterConfig: Record<string, unknown> = {
-        url: this.config.url,
-        ...this.config.adapterConfig,
-      };
-
-      // Add extra fields to config for backwards compatibility
-      if (this.config.extraFields) {
-        for (const field of this.config.extraFields) {
-          if (!(field.name in adapterConfig)) {
-            adapterConfig[field.name] = field.value;
-          }
-        }
-      }
-
-      // Validate config against the adapter's Zod schema
-      if (descriptor.configSchema && typeof descriptor.configSchema.safeParse === "function") {
-        const validation = descriptor.configSchema.safeParse(adapterConfig);
-        if (!validation.success) {
-          throw new Error(
-            `Invalid config for adapter "${this.config.type}": ${validation.error.message}`,
-          );
-        }
+      // Build the adapter config and validate it against the adapter's Zod
+      // schema. Both steps are shared with `validateExternalSyncConfig` so an
+      // ahead-of-time check (e.g. the backend create/update endpoints) rejects
+      // exactly what `initialize` would reject here.
+      const adapterConfig = buildAdapterConfig(this.config);
+      const validation = validateExternalSyncConfig(this.config);
+      if (!validation.valid) {
+        throw new Error(validation.message);
       }
 
       await v2.initialize(adapterConfig);
