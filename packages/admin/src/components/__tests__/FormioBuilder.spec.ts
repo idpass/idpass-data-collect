@@ -53,6 +53,13 @@ vi.mock('@/formio/loadBuilderAssets', () => ({
   loadBuilderAssets: vi.fn(),
 }))
 
+// Custom-component registration touches the real Formio.Components registry,
+// which the @formio/js mock above does not provide. These tests cover the
+// builder lifecycle, not registration (verified via e2e), so stub it out.
+vi.mock('@/formio/builderComponents', () => ({
+  registerBuilderComponents: vi.fn(),
+}))
+
 describe('FormioBuilder', () => {
   beforeEach(() => {
     handlers.clear()

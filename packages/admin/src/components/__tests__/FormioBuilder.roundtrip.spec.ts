@@ -54,6 +54,12 @@ vi.mock('@/formio/loadBuilderAssets', () => ({
   loadBuilderAssets: vi.fn(),
 }))
 
+// See FormioBuilder.spec.ts: registration needs the real Formio.Components
+// registry (absent from the @formio/js mock); stub it for the lifecycle tests.
+vi.mock('@/formio/builderComponents', () => ({
+  registerBuilderComponents: vi.fn(),
+}))
+
 describe('FormioBuilder schema round-trip', () => {
   it('emits the input schema unchanged when no edits occur', async () => {
     const wrapper = mount(FormioBuilder, {

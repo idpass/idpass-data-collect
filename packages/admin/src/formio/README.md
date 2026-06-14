@@ -23,9 +23,14 @@ properties at compile time). Source of truth: `src/assets/design-tokens.css`
 
 ## Custom components
 
-- **Mobile runtime** components live in `packages/mobile/src/formio/components/`.
-- **Builder-side** registration of custom components (e.g. biometrics) was
-  previously done by `public/biometric-component.js` via the iframe page.
-  That path is dead in the Vue builder — custom builder components should be
-  registered through `Formio.use(...)` before `Formio.builder(...)` runs in
-  `FormioBuilder.vue` (pending, see OP #1059).
+- **Builder-side** components (`biometricCapture`, `claim169Scanner`) are
+  defined in `builderComponents.ts` and registered via
+  `registerBuilderComponents()`, which `FormioBuilder.vue` calls before
+  `Formio.builder(...)`. They are builder-only definitions (schema +
+  `builderInfo` palette entry + `editForm` settings); the admin never captures,
+  so the default Field render is used. This replaces the legacy global
+  `public/biometric-component.js` loaded by the removed builder iframe (#1059).
+- **Mobile runtime** components live in `packages/mobile/src/formio/components/`
+  (`BiometricCapture.ts`, `Claim169Scanner.ts`) — they implement the actual
+  capture/scan behaviour. Note mobile uses `formiojs` (v4) while admin uses
+  `@formio/js` (v5), so the two are kept as separate definitions by design.
