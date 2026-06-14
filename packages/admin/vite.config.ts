@@ -16,11 +16,15 @@ export default defineConfig({
       '@idpass/data-collect-core': resolve(__dirname, '../datacollect/src/browser.ts'),
     },
   },
-  // Remove the global Bootstrap SCSS import
   css: {
     preprocessorOptions: {
       scss: {
-        // additionalData: `@import "bootstrap/scss/bootstrap";`,
+        // Bootstrap 4 (compiled scoped in src/formio/builder-theme.scss)
+        // predates modern Sass: silence its deprecation noise, plus the
+        // `@import` deprecation our scoping pattern relies on (nested
+        // `@import` has no `@use` equivalent).
+        quietDeps: true,
+        silenceDeprecations: ['import', 'global-builtin', 'color-functions', 'slash-div'],
       },
     },
   },
