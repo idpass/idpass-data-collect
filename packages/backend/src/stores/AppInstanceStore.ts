@@ -29,12 +29,15 @@ import {
   SyncLevel,
   AuthManager,
   FormClassifier,
+  createLogger,
 } from "@idpass/data-collect-core";
 import { Pool } from "pg";
 import { v4 as uuidv4 } from "uuid";
 import { AppConfigStore, AppInstance, AppInstanceStore } from "../types";
 import { InMemoryAuthStorageAdapter } from "../auth/InMemoryAuthStorageAdapter";
 import { ConflictStorePg } from "./ConflictStorePg";
+
+const log = createLogger("AppInstanceStore");
 
 export class AppInstanceStoreImpl implements AppInstanceStore {
   private instances: Record<string, AppInstance> = {};
@@ -61,7 +64,19 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
   async initialize(): Promise<void> {
     const configs = await this.appConfigStore.getConfigs();
     for (const config of configs) {
-      await this.createAppInstance(config.id);
+      // One misconfigured tenant must not abort startup for all the others.
+      // A config can be persisted with an external-sync adapter that later
+      // fails to initialize (e.g. an orphaned config from a partial save, or
+      // a now-unreachable external system); log and skip it rather than
+      // crashing the whole server.
+      try {
+        await this.createAppInstance(config.id);
+      } catch (err) {
+        log.error(
+          { err, configId: config.id },
+          "Failed to start app instance during initialize; skipping this tenant",
+        );
+      }
     }
   }
 
@@ -105,7 +120,21 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
       eventApplierService,
       config.externalSync || defaultExternalSyncConfig,
     );
-    await externalSyncAdapter.initialize();
+    // External sync is advisory to instance creation: if the adapter config is
+    // invalid or the external system is unreachable, the instance must still
+    // come up so local data management works — sync stays disabled until the
+    // config is corrected. Mirrors ExternalSyncManager's own "no adapter
+    // registered → external sync disabled" path. The create/update endpoints
+    // validate the adapter config up front (returning 400) so genuinely-bad
+    // configs are caught before they ever reach here.
+    try {
+      await externalSyncAdapter.initialize();
+    } catch (err) {
+      log.warn(
+        { err, configId },
+        "External sync adapter init failed; external sync disabled for this instance",
+      );
+    }
     const manager = new EntityDataManager(
       eventStore,
       entityStore,

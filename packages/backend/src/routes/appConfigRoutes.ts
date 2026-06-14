@@ -29,7 +29,45 @@ import fs from "fs/promises";
 import { generatePublicArtifacts, getPublicArtifactPaths, resolvePublicBaseUrl } from "../utils/publicArtifacts";
 import rateLimit from "express-rate-limit";
 import { SYNC_SCOPE_SCHEMA } from "../middlewares/syncScopeSchema";
+import { validateExternalSyncConfig } from "@idpass/data-collect-core";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("appConfigRoutes");
 const isTest = process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID !== undefined;
+
+/**
+ * Persist-then-activate helper for the create/update endpoints.
+ *
+ * The config is the source of truth and is already committed by the caller.
+ * Starting the runtime instance and (re)generating public artifacts are
+ * best-effort side effects: if they fail we must NOT turn a committed write
+ * into a 500 — that produced the "save errored but the program is there on
+ * refresh" bug. Failures are logged and returned as advisory `warnings`.
+ */
+async function activateConfigSideEffects(
+  startInstance: () => Promise<unknown>,
+  generateArtifacts: () => Promise<unknown>,
+  configId: string,
+): Promise<string[]> {
+  const warnings: string[] = [];
+  try {
+    await startInstance();
+  } catch (err) {
+    log.warn({ err, configId }, "Config saved but runtime instance init failed");
+    warnings.push(
+      `Program saved, but starting its runtime instance failed: ${err instanceof Error ? err.message : "unknown error"}. External sync may be disabled until corrected.`,
+    );
+  }
+  try {
+    await generateArtifacts();
+  } catch (err) {
+    log.warn({ err, configId }, "Config saved but public artifact generation failed");
+    warnings.push(
+      `Program saved, but public artifact generation failed: ${err instanceof Error ? err.message : "unknown error"}.`,
+    );
+  }
+  return warnings;
+}
 
 const AppConfigSchema = z.object({
   id: z.string().min(1),
@@ -257,8 +295,17 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
         res.status(403).json({ error: "You do not have permission to view this program." });
         return;
       }
-      const appConfig = await appConfigStore.getConfig(id);
-      res.json(appConfig);
+      try {
+        const appConfig = await appConfigStore.getConfig(id);
+        res.json(appConfig);
+      } catch (error) {
+        // getConfig throws a plain "not found" Error; surface it as 404 rather
+        // than a 500 (mirrors the /:id/public handler below).
+        if (error instanceof Error && error.message.includes("not found")) {
+          return res.status(404).json({ error: "Configuration not found" });
+        }
+        throw error;
+      }
     }),
   );
 
@@ -339,23 +386,46 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
         // validates the shape while the runtime object carries the full type information
         const appConfig = parseResult.data as unknown as AppConfig;
         ensureValidConfigId(appConfig.id);
+
+        // Validate the external-sync adapter config BEFORE persisting, so an
+        // invalid config is rejected with 400 and nothing is half-created.
+        // (createAppInstance would otherwise throw on the same config AFTER
+        // the write committed, surfacing a misleading 500.)
+        if (appConfig.externalSync) {
+          const syncValidation = validateExternalSyncConfig(appConfig.externalSync);
+          if (!syncValidation.valid) {
+            await fs.unlink(req.file.path).catch(() => {});
+            return res.status(400).json({ error: syncValidation.message });
+          }
+        }
+
         const configToPersist: AppConfig = {
           ...appConfig,
           artifactId: generateArtifactId(),
         };
 
         await appConfigStore.saveConfig(configToPersist);
-        await appInstanceStore.createAppInstance(configToPersist.id);
-        await appInstanceStore.loadEntityData(configToPersist.id);
 
         // Clean up - delete the uploaded file
         await fs.unlink(req.file.path);
 
         const baseUrl = resolvePublicBaseUrl(req);
         const persistedConfig = await appConfigStore.getConfig(configToPersist.id);
-        await generatePublicArtifacts(baseUrl, persistedConfig);
+        // Best-effort side effects — never 500 a committed write (see helper).
+        const warnings = await activateConfigSideEffects(
+          async () => {
+            await appInstanceStore.createAppInstance(configToPersist.id);
+            await appInstanceStore.loadEntityData(configToPersist.id);
+          },
+          () => generatePublicArtifacts(baseUrl, persistedConfig),
+          configToPersist.id,
+        );
 
-        res.json({ status: "success", artifactId: persistedConfig.artifactId });
+        res.json({
+          status: "success",
+          artifactId: persistedConfig.artifactId,
+          ...(warnings.length > 0 && { warnings }),
+        });
       } catch (error) {
         // Clean up on error
         if (req.file) {
@@ -393,22 +463,39 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
           throw new AppError("Config id mismatch between payload and URL", 400);
         }
 
+        // Reject an invalid external-sync adapter config up front (see POST).
+        if (updatedAppConfig.externalSync) {
+          const syncValidation = validateExternalSyncConfig(updatedAppConfig.externalSync);
+          if (!syncValidation.valid) {
+            await fs.unlink(req.file.path).catch(() => {});
+            return res.status(400).json({ error: syncValidation.message });
+          }
+        }
+
         const existingConfig = await appConfigStore.getConfig(id);
         const configToPersist: AppConfig = {
           ...updatedAppConfig,
           artifactId: existingConfig.artifactId ?? generateArtifactId(),
         };
         await appConfigStore.saveConfig(configToPersist);
-        await appInstanceStore.updateAppInstance(id);
 
         // Clean up - delete the uploaded file
         await fs.unlink(req.file.path);
 
         const baseUrl = resolvePublicBaseUrl(req);
         const persistedConfig = await appConfigStore.getConfig(id);
-        await generatePublicArtifacts(baseUrl, persistedConfig);
+        // Best-effort side effects — never 500 a committed write (see helper).
+        const warnings = await activateConfigSideEffects(
+          () => appInstanceStore.updateAppInstance(id),
+          () => generatePublicArtifacts(baseUrl, persistedConfig),
+          id,
+        );
 
-        res.json({ status: "success", artifactId: persistedConfig.artifactId });
+        res.json({
+          status: "success",
+          artifactId: persistedConfig.artifactId,
+          ...(warnings.length > 0 && { warnings }),
+        });
       } catch (error) {
         // Clean up on error
         if (req.file) {
