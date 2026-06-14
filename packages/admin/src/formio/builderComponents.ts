@@ -18,46 +18,68 @@
  */
 
 /**
- * Biometric Capture Component for Form.io Builder
- * 
- * This file defines the custom Biometric Capture component for the Form.io builder.
- * It is loaded by the formio-builder.html iframe.
+ * Custom Form.io builder components for the ID PASS admin builder.
+ *
+ * Ports the two custom components that used to be loaded as a global script
+ * (`public/biometric-component.js`) inside the now-removed builder iframe
+ * (OP #1059). They are registered against the bundled `@formio/js` so they
+ * appear in the builder palette (Advanced group) with their settings panels.
+ *
+ * These are BUILDER-side definitions only — schema, palette entry
+ * (`builderInfo`) and settings (`editForm`). Capture/scan behaviour is runtime
+ * and lives in the mobile app (`packages/mobile/src/formio/components/`); the
+ * admin never captures, so the default Field render is sufficient here.
  */
 
-if (typeof Formio !== 'undefined') {
-  const Field = Formio.Components.components.field;
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { Formio } from '@formio/js'
+
+let registered = false
+
+/**
+ * Register the ID PASS custom builder components with Form.io. Idempotent and
+ * must run before `Formio.builder(...)` so the palette includes them.
+ */
+export function registerBuilderComponents(): void {
+  if (registered) return
+
+  const Components = (Formio as any).Components
+  const Field: any = Components.components.field
 
   class BiometricCapture extends Field {
-    static schema(...extend) {
-      return Field.schema({
-        type: 'biometricCapture',
-        label: 'Biometric Capture',
-        key: 'biometricCapture',
-        inputType: 'text',
-        group: 'data',
-        protected: false,
-        unique: false,
-        persistent: true,
-        // Custom properties for intent configuration
-        intentAction: 'io.idpass.bca.finger.Capture',
-        intentExtras: {},
-        captureEnv: 'Developer',
-        capturePurpose: 'Auth',
-        captureSpecVersion: '0.9.5',
-        captureTimeout: 30000,
-        captureAutoCapture: true,
-        captureQualityThreshold: 60,
-        captureFingers: ['Right_Thumb'],
-        captureDeviceId: '',
-        captureTransactionPrefix: 'FORMIO',
-        skipPolicy: 'after_attempts',
-        skipAttemptsThreshold: 3,
-        skipReasonRequired: false,
-        skipReasons: [],
-        validate: {
-          required: false
-        }
-      }, ...extend);
+    static schema(...extend: any[]) {
+      return Field.schema(
+        {
+          type: 'biometricCapture',
+          label: 'Biometric Capture',
+          key: 'biometricCapture',
+          inputType: 'text',
+          group: 'data',
+          protected: false,
+          unique: false,
+          persistent: true,
+          // Custom properties for intent configuration
+          intentAction: 'io.idpass.bca.finger.Capture',
+          intentExtras: {},
+          captureEnv: 'Developer',
+          capturePurpose: 'Auth',
+          captureSpecVersion: '0.9.5',
+          captureTimeout: 30000,
+          captureAutoCapture: true,
+          captureQualityThreshold: 60,
+          captureFingers: ['Right_Thumb'],
+          captureDeviceId: '',
+          captureTransactionPrefix: 'FORMIO',
+          skipPolicy: 'after_attempts',
+          skipAttemptsThreshold: 3,
+          skipReasonRequired: false,
+          skipReasons: [],
+          validate: {
+            required: false,
+          },
+        },
+        ...extend,
+      )
     }
 
     static get builderInfo() {
@@ -67,15 +89,10 @@ if (typeof Formio !== 'undefined') {
         icon: 'fingerprint',
         weight: 0,
         documentation: '#',
-        schema: BiometricCapture.schema()
-      };
+        schema: BiometricCapture.schema(),
+      }
     }
 
-    constructor(component, options, data) {
-      super(component, options, data);
-    }
-    
-    // Configure the settings form for the builder
     static editForm() {
       const fingerOptions = [
         { label: 'Left Thumb', value: 'Left_Thumb' },
@@ -87,10 +104,10 @@ if (typeof Formio !== 'undefined') {
         { label: 'Right Index Finger', value: 'Right_IndexFinger' },
         { label: 'Right Middle Finger', value: 'Right_MiddleFinger' },
         { label: 'Right Ring Finger', value: 'Right_RingFinger' },
-        { label: 'Right Little Finger', value: 'Right_LittleFinger' }
-      ];
+        { label: 'Right Little Finger', value: 'Right_LittleFinger' },
+      ]
 
-      const form = {
+      return {
         components: [
           {
             key: 'display',
@@ -101,7 +118,7 @@ if (typeof Formio !== 'undefined') {
                 label: 'Android Intent Action',
                 placeholder: 'io.idpass.bca.finger.Capture',
                 weight: 10,
-                tooltip: 'The Android Intent Action to launch.'
+                tooltip: 'The Android Intent Action to launch.',
               },
               {
                 type: 'panel',
@@ -115,31 +132,31 @@ if (typeof Formio !== 'undefined') {
                     key: 'captureEnv',
                     label: 'Environment',
                     placeholder: 'Developer',
-                    tooltip: 'Value used in the MOSIP capture request (env).'
+                    tooltip: 'Value used in the MOSIP capture request (env).',
                   },
                   {
                     type: 'textfield',
                     key: 'capturePurpose',
                     label: 'Purpose',
                     placeholder: 'Auth',
-                    tooltip: 'Value used in the MOSIP capture request (purpose).'
+                    tooltip: 'Value used in the MOSIP capture request (purpose).',
                   },
                   {
                     type: 'textfield',
                     key: 'captureSpecVersion',
                     label: 'Spec Version',
-                    placeholder: '0.9.5'
+                    placeholder: '0.9.5',
                   },
                   {
                     type: 'number',
                     key: 'captureTimeout',
                     label: 'Timeout (ms)',
-                    placeholder: '30000'
+                    placeholder: '30000',
                   },
                   {
                     type: 'checkbox',
                     key: 'captureAutoCapture',
-                    label: 'Enable Auto Capture'
+                    label: 'Enable Auto Capture',
                   },
                   {
                     type: 'number',
@@ -148,20 +165,20 @@ if (typeof Formio !== 'undefined') {
                     placeholder: '60',
                     validate: {
                       min: 1,
-                      max: 100
-                    }
+                      max: 100,
+                    },
                   },
                   {
                     type: 'textfield',
                     key: 'captureDeviceId',
                     label: 'Preferred Device ID',
-                    placeholder: 'Optional'
+                    placeholder: 'Optional',
                   },
                   {
                     type: 'textfield',
                     key: 'captureTransactionPrefix',
                     label: 'Transaction Prefix',
-                    placeholder: 'FORMIO'
+                    placeholder: 'FORMIO',
                   },
                   {
                     type: 'select',
@@ -169,11 +186,11 @@ if (typeof Formio !== 'undefined') {
                     label: 'Fingers to Capture',
                     multiple: true,
                     data: {
-                      values: fingerOptions
+                      values: fingerOptions,
                     },
                     placeholder: 'Select one or more fingers',
                     clearOnRefresh: false,
-                    defaultValue: ['Right_Thumb']
+                    defaultValue: ['Right_Thumb'],
                   },
                   {
                     type: 'panel',
@@ -191,10 +208,10 @@ if (typeof Formio !== 'undefined') {
                           values: [
                             { label: 'Never', value: 'never' },
                             { label: 'Always', value: 'always' },
-                            { label: 'After Attempts', value: 'after_attempts' }
-                          ]
+                            { label: 'After Attempts', value: 'after_attempts' },
+                          ],
                         },
-                        defaultValue: 'after_attempts'
+                        defaultValue: 'after_attempts',
                       },
                       {
                         type: 'number',
@@ -202,14 +219,14 @@ if (typeof Formio !== 'undefined') {
                         label: 'Skip Attempts Threshold',
                         tooltip: 'Number of failed attempts before skip is allowed.',
                         defaultValue: 3,
-                        customConditional: "show = row.skipPolicy === 'after_attempts';"
+                        customConditional: "show = row.skipPolicy === 'after_attempts';",
                       },
                       {
                         type: 'checkbox',
                         key: 'skipReasonRequired',
                         label: 'Require Skip Reason',
                         tooltip: 'If checked, the user must provide a reason when skipping.',
-                        defaultValue: false
+                        defaultValue: false,
                       },
                       {
                         type: 'tags',
@@ -217,11 +234,11 @@ if (typeof Formio !== 'undefined') {
                         label: 'Predefined Skip Reasons',
                         tooltip: 'List of reasons for the user to select from.',
                         placeholder: 'Add a reason and press Enter',
-                        storeas: 'array'
-                      }
-                    ]
-                  }
-                ]
+                        storeas: 'array',
+                      },
+                    ],
+                  },
+                ],
               },
               {
                 type: 'textarea',
@@ -231,45 +248,41 @@ if (typeof Formio !== 'undefined') {
                 weight: 50,
                 tooltip: 'Optional JSON object merged into the generated extras sent to BCA.',
                 input: true,
-                as: 'json'
-              }
-            ]
+                as: 'json',
+              },
+            ],
           },
           { key: 'data', ignore: true },
           {
             key: 'validation',
-            components: [
-              { key: 'unique', ignore: true }
-            ]
-          }
-        ]
-      };
-
-      return form;
+            components: [{ key: 'unique', ignore: true }],
+          },
+        ],
+      }
     }
   }
 
-  // Register the component
-  Formio.Components.addComponent('biometricCapture', BiometricCapture);
-
   class Claim169Scanner extends Field {
-    static schema(...extend) {
-      return Field.schema({
-        type: 'claim169Scanner',
-        label: 'Scan Identity',
-        key: 'claim169Scanner',
-        inputType: 'hidden',
-        protected: false,
-        unique: false,
-        persistent: true,
-        // Custom properties
-        trustedIssuers: [],
-        fieldMappings: [],
-        storeOriginalData: true,
-        validate: {
-          required: false
-        }
-      }, ...extend);
+    static schema(...extend: any[]) {
+      return Field.schema(
+        {
+          type: 'claim169Scanner',
+          label: 'Scan Identity',
+          key: 'claim169Scanner',
+          inputType: 'hidden',
+          protected: false,
+          unique: false,
+          persistent: true,
+          // Custom properties
+          trustedIssuers: [],
+          fieldMappings: [],
+          storeOriginalData: true,
+          validate: {
+            required: false,
+          },
+        },
+        ...extend,
+      )
     }
 
     static get builderInfo() {
@@ -279,12 +292,8 @@ if (typeof Formio !== 'undefined') {
         icon: 'qrcode',
         weight: 10,
         documentation: '#',
-        schema: Claim169Scanner.schema()
-      };
-    }
-
-    constructor(component, options, data) {
-      super(component, options, data);
+        schema: Claim169Scanner.schema(),
+      }
     }
 
     static editForm() {
@@ -298,7 +307,7 @@ if (typeof Formio !== 'undefined') {
                 key: 'storeOriginalData',
                 label: 'Store Original Data',
                 tooltip: 'If checked, the full verified identity data will be stored in this field.',
-                defaultValue: true
+                defaultValue: true,
               },
               {
                 type: 'panel',
@@ -319,25 +328,25 @@ if (typeof Formio !== 'undefined') {
                         label: 'Issuer ID',
                         placeholder: 'https://identity.example.org',
                         tooltip: 'The issuer identifier from the Claim-169 QR code (usually a URL)',
-                        validate: { required: true }
+                        validate: { required: true },
                       },
                       {
                         type: 'textarea',
                         key: 'ed25519Key',
                         label: 'Ed25519 Public Key (Base64)',
                         tooltip: 'Base64-encoded 32-byte Ed25519 public key',
-                        rows: 2
+                        rows: 2,
                       },
                       {
                         type: 'textarea',
                         key: 'es256Key',
                         label: 'ES256 Public Key (Base64)',
                         tooltip: 'Base64-encoded ES256/P-256 public key',
-                        rows: 2
-                      }
-                    ]
-                  }
-                ]
+                        rows: 2,
+                      },
+                    ],
+                  },
+                ],
               },
               {
                 type: 'panel',
@@ -368,10 +377,10 @@ if (typeof Formio !== 'undefined') {
                             { label: 'Phone', value: 'phone' },
                             { label: 'Email', value: 'email' },
                             { label: 'Photo', value: 'photo' },
-                            { label: 'ID', value: 'id' }
-                          ]
+                            { label: 'ID', value: 'id' },
+                          ],
                         },
-                        validate: { required: true }
+                        validate: { required: true },
                       },
                       {
                         type: 'textfield',
@@ -379,32 +388,32 @@ if (typeof Formio !== 'undefined') {
                         label: 'Form Field Key',
                         placeholder: 'firstName',
                         tooltip: 'The key of the form component to populate.',
-                        validate: { required: true }
+                        validate: { required: true },
                       },
                       {
                         type: 'checkbox',
                         key: 'overwrite',
                         label: 'Overwrite',
                         tooltip: 'Overwrite existing value if present.',
-                        defaultValue: true
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
+                        defaultValue: true,
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
           },
           { key: 'data', ignore: true },
           {
             key: 'validation',
-            components: [
-              { key: 'unique', ignore: true }
-            ]
-          }
-        ]
-      };
+            components: [{ key: 'unique', ignore: true }],
+          },
+        ],
+      }
     }
   }
 
-  Formio.Components.addComponent('claim169Scanner', Claim169Scanner);
+  Components.addComponent('biometricCapture', BiometricCapture)
+  Components.addComponent('claim169Scanner', Claim169Scanner)
+  registered = true
 }

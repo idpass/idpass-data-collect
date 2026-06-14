@@ -17,6 +17,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Formio } from '@formio/js'
 import { loadBuilderAssets } from '@/formio/loadBuilderAssets'
+import { registerBuilderComponents } from '@/formio/builderComponents'
 import type { FormioBuilderInstance } from '@/formio/types'
 
 const props = defineProps<{
@@ -80,6 +81,9 @@ async function applySchema(next: object): Promise<void> {
 onMounted(async () => {
   if (!mountEl.value) return
   loadBuilderAssets()
+  // Register ID PASS custom components (biometric, Claim-169) before building
+  // so they appear in the palette. Idempotent.
+  registerBuilderComponents()
   const instance = (await Formio.builder(
     mountEl.value,
     cloneSchema(props.modelValue),
