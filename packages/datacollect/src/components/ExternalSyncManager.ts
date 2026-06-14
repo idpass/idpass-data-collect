@@ -75,11 +75,16 @@ export function buildAdapterConfig(config: ExternalSyncConfig): Record<string, u
 }
 
 /**
- * Result of {@link validateExternalSyncConfig}.
+ * Result of {@link validateExternalSyncConfig}. `message` is populated only
+ * when `valid` is false. Kept as a single shape (rather than a discriminated
+ * union) so consumers can read `message` after a `!valid` check without relying
+ * on control-flow narrowing — some toolchains compiling this shared source
+ * (e.g. the mobile app's `vue-tsc`) do not narrow the union on negation.
  */
-export type ExternalSyncConfigValidation =
-  | { valid: true }
-  | { valid: false; message: string };
+export interface ExternalSyncConfigValidation {
+  valid: boolean;
+  message?: string;
+}
 
 /**
  * Validate an {@link ExternalSyncConfig} against the target adapter's schema
