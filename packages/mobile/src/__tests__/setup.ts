@@ -77,21 +77,26 @@ const localStorageMock = {
   key: vi.fn(),
 }
 
-Object.defineProperty(window, 'localStorage', {
-  value: localStorageMock,
-  writable: true,
-})
+// `window` is absent under the `node` test environment (e.g. crypto-only
+// suites that opt out of jsdom via `@vitest-environment node`); guard so the
+// shared setup stays usable there.
+if (typeof window !== 'undefined') {
+  Object.defineProperty(window, 'localStorage', {
+    value: localStorageMock,
+    writable: true,
+  })
 
-// Mock window.location
-Object.defineProperty(window, 'location', {
-  value: {
-    href: 'http://localhost:8081',
-    assign: vi.fn(),
-    reload: vi.fn(),
-    replace: vi.fn(),
-  },
-  writable: true,
-})
+  // Mock window.location
+  Object.defineProperty(window, 'location', {
+    value: {
+      href: 'http://localhost:8081',
+      assign: vi.fn(),
+      reload: vi.fn(),
+      replace: vi.fn(),
+    },
+    writable: true,
+  })
+}
 
 // Mock console methods to avoid noise in tests
 global.console = {

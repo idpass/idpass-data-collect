@@ -53,6 +53,7 @@
     "flatpickr-formio": "4.6.13-formio.2",
     "font-awesome": "^4.7.0",
     "formiojs": "^4.21.7",
+    "jose": "^6.1.3",
     "libsodium-wrappers": "^0.7.16",
     "lodash": "^4.17.23",
     "pinia": "^3.0.4",
