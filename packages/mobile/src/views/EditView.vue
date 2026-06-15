@@ -7,8 +7,9 @@ import { reverseTransformEntityData } from '@/utils/reverseTransformData'
 import FormioWrapper from '@/components/FormioWrapper.vue'
 import { SyncLevel, FormClassifier } from '@idpass/data-collect-core'
 import { v4 as uuidv4 } from 'uuid'
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useInjiVerification } from '@/composables/useInjiVerification'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,6 +18,9 @@ const tenantapp = ref<TenantAppData>()
 const entityForm = ref<EntityForm>()
 const storedEntityData = ref<unknown>()
 const formio = ref<unknown>()
+const inji = useInjiVerification()
+
+onUnmounted(() => inji.reset())
 
 const navigateToDetail = () => {
   const appId = route.params.id as string
@@ -58,6 +62,12 @@ onMounted(async () => {
 
     const rawData = entityData[0].modified.data
 
+    // Rebuild the Inji verification session from persisted provenance so
+    // verified badges show on the form fields when editing an existing entity.
+    if (typeof rawData === 'object' && rawData !== null) {
+      inji.hydrate(rawData as Record<string, unknown>)
+    }
+
     const fieldMappings = tenantapp.value.externalSync?.fieldMappings
     if (fieldMappings && fieldMappings.length > 0 && typeof rawData === 'object' && rawData !== null) {
       try {
@@ -93,6 +103,7 @@ const onSubmit = async (submission: any) => {
     type: classification.updateEventType,
     data: {
       ...submission.data,
+      ...(inji.serializeForSave() ?? {}),
       entityName: entityForm.value.name,
       _displayName: entityForm.value.nameField
         ? (submission.data[entityForm.value.nameField] as string | undefined) || entityGuid

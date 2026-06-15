@@ -87,9 +87,50 @@ const claim169Provenance = computed<{
   }
 })
 
+// Provenance from Inji per-field VC verification. Each verified field links
+// to a signed credential (deduped by digest); we join the per-field entries
+// to their credential so the dialog can show the issuer + validity window.
+interface InjiVerificationView {
+  fieldPath: string
+  issuer: string
+  claimPath: string
+  verifiedAt?: string
+  expiresAt?: number
+  expired: boolean
+}
+const injiVerifications = computed<InjiVerificationView[]>(() => {
+  const data = storedEntityData.value?.[0]?.modified?.data as Record<string, unknown> | undefined
+  if (!data) return []
+  const vers = data._injiVerifications as Record<string, { vcDigest: string; claimPath: string; verifiedAt?: string }> | undefined
+  const creds = data._injiCredentials as Record<string, { issuerDid?: string; expiresAt?: number }> | undefined
+  if (!vers || typeof vers !== 'object') return []
+  const now = Date.now()
+  return Object.entries(vers).map(([fieldPath, v]) => {
+    const cred = creds?.[v.vcDigest]
+    const expiresAt = cred?.expiresAt
+    return {
+      fieldPath,
+      issuer: cred?.issuerDid ?? 'Unknown issuer',
+      claimPath: v.claimPath,
+      verifiedAt: v.verifiedAt,
+      expiresAt,
+      expired: typeof expiresAt === 'number' ? expiresAt * 1000 < now : false
+    }
+  })
+})
+const showInjiDialog = ref(false)
+
 const issuerShort = (did: string): string => {
   const m = /^did:[^:]+:(.+)$/.exec(did)
   return m ? m[1] : did
+}
+
+const formatEpochDate = (epochSec?: number): string => {
+  if (!epochSec) return '—'
+  const d = new Date(epochSec * 1000)
+  return Number.isNaN(d.getTime())
+    ? '—'
+    : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 const formatProvenanceDate = (iso?: string): string => {
@@ -239,6 +280,17 @@ const getEntityName = () => {
               >
                 Verified by {{ issuerShort(claim169Provenance.verifiedBy) }}
                 <template v-if="claim169Provenance.expired"> · VC expired</template>
+              </v-chip>
+              <v-chip
+                v-if="injiVerifications.length"
+                size="x-small"
+                :color="injiVerifications.some((v) => v.expired) ? 'warning' : 'success'"
+                variant="tonal"
+                prepend-icon="mdi-certificate-outline"
+                @click="showInjiDialog = true"
+                style="cursor: pointer"
+              >
+                {{ injiVerifications.length }} field{{ injiVerifications.length > 1 ? 's' : '' }} verified
               </v-chip>
             </div>
           </div>
@@ -447,6 +499,45 @@ const getEntityName = () => {
       </v-card-actions>
     </v-card>
   </v-dialog>
+
+  <!-- Inji per-field verification provenance. Lists each field filled from a
+       signed credential, its issuer (trust anchor), the claim path, and the
+       credential's validity window. -->
+  <v-dialog v-model="showInjiDialog" max-width="520">
+    <v-card v-if="injiVerifications.length" rounded="lg">
+      <v-card-title class="d-flex align-center ga-2">
+        <v-icon icon="mdi-certificate-outline" :color="injiVerifications.some((v) => v.expired) ? 'warning' : 'success'" />
+        Credential-verified fields
+      </v-card-title>
+      <v-card-text>
+        <div class="text-body-2 text-medium-emphasis mb-3">
+          Each field below was filled from a Verifiable Credential checked offline
+          against a trusted issuer.
+        </div>
+        <div v-for="v in injiVerifications" :key="v.fieldPath" class="inji-entry">
+          <dl class="provenance-grid">
+            <dt>Field</dt>
+            <dd class="provenance-mono">{{ v.fieldPath }}</dd>
+            <dt>Issuer</dt>
+            <dd class="provenance-mono">{{ issuerShort(v.issuer) }}</dd>
+            <dt>Claim</dt>
+            <dd class="provenance-mono">{{ v.claimPath }}</dd>
+            <dt>Verified</dt>
+            <dd>{{ formatProvenanceDate(v.verifiedAt) }}</dd>
+            <dt>VC expires</dt>
+            <dd :class="{ 'text-warning': v.expired }">
+              {{ formatEpochDate(v.expiresAt) }}
+              <span v-if="v.expired"> · Expired</span>
+            </dd>
+          </dl>
+        </div>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer />
+        <v-btn variant="text" @click="showInjiDialog = false">Close</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <style scoped>
@@ -470,6 +561,12 @@ const getEntityName = () => {
 .provenance-mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.82rem;
+}
+
+.inji-entry + .inji-entry {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .enrolment-card {
