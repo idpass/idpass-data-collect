@@ -53,6 +53,33 @@ export interface Claim169Config {
   trustedIssuers: TrustedIssuer[]
 }
 
+export interface InjiTrustedIssuer {
+  issuerId: string
+  /** Optional JWK `kid` to disambiguate multiple keys for one issuer. */
+  kid?: string
+  publicKey: {
+    ed25519?: string
+    es256?: string
+  }
+}
+
+export interface InjiCredentialTemplate {
+  id: string
+  /** VC `type` values a credential must contain to satisfy this template. */
+  matchTypes: string[]
+  expectedFormat: 'jwt-vc' | 'sd-jwt'
+  /** Optional issuer allowlist scoping this template. */
+  allowedIssuers?: string[]
+  /** Optional human label surfaced in the scan overlay. */
+  claimLabel?: string
+}
+
+export interface InjiConfig {
+  enabled: boolean
+  trustedIssuers: InjiTrustedIssuer[]
+  credentialTemplates: InjiCredentialTemplate[]
+}
+
 export interface Config {
   id: string
   name: string
@@ -75,6 +102,11 @@ export interface Config {
    * components still keep their own embedded trustedIssuers list.
    */
   claim169?: Claim169Config
+  /**
+   * Tenant-level Inji wallet per-field verification config (schema v3).
+   * Drives the form-field "Verify" affordance + offline VC trust registry.
+   */
+  inji?: InjiConfig
 }
 
 export interface TrustedIssuer {

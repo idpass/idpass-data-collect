@@ -196,6 +196,7 @@ const saveTenantApp = async (config: TenantAppData, sourceUrl = '') => {
       externalSync: config.externalSync,
       authConfigs: config.authConfigs,
       claim169: config.claim169 ?? { enabled: false, trustedIssuers: [] },
+      inji: config.inji ?? { enabled: false, trustedIssuers: [], credentialTemplates: [] },
       // Without this the Enrol-in-Program picker silently disappears after
       // any version-bump re-import: the explicit patch payload overrides
       // existing fields, and any field NOT listed here is left untouched
