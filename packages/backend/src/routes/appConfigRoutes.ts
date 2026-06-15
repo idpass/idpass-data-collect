@@ -142,6 +142,27 @@ const AppConfigSchema = z.object({
     })).default([]),
   }).nullish(),
   /**
+   * Inji wallet per-field verification trust anchors + templates. See type InjiConfig.
+   */
+  inji: z.object({
+    enabled: z.boolean().default(false),
+    trustedIssuers: z.array(z.object({
+      issuerId: z.string().min(1),
+      kid: z.string().nullish(),
+      publicKey: z.object({
+        ed25519: z.string().nullish(),
+        es256: z.string().nullish(),
+      }),
+    })).default([]),
+    credentialTemplates: z.array(z.object({
+      id: z.string().min(1),
+      matchTypes: z.array(z.string()).default([]),
+      expectedFormat: z.enum(["jwt-vc", "sd-jwt"]),
+      allowedIssuers: z.array(z.string()).nullish(),
+      claimLabel: z.string().nullish(),
+    })).default([]),
+  }).nullish(),
+  /**
    * Backend sync endpoint the mobile/admin clients use for this tenant.
    * Persisted (was previously accepted-but-dropped). Mobile reads it from
    * the downloaded tenant config to construct its sync URLs; without it the
@@ -650,6 +671,84 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
       await generatePublicArtifacts(baseUrl, persistedConfig);
 
       res.json({ status: "success", claim169: persistedConfig.claim169 ?? null });
+    }),
+  );
+
+  // JSON-body PATCH for editing only the inji block. Mobile reads inji from
+  // the public artifact, so regenerate after saving (same pattern as the
+  // claim169 PATCH). Body: `{ inji: InjiConfig | null }` — null clears it.
+  router.patch(
+    "/:id/inji",
+    adminAuth,
+    asyncHandler(async (req, res) => {
+      const { id } = req.params;
+      ensureValidConfigId(id);
+
+      const InjiPatchSchema = z.object({
+        inji: z
+          .object({
+            enabled: z.boolean(),
+            trustedIssuers: z.array(z.object({
+              issuerId: z.string().min(1),
+              kid: z.string().nullish(),
+              publicKey: z.object({
+                ed25519: z.string().nullish(),
+                es256: z.string().nullish(),
+              }),
+            })),
+            credentialTemplates: z.array(z.object({
+              id: z.string().min(1),
+              matchTypes: z.array(z.string()),
+              expectedFormat: z.enum(["jwt-vc", "sd-jwt"]),
+              allowedIssuers: z.array(z.string()).nullish(),
+              claimLabel: z.string().nullish(),
+            })),
+          })
+          .nullable(),
+      });
+      const parsed = InjiPatchSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res
+          .status(400)
+          .json({ error: "Invalid inji payload", details: parsed.error.issues });
+      }
+
+      // Normalise `.nullish()` fields to omitted-when-absent so the persisted
+      // shape matches the InjiConfig interface.
+      const normalisedInji = parsed.data.inji
+        ? {
+            enabled: parsed.data.inji.enabled,
+            trustedIssuers: parsed.data.inji.trustedIssuers.map((issuer) => ({
+              issuerId: issuer.issuerId,
+              ...(issuer.kid ? { kid: issuer.kid } : {}),
+              publicKey: {
+                ...(issuer.publicKey.ed25519 ? { ed25519: issuer.publicKey.ed25519 } : {}),
+                ...(issuer.publicKey.es256 ? { es256: issuer.publicKey.es256 } : {}),
+              },
+            })),
+            credentialTemplates: parsed.data.inji.credentialTemplates.map((tpl) => ({
+              id: tpl.id,
+              matchTypes: tpl.matchTypes,
+              expectedFormat: tpl.expectedFormat,
+              ...(tpl.allowedIssuers ? { allowedIssuers: tpl.allowedIssuers } : {}),
+              ...(tpl.claimLabel ? { claimLabel: tpl.claimLabel } : {}),
+            })),
+          }
+        : null;
+
+      const existing = await appConfigStore.getConfig(id);
+      const updated: AppConfig = {
+        ...existing,
+        inji: normalisedInji,
+      };
+      await appConfigStore.saveConfig(updated);
+      await appInstanceStore.updateAppInstance(id);
+
+      const baseUrl = resolvePublicBaseUrl(req);
+      const persistedConfig = await appConfigStore.getConfig(id);
+      await generatePublicArtifacts(baseUrl, persistedConfig);
+
+      res.json({ status: "success", inji: persistedConfig.inji ?? null });
     }),
   );
 

@@ -101,6 +101,7 @@ export const appConfigs = pgTable("app_configs", {
   programs: jsonb("programs"),
   syncServerUrl: text("sync_server_url"),
   claim169: jsonb("claim169"),
+  inji: jsonb("inji"),
 });
 
 /**
