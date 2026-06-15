@@ -26,11 +26,13 @@
 
 import { describe, it, expect, beforeAll } from 'vitest'
 import { SignJWT, exportSPKI, generateKeyPair, base64url, type CryptoKey } from 'jose'
+import { generateQRData } from '@mosip/pixelpass'
 import {
   detectFormat,
   verify,
   matchTemplate,
   extractClaim,
+  normalizeScannedPayload,
   VcRejectReason,
   MAX_VC_BYTES,
   type VerifiedVc
@@ -265,5 +267,72 @@ describe('extractClaim', () => {
     ['$.credentialSubject.kids[9].age', undefined]
   ])('resolves %s', (path, expected) => {
     expect(extractClaim(obj, path as string)).toBe(expected)
+  })
+})
+
+describe('normalizeScannedPayload / PixelPass (Inji Wallet QR)', () => {
+  // Reproduce the wallet's share-QR encoding: PixelPass(JSON.stringify(credential)).
+  // For vc+sd-jwt the credential is the compact SD-JWT string.
+  const walletQrFor = (compact: string) => generateQRData(JSON.stringify(compact), '')
+
+  async function buildSdJwt(disclose: Array<[string, string, unknown]>): Promise<string> {
+    const enc = (arr: unknown) => base64url.encode(new TextEncoder().encode(JSON.stringify(arr)))
+    const disclosures = disclose.map((d) => enc(d))
+    const digests = await Promise.all(
+      disclosures.map(async (d) => {
+        const h = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(d))
+        return base64url.encode(new Uint8Array(h))
+      })
+    )
+    const issuerJwt = await new SignJWT({ vct: 'BirthCertificate', type: ['VerifiableCredential', 'BirthCertificate'], _sd: digests })
+      .setProtectedHeader({ alg: 'ES256' })
+      .setIssuer(ISSUER)
+      .setIssuedAt()
+      .setExpirationTime('2h')
+      .sign(es256Priv)
+    return issuerJwt + '~' + disclosures.join('~') + '~'
+  }
+
+  it('leaves an already-compact payload untouched', () => {
+    expect(normalizeScannedPayload('aaa.bbb.ccc')).toBe('aaa.bbb.ccc')
+    expect(normalizeScannedPayload('aaa.bbb.ccc~d1~d2~')).toBe('aaa.bbb.ccc~d1~d2~')
+  })
+
+  it('recovers a compact SD-JWT from a wallet PixelPass QR', async () => {
+    const compact = await buildSdJwt([['salt1', 'birthDate', '1990-05-17']])
+    const qr = walletQrFor(compact)
+    expect(qr).not.toContain('~') // it's base45-encoded, not the raw compact string
+    expect(normalizeScannedPayload(qr)).toBe(compact)
+  })
+
+  it('verify() succeeds on a wallet PixelPass QR with the same claims as the raw compact', async () => {
+    const compact = await buildSdJwt([
+      ['salt1', 'birthDate', '1990-05-17'],
+      ['salt2', 'nationality', 'PT']
+    ])
+    const qr = walletQrFor(compact)
+
+    const fromRaw = await verify(compact, esConfig)
+    const fromQr = await verify(qr, esConfig)
+
+    expect(fromRaw.ok).toBe(true)
+    expect(fromQr.ok).toBe(true)
+    expect(fromQr.vc?.rawDigest).toBe(fromRaw.vc?.rawDigest)
+    expect(extractClaim(fromQr.vc!.claims, '$.birthDate')).toBe('1990-05-17')
+    expect(extractClaim(fromQr.vc!.claims, '$.nationality')).toBe('PT')
+  })
+
+  it('rejects a PixelPass-wrapped JSON-LD object (unsupported in Phase 1)', async () => {
+    const jsonLd = { '@context': ['https://www.w3.org/2018/credentials/v1'], type: ['VerifiableCredential'], proof: { type: 'Ed25519Signature2020' } }
+    const qr = generateQRData(JSON.stringify(jsonLd), '')
+    const res = await verify(qr, esConfig)
+    expect(res.ok).toBe(false)
+    expect(res.reason).toBe(VcRejectReason.UNSUPPORTED_FORMAT)
+  })
+
+  it('rejects non-PixelPass garbage cleanly', async () => {
+    const res = await verify('not pixelpass, not a jwt', esConfig)
+    expect(res.ok).toBe(false)
+    expect(res.reason).toBe(VcRejectReason.UNSUPPORTED_FORMAT)
   })
 })

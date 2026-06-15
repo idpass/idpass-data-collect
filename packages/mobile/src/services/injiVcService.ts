@@ -41,6 +41,7 @@ import {
   type CryptoKey,
   type JWK
 } from 'jose'
+import { decode as pixelPassDecode } from '@mosip/pixelpass'
 import type { InjiCredentialTemplate, InjiTrustedIssuer } from '@/utils/formIoUtils'
 
 export type VcFormat = 'jwt-vc' | 'sd-jwt'
@@ -100,6 +101,41 @@ export function detectFormat(raw: string): VcFormat | null {
 function isCompactJws(s: string): boolean {
   const parts = s.split('.')
   return parts.length === 3 && parts.every((p) => p.length > 0)
+}
+
+/**
+ * Recover a compact VC string from a scanned payload.
+ *
+ * The MOSIP Inji Wallet emits its share QR as
+ * `PixelPass(JSON.stringify(credential))` — for a `vc+sd-jwt` credential the
+ * inner value is the compact SD-JWT string, JSON-quoted, then base45/CBOR/zlib
+ * encoded. This reverses that so {@link verify} sees the same compact string a
+ * pasted fixture would produce.
+ *
+ * Best-effort and side-effect-free:
+ * - Already-compact input (a fixture, or a paste) is returned untouched — no
+ *   PixelPass attempted.
+ * - A PixelPass blob that decodes+`JSON.parse`s to a string is unwrapped.
+ * - Anything else (JSON-LD / mDoc object, or non-PixelPass garbage) is returned
+ *   unchanged so `verify` rejects it cleanly with `UNSUPPORTED_FORMAT`.
+ *
+ * Never throws.
+ */
+export function normalizeScannedPayload(raw: string): string {
+  const s = raw.trim()
+  if (!s) return s
+  // Already a compact JWT/SD-JWT (fixture or paste) — do not PixelPass-decode.
+  if (detectFormat(s)) return s
+  try {
+    const decoded = pixelPassDecode(s)
+    // Wallet wrapped the compact string with JSON.stringify → parse unwraps it.
+    const parsed = JSON.parse(decoded)
+    if (typeof parsed === 'string') return parsed
+    // Object (JSON-LD / mDoc) — unsupported in Phase 1; let verify reject it.
+    return s
+  } catch {
+    return s
+  }
 }
 
 function byteLength(s: string): number {
@@ -186,7 +222,8 @@ function decodeMaybeBase64(s: string): Uint8Array {
  * optional reason and the normalized credential.
  */
 export async function verify(raw: string, injiConfig: { trustedIssuers: InjiTrustedIssuer[] }): Promise<VcResult> {
-  const s = raw.trim()
+  // Recover a compact VC from a wallet PixelPass QR (or pass a fixture through).
+  const s = normalizeScannedPayload(raw)
 
   if (byteLength(s) > MAX_VC_BYTES) {
     return { ok: false, reason: VcRejectReason.TOO_LARGE }
