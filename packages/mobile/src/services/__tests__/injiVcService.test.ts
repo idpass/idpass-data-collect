@@ -270,6 +270,70 @@ describe('extractClaim', () => {
   })
 })
 
+describe('Certify-shaped SD-JWT (real issuer wire format)', () => {
+  // Reproduces exactly what MOSIP Inji Certify emits for a vc+sd-jwt credential
+  // (verified from certify-service SDJWT.java + VelocityTemplatingEngineImpl):
+  //  - the vcTemplate is filled, so `credentialSubject` stays NESTED
+  //  - `vct` is injected at the payload top level
+  //  - selectively-disclosed claims become an `_sd` digest array INSIDE
+  //    credentialSubject (Authlete `com.authlete.sd` / IETF SD-JWT), with the
+  //    plain claims left in place
+  // This pins the structure our verifier must parse, and proves the correct
+  // field path is `$.credentialSubject.<claim>` (NOT a flat top-level claim).
+  async function buildCertifySdJwt(): Promise<string> {
+    const enc = (arr: unknown) => base64url.encode(new TextEncoder().encode(JSON.stringify(arr)))
+    const digest = async (d: string) =>
+      base64url.encode(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(d))))
+
+    // Disclosed (selectively-disclosable) claims — Authlete disclosure = [salt, name, value].
+    const dFullName = enc(['c2FsdEZO', 'fullName', 'Gorge Cooper'])
+    const dDob = enc(['c2FsdERP', 'dateOfBirth', '25-05-1990'])
+
+    const payload = {
+      vct: 'FarmerSdJwt',
+      credentialSubject: {
+        id: 'did:jwk:holder',
+        // plain (always-disclosed) claims stay in place
+        gender: 'Male',
+        district: 'Bangalore',
+        // disclosed claims are replaced by their digests in an _sd array
+        _sd: [await digest(dFullName), await digest(dDob)]
+      }
+    }
+    const issuerJwt = await new SignJWT(payload)
+      .setProtectedHeader({ alg: 'EdDSA', typ: 'vc+sd-jwt' })
+      .setIssuer(ISSUER)
+      .setIssuedAt()
+      .setExpirationTime('2h')
+      .sign(edPriv)
+    return `${issuerJwt}~${dFullName}~${dDob}~`
+  }
+
+  it('verifies, merges nested _sd, and resolves credentialSubject claim paths', async () => {
+    const token = await buildCertifySdJwt()
+    const res = await verify(token, edConfig)
+
+    expect(res.ok).toBe(true)
+    expect(res.vc?.format).toBe('sd-jwt')
+    // vct injected at top level → surfaced as a type
+    expect(res.vc?.types).toContain('FarmerSdJwt')
+    // plain claim (never in _sd) resolves
+    expect(extractClaim(res.vc!.claims, '$.credentialSubject.gender')).toBe('Male')
+    // disclosed claims merged back UNDER credentialSubject (nested _sd handled)
+    expect(extractClaim(res.vc!.claims, '$.credentialSubject.fullName')).toBe('Gorge Cooper')
+    expect(extractClaim(res.vc!.claims, '$.credentialSubject.dateOfBirth')).toBe('25-05-1990')
+  })
+
+  it('matches a tenant template by the injected vct', async () => {
+    const token = await buildCertifySdJwt()
+    const res = await verify(token, edConfig)
+    const templates: InjiCredentialTemplate[] = [
+      { id: 'farmer-sdjwt-v1', matchTypes: ['FarmerSdJwt'], expectedFormat: 'sd-jwt' }
+    ]
+    expect(matchTemplate(res.vc!, templates)?.id).toBe('farmer-sdjwt-v1')
+  })
+})
+
 describe('normalizeScannedPayload / PixelPass (Inji Wallet QR)', () => {
   // Reproduce the wallet's share-QR encoding: PixelPass(JSON.stringify(credential)).
   // For vc+sd-jwt the credential is the compact SD-JWT string.
