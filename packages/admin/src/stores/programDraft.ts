@@ -19,7 +19,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
-import { getApp, getApps as getAppsApi, createApp as createAppApi, updateApp as updateAppApi, type FieldMapping, type AppProgram, type Claim169Config } from '@/api'
+import { getApp, getApps as getAppsApi, createApp as createAppApi, updateApp as updateAppApi, type FieldMapping, type AppProgram, type Claim169Config, type InjiConfig } from '@/api'
 import type { OpenSppV2Field } from '@/api/opensppV2'
 import type { ExternalSyncField } from '@idpass/data-collect-core'
 
@@ -69,6 +69,8 @@ export interface ProgramDraft {
   programs: AppProgram[]
   /** Claim-169 identity verification config (trust anchors + enable flag). */
   claim169: Claim169Config
+  /** Inji wallet per-field VC verification config (trust anchors + templates). */
+  inji: InjiConfig
   /** Cached OpenSPP V2 fields for mapping UI */
   opensppV2Fields?: OpenSppV2Field[]
 }
@@ -133,6 +135,7 @@ const getEmptyDraft = (): ProgramDraft => ({
   },
   programs: [],
   claim169: { enabled: false, trustedIssuers: [] },
+  inji: { enabled: false, trustedIssuers: [], credentialTemplates: [] },
   opensppV2Fields: [],
 })
 
@@ -303,6 +306,7 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
             },
         programs: config.programs ?? [],
         claim169: config.claim169 ?? { enabled: false, trustedIssuers: [] },
+        inji: config.inji ?? { enabled: false, trustedIssuers: [], credentialTemplates: [] },
       }
       errors.value = getEmptyErrors()
       mode.value = 'edit'
@@ -348,6 +352,7 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
             },
         programs: config.programs ?? [],
         claim169: config.claim169 ?? { enabled: false, trustedIssuers: [] },
+        inji: config.inji ?? { enabled: false, trustedIssuers: [], credentialTemplates: [] },
       }
       errors.value = getEmptyErrors()
       mode.value = 'copy'
@@ -639,6 +644,12 @@ export const useProgramDraftStore = defineStore('programDraft', () => {
         claim169: draft.value.claim169.enabled || draft.value.claim169.trustedIssuers.length > 0
           ? draft.value.claim169
           : null,
+        inji:
+          draft.value.inji.enabled ||
+          draft.value.inji.trustedIssuers.length > 0 ||
+          draft.value.inji.credentialTemplates.length > 0
+            ? draft.value.inji
+            : null,
       }
 
       const formData = new FormData()

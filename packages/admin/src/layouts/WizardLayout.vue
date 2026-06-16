@@ -98,6 +98,19 @@ const steps = computed<StepDef[]>(() => [
       ]
     : []),
   {
+    // Inji per-field VC verification is independent of field mapping, so it is
+    // always available (disabled by default until trust anchors + templates are set).
+    id: 'inji',
+    title: 'Inji Verify',
+    icon: 'mdi-wallet-outline',
+    route: 'wizard-inji',
+    validate: () => {
+      const i = draftStore.draft.inji
+      // Incomplete if enabled with no issuers or no templates; disabled is fine.
+      return !i.enabled || (i.trustedIssuers.length > 0 && i.credentialTemplates.length > 0)
+    },
+  },
+  {
     id: 'auth',
     title: 'Authentication',
     icon: 'mdi-shield-key-outline',

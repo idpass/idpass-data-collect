@@ -17,11 +17,14 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Formio } from '@formio/js'
 import { loadBuilderAssets } from '@/formio/loadBuilderAssets'
-import { registerBuilderComponents } from '@/formio/builderComponents'
+import { registerBuilderComponents, setCredentialTemplates } from '@/formio/builderComponents'
 import type { FormioBuilderInstance } from '@/formio/types'
+import type { InjiCredentialTemplate } from '@/api'
 
 const props = defineProps<{
   modelValue: object
+  /** Tenant Inji credential templates, populating the field "Inji Verification" tab dropdown. */
+  credentialTemplates?: InjiCredentialTemplate[]
 }>()
 
 const emit = defineEmits<{
@@ -81,6 +84,9 @@ async function applySchema(next: object): Promise<void> {
 onMounted(async () => {
   if (!mountEl.value) return
   loadBuilderAssets()
+  // Feed the tenant's Inji credential templates to the field "Inji Verification"
+  // tab dropdown. Must run before the builder mounts; read live at editForm time.
+  setCredentialTemplates(props.credentialTemplates ?? [])
   // Register ID PASS custom components (biometric, Claim-169) before building
   // so they appear in the palette. Idempotent.
   registerBuilderComponents()

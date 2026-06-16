@@ -91,7 +91,11 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="form-designer">
-    <FormioBuilder v-model="schema" class="form-builder-host" />
+    <FormioBuilder
+      v-model="schema"
+      :credential-templates="draftStore.draft.inji.credentialTemplates"
+      class="form-builder-host"
+    />
 
     <v-dialog v-model="showLeaveDialog" :max-width="400" persistent>
       <v-card>
