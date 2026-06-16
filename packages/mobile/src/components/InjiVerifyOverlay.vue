@@ -25,7 +25,7 @@ const overwritePaths = ref<string[] | null>(null)
 const headerTitle = computed(() => session.currentTarget.value?.label ?? 'Verify with credential')
 
 const REASON_MESSAGES: Record<VcRejectReason, string> = {
-  [VcRejectReason.UNSUPPORTED_FORMAT]: 'Unsupported credential format. Expected a JWT-VC or SD-JWT.',
+  [VcRejectReason.UNSUPPORTED_FORMAT]: 'Unsupported credential format. Expected a JWT-VC, SD-JWT, or JSON-LD (ldp_vc) credential.',
   [VcRejectReason.MALFORMED]: 'The credential could not be parsed.',
   [VcRejectReason.TOO_LARGE]: 'This credential is too large to store. It may embed a photo or biometrics.',
   [VcRejectReason.UNKNOWN_ISSUER]: 'Unknown issuer — not in this programme’s trust list.',

@@ -67,7 +67,7 @@ export interface InjiCredentialTemplate {
   id: string
   /** VC `type` values a credential must contain to satisfy this template. */
   matchTypes: string[]
-  expectedFormat: 'jwt-vc' | 'sd-jwt'
+  expectedFormat: 'jwt-vc' | 'sd-jwt' | 'ldp_vc'
   /** Optional issuer allowlist scoping this template. */
   allowedIssuers?: string[]
   /** Optional human label surfaced in the scan overlay. */

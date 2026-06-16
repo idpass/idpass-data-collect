@@ -157,7 +157,7 @@ const AppConfigSchema = z.object({
     credentialTemplates: z.array(z.object({
       id: z.string().min(1),
       matchTypes: z.array(z.string()).default([]),
-      expectedFormat: z.enum(["jwt-vc", "sd-jwt"]),
+      expectedFormat: z.enum(["jwt-vc", "sd-jwt", "ldp_vc"]),
       allowedIssuers: z.array(z.string()).nullish(),
       claimLabel: z.string().nullish(),
     })).default([]),
@@ -699,7 +699,7 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
             credentialTemplates: z.array(z.object({
               id: z.string().min(1),
               matchTypes: z.array(z.string()),
-              expectedFormat: z.enum(["jwt-vc", "sd-jwt"]),
+              expectedFormat: z.enum(["jwt-vc", "sd-jwt", "ldp_vc"]),
               allowedIssuers: z.array(z.string()).nullish(),
               claimLabel: z.string().nullish(),
             })),

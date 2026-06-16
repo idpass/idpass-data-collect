@@ -6,29 +6,14 @@
 // This is the gating de-risk for the ldp_vc verifier. Mirrors what the real
 // mobile verifier will do (WebCrypto Ed25519 + jsonld.canonize + bundled loader).
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 import * as jsonldMod from 'jsonld'
+import { createOfflineDocumentLoader } from '../verifiers/jsonldContexts'
 const jsonld: any = (jsonldMod as any).default ?? jsonldMod
-
-const here = dirname(fileURLToPath(import.meta.url))
-const ctxDir = join(here, '../verifiers/jsonldContexts')
-const credV1 = JSON.parse(readFileSync(join(ctxDir, 'credentials-v1.jsonld'), 'utf-8'))
-const ed2020V1 = JSON.parse(readFileSync(join(ctxDir, 'ed25519-2020-v1.jsonld'), 'utf-8'))
 
 // Fail-closed loader: only the bundled contexts resolve; anything else throws
 // (so any network attempt during canonicalization fails the test loudly).
-const BUNDLED: Record<string, unknown> = {
-  'https://www.w3.org/2018/credentials/v1': credV1,
-  'https://w3id.org/security/suites/ed25519-2020/v1': ed2020V1,
-}
-const documentLoader = async (url: string) => {
-  const doc = BUNDLED[url]
-  if (!doc) throw new Error(`OFFLINE: refusing to fetch un-bundled context ${url}`)
-  return { contextUrl: undefined as undefined, document: doc, documentUrl: url }
-}
+const documentLoader = createOfflineDocumentLoader()
 
 // --- base58btc (multibase 'z') for Ed25519Signature2020 proofValue ---
 const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'

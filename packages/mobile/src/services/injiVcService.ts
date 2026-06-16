@@ -43,8 +43,9 @@ import {
 } from 'jose'
 import { decode as pixelPassDecode } from '@mosip/pixelpass'
 import type { InjiCredentialTemplate, InjiTrustedIssuer } from '@/utils/formIoUtils'
+import { verifyLdp } from './verifiers/ldpVc'
 
-export type VcFormat = 'jwt-vc' | 'sd-jwt'
+export type VcFormat = 'jwt-vc' | 'sd-jwt' | 'ldp_vc'
 
 export enum VcRejectReason {
   UNSUPPORTED_FORMAT = 'UNSUPPORTED_FORMAT',
@@ -131,11 +132,38 @@ export function normalizeScannedPayload(raw: string): string {
     // Wallet wrapped the compact string with JSON.stringify → parse unwraps it.
     const parsed = JSON.parse(decoded)
     if (typeof parsed === 'string') return parsed
-    // Object (JSON-LD / mDoc) — unsupported in Phase 1; let verify reject it.
+    // Object (JSON-LD / mDoc) — surfaced via normalizeScanned, not this string API.
     return s
   } catch {
     return s
   }
+}
+
+/**
+ * Structured form of {@link normalizeScannedPayload} used by {@link verify}.
+ * Recovers the scanned payload and reports its shape so the orchestrator can
+ * route JSON-LD credentials (objects) to the `ldp_vc` verifier instead of
+ * dropping them. A compact JWS string stays a string; a PixelPass blob that
+ * decodes to a JSON string is unwrapped to that string; one that decodes to a
+ * JSON object (JSON-LD / mDoc) surfaces as an object. Never throws.
+ */
+export function normalizeScanned(raw: string): { kind: 'string' | 'object'; value: string | Record<string, unknown> } {
+  const s = raw.trim()
+  if (!s) return { kind: 'string', value: s }
+  if (detectFormat(s)) return { kind: 'string', value: s }
+  try {
+    const parsed = JSON.parse(pixelPassDecode(s))
+    if (typeof parsed === 'string') return { kind: 'string', value: parsed }
+    if (parsed && typeof parsed === 'object') return { kind: 'object', value: parsed as Record<string, unknown> }
+  } catch {
+    // not PixelPass — fall through
+  }
+  return { kind: 'string', value: s }
+}
+
+/** A decoded object is `ldp_vc` when it carries a JSON-LD context and a proof. */
+function isLdpVc(obj: Record<string, unknown>): boolean {
+  return '@context' in obj && 'proof' in obj
 }
 
 function byteLength(s: string): number {
@@ -222,9 +250,21 @@ function decodeMaybeBase64(s: string): Uint8Array {
  * optional reason and the normalized credential.
  */
 export async function verify(raw: string, injiConfig: { trustedIssuers: InjiTrustedIssuer[] }): Promise<VcResult> {
-  // Recover a compact VC from a wallet PixelPass QR (or pass a fixture through).
-  const s = normalizeScannedPayload(raw)
+  // Recover the scanned payload (compact string, or a decoded JSON-LD object).
+  const scanned = normalizeScanned(raw)
 
+  if (scanned.kind === 'object') {
+    const obj = scanned.value as Record<string, unknown>
+    if (byteLength(JSON.stringify(obj)) > MAX_VC_BYTES) {
+      return { ok: false, reason: VcRejectReason.TOO_LARGE }
+    }
+    if (!isLdpVc(obj)) {
+      return { ok: false, reason: VcRejectReason.UNSUPPORTED_FORMAT }
+    }
+    return verifyLdp(obj, injiConfig)
+  }
+
+  const s = scanned.value as string
   if (byteLength(s) > MAX_VC_BYTES) {
     return { ok: false, reason: VcRejectReason.TOO_LARGE }
   }
@@ -234,6 +274,19 @@ export async function verify(raw: string, injiConfig: { trustedIssuers: InjiTrus
     return { ok: false, reason: VcRejectReason.UNSUPPORTED_FORMAT }
   }
 
+  return verifyJws(s, format, injiConfig)
+}
+
+/**
+ * Verify a compact JWS-based VC (JWT-VC or SD-JWT). Resolves the issuer offline,
+ * verifies the signature, validates `exp`/`nbf`, and (for SD-JWT) merges valid
+ * disclosures.
+ */
+async function verifyJws(
+  s: string,
+  format: VcFormat,
+  injiConfig: { trustedIssuers: InjiTrustedIssuer[] }
+): Promise<VcResult> {
   const issuerJwt = format === 'sd-jwt' ? s.split('~')[0] : s
 
   let header: { alg?: string; kid?: string }

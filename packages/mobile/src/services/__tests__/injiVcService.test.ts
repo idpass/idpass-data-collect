@@ -117,9 +117,11 @@ describe('verify — JWT-VC', () => {
   it('rejects a tampered signature with INVALID_SIGNATURE', async () => {
     const jwt = await signEs(VC_PAYLOAD)
     const parts = jwt.split('.')
-    // Flip the last char of the signature segment.
+    // Flip the FIRST char of the signature segment — it encodes real bytes, so
+    // the tamper is deterministic. (Flipping the LAST char of a 64-byte ES256
+    // sig only touches unused base64url padding bits ~1/4 of the time → flaky.)
     const sig = parts[2]
-    parts[2] = sig.slice(0, -1) + (sig.slice(-1) === 'A' ? 'B' : 'A')
+    parts[2] = (sig[0] === 'A' ? 'B' : 'A') + sig.slice(1)
     const res = await verify(parts.join('.'), esConfig)
     expect(res.ok).toBe(false)
     expect(res.reason).toBe(VcRejectReason.INVALID_SIGNATURE)
@@ -386,9 +388,20 @@ describe('normalizeScannedPayload / PixelPass (Inji Wallet QR)', () => {
     expect(extractClaim(fromQr.vc!.claims, '$.nationality')).toBe('PT')
   })
 
-  it('rejects a PixelPass-wrapped JSON-LD object (unsupported in Phase 1)', async () => {
-    const jsonLd = { '@context': ['https://www.w3.org/2018/credentials/v1'], type: ['VerifiableCredential'], proof: { type: 'Ed25519Signature2020' } }
+  it('routes a PixelPass-wrapped JSON-LD object to the ldp_vc verifier (rejects when proof is incomplete)', async () => {
+    // Now SUPPORTED (Phase 2): an @context+proof object is routed to verifyLdp.
+    // This one has no proofValue → MALFORMED, proving it reached the ldp path
+    // rather than being dropped as UNSUPPORTED_FORMAT.
+    const jsonLd = { '@context': ['https://www.w3.org/2018/credentials/v1'], type: ['VerifiableCredential'], issuer: 'did:example:x', proof: { type: 'Ed25519Signature2020' } }
     const qr = generateQRData(JSON.stringify(jsonLd), '')
+    const res = await verify(qr, esConfig)
+    expect(res.ok).toBe(false)
+    expect(res.reason).toBe(VcRejectReason.MALFORMED)
+  })
+
+  it('rejects a PixelPass object without @context+proof as unsupported', async () => {
+    const obj = { type: ['VerifiableCredential'], hello: 'world' }
+    const qr = generateQRData(JSON.stringify(obj), '')
     const res = await verify(qr, esConfig)
     expect(res.ok).toBe(false)
     expect(res.reason).toBe(VcRejectReason.UNSUPPORTED_FORMAT)
