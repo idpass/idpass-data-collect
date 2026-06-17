@@ -30,11 +30,15 @@
  */
 import credentialsV1 from './credentials-v1.json'
 import ed25519Signature2020V1 from './ed25519-2020-v1.json'
+import farmerV1 from './farmer-v1.json'
 
 /** url → context document. Aliased URLs (http/https, w3id redirects) included. */
 export const BUNDLED_CONTEXTS: Record<string, unknown> = {
   'https://www.w3.org/2018/credentials/v1': credentialsV1,
-  'https://w3id.org/security/suites/ed25519-2020/v1': ed25519Signature2020V1
+  'https://w3id.org/security/suites/ed25519-2020/v1': ed25519Signature2020V1,
+  // Stock MOSIP Inji Certify FarmerCredential context (captured from a live
+  // issuer; the credential references it by URL but we resolve it offline).
+  'https://piyush7034.github.io/my-files/farmer.json': farmerV1
 }
 
 export interface LoadedContext {

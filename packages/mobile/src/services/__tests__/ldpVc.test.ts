@@ -145,4 +145,47 @@ describe('ldp_vc offline verification', () => {
     expect(res.ok).toBe(false)
     expect(res.reason).toBe(VcRejectReason.EXPIRED)
   })
+
+  // Real stock-Inji FarmerCredential shape: the EXACT three @context URLs the
+  // MOSIP Certify FarmerCredential template emits (no inline @vocab), all stock
+  // claims. Proves the bundled farmer context makes safe-mode canonicalization
+  // resolve every term offline — the gating risk for the real-wallet scan.
+  it('verifies a stock-shaped FarmerCredential offline with the bundled farmer context', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const farmer: any = {
+      '@context': [
+        'https://www.w3.org/2018/credentials/v1',
+        'https://piyush7034.github.io/my-files/farmer.json',
+        'https://w3id.org/security/suites/ed25519-2020/v1'
+      ],
+      type: ['VerifiableCredential', 'FarmerCredential'],
+      issuer: ISSUER,
+      issuanceDate: '2024-01-01T00:00:00Z',
+      expirationDate: '2999-01-01T00:00:00Z',
+      credentialSubject: {
+        id: 'did:jwk:holder',
+        fullName: 'Gorge Cooper',
+        mobileNumber: '9876543210',
+        dateOfBirth: '1990-05-25',
+        gender: 'Male',
+        state: 'Karnataka',
+        district: 'Bangalore',
+        villageOrTown: 'Whitefield',
+        postalCode: '560066',
+        landArea: '2.5',
+        landOwnershipType: 'Owned',
+        primaryCropType: 'Rice',
+        secondaryCropType: 'Wheat',
+        farmerID: '987654321'
+      }
+    }
+    const signed = await signLdp(farmer, keyPair.privateKey)
+    const res = await verify(walletQr(signed), trust)
+
+    expect(res.ok).toBe(true)
+    expect(res.vc?.types).toContain('FarmerCredential')
+    expect(extractClaim(res.vc!.claims, '$.credentialSubject.fullName')).toBe('Gorge Cooper')
+    expect(extractClaim(res.vc!.claims, '$.credentialSubject.district')).toBe('Bangalore')
+    expect(extractClaim(res.vc!.claims, '$.credentialSubject.farmerID')).toBe('987654321')
+  })
 })
