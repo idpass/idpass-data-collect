@@ -78,7 +78,38 @@ function buildAffordance(self: AnyField): HTMLElement {
   })
   wrap.appendChild(btn)
 
+  // A verified field is locked to its proof; the only edit is to remove the
+  // verification (which clears the value + provenance and re-enables editing).
+  if (existing) {
+    const remove = document.createElement('button')
+    remove.type = 'button'
+    remove.className = 'inji-verifiable__btn inji-verifiable__btn--remove'
+    remove.textContent = 'Remove verification'
+    remove.setAttribute('aria-label', `Remove verification from ${escapeText(label)}`)
+    remove.addEventListener('click', (e) => {
+      e.preventDefault()
+      const root = self.root as InjiFormRoot | undefined
+      session.removeVerification(fieldPath, root)
+      self.redraw?.()
+    })
+    wrap.appendChild(remove)
+  }
+
   return wrap
+}
+
+/**
+ * Lock (or unlock) a field's native inputs to match its verification state. A
+ * VC-filled value must not silently drift from the proof, so verified fields
+ * are read-only until the operator explicitly removes the verification.
+ */
+function setFieldLocked(element: HTMLElement, locked: boolean): void {
+  const inputs = element.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+    'input, textarea, select'
+  )
+  inputs.forEach((el) => {
+    el.disabled = locked
+  })
 }
 
 let applied = false
@@ -98,7 +129,6 @@ export function applyInjiVerifiableDecoration(): void {
   }
 
   const originalAttach = Field.prototype.attach
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   Field.prototype.attach = function patchedAttach(this: AnyField, element: HTMLElement) {
     const result = originalAttach.call(this, element)
 
@@ -111,6 +141,9 @@ export function applyInjiVerifiableDecoration(): void {
 
     try {
       element.appendChild(buildAffordance(this))
+      const fieldPath: string = this.path ?? this.key ?? ''
+      const verified = !!useInjiVerification().getFieldVerification(fieldPath)
+      setFieldLocked(element, verified)
     } catch {
       // Decoration is advisory — never break the field's own attach.
     }

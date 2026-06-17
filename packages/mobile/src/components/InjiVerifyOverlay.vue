@@ -3,8 +3,8 @@ import { ref, computed, watch } from 'vue'
 import { usePlatform } from '@/platform'
 import { useBarcodeScan } from '@/composables/useBarcodeScan'
 import { useInjiConfig } from '@/composables/useInjiConfig'
-import { useInjiVerification } from '@/composables/useInjiVerification'
-import { verify, matchTemplate, VcRejectReason, type VerifiedVc } from '@/services/injiVcService'
+import { useInjiVerification, type InjiOverwriteConflict } from '@/composables/useInjiVerification'
+import { verify, matchTemplate, extractClaim, VcRejectReason, type VerifiedVc } from '@/services/injiVcService'
 
 const { isNative } = usePlatform()
 const { isScanning, requestPermissions, cleanup, scanBarcode } = useBarcodeScan()
@@ -20,9 +20,30 @@ const isWebProcessing = ref(false)
 // and claim before committing — same verify-decode-confirm-commit pattern as
 // the Claim-169 overlay.
 const pendingVc = ref<VerifiedVc | null>(null)
-const overwritePaths = ref<string[] | null>(null)
+const overwriteConflicts = ref<InjiOverwriteConflict[] | null>(null)
 
 const headerTitle = computed(() => session.currentTarget.value?.label ?? 'Verify with credential')
+
+const fmtValue = (v: unknown): string => {
+  if (v === undefined || v === null || v === '') return '—'
+  return String(v)
+}
+
+// The claim value that will fill the tapped field — shown prominently so the
+// operator can eyeball it against the person before committing.
+const pendingClaimValue = computed<string>(() => {
+  const target = session.currentTarget.value
+  if (!pendingVc.value || !target?.claimPath) return '—'
+  return fmtValue(extractClaim(pendingVc.value.claims, target.claimPath))
+})
+
+// Set when the verified credential has no value for the tapped field (right
+// template, missing claim) — surfaced instead of silently leaving it empty.
+const targetHasNoValue = computed<boolean>(() => {
+  const target = session.currentTarget.value
+  if (!pendingVc.value || !target?.claimPath) return false
+  return extractClaim(pendingVc.value.claims, target.claimPath) === undefined
+})
 
 const REASON_MESSAGES: Record<VcRejectReason, string> = {
   [VcRejectReason.UNSUPPORTED_FORMAT]: 'Unsupported credential format. Expected a JWT-VC, SD-JWT, or JSON-LD (ldp_vc) credential.',
@@ -117,18 +138,22 @@ const startScan = async () => {
 const commit = (overwriteConfirmed = false) => {
   if (!pendingVc.value) return
   const result = session.completeScan(pendingVc.value, { overwriteConfirmed })
-  if (result.needsOverwriteConfirm?.length) {
-    overwritePaths.value = result.needsOverwriteConfirm
+  if (result.conflicts?.length) {
+    overwriteConflicts.value = result.conflicts
     return
+  }
+  if (!result.filled.length && result.noValue?.length) {
+    // Verified, but the credential carried no value for this field.
+    displayError('Credential verified, but it has no value for this field.')
   }
   // completeScan resolved the promise + closed the overlay on success.
   pendingVc.value = null
-  overwritePaths.value = null
+  overwriteConflicts.value = null
 }
 
 const rescan = () => {
   pendingVc.value = null
-  overwritePaths.value = null
+  overwriteConflicts.value = null
   if (isNative.value) setTimeout(() => startScan(), 100)
 }
 
@@ -145,13 +170,13 @@ watch(
       showError.value = false
       isProcessing.value = false
       pendingVc.value = null
-      overwritePaths.value = null
+      overwriteConflicts.value = null
       webInput.value = ''
       if (isNative.value) setTimeout(() => startScan(), 100)
     } else {
       await cleanup()
       pendingVc.value = null
-      overwritePaths.value = null
+      overwriteConflicts.value = null
     }
   }
 )
@@ -172,18 +197,31 @@ watch(
 
       <div class="scanner-content">
         <!-- Overwrite confirmation -->
-        <div v-if="overwritePaths" class="confirm-panel">
+        <div v-if="overwriteConflicts" class="confirm-panel">
           <div class="confirm-status confirm-status--bad">
             <div>
-              <div class="confirm-status__title">Overwrite existing verification?</div>
+              <div class="confirm-status__title">Replace existing value?</div>
               <div class="confirm-status__subtitle">
-                {{ overwritePaths.length }} field(s) were verified with a different credential.
+                Check this is the right person before overwriting.
               </div>
             </div>
           </div>
+          <ul class="confirm-diff">
+            <li v-for="c in overwriteConflicts" :key="c.path" class="confirm-diff__row">
+              <div class="confirm-diff__label">
+                {{ c.label || c.path }}
+                <span class="confirm-diff__kind">{{ c.kind === 'manual' ? 'typed in' : 'other credential' }}</span>
+              </div>
+              <div class="confirm-diff__values">
+                <span class="confirm-diff__old">{{ fmtValue(c.oldValue) }}</span>
+                <span class="confirm-diff__arrow">→</span>
+                <span class="confirm-diff__new">{{ fmtValue(c.newValue) }}</span>
+              </div>
+            </li>
+          </ul>
           <div class="confirm-actions">
             <button class="back-link" type="button" @click="rescan">Cancel</button>
-            <button class="scan-button" type="button" @click="commit(true)">Overwrite</button>
+            <button class="scan-button" type="button" @click="commit(true)">Replace</button>
           </div>
         </div>
 
@@ -195,6 +233,21 @@ watch(
               <div class="confirm-status__subtitle">Signature checked against a trusted issuer.</div>
             </div>
           </div>
+
+          <!-- Prominent claim value for eyeball check against the person. -->
+          <div v-if="!targetHasNoValue" class="claim-preview">
+            <div class="claim-preview__label">{{ headerTitle }}</div>
+            <div class="claim-preview__value">{{ pendingClaimValue }}</div>
+          </div>
+          <div v-else class="confirm-status confirm-status--warn">
+            <div>
+              <div class="confirm-status__title">No value for this field</div>
+              <div class="confirm-status__subtitle">
+                This credential is valid but carries no value for “{{ headerTitle }}”.
+              </div>
+            </div>
+          </div>
+
           <dl class="confirm-meta">
             <div class="confirm-meta__row">
               <dt>Issuer</dt>
@@ -370,6 +423,90 @@ watch(
 .confirm-status--bad {
   background: rgba(220, 38, 38, 0.08);
   color: #b91c1c;
+}
+
+.confirm-status--warn {
+  background: rgba(245, 158, 11, 0.1);
+  color: #b45309;
+}
+
+.claim-preview {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 14px;
+  padding: 1rem 1.25rem;
+  text-align: center;
+}
+
+.claim-preview__label {
+  font-size: 0.8rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.25rem;
+}
+
+.claim-preview__value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #111827;
+  word-break: break-word;
+}
+
+.confirm-diff {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.confirm-diff__row {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  padding: 0.75rem 0.875rem;
+}
+
+.confirm-diff__label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #374151;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.confirm-diff__kind {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.confirm-diff__values {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.375rem;
+  font-size: 0.95rem;
+}
+
+.confirm-diff__old {
+  color: #b91c1c;
+  text-decoration: line-through;
+  word-break: break-word;
+}
+
+.confirm-diff__arrow {
+  color: #9ca3af;
+}
+
+.confirm-diff__new {
+  color: #047857;
+  font-weight: 600;
+  word-break: break-word;
 }
 
 .confirm-status__title {

@@ -25,11 +25,17 @@ import {
 } from '../useInjiVerification'
 import type { VerifiedVc } from '@/services/injiVcService'
 
-function makeComponent(path: string, template: string, claimPath: string, initial: unknown = ''): InjiFormComponent {
+function makeComponent(
+  path: string,
+  template: string,
+  claimPath: string,
+  initial: unknown = '',
+  label?: string
+): InjiFormComponent {
   let value: unknown = initial
   return {
     path,
-    component: { properties: { injiTemplate: template, injiClaimPath: claimPath } },
+    component: { label: label ?? path, properties: { injiTemplate: template, injiClaimPath: claimPath } },
     getValue: () => value,
     setValue: (v: unknown) => {
       value = v
@@ -39,7 +45,10 @@ function makeComponent(path: string, template: string, claimPath: string, initia
 }
 
 function makeRoot(components: InjiFormComponent[]): InjiFormRoot {
-  return { everyComponent: (cb) => components.forEach(cb) }
+  return {
+    everyComponent: (cb) => components.forEach(cb),
+    getComponent: (path) => components.find((c) => (c.path ?? c.key) === path)
+  }
 }
 
 function makeVc(digest: string, claims: Record<string, unknown>): VerifiedVc {
@@ -137,5 +146,83 @@ describe('useInjiVerification', () => {
     expect(confirmed.filled).toEqual(['dob'])
     expect(dob.getValue!()).toBe('1985-01-01')
     expect(session.getFieldVerification('dob')?.vcDigest).toBe('dig-2')
+  })
+
+  it('protects a manual value in the tapped field (requires confirm, then overwrites)', () => {
+    const session = useInjiVerification()
+    // Operator already typed a value into the tapped field — NOT from a VC.
+    const dob = makeComponent('dob', 'birth-cert-v1', '$.credentialSubject.birthDate', '2000-12-31', 'Date of Birth')
+    const root = makeRoot([dob])
+
+    void session.requestScan({ fieldPath: 'dob', templateId: 'birth-cert-v1', claimPath: '$.credentialSubject.birthDate', formRoot: root })
+    const gated = session.completeScan(makeVc('dig-1', CLAIMS))
+
+    expect(gated.filled).toEqual([])
+    expect(gated.needsOverwriteConfirm).toEqual(['dob'])
+    // Manual value untouched until confirmed.
+    expect(dob.getValue!()).toBe('2000-12-31')
+    // Conflict carries a value diff for the overlay.
+    const conflict = gated.conflicts?.find((c) => c.path === 'dob')
+    expect(conflict).toBeDefined()
+    expect(conflict!.kind).toBe('manual')
+    expect(conflict!.oldValue).toBe('2000-12-31')
+    expect(conflict!.newValue).toBe('1990-05-17')
+    expect(conflict!.label).toBe('Date of Birth')
+
+    const confirmed = session.completeScan(makeVc('dig-1', CLAIMS), { overwriteConfirmed: true })
+    expect(confirmed.filled).toEqual(['dob'])
+    expect(dob.getValue!()).toBe('1990-05-17')
+  })
+
+  it('does not gate when the tapped manual value equals the incoming claim', () => {
+    const session = useInjiVerification()
+    const dob = makeComponent('dob', 'birth-cert-v1', '$.credentialSubject.birthDate', '1990-05-17')
+    const root = makeRoot([dob])
+    void session.requestScan({ fieldPath: 'dob', templateId: 'birth-cert-v1', claimPath: '$.credentialSubject.birthDate', formRoot: root })
+    const res = session.completeScan(makeVc('dig-1', CLAIMS))
+    expect(res.needsOverwriteConfirm).toBeUndefined()
+    expect(res.filled).toEqual(['dob'])
+  })
+
+  it('reports fields whose claim path does not resolve as noValue', () => {
+    const session = useInjiVerification()
+    const dob = makeComponent('dob', 'birth-cert-v1', '$.credentialSubject.birthDate')
+    const ssn = makeComponent('ssn', 'birth-cert-v1', '$.credentialSubject.ssn')
+    const root = makeRoot([dob, ssn])
+    void session.requestScan({ fieldPath: 'ssn', templateId: 'birth-cert-v1', claimPath: '$.credentialSubject.ssn', formRoot: root })
+    const res = session.completeScan(makeVc('dig-1', CLAIMS))
+    expect(res.filled).toEqual(['dob'])
+    expect(res.noValue).toEqual(['ssn'])
+  })
+
+  it('removeVerification clears the value + provenance and drops an orphaned credential', () => {
+    const session = useInjiVerification()
+    const dob = makeComponent('dob', 'birth-cert-v1', '$.credentialSubject.birthDate')
+    const root = makeRoot([dob])
+    void session.requestScan({ fieldPath: 'dob', templateId: 'birth-cert-v1', claimPath: '$.credentialSubject.birthDate', formRoot: root })
+    session.completeScan(makeVc('dig-1', CLAIMS))
+    expect(dob.getValue!()).toBe('1990-05-17')
+    expect(Object.keys(session.scannedVcs)).toEqual(['dig-1'])
+
+    session.removeVerification('dob', root)
+    expect(session.getFieldVerification('dob')).toBeUndefined()
+    expect(dob.getValue!()).toBe('')
+    // Credential dropped — no field references it anymore.
+    expect(Object.keys(session.scannedVcs)).toEqual([])
+  })
+
+  it('removeVerification keeps a shared credential while another field still uses it', () => {
+    const session = useInjiVerification()
+    const dob = makeComponent('dob', 'birth-cert-v1', '$.credentialSubject.birthDate')
+    const nat = makeComponent('nationality', 'birth-cert-v1', '$.credentialSubject.nationality')
+    const root = makeRoot([dob, nat])
+    void session.requestScan({ fieldPath: 'dob', templateId: 'birth-cert-v1', claimPath: '$.credentialSubject.birthDate', formRoot: root })
+    session.completeScan(makeVc('dig-1', CLAIMS))
+
+    session.removeVerification('dob', root)
+    expect(session.getFieldVerification('dob')).toBeUndefined()
+    // nationality still verified by dig-1 → credential retained.
+    expect(session.getFieldVerification('nationality')?.vcDigest).toBe('dig-1')
+    expect(Object.keys(session.scannedVcs)).toEqual(['dig-1'])
   })
 })

@@ -41,6 +41,7 @@ import {
   applyInjiVerifiableDecoration,
   __resetInjiVerifiableDecorationForTest
 } from '../injiVerifiable'
+import { useInjiVerification } from '@/composables/useInjiVerification'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const FakeField: any = (Formio as any).Components.components.field
@@ -54,8 +55,18 @@ function makeField(props?: Record<string, string>) {
   return f
 }
 
+function seedVerified(fieldPath: string): void {
+  useInjiVerification().hydrate({
+    _injiCredentials: { 'dig-1': { rawVc: 'raw', format: 'jwt-vc', issuerDid: 'did:web:x' } },
+    _injiVerifications: {
+      [fieldPath]: { vcDigest: 'dig-1', template: 'birth-cert-v1', claimPath: '$.x', verifiedAt: '2024-01-01T00:00:00Z' }
+    }
+  })
+}
+
 describe('applyInjiVerifiableDecoration', () => {
   beforeEach(() => {
+    useInjiVerification().reset()
     __resetInjiVerifiableDecorationForTest()
     applyInjiVerifiableDecoration()
   })
@@ -96,5 +107,37 @@ describe('applyInjiVerifiableDecoration', () => {
     const el = document.createElement('div')
     const ret = f.attach(el)
     expect(ret[0]).toBe('original-ref')
+  })
+
+  it('locks the input and shows a Remove button on a verified field', () => {
+    seedVerified('dob')
+    const f = makeField({ injiTemplate: 'birth-cert-v1', injiClaimPath: '$.x' })
+    const el = document.createElement('div')
+    el.innerHTML = '<input type="text" />'
+    f.attach(el)
+
+    expect(el.querySelector('.inji-verifiable__badge--ok')).not.toBeNull()
+    expect(el.querySelector('.inji-verifiable__btn--remove')?.textContent).toBe('Remove verification')
+    expect(el.querySelector('input')?.disabled).toBe(true)
+  })
+
+  it('Remove verification clears state and re-enables the field on redraw', () => {
+    seedVerified('dob')
+    const f = makeField({ injiTemplate: 'birth-cert-v1', injiClaimPath: '$.x' })
+    f.redraw = vi.fn()
+    const el = document.createElement('div')
+    el.innerHTML = '<input type="text" />'
+    f.attach(el)
+
+    ;(el.querySelector('.inji-verifiable__btn--remove') as HTMLButtonElement).click()
+    expect(useInjiVerification().getFieldVerification('dob')).toBeUndefined()
+    expect(f.redraw).toHaveBeenCalled()
+
+    // Re-attach (the redraw) on a fresh element → now editable, no remove button.
+    const el2 = document.createElement('div')
+    el2.innerHTML = '<input type="text" />'
+    f.attach(el2)
+    expect(el2.querySelector('.inji-verifiable__btn--remove')).toBeNull()
+    expect(el2.querySelector('input')?.disabled).toBe(false)
   })
 })

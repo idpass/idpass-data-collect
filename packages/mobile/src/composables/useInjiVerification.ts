@@ -38,7 +38,7 @@ import { extractClaim, type VerifiedVc } from '@/services/injiVcService'
 export interface InjiFormComponent {
   path?: string
   key?: string
-  component?: { properties?: Record<string, string> }
+  component?: { label?: string; properties?: Record<string, string> }
   getValue?: () => unknown
   setValue?: (value: unknown) => void
   redraw?: () => void
@@ -81,11 +81,26 @@ export interface InjiSerializedProvenance {
   _injiVerifications: Record<string, InjiVerificationRecord>
 }
 
+/** A field whose existing value (manual or VC-filled) would be replaced. */
+export interface InjiOverwriteConflict {
+  path: string
+  label?: string
+  claimPath: string
+  oldValue: unknown
+  newValue: unknown
+  /** `vc` = previously verified by a different credential; `manual` = operator-typed. */
+  kind: 'vc' | 'manual'
+}
+
 export interface CompleteScanResult {
   /** Fields whose value was filled (paths). */
   filled: string[]
-  /** A different VC would overwrite these already-verified fields. */
+  /** Paths needing overwrite confirmation (back-compat flat list). */
   needsOverwriteConfirm?: string[]
+  /** Rich per-field diff for the overwrite-confirm UI. */
+  conflicts?: InjiOverwriteConflict[]
+  /** Same-template fields whose claim path resolved nothing (right VC, no value). */
+  noValue?: string[]
 }
 
 // ── Overlay-facing reactive state ───────────────────────────────────────────
@@ -149,19 +164,36 @@ function completeScan(vc: VerifiedVc, opts: { overwriteConfirmed?: boolean } = {
     if (tpl && tpl === template) candidates.push(c)
   })
 
-  // Overwrite gate: an already-verified field bound to a DIFFERENT VC.
-  const conflicts: string[] = []
+  // Overwrite gate. Two conflict kinds require operator confirmation:
+  //  - vc:     an already-verified field bound to a DIFFERENT credential.
+  //  - manual: the tapped field holds an operator-typed value that differs
+  //            from the incoming claim (a valid VC for the wrong beneficiary
+  //            can't be auto-detected — the human confirm is the safeguard).
+  // Fan-out fields with a manual value are skipped (not overwritten), so they
+  // never raise a manual conflict.
+  const conflicts: InjiOverwriteConflict[] = []
   for (const c of candidates) {
     const path = fieldPathOf(c)
+    const claimPath = c.component?.properties?.injiClaimPath
+    if (!path || !claimPath) continue
+    const newValue = extractClaim(vc.claims, claimPath)
+    if (newValue === undefined) continue
     const existing = verifications[path]
-    if (existing && existing.vcDigest !== digest) conflicts.push(path)
+    const current = c.getValue?.()
+    const isTarget = path === target.fieldPath
+    if (existing && existing.vcDigest !== digest) {
+      conflicts.push({ path, label: c.component?.label, claimPath, oldValue: current, newValue, kind: 'vc' })
+    } else if (!existing && isTarget && !isEmptyValue(current) && current !== newValue) {
+      conflicts.push({ path, label: c.component?.label, claimPath, oldValue: current, newValue, kind: 'manual' })
+    }
   }
   if (conflicts.length && !opts.overwriteConfirmed) {
-    return { filled: [], needsOverwriteConfirm: conflicts }
+    return { filled: [], needsOverwriteConfirm: conflicts.map((c) => c.path), conflicts }
   }
 
   const verifiedAt = new Date().toISOString()
   const filled: string[] = []
+  const noValue: string[] = []
 
   for (const c of candidates) {
     const path = fieldPathOf(c)
@@ -169,7 +201,11 @@ function completeScan(vc: VerifiedVc, opts: { overwriteConfirmed?: boolean } = {
     if (!path || !claimPath) continue
 
     const value = extractClaim(vc.claims, claimPath)
-    if (value === undefined) continue // CLAIM_NOT_FOUND for this field — leave empty
+    if (value === undefined) {
+      // Right credential, but no value for this field — surface, don't fill.
+      noValue.push(path)
+      continue
+    }
 
     const isTarget = path === target.fieldPath
     const current = c.getValue?.()
@@ -211,7 +247,27 @@ function completeScan(vc: VerifiedVc, opts: { overwriteConfirmed?: boolean } = {
   isOpen.value = false
   currentTarget.value = null
 
-  return { filled }
+  return { filled, ...(noValue.length ? { noValue } : {}) }
+}
+
+/**
+ * Undo a field's verification: drop its provenance entry, clear the field value
+ * (returning it to editable), and drop the credential record when no remaining
+ * field references it. Used by the field "Remove verification" affordance to
+ * correct a mistaken scan.
+ */
+function removeVerification(fieldPath: string, formRoot?: InjiFormRoot): void {
+  const rec = verifications[fieldPath]
+  if (!rec) return
+  delete verifications[fieldPath]
+
+  const comp = formRoot?.getComponent?.(fieldPath)
+  comp?.setValue?.('')
+  comp?.redraw?.()
+
+  // Drop the credential only when nothing else still references its digest.
+  const stillUsed = Object.values(verifications).some((v) => v.vcDigest === rec.vcDigest)
+  if (!stillUsed) delete scannedVcs[rec.vcDigest]
 }
 
 function cancelScan(): void {
@@ -277,6 +333,7 @@ export function useInjiVerification() {
     requestScan,
     completeScan,
     cancelScan,
+    removeVerification,
     getFieldVerification,
     serializeForSave,
     hydrate,
