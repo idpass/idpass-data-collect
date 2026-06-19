@@ -180,17 +180,18 @@ export function createSelfServiceRouter(
 
       const otpCode = await otpStore.createOtp(identifier, tenantId, entityGuid);
 
-      // In production, send the code via SMS or email here.
-      // For development/testing, the plaintext code is included in the
-      // response so it can be displayed in the UI without an SMS gateway.
+      // The OTP is delivered out of band via the SMS or email gateway. The
+      // plaintext code is returned in the response body only when
+      // OTP_EXPOSE_DEV_CODE is explicitly set, enabling local development
+      // without a gateway. It is omitted from the response in every other case.
       log.info({ tenantId, codeId: otpCode.id }, "OTP code generated");
 
-      const isProduction = process.env.NODE_ENV === "production";
+      const exposeDevCode = process.env.OTP_EXPOSE_DEV_CODE === "true";
 
       res.json({
         success: true,
         expiresIn: 300, // 5 minutes in seconds
-        ...(isProduction ? {} : { devCode: otpCode.code }),
+        ...(exposeDevCode ? { devCode: otpCode.code } : {}),
       });
     }),
   );
