@@ -34,31 +34,36 @@ export interface PublicArtifactPaths {
   qrPath: string;
 }
 
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
 export function resolvePublicBaseUrl(req: Request): string {
-  // Allow explicit configuration via environment variable (recommended for production)
+  // Trusted, explicit configuration — required for any non-local deployment.
   const configured = process.env.PUBLIC_BASE_URL?.trim();
   if (configured) {
     return configured.replace(/\/+$/, "");
   }
 
-  // Check for Railway's public domain (when behind Railway's proxy)
-  const railwayPublicDomain = process.env.RAILWAY_PUBLIC_DOMAIN;
+  // Railway's public domain (when behind Railway's proxy). Railway always uses
+  // HTTPS for public domains.
+  const railwayPublicDomain = process.env.RAILWAY_PUBLIC_DOMAIN?.trim();
   if (railwayPublicDomain) {
-    // Railway always uses HTTPS for public domains
-    return `https://${railwayPublicDomain}`;
+    return `https://${railwayPublicDomain.replace(/\/+$/, "")}`;
   }
 
-  // Check for X-Forwarded-Host header (when behind a reverse proxy)
-  const forwardedHost = req.get("x-forwarded-host");
-  const forwardedProto = req.get("x-forwarded-proto") || req.protocol;
-  if (forwardedHost) {
-    // Don't include port for standard HTTP/HTTPS (80/443)
-    return `${forwardedProto}://${forwardedHost}`;
-  }
-
-  // Fallback: construct from request (for local development)
-  const protocol = req.protocol;
+  // No trusted base URL is configured. This value is persisted into the public
+  // artifact (syncServerUrl + QR target), so it must NOT be derived from
+  // client-controllable host headers (Host / X-Forwarded-Host): an attacker who
+  // can reach an artifact endpoint could otherwise repoint onboarding at their
+  // own sync server. Accept the request host only when it is loopback (local
+  // development); for anything else, fail closed and require explicit config.
   const hostname = req.hostname;
+  if (!LOOPBACK_HOSTS.has(hostname)) {
+    throw new Error(
+      "Cannot resolve a trusted public base URL. Set PUBLIC_BASE_URL (or RAILWAY_PUBLIC_DOMAIN) for non-local deployments.",
+    );
+  }
+
+  const protocol = req.protocol;
   const port = req.socket.localPort;
   const isDefaultPort = (protocol === "http" && port === 80) || (protocol === "https" && port === 443);
   return `${protocol}://${hostname}${isDefaultPort ? "" : `:${port}`}`;
