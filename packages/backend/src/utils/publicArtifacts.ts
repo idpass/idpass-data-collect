@@ -91,6 +91,15 @@ export async function generatePublicArtifacts(baseUrl: string, appConfig: AppCon
 
   const publicConfig = cloneDeep(appConfig);
   set(publicConfig, "syncServerUrl", baseUrl);
+  // The public artifact is served unauthenticated for QR onboarding. entityData
+  // holds seeded beneficiary records (names, national IDs, dates of birth) which
+  // would otherwise be publicly downloadable — and, when self-service ID auth is
+  // enabled, those values are the login factors. Clients receive entities via
+  // sync, not from the onboarding config, and the server seeds entityData from
+  // its own stored config, so emptying it here removes the disclosure without
+  // affecting onboarding or server-side seeding. The field is kept (as an empty
+  // array) because the mobile tenant-app schema requires it.
+  set(publicConfig, "entityData", []);
   const publicJson = JSON.stringify(publicConfig, null, 2);
 
   await fs.writeFile(jsonPath, publicJson);
