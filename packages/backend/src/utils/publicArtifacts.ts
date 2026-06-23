@@ -70,6 +70,62 @@ function assertValidArtifactId(artifactId: string) {
   }
 }
 
+/**
+ * Matches field names that hold credentials/secrets. Used to strip secret
+ * values out of authConfigs.fields, which is a free-form bag that also carries
+ * legitimately-public OIDC client params (authority, clientId, scope, …) that
+ * client auth adapters need, so we deny by name rather than dropping the bag.
+ */
+const SECRET_FIELD_PATTERN = /(secret|password|passwd|token|api[_-]?key|private[_-]?key|credential)/i;
+
+function redactSecretFields(fields: Record<string, string>): Record<string, string> {
+  const safe: Record<string, string> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (!SECRET_FIELD_PATTERN.test(key)) {
+      safe[key] = value;
+    }
+  }
+  return safe;
+}
+
+/**
+ * Produces a copy of an AppConfig safe to publish in an unauthenticated public
+ * artifact (downloadable JSON / QR onboarding payload).
+ *
+ * Public artifacts are served without authentication, so any secret in the
+ * config would be disclosed to anyone with the artifact/QR URL. This strips:
+ *  - externalSync.adapterConfig and externalSync.extraFields (OAuth client
+ *    secrets, adapter passwords, OpenFn apiKey/callbackToken, OpenSPP
+ *    username/password) and the server-side registry url. Only the fields a
+ *    client legitimately needs are kept (type, auth, fieldMappings).
+ *  - authConfigs[].fields whose name looks like a credential (client_secret,
+ *    JWT secret, …), keeping public OIDC client params.
+ *
+ * The returned config is a deep clone; the caller's config is never mutated, so
+ * the server keeps using the real secrets for external sync.
+ */
+export function redactConfigForPublicArtifact(appConfig: AppConfig): AppConfig {
+  const redacted = cloneDeep(appConfig);
+
+  if (redacted.externalSync) {
+    const { type, auth, fieldMappings } = redacted.externalSync;
+    redacted.externalSync = {
+      type,
+      ...(auth !== undefined ? { auth } : {}),
+      ...(fieldMappings !== undefined ? { fieldMappings } : {}),
+    } as AppConfig["externalSync"];
+  }
+
+  if (redacted.authConfigs) {
+    redacted.authConfigs = redacted.authConfigs.map((c) => ({
+      type: c.type,
+      fields: redactSecretFields(c.fields ?? {}),
+    }));
+  }
+
+  return redacted;
+}
+
 export function getPublicArtifactPaths(artifactId: string): PublicArtifactPaths {
   assertValidArtifactId(artifactId);
   return {
@@ -89,7 +145,7 @@ export async function generatePublicArtifacts(baseUrl: string, appConfig: AppCon
   await fs.mkdir(PUBLIC_FOLDER, { recursive: true });
   const { jsonPath, qrPath } = getPublicArtifactPaths(appConfig.artifactId);
 
-  const publicConfig = cloneDeep(appConfig);
+  const publicConfig = redactConfigForPublicArtifact(appConfig);
   set(publicConfig, "syncServerUrl", baseUrl);
   const publicJson = JSON.stringify(publicConfig, null, 2);
 
