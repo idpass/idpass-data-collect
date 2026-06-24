@@ -20,7 +20,13 @@ describeIfPostgres("Self-Service Routes", () => {
 
   beforeAll(async () => {
     process.env.JWT_SECRET = JWT_SECRET;
+    // Opt in to returning the plaintext OTP so these tests can read it back.
+    process.env.OTP_EXPOSE_DEV_CODE = "true";
     await ensureDatabaseExists(postgresUrl);
+  });
+
+  afterAll(() => {
+    delete process.env.OTP_EXPOSE_DEV_CODE;
   });
 
   beforeEach(async () => {
@@ -59,9 +65,24 @@ describeIfPostgres("Self-Service Routes", () => {
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
       expect(response.body.expiresIn).toBe(300);
-      // In non-production mode, devCode is included for testing
+      // devCode is returned because OTP_EXPOSE_DEV_CODE is enabled for this suite.
       expect(response.body.devCode).toBeDefined();
       expect(response.body.devCode).toMatch(/^\d{6}$/);
+    });
+
+    it("should NOT return devCode when OTP_EXPOSE_DEV_CODE is not enabled", async () => {
+      delete process.env.OTP_EXPOSE_DEV_CODE;
+      try {
+        const response = await request(app)
+          .post("/api/auth/otp/request")
+          .send({ identifier: "+1234567890", tenantId: "tenant-1" });
+
+        expect(response.status).toBe(200);
+        expect(response.body.success).toBe(true);
+        expect(response.body.devCode).toBeUndefined();
+      } finally {
+        process.env.OTP_EXPOSE_DEV_CODE = "true";
+      }
     });
 
     it("should return 400 when identifier is missing", async () => {
