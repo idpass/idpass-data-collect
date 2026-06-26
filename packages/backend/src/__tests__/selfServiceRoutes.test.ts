@@ -39,11 +39,17 @@ describeIfPostgres("Self-Service Routes", () => {
       createAppInstance: jest.fn(),
       updateAppInstance: jest.fn(),
       loadEntityData: jest.fn(),
-      getAppInstance: jest.fn().mockResolvedValue(null),
+      // Self-service is gated behind selfService.enabled (default OFF). These
+      // suites exercise the enabled feature, so the default instance opts in.
+      getAppInstance: jest.fn().mockResolvedValue({
+        configId: "tenant-1",
+        config: { selfService: { enabled: true } },
+        edm: { searchEntities: jest.fn().mockResolvedValue([]) },
+      }),
       clearAppInstance: jest.fn(),
       clearStore: jest.fn(),
       closeConnection: jest.fn(),
-    } as jest.Mocked<AppInstanceStore>;
+    } as unknown as jest.Mocked<AppInstanceStore>;
 
     app = express();
     app.use(bodyParser.json());
@@ -259,8 +265,9 @@ describeIfPostgres("Self-Service Routes", () => {
 
       mockAppInstanceStore.getAppInstance.mockResolvedValue({
         configId: "tenant-1",
+        config: { selfService: { enabled: true } },
         edm: mockEdm as never,
-      });
+      } as never);
 
       const response = await request(app)
         .post("/api/auth/id/verify")
@@ -287,8 +294,9 @@ describeIfPostgres("Self-Service Routes", () => {
 
       mockAppInstanceStore.getAppInstance.mockResolvedValue({
         configId: "tenant-1",
+        config: { selfService: { enabled: true } },
         edm: mockEdm as never,
-      });
+      } as never);
 
       const response = await request(app)
         .post("/api/auth/id/verify")
@@ -309,7 +317,7 @@ describeIfPostgres("Self-Service Routes", () => {
       expect(response.status).toBe(400);
     });
 
-    it("should return 401 with uniform error when tenant is not found", async () => {
+    it("should return 403 when the tenant is not found (self-service gate)", async () => {
       mockAppInstanceStore.getAppInstance.mockResolvedValue(null);
 
       const response = await request(app)
@@ -320,8 +328,8 @@ describeIfPostgres("Self-Service Routes", () => {
           tenantId: "nonexistent-tenant",
         });
 
-      expect(response.status).toBe(401);
-      expect(response.body.error).toBe("Verification failed");
+      expect(response.status).toBe(403);
+      expect(response.body.error).toBe("Self-service is not enabled for this tenant");
     });
   });
 
