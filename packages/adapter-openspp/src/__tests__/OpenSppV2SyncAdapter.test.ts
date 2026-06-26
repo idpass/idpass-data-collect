@@ -253,6 +253,61 @@ describe("OpenSppV2SyncAdapter", () => {
       expect(mockV2ClientImplementation.createIndividual).not.toHaveBeenCalled();
     });
 
+    it("does not discover/patch a record via a client-supplied identifier (H1/H2/H3)", async () => {
+      // Entity carries a server-set externalId that no longer resolves on
+      // OpenSPP, plus an attacker-controlled national_id pointing at a victim.
+      const entityPair: EntityPair = {
+        guid: "attacker-1",
+        initial: {
+          id: "e-att", guid: "attacker-1", type: EntityType.Individual, version: 1,
+          externalId: "stale-ext",
+          data: { entityName: "individual", firstName: "Mal", lastName: "Lory", externalId: "stale-ext" },
+          lastUpdated: "2024-01-01T12:00:00.000Z",
+        },
+        modified: {
+          id: "e-att", guid: "attacker-1", type: EntityType.Individual, version: 2,
+          externalId: "stale-ext",
+          data: {
+            entityName: "individual", firstName: "Mal", lastName: "Lory", externalId: "stale-ext",
+            national_id: "VICTIM-NID", uin: "VICTIM-NID",
+          },
+          lastUpdated: "2024-01-02T12:00:00.000Z",
+        },
+      };
+
+      const mockEntityStore = {
+        getAllEntities: jest.fn().mockResolvedValue([entityPair]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([entityPair]),
+        getEntity: jest.fn().mockResolvedValue(entityPair),
+        getEntityByExternalId: jest.fn().mockResolvedValue(entityPair),
+        saveEntity: jest.fn(),
+      };
+      eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
+
+      // The victim resolves ONLY if queried by the client-supplied identifier.
+      // The stale externalId resolves to nothing.
+      mockV2ClientImplementation.getIndividual.mockImplementation(async (id: string) => {
+        if (id.includes("VICTIM-NID")) {
+          return {
+            type: "Individual",
+            identifier: [{ system: "urn:openspp:vocab:id-type#national_id", value: "VICTIM-NID" }],
+            meta: { versionId: "victim-version" },
+          } as IndividualResource;
+        }
+        return null;
+      });
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      await adapter.pushData();
+
+      // Discovery must never probe the victim's client-supplied identifier...
+      const queried = mockV2ClientImplementation.getIndividual.mock.calls.map((c) => c[0] as string);
+      expect(queried.some((id) => id.includes("VICTIM-NID"))).toBe(false);
+      // ...so the victim is never PATCHed; the entity is POSTed as new instead.
+      expect(mockV2ClientImplementation.patchIndividual).not.toHaveBeenCalled();
+      expect(mockV2ClientImplementation.createIndividual).toHaveBeenCalled();
+    });
+
     it("handles empty entity list", async () => {
       const mockEntityStore = {
         getAllEntities: jest.fn().mockResolvedValue([]),

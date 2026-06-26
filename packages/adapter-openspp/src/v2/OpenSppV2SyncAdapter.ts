@@ -824,57 +824,28 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
    * doesn't kill the discovery sweep.
    */
   private async tryDiscoverIndividual(
-    data: Record<string, unknown>,
+    _data: Record<string, unknown>,
     storedExternalId?: string,
   ): Promise<{ resource: IndividualResource; identifier: string } | null> {
-    const seen = new Set<string>();
-    const candidates: Array<{ system: string; value: string }> = [];
-
-    const ensureNamespace = (code: string) =>
-      code.startsWith(this.identifierNamespace) ? code : `${this.identifierNamespace}${code}`;
-
-    const tryAdd = (code: string, value: unknown) => {
-      if (typeof value !== "string" || value.length === 0) return;
-      const system = ensureNamespace(code);
-      const key = `${system}|${value}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      candidates.push({ system, value });
-    };
-
-    // Walk common identity fields on the entity. Order matters: cheaper /
-    // more authoritative identifiers first so the first hit short-circuits.
-    // OpenSPP id-type vocab codes are case-sensitive on the validator side
-    // but registries differ on casing convention (UIN vs uin, NATIONAL_ID vs
-    // national_id) — probe both casings so we don't miss the partner.
-    const bothCasings = (code: string, value: unknown) => {
-      tryAdd(code.toUpperCase(), value);
-      tryAdd(code.toLowerCase(), value);
-    };
-    bothCasings("UIN", data.uin);
-    bothCasings("NATIONAL_ID", data.national_id);
-    bothCasings("REG_ID", data.reg_id);
-    bothCasings("REGISTRATION_ID", data.registration_id);
-    bothCasings("PASSPORT_ID", data.passport_id);
-    // The stored externalId is a single opaque string but the operator may
-    // have registered it under any id-type on OpenSPP (depends on how the
-    // upstream registry was bootstrapped). Probe every known system with it
-    // — the first GET hit wins.
-    if (storedExternalId) {
-      for (const code of ["UIN", "NATIONAL_ID", "REG_ID", "REGISTRATION_ID", "PASSPORT_ID", "HOUSEHOLD_ID"]) {
-        bothCasings(code, storedExternalId);
-      }
-      tryAdd(this.identifierType, storedExternalId);
+    // Discovery is restricted to the server-resolved externalId probed under
+    // the tenant's configured identifier type. Probing client-supplied identity
+    // fields (uin/national_id/...), alternate casings, or other id-type
+    // namespaces would let a client name a victim's OpenSPP record and have it
+    // rebound + overwritten with the server's privileged credentials
+    // (findings H1/H2/H3). externalId itself is server-managed: clients can no
+    // longer set it (stripped at the /api/sync/push boundary).
+    if (typeof storedExternalId !== "string" || storedExternalId.length === 0) {
+      return null;
     }
-
-    for (const c of candidates) {
-      const id = this.getClient().formatIdentifier(c.system, c.value);
-      try {
-        const found = await this.getClient().getIndividual(id);
-        if (found) return { resource: found, identifier: id };
-      } catch {
-        // ignore — try next candidate
-      }
+    const system = this.identifierType.startsWith(this.identifierNamespace)
+      ? this.identifierType
+      : `${this.identifierNamespace}${this.identifierType}`;
+    const id = this.getClient().formatIdentifier(system, storedExternalId);
+    try {
+      const found = await this.getClient().getIndividual(id);
+      if (found) return { resource: found, identifier: id };
+    } catch {
+      // ignore — discovery is best-effort
     }
     return null;
   }
@@ -1000,49 +971,24 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
    * GET each candidate, return the first hit.
    */
   private async tryDiscoverGroup(
-    data: Record<string, unknown>,
+    _data: Record<string, unknown>,
     storedExternalId?: string,
   ): Promise<{ resource: GroupResource; identifier: string } | null> {
-    const seen = new Set<string>();
-    const candidates: Array<{ system: string; value: string }> = [];
-
-    const ensureNamespace = (code: string) =>
-      code.startsWith(this.identifierNamespace) ? code : `${this.identifierNamespace}${code}`;
-
-    const tryAdd = (code: string, value: unknown) => {
-      if (typeof value !== "string" || value.length === 0) return;
-      const system = ensureNamespace(code);
-      const key = `${system}|${value}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      candidates.push({ system, value });
-    };
-
-    // Probe both casings — OpenSPP vocab is case-sensitive on validate.
-    const bothCasings = (code: string, value: unknown) => {
-      tryAdd(code.toUpperCase(), value);
-      tryAdd(code.toLowerCase(), value);
-    };
-    bothCasings("HOUSEHOLD_ID", data.household_id);
-    bothCasings("REG_ID", data.reg_id);
-    bothCasings("REGISTRATION_ID", data.registration_id);
-    // Same opaque-externalId logic as the individual sweep — probe each
-    // known group system with the stored externalId.
-    if (storedExternalId) {
-      for (const code of ["HOUSEHOLD_ID", "REG_ID", "REGISTRATION_ID"]) {
-        bothCasings(code, storedExternalId);
-      }
-      tryAdd(this.groupIdentifierType, storedExternalId);
+    // Restricted to the server-resolved externalId under the configured group
+    // identifier type — see tryDiscoverIndividual. Client identity fields,
+    // alternate casings and cross-namespace probing removed (H1/H2/H3).
+    if (typeof storedExternalId !== "string" || storedExternalId.length === 0) {
+      return null;
     }
-
-    for (const c of candidates) {
-      const id = this.getClient().formatIdentifier(c.system, c.value);
-      try {
-        const found = await this.getClient().getGroup(id);
-        if (found) return { resource: found, identifier: id };
-      } catch {
-        // ignore — try next
-      }
+    const system = this.groupIdentifierType.startsWith(this.identifierNamespace)
+      ? this.groupIdentifierType
+      : `${this.identifierNamespace}${this.groupIdentifierType}`;
+    const id = this.getClient().formatIdentifier(system, storedExternalId);
+    try {
+      const found = await this.getClient().getGroup(id);
+      if (found) return { resource: found, identifier: id };
+    } catch {
+      // ignore — discovery is best-effort
     }
     return null;
   }
