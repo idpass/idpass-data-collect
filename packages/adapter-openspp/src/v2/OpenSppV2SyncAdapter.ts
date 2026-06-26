@@ -1424,7 +1424,11 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
    * Checks for an `identifierType` field in the form data, falling back to `national_id`.
    */
   private resolveIdentifierSystem(data: Record<string, unknown>, entityType: "individual" | "group" = "individual"): string {
-    const formCode = data.identifierType as string | undefined;
+    // identifierType is server-managed and must be a string. A non-string value
+    // (e.g. an object smuggled in entity data) would throw on `.startsWith`,
+    // failing every sync. Ignore anything that is not a usable string. (H22)
+    const formCode =
+      typeof data.identifierType === "string" && data.identifierType.length > 0 ? data.identifierType : undefined;
     const defaultCode = entityType === "group" ? this.groupIdentifierType : this.identifierType;
     const code = formCode || defaultCode;
     if (code.startsWith(this.identifierNamespace)) {
@@ -1663,7 +1667,8 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     userId: string;
     syncLevel: SyncLevel;
   } {
-    const identifier = resolvedIdentifier ?? this.extractIdentifier(individual);
+    const matched = this.extractMatchingId(individual);
+    const identifier = resolvedIdentifier ?? matched?.value;
     const guid = existingGuid || identifier || uuidv4();
 
     const data: Record<string, unknown> = {
@@ -1710,6 +1715,15 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
     data.externalId = identifier;
 
+    // Preserve the OpenSPP identifier system so a later push targets the same
+    // id-type instead of defaulting to system_id and overwriting a different
+    // record (H10).
+    if (matched?.system) {
+      data.identifierType = matched.system.startsWith(this.identifierNamespace)
+        ? matched.system.slice(this.identifierNamespace.length)
+        : matched.system;
+    }
+
     return {
       guid: uuidv4(),
       entityGuid: guid,
@@ -1734,7 +1748,8 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     userId: string;
     syncLevel: SyncLevel;
   } {
-    const identifier = resolvedIdentifier ?? this.extractGroupIdentifier(group);
+    const matched = this.extractMatchingId(group);
+    const identifier = resolvedIdentifier ?? matched?.value;
     const guid = existingGuid || identifier || uuidv4();
 
     const data: Record<string, unknown> = {
@@ -1751,6 +1766,14 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     }
 
     data.externalId = identifier;
+
+    // Preserve the OpenSPP identifier system so a later push targets the same
+    // id-type instead of defaulting and overwriting a different record (H10).
+    if (matched?.system) {
+      data.identifierType = matched.system.startsWith(this.identifierNamespace)
+        ? matched.system.slice(this.identifierNamespace.length)
+        : matched.system;
+    }
 
     return {
       guid: uuidv4(),
