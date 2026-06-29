@@ -55,6 +55,8 @@ const mockV2ClientImplementation = {
   })),
   updateGroup: jest.fn().mockImplementation((_: string, resource: GroupResource) => resource),
   patchGroup: jest.fn().mockImplementation(() => ({ type: "Group", identifier: [] })),
+  createChangeRequest: jest.fn().mockResolvedValue({ id: "cr-1", status: "pending" }),
+  getChangeRequest: jest.fn().mockResolvedValue(null),
 };
 
 jest.mock("../v2/OpenSppV2Client", () => {
@@ -64,6 +66,8 @@ jest.mock("../v2/OpenSppV2Client", () => {
     OpenSppV2Client: jest.fn().mockImplementation(() => mockV2ClientImplementation),
     default: jest.fn().mockImplementation(() => mockV2ClientImplementation),
     PreconditionFailedError: actual.PreconditionFailedError,
+    ConflictError: actual.ConflictError,
+    ChangeRequestRevisionNeededError: actual.ChangeRequestRevisionNeededError,
   };
 });
 
@@ -388,6 +392,44 @@ describe("OpenSppV2SyncAdapter", () => {
         expect.anything(),
         "v1",
       );
+    });
+
+    it("pushes enrolments only, without re-patching a baseline-parity entity (H4)", async () => {
+      // initial.version === modified.version (no genuine local entity edit), but
+      // the entity carries client-controllable pendingProgramEnrolments.
+      const entityPair: EntityPair = {
+        guid: "ind-enr",
+        initial: {
+          id: "e", guid: "ind-enr", type: EntityType.Individual, version: 3, externalId: "ind-enr",
+          data: { entityName: "individual", firstName: "Pat", lastName: "Lee", externalId: "ind-enr" },
+          lastUpdated: "2024-01-01T12:00:00.000Z",
+        },
+        modified: {
+          id: "e", guid: "ind-enr", type: EntityType.Individual, version: 3, externalId: "ind-enr",
+          data: {
+            entityName: "individual", firstName: "Pat", lastName: "Lee", externalId: "ind-enr",
+            pendingProgramEnrolments: [{ programId: 42 }],
+          },
+          lastUpdated: "2024-01-01T12:00:00.000Z",
+        },
+      };
+      const mockEntityStore = {
+        getAllEntities: jest.fn().mockResolvedValue([entityPair]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([entityPair]),
+        getEntity: jest.fn().mockResolvedValue(entityPair),
+        getEntityByExternalId: jest.fn().mockResolvedValue(entityPair),
+        saveEntity: jest.fn(),
+      };
+      eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      await adapter.pushData();
+
+      // The entity itself must NOT be written (no stale overwrite)...
+      expect(mockV2ClientImplementation.patchIndividual).not.toHaveBeenCalled();
+      expect(mockV2ClientImplementation.createIndividual).not.toHaveBeenCalled();
+      // ...but the enrolment CR still flows.
+      expect(mockV2ClientImplementation.createChangeRequest).toHaveBeenCalled();
     });
 
     it("handles empty entity list", async () => {

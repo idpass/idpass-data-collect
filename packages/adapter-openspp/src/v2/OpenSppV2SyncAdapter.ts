@@ -614,7 +614,10 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   // ==================== Push Logic ====================
 
   private async pushEntities(
-    entities: Array<{ modified: { guid: string; type: EntityType; externalId?: string; data: Record<string, unknown> } }>,
+    entities: Array<{
+      initial?: { version: number } | null;
+      modified: { guid: string; type: EntityType; version: number; externalId?: string; data: Record<string, unknown> };
+    }>,
     entityType: "individual" | "group",
   ): Promise<{ pushed: number; failed: number; skipped: number; errors: Array<{ guid: string; error: string; code: string }> }> {
     const failedEntities: Array<{ guid: string; error: string; code: string }> = [];
@@ -626,6 +629,17 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
         const entity = entityPair.modified;
         const externalId = this.resolveExternalId(entity);
 
+        // An entity at baseline parity (no genuine local entity edit) that was
+        // force-included only because it carries pending enrolments must push
+        // ONLY the enrolment CRs — never re-PATCH the entity, which would
+        // overwrite OpenSPP fields with stale/pull-sourced data using a fresh
+        // If-Match. pendingProgramEnrolments is user-controllable (H4).
+        const pending = entity.data?.pendingProgramEnrolments;
+        const hasPending = Array.isArray(pending) && pending.length > 0;
+        const baselineParity =
+          !!entity.externalId && !!entityPair.initial && entityPair.initial.version === entity.version;
+        const enrolmentsOnly = baselineParity && hasPending;
+
         let attempt = 0;
         let lastError: Error | null = null;
         let success = false;
@@ -633,9 +647,9 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
         while (attempt <= this.maxRetries && !success) {
           try {
             if (entityType === "individual") {
-              await this.pushIndividual(entity.guid, entity.data, externalId);
+              await this.pushIndividual(entity.guid, entity.data, externalId, enrolmentsOnly);
             } else {
-              await this.pushGroup(entity.guid, entity.data, externalId);
+              await this.pushGroup(entity.guid, entity.data, externalId, enrolmentsOnly);
             }
             success = true;
           } catch (error) {
@@ -701,11 +715,14 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     guid: string,
     data: Record<string, unknown>,
     externalId?: string,
+    enrolmentsOnly = false,
   ): Promise<void> {
-    if (this.submitVia === "change-request") {
-      await this.pushIndividualViaCR(guid, data, externalId);
-    } else {
-      await this.pushIndividualDirect(guid, data, externalId);
+    if (!enrolmentsOnly) {
+      if (this.submitVia === "change-request") {
+        await this.pushIndividualViaCR(guid, data, externalId);
+      } else {
+        await this.pushIndividualDirect(guid, data, externalId);
+      }
     }
     // Direct create writes the new externalId via `saveExternalIdToEntity`;
     // re-resolve from the store so the program-enrolment CR registrant
@@ -854,11 +871,14 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     guid: string,
     data: Record<string, unknown>,
     externalId?: string,
+    enrolmentsOnly = false,
   ): Promise<void> {
-    if (this.submitVia === "change-request") {
-      await this.pushGroupViaCR(guid, data, externalId);
-    } else {
-      await this.pushGroupDirect(guid, data, externalId);
+    if (!enrolmentsOnly) {
+      if (this.submitVia === "change-request") {
+        await this.pushGroupViaCR(guid, data, externalId);
+      } else {
+        await this.pushGroupDirect(guid, data, externalId);
+      }
     }
     const refreshedId = await this.refreshExternalIdAfterPush(guid, externalId);
     await this.pushPendingProgramEnrolments(guid, "group", data, refreshedId);
