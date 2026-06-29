@@ -19,10 +19,7 @@
 
 import { AuthAdapter, AuthConfig, OIDCConfig, SingleAuthStorage } from "../../interfaces/types";
 import OIDCClient from "./OIDCClient";
-import axios from "axios";
-import { createLogger } from "../../utils/logger";
-
-const log = createLogger("Auth0AuthAdapter");
+import { verifyOidcAccessToken } from "./verifyOidcAccessToken";
 
 export class Auth0AuthAdapter implements AuthAdapter {
   private oidc: OIDCClient;
@@ -82,16 +79,16 @@ export class Auth0AuthAdapter implements AuthAdapter {
   }
 
   private async validateTokenServer(token: string): Promise<boolean> {
-   
-    try {
-     
-      // Use userinfo validation since crypto module is not available in browsers
-      log.debug("Using userinfo validation for Auth0 token");
-      return this.checkTokenActive(token);
-    } catch (error) {
-      log.error({ err: error }, "Auth0 token validation error");
-      return false;
-    }
+    // Verify the JWT signature + issuer via JWKS and bind it to this tenant's
+    // configured client/audience. A userinfo 200 alone is NOT sufficient — it
+    // accepts any live token from the same Auth0 tenant regardless of which
+    // client it was issued for (finding H33). `audience` overrides `organization`
+    // as the expected API audience when configured.
+    return verifyOidcAccessToken(token, {
+      authority: this.config.fields.authority,
+      clientId: this.config.fields.client_id,
+      audience: this.config.fields.audience,
+    });
   }
 
   private async validateTokenClient(token: string): Promise<boolean> {
@@ -103,38 +100,6 @@ export class Auth0AuthAdapter implements AuthAdapter {
     const user = await this.oidc.handleCallback();
     if (user && this.authStorage) {
       await this.authStorage.setToken(user.access_token);
-    }
-  }
-
-  private async checkTokenActive(token: string): Promise<boolean> {
-    try {
-      
-      // Call Auth0's userinfo endpoint to verify token is still active
-      const userinfoUrl = `${this.config.fields.authority}/userinfo`;
-      const response = await axios.get(userinfoUrl, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 5000 // 5 second timeout
-      });
-      
-      // If we get a successful response with user data, the token is active
-      const isActive = !!(response.status === 200 && response.data && response.data.sub);
-      if(this.config.fields.organization){
-        if(isActive && response.data.org_id === this.config.fields.organization){ 
-          return true;
-        }
-      }
-      else if(isActive){
-        return true;
-      }
-     
-      return false;
-    } catch (error) {
-      log.error({ err: error }, "Error checking token activity");
-      // If userinfo call fails, token might be revoked or invalid
-      return false;
     }
   }
 
