@@ -20,7 +20,7 @@
   "dependencies": {
     "@formio/js": "5.3.6",
     "@idpass/data-collect-core": "workspace:*",
-    "axios": "^1.13.5",
+    "axios": "^1.16.0",
     "bootstrap": "4.6.2",
     "font-awesome": "4.7.0",
     "js-yaml": "^4.1.1",
