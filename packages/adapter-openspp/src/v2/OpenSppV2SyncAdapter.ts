@@ -1643,13 +1643,16 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
   /**
    * Fallback identifier extraction for records created directly in OpenSPP
-   * that don't carry a DataCollect-issued identifier.
-   * Uses system|value composite so round-trips are stable.
+   * that don't carry a DataCollect-issued identifier. Restricted to the
+   * configured OpenSPP namespace: a record whose only identifiers live in other
+   * id-type namespaces is NOT adopted — importing it would pull unrelated
+   * beneficiary PII and make it a confused-deputy PATCH target on the next
+   * push (H12). Uses system|value composite so round-trips are stable.
    */
   private extractAnyIdentifier(resource: IndividualResource | GroupResource): string | undefined {
-    const first = resource.identifier?.[0];
-    if (!first) return undefined;
-    return `${first.system}|${first.value}`;
+    const matched = resource.identifier?.find((id) => this.isOpenSppIdentifier(id.system));
+    if (!matched) return undefined;
+    return `${matched.system}|${matched.value}`;
   }
 
   // ==================== Transform to Form Submissions ====================

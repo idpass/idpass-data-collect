@@ -737,7 +737,7 @@ describe("OpenSppV2SyncAdapter", () => {
       expect(freshEventApplierService.submitForm).not.toHaveBeenCalled();
     });
 
-    it("pulls individuals with non-matching identifier system", async () => {
+    it("skips individuals whose only identifier system is out-of-namespace (H12)", async () => {
       mockV2ClientImplementation.searchIndividuals.mockReset();
       mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce({
         data: [{
@@ -763,17 +763,10 @@ describe("OpenSppV2SyncAdapter", () => {
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
       const result = await adapter.pullData();
 
-      expect(result.pulled).toBe(1);
-      expect(result.skipped).toBe(0);
-      expect(eventApplierService.submitForm).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: "create-individual",
-          data: expect.objectContaining({
-            firstName: "Maria",
-            lastName: "Santos",
-          }),
-        }),
-      );
+      // Out-of-namespace records must not be imported as DataCollect entities.
+      expect(result.pulled).toBe(0);
+      expect(result.skipped).toBe(1);
+      expect(eventApplierService.submitForm).not.toHaveBeenCalled();
     });
 
     it("pulls individuals with no identifiers at all", async () => {
