@@ -44,6 +44,29 @@ export interface OidcVerifyParams {
  * a token when no clientId/audience is configured to bind against. `jose` is
  * isomorphic (WebCrypto) so this runs in both the backend and browser builds.
  */
+type RemoteJwks = ReturnType<typeof import("jose")["createRemoteJWKSet"]>;
+
+interface JwksCacheEntry {
+  issuer: string;
+  jwks: RemoteJwks;
+  expiresAt: number;
+}
+
+/**
+ * Cache the resolved issuer + `RemoteJWKSet` per authority so we don't re-fetch
+ * the discovery document and re-create the key set on every token check. The
+ * `RemoteJWKSet` itself caches signing keys (with jose's own cooldown/rotation
+ * handling); this cache just avoids the per-call discovery round-trip. TTL'd so
+ * a rotated discovery document (issuer/jwks_uri change) is eventually picked up.
+ */
+const DISCOVERY_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const jwksCache = new Map<string, JwksCacheEntry>();
+
+/** Clear the discovery/JWKS cache. Test-only. */
+export function __resetOidcVerifyCacheForTests(): void {
+  jwksCache.clear();
+}
+
 export async function verifyOidcAccessToken(token: string, params: OidcVerifyParams): Promise<boolean> {
   const authority = params.authority?.replace(/\/+$/, "");
   if (!authority) {
@@ -58,30 +81,40 @@ export async function verifyOidcAccessToken(token: string, params: OidcVerifyPar
   }
 
   try {
-    const discoveryRes = await fetch(`${authority}/.well-known/openid-configuration`);
-    if (!discoveryRes.ok) {
-      log.warn({ status: discoveryRes.status }, "OIDC token rejected: discovery fetch failed");
-      return false;
-    }
-    const discovery = (await discoveryRes.json()) as { issuer?: string; jwks_uri?: string };
-    if (!discovery.issuer || !discovery.jwks_uri) {
-      log.warn("OIDC token rejected: discovery missing issuer/jwks_uri");
-      return false;
-    }
-
-    // Guard against a discovery document pointing JWKS at an attacker origin.
-    const jwksUrl = new URL(discovery.jwks_uri);
-    if (jwksUrl.origin !== new URL(authority).origin) {
-      log.warn({ jwksOrigin: jwksUrl.origin }, "OIDC token rejected: jwks_uri origin mismatch");
-      return false;
-    }
-
     // Imported dynamically: jose is ESM-only, and a static import would be
     // eagerly loaded by every module that transitively imports this adapter
     // (breaking CommonJS test runners that never exercise this path).
     const { createRemoteJWKSet, jwtVerify } = await import("jose");
-    const JWKS = createRemoteJWKSet(jwksUrl);
-    const { payload } = await jwtVerify(token, JWKS, { issuer: discovery.issuer });
+
+    let entry = jwksCache.get(authority);
+    if (!entry || entry.expiresAt <= Date.now()) {
+      const discoveryRes = await fetch(`${authority}/.well-known/openid-configuration`);
+      if (!discoveryRes.ok) {
+        log.warn({ status: discoveryRes.status }, "OIDC token rejected: discovery fetch failed");
+        return false;
+      }
+      const discovery = (await discoveryRes.json()) as { issuer?: string; jwks_uri?: string };
+      if (!discovery.issuer || !discovery.jwks_uri) {
+        log.warn("OIDC token rejected: discovery missing issuer/jwks_uri");
+        return false;
+      }
+
+      // Guard against a discovery document pointing JWKS at an attacker origin.
+      const jwksUrl = new URL(discovery.jwks_uri);
+      if (jwksUrl.origin !== new URL(authority).origin) {
+        log.warn({ jwksOrigin: jwksUrl.origin }, "OIDC token rejected: jwks_uri origin mismatch");
+        return false;
+      }
+
+      entry = {
+        issuer: discovery.issuer,
+        jwks: createRemoteJWKSet(jwksUrl),
+        expiresAt: Date.now() + DISCOVERY_CACHE_TTL_MS,
+      };
+      jwksCache.set(authority, entry);
+    }
+
+    const { payload } = await jwtVerify(token, entry.jwks, { issuer: entry.issuer });
 
     // Bind the token to this tenant's client/audience. Auth0 access tokens carry
     // the client in `azp` and the API in `aud`; Keycloak likewise. Accept if any

@@ -1,4 +1,4 @@
-import { verifyOidcAccessToken } from "../verifyOidcAccessToken";
+import { verifyOidcAccessToken, __resetOidcVerifyCacheForTests } from "../verifyOidcAccessToken";
 
 /**
  * H33: OIDC access tokens on sync routes were accepted on a userinfo 200 alone,
@@ -33,6 +33,7 @@ function mockDiscovery(jwksUri = `${AUTHORITY}/jwks`, issuer = AUTHORITY) {
 describe("verifyOidcAccessToken (H33)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    __resetOidcVerifyCacheForTests();
     fetchMock = jest.fn();
     global.fetch = fetchMock as unknown as typeof fetch;
   });
@@ -88,5 +89,20 @@ describe("verifyOidcAccessToken (H33)", () => {
   it("fails closed when authority is missing", async () => {
     const ok = await verifyOidcAccessToken("tok", { clientId: "my-client" });
     expect(ok).toBe(false);
+  });
+
+  it("caches discovery + JWKS per authority across calls", async () => {
+    mockDiscovery(); // only one discovery response queued
+    mockJwtVerify.mockResolvedValue({ payload: { sub: "u1", azp: "my-client" } });
+
+    const first = await verifyOidcAccessToken("tok-1", { authority: AUTHORITY, clientId: "my-client" });
+    const second = await verifyOidcAccessToken("tok-2", { authority: AUTHORITY, clientId: "my-client" });
+
+    expect(first).toBe(true);
+    expect(second).toBe(true);
+    // Discovery fetched once and the key set created once, despite two verifies.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mockCreateRemoteJWKSet).toHaveBeenCalledTimes(1);
+    expect(mockJwtVerify).toHaveBeenCalledTimes(2);
   });
 });
