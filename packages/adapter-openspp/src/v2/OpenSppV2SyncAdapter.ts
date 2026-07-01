@@ -854,9 +854,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     if (typeof storedExternalId !== "string" || storedExternalId.length === 0) {
       return null;
     }
-    const system = this.identifierType.startsWith(this.identifierNamespace)
-      ? this.identifierType
-      : `${this.identifierNamespace}${this.identifierType}`;
+    const system = this.ensureNamespace(this.identifierType);
     const id = this.getClient().formatIdentifier(system, storedExternalId);
     try {
       const found = await this.getClient().getIndividual(id);
@@ -1000,9 +998,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     if (typeof storedExternalId !== "string" || storedExternalId.length === 0) {
       return null;
     }
-    const system = this.groupIdentifierType.startsWith(this.identifierNamespace)
-      ? this.groupIdentifierType
-      : `${this.identifierNamespace}${this.groupIdentifierType}`;
+    const system = this.ensureNamespace(this.groupIdentifierType);
     const id = this.getClient().formatIdentifier(system, storedExternalId);
     try {
       const found = await this.getClient().getGroup(id);
@@ -1450,18 +1446,25 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     const formCode =
       typeof data.identifierType === "string" && data.identifierType.length > 0 ? data.identifierType : undefined;
     const defaultCode = entityType === "group" ? this.groupIdentifierType : this.identifierType;
-    const code = formCode || defaultCode;
-    if (code.startsWith(this.identifierNamespace)) {
-      return code;
-    }
-    return `${this.identifierNamespace}${code}`;
+    return this.ensureNamespace(formCode || defaultCode);
   }
 
   /**
-   * Check if an identifier system matches the configured namespace.
+   * Prefix a bare id-type code with the configured OpenSPP namespace, leaving
+   * already-namespaced values untouched. Single source of truth so the discover
+   * and resolve paths can't diverge.
    */
-  private isOpenSppIdentifier(system: string): boolean {
-    return system.startsWith(this.identifierNamespace);
+  private ensureNamespace(code: string): string {
+    return code.startsWith(this.identifierNamespace) ? code : `${this.identifierNamespace}${code}`;
+  }
+
+  /**
+   * Check if an identifier system matches the configured namespace. Guards
+   * against non-string `system` values in malformed OpenSPP responses, which
+   * would otherwise throw on `.startsWith` and fail the whole pull.
+   */
+  private isOpenSppIdentifier(system: unknown): boolean {
+    return typeof system === "string" && system.startsWith(this.identifierNamespace);
   }
 
   /**
