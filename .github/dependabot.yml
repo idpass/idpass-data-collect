@@ -1,0 +1,44 @@
+# Dependabot configuration.
+#
+# This repository is a single pnpm workspace: the root `pnpm-lock.yaml`
+# (together with `pnpm-workspace.yaml`) resolves dependencies for every
+# workspace member — `packages/*` and `website/`. A single `npm` entry rooted
+# at `/` therefore covers the whole workspace, including the Docusaurus site.
+#
+# There is intentionally NO separate `/website` entry. `website/` used to carry
+# a standalone `website/package-lock.json`, which made Dependabot treat it as an
+# independent npm project and open duplicate, no-op PRs (the site is built and
+# deployed with pnpm from the root lockfile, so that npm lockfile was never
+# used). That file has been removed; do not reintroduce it.
+#
+# Note: Dependabot *security* updates run independently of this file, driven by
+# advisories against the dependency graph. This file additionally enables
+# scheduled *version* updates. Minor/patch bumps are grouped to keep PR volume
+# low; majors still open individually so they get a closer look.
+version: 2
+updates:
+  # JavaScript/TypeScript dependencies for the entire pnpm workspace.
+  # `npm` is Dependabot's ecosystem name for npm/yarn/pnpm; it reads the root
+  # pnpm-lock.yaml and updates the relevant packages/*/package.json manifests.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    groups:
+      npm-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Keep GitHub Actions pinned and current.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
