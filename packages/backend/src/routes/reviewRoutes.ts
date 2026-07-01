@@ -22,6 +22,7 @@ import { FormSubmission, ReviewService, EventApplierService } from "@idpass/data
 import { authenticateJWT, AuthenticatedRequest, validateTenantAccess } from "../middlewares/authentication";
 import { requireAction, verifyRoleFromDatabase } from "../middlewares/rbac";
 import { asyncHandler } from "../middlewares/errorHandlers";
+import { stripServerManagedEventFields } from "../utils/eventSanitize";
 import { AppInstanceStore, Role, UserStore } from "../types";
 import { ReviewStore } from "../stores/ReviewStore";
 import { createLogger } from "../utils/logger";
@@ -64,7 +65,10 @@ export async function getReviewService(
     // Create a thin adapter that wraps EDM.submitForm into an EventApplierService-like interface.
     {
       submitForm: async (formData: FormSubmission) => {
-        return appInstance.edm.submitForm(formData);
+        // Review submissions are client-originated; strip server-managed
+        // identifier fields before applying on approval so an approved review
+        // can't re-inject a confused-deputy externalId (#41).
+        return appInstance.edm.submitForm(stripServerManagedEventFields(formData));
       },
     } as InstanceType<typeof EventApplierService>,
   );

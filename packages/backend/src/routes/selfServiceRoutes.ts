@@ -24,6 +24,7 @@ import rateLimit from "express-rate-limit";
 import { v4 as uuidv4 } from "uuid";
 import { FormClassifier, FormCategory } from "@idpass/data-collect-core";
 import { asyncHandler } from "../middlewares/errorHandlers";
+import { stripServerManagedEventFields } from "../utils/eventSanitize";
 import { extractBearerToken } from "../middlewares/authentication";
 import { OtpStore } from "../stores/OtpStore";
 import { ReviewStore } from "../stores/ReviewStore";
@@ -575,7 +576,12 @@ export function createSelfServiceRouter(
 
       const eventType = classification.updateEventType;
 
-      const submission = {
+      // Self-service form data is untrusted client input. Strip server-managed
+      // identifier fields (externalId/identifierType) here, at the ingestion
+      // door, so they can't reach the entity via direct apply OR through the
+      // review pipeline — closing the confused-deputy vector for this door
+      // (#41; same protection as /api/sync/push).
+      const submission = stripServerManagedEventFields({
         guid: uuidv4(),
         entityGuid,
         type: eventType,
@@ -583,7 +589,7 @@ export function createSelfServiceRouter(
         timestamp: new Date().toISOString(),
         userId: `self-service:${identifier}`,
         syncLevel: 0, // LOCAL
-      };
+      });
 
       // Standalone forms (life_event, grievance, etc.) are stored as review
       // records but never applied as entity events.
