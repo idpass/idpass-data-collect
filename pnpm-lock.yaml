@@ -635,8 +635,8 @@ importers:
         specifier: ^6.0.4
         version: 6.0.4(@capacitor/core@6.2.1)
       '@capacitor/status-bar':
-        specifier: ^6.0.3
-        version: 6.0.3(@capacitor/core@6.2.1)
+        specifier: ^8.0.2
+        version: 8.0.2(@capacitor/core@6.2.1)
       '@formio/vue':
         specifier: ^5.0.0
         version: 5.0.0(formiojs@4.21.7)(vue@3.5.28(typescript@5.9.3))
@@ -1789,10 +1789,10 @@ packages:
     peerDependencies:
       '@capacitor/core': ^6.0.0
 
-  '@capacitor/status-bar@6.0.3':
-    resolution: {integrity: sha512-nFlgSmtx6Zwaw0tEvZgQsWHBeOfWWB/AvEoCApopLT4mHkBVoSrwkLvy2PjZs5wxCbsmqvQczr3XCyTwaDZVQg==}
+  '@capacitor/status-bar@8.0.2':
+    resolution: {integrity: sha512-WXs8YB8B9eEaPZz+bcdY6t2nForF1FLoj/JU0Dl9RRgQnddnS98FEEyDooQhaY7wivr000j4+SC1FyeJkrFO7A==}
     peerDependencies:
-      '@capacitor/core': ^6.0.0
+      '@capacitor/core': '>=8.0.0'
 
   '@chevrotain/cst-dts-gen@11.0.3':
     resolution: {integrity: sha512-BvIKpRLeS/8UbfxXxgC33xOumsacaeCKAjAeLyOn7Pcp95HiRbrpl14S+9vaZLolnbssPIUuiUd8IvgkRyt6NQ==}
@@ -13638,7 +13638,7 @@ snapshots:
     dependencies:
       '@capacitor/core': 6.2.1
 
-  '@capacitor/status-bar@6.0.3(@capacitor/core@6.2.1)':
+  '@capacitor/status-bar@8.0.2(@capacitor/core@6.2.1)':
     dependencies:
       '@capacitor/core': 6.2.1
 

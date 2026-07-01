@@ -41,7 +41,7 @@
     "@capacitor/ios": "^6.2.1",
     "@capacitor/keyboard": "^6.0.4",
     "@capacitor/network": "^6.0.4",
-    "@capacitor/status-bar": "^6.0.3",
+    "@capacitor/status-bar": "^8.0.2",
     "@formio/vue": "^5.0.0",
     "@idpass/data-collect-core": "workspace:*",
     "@mdi/font": "^7.4.47",
