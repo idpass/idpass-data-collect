@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@idpass/data-collect-core": "workspace:*",
-    "axios": "^1.16.0",
+    "axios": "^1.18.1",
     "uuid": "^10.0.0",
     "zod": "^4.3.6"
   },
