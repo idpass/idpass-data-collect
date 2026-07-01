@@ -27,7 +27,7 @@ import { asyncHandler } from "../middlewares/errorHandlers";
 import { extractBearerToken } from "../middlewares/authentication";
 import { OtpStore } from "../stores/OtpStore";
 import { ReviewStore } from "../stores/ReviewStore";
-import { AppInstanceStore } from "../types";
+import { AppInstance, AppInstanceStore } from "../types";
 import { getReviewService } from "./reviewRoutes";
 import { createLogger } from "../utils/logger";
 
@@ -133,6 +133,24 @@ export function createSelfServiceRouter(
   const router = Router();
 
   /**
+   * Self-service is gated behind a per-tenant feature flag that defaults to OFF.
+   * Token issuance and every self-service data route are unavailable unless the
+   * tenant config explicitly sets `selfService.enabled === true`. The feature is
+   * under rework and must stay hidden/disabled for any config that has not opted
+   * in — this is the server-side enforcement that `selfService.enabled` lacked.
+   * Returns the resolved AppInstance on success, or null after writing a 403.
+   * Security finding: C2 (self-service auth ignored tenant settings).
+   */
+  async function requireSelfServiceEnabled(tenantId: string, res: Response): Promise<AppInstance | null> {
+    const appInstance = await appInstanceStore.getAppInstance(tenantId);
+    if (!appInstance || appInstance.config?.selfService?.enabled !== true) {
+      res.status(403).json({ error: "Self-service is not enabled for this tenant" });
+      return null;
+    }
+    return appInstance;
+  }
+
+  /**
    * POST /otp/request
    * Request a one-time password to be sent to the given identifier.
    * In production, this would integrate with an SMS/email gateway.
@@ -152,6 +170,9 @@ export function createSelfServiceRouter(
 
       const { identifier, tenantId } = parseResult.data;
 
+      const appInstance = await requireSelfServiceEnabled(tenantId, res);
+      if (!appInstance) return;
+
       // Per-identifier rate limit: reject if >= 5 codes requested for
       // this identifier+tenant in the last 15 minutes.
       const recentCodes = await otpStore.getActiveCodesByIdentifier(identifier, tenantId);
@@ -166,16 +187,13 @@ export function createSelfServiceRouter(
       // This allows the self-service token to include entityGuid for data access.
       // SearchCriteria items are AND'd, so search phone and email separately.
       let entityGuid: string | undefined;
-      const appInstance = await appInstanceStore.getAppInstance(tenantId);
-      if (appInstance) {
-        const edm = appInstance.edm;
-        let searchResults = await edm.searchEntities([{ phone: identifier }]);
-        if (searchResults.length === 0) {
-          searchResults = await edm.searchEntities([{ email: identifier }]);
-        }
-        if (searchResults.length > 0) {
-          entityGuid = searchResults[0].modified.guid;
-        }
+      const edm = appInstance.edm;
+      let searchResults = await edm.searchEntities([{ phone: identifier }]);
+      if (searchResults.length === 0) {
+        searchResults = await edm.searchEntities([{ email: identifier }]);
+      }
+      if (searchResults.length > 0) {
+        entityGuid = searchResults[0].modified.guid;
       }
 
       const otpCode = await otpStore.createOtp(identifier, tenantId, entityGuid);
@@ -213,6 +231,8 @@ export function createSelfServiceRouter(
       }
 
       const { identifier, otp, tenantId } = parseResult.data;
+
+      if (!(await requireSelfServiceEnabled(tenantId, res))) return;
 
       // Verify the OTP using constant-time hash comparison in the store.
       // The store atomically locks the row, verifies the hash, increments
@@ -263,11 +283,8 @@ export function createSelfServiceRouter(
 
       const { nationalId, dateOfBirth, tenantId } = parseResult.data;
 
-      // Look up the entity with matching national ID and date of birth
-      const appInstance = await appInstanceStore.getAppInstance(tenantId);
-      if (!appInstance) {
-        return res.status(401).json({ error: "Verification failed" });
-      }
+      const appInstance = await requireSelfServiceEnabled(tenantId, res);
+      if (!appInstance) return;
 
       const edm = appInstance.edm;
 
@@ -354,11 +371,9 @@ export function createSelfServiceRouter(
 
       const { idToken, tenantId, nonce } = parseResult.data;
 
-      // Load tenant config
-      const appInstance = await appInstanceStore.getAppInstance(tenantId);
-      if (!appInstance) {
-        return res.status(401).json({ error: "Authentication failed" });
-      }
+      // Load tenant config (also enforces the self-service feature flag)
+      const appInstance = await requireSelfServiceEnabled(tenantId, res);
+      if (!appInstance) return;
 
       // Validate that OIDC is configured for this tenant
       const oidcConfig = appInstance.config.selfService?.oidcConfig;
@@ -469,10 +484,8 @@ export function createSelfServiceRouter(
         return res.status(400).json({ error: "No entity associated with this token" });
       }
 
-      const appInstance = await appInstanceStore.getAppInstance(tenantId);
-      if (!appInstance) {
-        return res.status(404).json({ error: "Tenant not found" });
-      }
+      const appInstance = await requireSelfServiceEnabled(tenantId, res);
+      if (!appInstance) return;
 
       let entityPair;
       try {
@@ -540,10 +553,8 @@ export function createSelfServiceRouter(
         return res.status(400).json({ error: "No entity associated with this token" });
       }
 
-      const appInstance = await appInstanceStore.getAppInstance(tenantId);
-      if (!appInstance) {
-        return res.status(404).json({ error: "Tenant not found" });
-      }
+      const appInstance = await requireSelfServiceEnabled(tenantId, res);
+      if (!appInstance) return;
 
       // Validate formType against tenant's allowed forms
       const selfServiceConfig = appInstance.config.selfService;
@@ -639,10 +650,8 @@ export function createSelfServiceRouter(
         return res.status(400).json({ error: "No entity associated with this token" });
       }
 
-      const appInstance = await appInstanceStore.getAppInstance(tenantId);
-      if (!appInstance) {
-        return res.status(404).json({ error: "Tenant not found" });
-      }
+      const appInstance = await requireSelfServiceEnabled(tenantId, res);
+      if (!appInstance) return;
 
       // Build submission history from both applied events and pending reviews
       const submissions: Array<{

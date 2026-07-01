@@ -4,7 +4,7 @@
   "description": "Demo app configuration with households and individuals for development and testing.",
   "version": "1.0.0",
   "selfService": {
-    "enabled": true,
+    "enabled": false,
     "authMethods": ["otp", "id"],
     "allowedForms": ["individual", "household", "life_event", "assistance_request", "grievance"],
     "languages": ["en", "fr"],

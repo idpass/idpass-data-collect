@@ -295,7 +295,7 @@ describeIfPostgres("POST /api/auth/oidc/exchange", () => {
     expect(response.body.error).toBe("Invalid request");
   });
 
-  it("should return uniform 'Authentication failed' when tenant is not found", async () => {
+  it("should return uniform self-service-disabled error when tenant is not found", async () => {
     mockAppInstanceStore.getAppInstance.mockResolvedValue(null);
 
     const response = await request(app).post("/api/auth/oidc/exchange").send({
@@ -304,9 +304,10 @@ describeIfPostgres("POST /api/auth/oidc/exchange", () => {
       tenantId: "nonexistent-tenant",
     });
 
-    expect(response.status).toBe(401);
-    expect(response.body.error).toBe("Authentication failed");
-    // Should NOT leak tenant-specific information
+    // The self-service gate runs first and returns a uniform 403 regardless of
+    // whether the tenant exists, so it does not leak tenant-specific info.
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("Self-service is not enabled for this tenant");
     expect(response.body.error).not.toContain("Tenant not found");
   });
 
@@ -561,8 +562,8 @@ describe("GET /api/auth/self-service/entity (without PostgreSQL)", () => {
 
     const response = await request(app).get("/api/auth/self-service/entity").set("Authorization", `Bearer ${token}`);
 
-    expect(response.status).toBe(404);
-    expect(response.body.error).toBe("Tenant not found");
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("Self-service is not enabled for this tenant");
   });
 
   it("should return 404 when entity is not found", async () => {
@@ -707,8 +708,8 @@ describe("POST /api/auth/self-service/submit (without PostgreSQL)", () => {
       .set("Authorization", `Bearer ${token}`)
       .send({ formType: "update-individual", formData: { name: "Updated" } });
 
-    expect(response.status).toBe(404);
-    expect(response.body.error).toBe("Tenant not found");
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("Self-service is not enabled for this tenant");
   });
 });
 
@@ -990,8 +991,8 @@ describe("GET /api/auth/self-service/submissions (without PostgreSQL)", () => {
       .get("/api/auth/self-service/submissions")
       .set("Authorization", `Bearer ${token}`);
 
-    expect(response.status).toBe(404);
-    expect(response.body.error).toBe("Tenant not found");
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("Self-service is not enabled for this tenant");
   });
 });
 
