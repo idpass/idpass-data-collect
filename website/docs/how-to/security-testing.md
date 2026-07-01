@@ -21,10 +21,18 @@ pack (Claude Code "skills"). Install it with:
 npx skills add mukul975/Anthropic-Cybersecurity-Skills
 ```
 
-It is a large, single-author pack (750+ skills). Review a skill's `SKILL.md`
-and `scripts/` before running it, and install only what you need. The skills
-that map to DataCollect's stack (TypeScript, Express + PostgreSQL, Vue, JWT,
-multi-tenant, Docker, GitHub Actions) are:
+It is a large, single-author pack (750+ skills) and is **not affiliated with
+Anthropic** despite the name — treat it as untrusted third-party content. Review
+a skill's `SKILL.md` and `scripts/` before running it, and install only what you
+need.
+
+To avoid depending on the upstream pull, the curated subset below is also
+**vendored in this repository** under
+[`security/skills/`](https://github.com/idpass/idpass-data-collect/tree/develop/security/skills)
+(pinned to a specific upstream commit, Apache-2.0). See its `README.md` for how
+to activate a skill in Claude Code. The skills that map to DataCollect's stack
+(TypeScript, Express + PostgreSQL, Vue, JWT, multi-tenant, Docker, GitHub
+Actions) are:
 
 **Web application security**
 - `exploiting-sql-injection-vulnerabilities`, `performing-second-order-sql-injection` — the backend uses raw SQL in its stores.
