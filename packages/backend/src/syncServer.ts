@@ -57,6 +57,25 @@ import { MockRegistrySyncAdapter } from "@idpass/adapter-mock";
 
 const log = createLogger("syncServer");
 
+/**
+ * Resolves Express's "trust proxy" setting from the TRUST_PROXY env var.
+ *
+ * Defaults to false so that a directly exposed server does not trust a
+ * client-supplied X-Forwarded-For header — otherwise an attacker can rotate
+ * that header to mint a fresh IP per request and bypass IP-based rate limiting.
+ * When running behind reverse proxies that append the client IP to
+ * X-Forwarded-For, set TRUST_PROXY to the number of those proxies (e.g. "1"
+ * for a single nginx hop). Boolean and subnet/preset strings are also accepted.
+ */
+export function resolveTrustProxy(raw: string | undefined): boolean | number | string {
+  if (!raw) return false;
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  const n = Number(raw);
+  if (Number.isInteger(n) && n >= 0) return n;
+  return raw;
+}
+
 // Register external sync adapters with the V2 adapter registry
 // openspp-v1-adapter: Odoo JSON-RPC (database/username/password)
 adapterRegistry.register("openspp-v1-adapter", (deps) =>
@@ -132,7 +151,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   const app = express();
 
   setupUncaughtHandlers();
-  app.set("trust proxy", 1);
+  app.set("trust proxy", resolveTrustProxy(process.env.TRUST_PROXY));
   app.use(helmet());
   const corsOrigins = process.env.CORS_ORIGINS;
   const corsOptions: cors.CorsOptions = { origin: false };
