@@ -614,7 +614,10 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   // ==================== Push Logic ====================
 
   private async pushEntities(
-    entities: Array<{ modified: { guid: string; type: EntityType; externalId?: string; data: Record<string, unknown> } }>,
+    entities: Array<{
+      initial?: { version: number } | null;
+      modified: { guid: string; type: EntityType; version: number; externalId?: string; data: Record<string, unknown> };
+    }>,
     entityType: "individual" | "group",
   ): Promise<{ pushed: number; failed: number; skipped: number; errors: Array<{ guid: string; error: string; code: string }> }> {
     const failedEntities: Array<{ guid: string; error: string; code: string }> = [];
@@ -626,6 +629,17 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
         const entity = entityPair.modified;
         const externalId = this.resolveExternalId(entity);
 
+        // An entity at baseline parity (no genuine local entity edit) that was
+        // force-included only because it carries pending enrolments must push
+        // ONLY the enrolment CRs — never re-PATCH the entity, which would
+        // overwrite OpenSPP fields with stale/pull-sourced data using a fresh
+        // If-Match. pendingProgramEnrolments is user-controllable (H4).
+        const pending = entity.data?.pendingProgramEnrolments;
+        const hasPending = Array.isArray(pending) && pending.length > 0;
+        const baselineParity =
+          !!entity.externalId && !!entityPair.initial && entityPair.initial.version === entity.version;
+        const enrolmentsOnly = baselineParity && hasPending;
+
         let attempt = 0;
         let lastError: Error | null = null;
         let success = false;
@@ -633,9 +647,9 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
         while (attempt <= this.maxRetries && !success) {
           try {
             if (entityType === "individual") {
-              await this.pushIndividual(entity.guid, entity.data, externalId);
+              await this.pushIndividual(entity.guid, entity.data, externalId, enrolmentsOnly);
             } else {
-              await this.pushGroup(entity.guid, entity.data, externalId);
+              await this.pushGroup(entity.guid, entity.data, externalId, enrolmentsOnly);
             }
             success = true;
           } catch (error) {
@@ -701,11 +715,14 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     guid: string,
     data: Record<string, unknown>,
     externalId?: string,
+    enrolmentsOnly = false,
   ): Promise<void> {
-    if (this.submitVia === "change-request") {
-      await this.pushIndividualViaCR(guid, data, externalId);
-    } else {
-      await this.pushIndividualDirect(guid, data, externalId);
+    if (!enrolmentsOnly) {
+      if (this.submitVia === "change-request") {
+        await this.pushIndividualViaCR(guid, data, externalId);
+      } else {
+        await this.pushIndividualDirect(guid, data, externalId);
+      }
     }
     // Direct create writes the new externalId via `saveExternalIdToEntity`;
     // re-resolve from the store so the program-enrolment CR registrant
@@ -824,57 +841,28 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
    * doesn't kill the discovery sweep.
    */
   private async tryDiscoverIndividual(
-    data: Record<string, unknown>,
+    _data: Record<string, unknown>,
     storedExternalId?: string,
   ): Promise<{ resource: IndividualResource; identifier: string } | null> {
-    const seen = new Set<string>();
-    const candidates: Array<{ system: string; value: string }> = [];
-
-    const ensureNamespace = (code: string) =>
-      code.startsWith(this.identifierNamespace) ? code : `${this.identifierNamespace}${code}`;
-
-    const tryAdd = (code: string, value: unknown) => {
-      if (typeof value !== "string" || value.length === 0) return;
-      const system = ensureNamespace(code);
-      const key = `${system}|${value}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      candidates.push({ system, value });
-    };
-
-    // Walk common identity fields on the entity. Order matters: cheaper /
-    // more authoritative identifiers first so the first hit short-circuits.
-    // OpenSPP id-type vocab codes are case-sensitive on the validator side
-    // but registries differ on casing convention (UIN vs uin, NATIONAL_ID vs
-    // national_id) — probe both casings so we don't miss the partner.
-    const bothCasings = (code: string, value: unknown) => {
-      tryAdd(code.toUpperCase(), value);
-      tryAdd(code.toLowerCase(), value);
-    };
-    bothCasings("UIN", data.uin);
-    bothCasings("NATIONAL_ID", data.national_id);
-    bothCasings("REG_ID", data.reg_id);
-    bothCasings("REGISTRATION_ID", data.registration_id);
-    bothCasings("PASSPORT_ID", data.passport_id);
-    // The stored externalId is a single opaque string but the operator may
-    // have registered it under any id-type on OpenSPP (depends on how the
-    // upstream registry was bootstrapped). Probe every known system with it
-    // — the first GET hit wins.
-    if (storedExternalId) {
-      for (const code of ["UIN", "NATIONAL_ID", "REG_ID", "REGISTRATION_ID", "PASSPORT_ID", "HOUSEHOLD_ID"]) {
-        bothCasings(code, storedExternalId);
-      }
-      tryAdd(this.identifierType, storedExternalId);
+    // Discovery is restricted to the server-resolved externalId probed under
+    // the tenant's configured identifier type. Probing client-supplied identity
+    // fields (uin/national_id/...), alternate casings, or other id-type
+    // namespaces would let a client name a victim's OpenSPP record and have it
+    // rebound + overwritten with the server's privileged credentials
+    // (findings H1/H2/H3). externalId itself is server-managed: clients can no
+    // longer set it (stripped at the /api/sync/push boundary).
+    if (typeof storedExternalId !== "string" || storedExternalId.length === 0) {
+      return null;
     }
-
-    for (const c of candidates) {
-      const id = this.getClient().formatIdentifier(c.system, c.value);
-      try {
-        const found = await this.getClient().getIndividual(id);
-        if (found) return { resource: found, identifier: id };
-      } catch {
-        // ignore — try next candidate
-      }
+    const system = this.identifierType.startsWith(this.identifierNamespace)
+      ? this.identifierType
+      : `${this.identifierNamespace}${this.identifierType}`;
+    const id = this.getClient().formatIdentifier(system, storedExternalId);
+    try {
+      const found = await this.getClient().getIndividual(id);
+      if (found) return { resource: found, identifier: id };
+    } catch {
+      // ignore — discovery is best-effort
     }
     return null;
   }
@@ -883,11 +871,14 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     guid: string,
     data: Record<string, unknown>,
     externalId?: string,
+    enrolmentsOnly = false,
   ): Promise<void> {
-    if (this.submitVia === "change-request") {
-      await this.pushGroupViaCR(guid, data, externalId);
-    } else {
-      await this.pushGroupDirect(guid, data, externalId);
+    if (!enrolmentsOnly) {
+      if (this.submitVia === "change-request") {
+        await this.pushGroupViaCR(guid, data, externalId);
+      } else {
+        await this.pushGroupDirect(guid, data, externalId);
+      }
     }
     const refreshedId = await this.refreshExternalIdAfterPush(guid, externalId);
     await this.pushPendingProgramEnrolments(guid, "group", data, refreshedId);
@@ -1000,49 +991,24 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
    * GET each candidate, return the first hit.
    */
   private async tryDiscoverGroup(
-    data: Record<string, unknown>,
+    _data: Record<string, unknown>,
     storedExternalId?: string,
   ): Promise<{ resource: GroupResource; identifier: string } | null> {
-    const seen = new Set<string>();
-    const candidates: Array<{ system: string; value: string }> = [];
-
-    const ensureNamespace = (code: string) =>
-      code.startsWith(this.identifierNamespace) ? code : `${this.identifierNamespace}${code}`;
-
-    const tryAdd = (code: string, value: unknown) => {
-      if (typeof value !== "string" || value.length === 0) return;
-      const system = ensureNamespace(code);
-      const key = `${system}|${value}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      candidates.push({ system, value });
-    };
-
-    // Probe both casings — OpenSPP vocab is case-sensitive on validate.
-    const bothCasings = (code: string, value: unknown) => {
-      tryAdd(code.toUpperCase(), value);
-      tryAdd(code.toLowerCase(), value);
-    };
-    bothCasings("HOUSEHOLD_ID", data.household_id);
-    bothCasings("REG_ID", data.reg_id);
-    bothCasings("REGISTRATION_ID", data.registration_id);
-    // Same opaque-externalId logic as the individual sweep — probe each
-    // known group system with the stored externalId.
-    if (storedExternalId) {
-      for (const code of ["HOUSEHOLD_ID", "REG_ID", "REGISTRATION_ID"]) {
-        bothCasings(code, storedExternalId);
-      }
-      tryAdd(this.groupIdentifierType, storedExternalId);
+    // Restricted to the server-resolved externalId under the configured group
+    // identifier type — see tryDiscoverIndividual. Client identity fields,
+    // alternate casings and cross-namespace probing removed (H1/H2/H3).
+    if (typeof storedExternalId !== "string" || storedExternalId.length === 0) {
+      return null;
     }
-
-    for (const c of candidates) {
-      const id = this.getClient().formatIdentifier(c.system, c.value);
-      try {
-        const found = await this.getClient().getGroup(id);
-        if (found) return { resource: found, identifier: id };
-      } catch {
-        // ignore — try next
-      }
+    const system = this.groupIdentifierType.startsWith(this.identifierNamespace)
+      ? this.groupIdentifierType
+      : `${this.identifierNamespace}${this.groupIdentifierType}`;
+    const id = this.getClient().formatIdentifier(system, storedExternalId);
+    try {
+      const found = await this.getClient().getGroup(id);
+      if (found) return { resource: found, identifier: id };
+    } catch {
+      // ignore — discovery is best-effort
     }
     return null;
   }
@@ -1478,7 +1444,11 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
    * Checks for an `identifierType` field in the form data, falling back to `national_id`.
    */
   private resolveIdentifierSystem(data: Record<string, unknown>, entityType: "individual" | "group" = "individual"): string {
-    const formCode = data.identifierType as string | undefined;
+    // identifierType is server-managed and must be a string. A non-string value
+    // (e.g. an object smuggled in entity data) would throw on `.startsWith`,
+    // failing every sync. Ignore anything that is not a usable string. (H22)
+    const formCode =
+      typeof data.identifierType === "string" && data.identifierType.length > 0 ? data.identifierType : undefined;
     const defaultCode = entityType === "group" ? this.groupIdentifierType : this.identifierType;
     const code = formCode || defaultCode;
     if (code.startsWith(this.identifierNamespace)) {
@@ -1693,13 +1663,16 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
   /**
    * Fallback identifier extraction for records created directly in OpenSPP
-   * that don't carry a DataCollect-issued identifier.
-   * Uses system|value composite so round-trips are stable.
+   * that don't carry a DataCollect-issued identifier. Restricted to the
+   * configured OpenSPP namespace: a record whose only identifiers live in other
+   * id-type namespaces is NOT adopted — importing it would pull unrelated
+   * beneficiary PII and make it a confused-deputy PATCH target on the next
+   * push (H12). Uses system|value composite so round-trips are stable.
    */
   private extractAnyIdentifier(resource: IndividualResource | GroupResource): string | undefined {
-    const first = resource.identifier?.[0];
-    if (!first) return undefined;
-    return `${first.system}|${first.value}`;
+    const matched = resource.identifier?.find((id) => this.isOpenSppIdentifier(id.system));
+    if (!matched) return undefined;
+    return `${matched.system}|${matched.value}`;
   }
 
   // ==================== Transform to Form Submissions ====================
@@ -1717,7 +1690,8 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     userId: string;
     syncLevel: SyncLevel;
   } {
-    const identifier = resolvedIdentifier ?? this.extractIdentifier(individual);
+    const matched = this.extractMatchingId(individual);
+    const identifier = resolvedIdentifier ?? matched?.value;
     const guid = existingGuid || identifier || uuidv4();
 
     const data: Record<string, unknown> = {
@@ -1764,6 +1738,15 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
     data.externalId = identifier;
 
+    // Preserve the OpenSPP identifier system so a later push targets the same
+    // id-type instead of defaulting to system_id and overwriting a different
+    // record (H10).
+    if (matched?.system) {
+      data.identifierType = matched.system.startsWith(this.identifierNamespace)
+        ? matched.system.slice(this.identifierNamespace.length)
+        : matched.system;
+    }
+
     return {
       guid: uuidv4(),
       entityGuid: guid,
@@ -1788,7 +1771,8 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     userId: string;
     syncLevel: SyncLevel;
   } {
-    const identifier = resolvedIdentifier ?? this.extractGroupIdentifier(group);
+    const matched = this.extractMatchingId(group);
+    const identifier = resolvedIdentifier ?? matched?.value;
     const guid = existingGuid || identifier || uuidv4();
 
     const data: Record<string, unknown> = {
@@ -1805,6 +1789,14 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     }
 
     data.externalId = identifier;
+
+    // Preserve the OpenSPP identifier system so a later push targets the same
+    // id-type instead of defaulting and overwriting a different record (H10).
+    if (matched?.system) {
+      data.identifierType = matched.system.startsWith(this.identifierNamespace)
+        ? matched.system.slice(this.identifierNamespace.length)
+        : matched.system;
+    }
 
     return {
       guid: uuidv4(),

@@ -35,6 +35,7 @@ import { createScopeContextMiddleware, type ScopeAwareRequest } from "../middlew
 import { AppInstanceStore, Role } from "../types";
 import { createLogger } from "../utils/logger";
 import { processTransactionalBatch } from "../utils/transactionalEdm";
+import { stripServerManagedEventFields } from "../utils/eventSanitize";
 import { SyncEventStore } from "../stores/SyncEventStore";
 import { SyncJobRegistry } from "../stores/SyncJobRegistry";
 import { SyncTelemetryStore } from "../stores/SyncTelemetryStore";
@@ -411,7 +412,13 @@ export function createSyncRouter(
       const sorted = events
         .slice()
         .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-      const allEvents: FormSubmission[] = sorted.map((event) => ({ ...event, syncLevel: 1 }));
+      // Strip client-asserted server-managed identifier fields (externalId,
+      // identifierType) before applying. These select the external record a
+      // later push PATCHes and must come only from a trusted external pull —
+      // never from a client. Findings: H11, H30, H10/H22.
+      const allEvents: FormSubmission[] = sorted.map((event) =>
+        stripServerManagedEventFields({ ...event, syncLevel: 1 }),
+      );
 
       // ---------------------------------------------------------------
       // Per-event scope validation (Phase 3 — WP #947)

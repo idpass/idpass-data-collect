@@ -65,6 +65,11 @@ const loginLimiter = rateLimit({
   message: { error: "Too many login attempts, please try again later" },
 });
 
+// A bcrypt hash compared against when the email is unknown, so login spends the
+// same time hashing whether or not the account exists. Without it, the absence
+// of a hash comparison lets an attacker enumerate valid emails by timing.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync("invalid-account-placeholder", 10);
+
 export function createUserRoutes(userStore: UserStore): Router {
   const router = Router();
 
@@ -75,11 +80,13 @@ export function createUserRoutes(userStore: UserStore): Router {
     asyncHandler(async (req, res) => {
       const { email, password } = req.body;
       const user = await userStore.getUser(email);
-      if (!user) {
-        return res.status(401).json({ error: "Invalid email or password" });
-      }
-      const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-      if (!isPasswordValid) {
+      // Always run a hash comparison — against the real hash when the account
+      // exists, otherwise against a placeholder — so the response time does not
+      // reveal whether the email is registered.
+      const candidatePassword = typeof password === "string" ? password : "";
+      const passwordHash = user ? user.passwordHash : DUMMY_PASSWORD_HASH;
+      const isPasswordValid = await bcrypt.compare(candidatePassword, passwordHash);
+      if (!user || !isPasswordValid) {
         return res.status(401).json({ error: "Invalid email or password" });
       }
 

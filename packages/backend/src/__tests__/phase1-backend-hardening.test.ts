@@ -132,7 +132,7 @@ describeIfPostgres("Phase 1b: Uniform error messages for brute-force protection"
     await otpStore.closeConnection();
   });
 
-  it("/id/verify should return uniform 'Verification failed' when tenant not found", async () => {
+  it("/id/verify should return uniform self-service-disabled error when tenant not found", async () => {
     mockAppInstanceStore.getAppInstance.mockResolvedValue(null);
 
     const response = await request(app).post("/api/auth/id/verify").send({
@@ -141,8 +141,9 @@ describeIfPostgres("Phase 1b: Uniform error messages for brute-force protection"
       tenantId: "nonexistent-tenant",
     });
 
-    expect(response.status).toBe(401);
-    expect(response.body.error).toBe("Verification failed");
+    // Self-service gate runs first; uniform 403 regardless of tenant existence.
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("Self-service is not enabled for this tenant");
   });
 
   it("/id/verify should return uniform 'Verification failed' when identity not found", async () => {
@@ -152,7 +153,7 @@ describeIfPostgres("Phase 1b: Uniform error messages for brute-force protection"
 
     mockAppInstanceStore.getAppInstance.mockResolvedValue({
       configId: "tenant-1",
-      config: { id: "tenant-1", name: "Test" } as AppConfig,
+      config: { id: "tenant-1", name: "Test", selfService: { enabled: true } } as AppConfig,
       edm: mockEdm as never,
     });
 
@@ -200,7 +201,7 @@ describeIfPostgres("Phase 1b: Uniform error messages for brute-force protection"
     expect(identityResponse.body.error).not.toContain("Identity not found");
   });
 
-  it("/oidc/exchange should return uniform 'Authentication failed' when tenant not found", async () => {
+  it("/oidc/exchange should return uniform self-service-disabled error when tenant not found", async () => {
     mockAppInstanceStore.getAppInstance.mockResolvedValue(null);
 
     const response = await request(app).post("/api/auth/oidc/exchange").send({
@@ -209,8 +210,9 @@ describeIfPostgres("Phase 1b: Uniform error messages for brute-force protection"
       tenantId: "nonexistent-tenant",
     });
 
-    expect(response.status).toBe(401);
-    expect(response.body.error).toBe("Authentication failed");
+    // Self-service gate runs first; uniform 403 regardless of tenant existence.
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("Self-service is not enabled for this tenant");
   });
 
   it("/oidc/exchange should NOT leak 'Tenant not found' message", async () => {
@@ -540,7 +542,7 @@ describeIfPostgres("Phase 1c: Dynamic availableForms from tenant config", () => 
     expect(response.body.availableForms[0].label).toBe("Update Profile");
   });
 
-  it("should fall back to generic form when no selfService config at all", async () => {
+  it("should reject access when no selfService config at all (feature off by default)", async () => {
     mockAppInstanceStore.getAppInstance.mockResolvedValue({
       configId: "tenant-no-ss",
       config: {
@@ -562,10 +564,9 @@ describeIfPostgres("Phase 1c: Dynamic availableForms from tenant config", () => 
 
     const response = await request(app).get("/api/auth/self-service/entity").set("Authorization", `Bearer ${token}`);
 
-    expect(response.status).toBe(200);
-    expect(response.body.availableForms).toHaveLength(1);
-    expect(response.body.availableForms[0].type).toBe("update-individual");
-    expect(response.body.availableForms[0].label).toBe("Update Profile");
+    // No selfService config means the feature is disabled (C2 gate).
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("Self-service is not enabled for this tenant");
   });
 
   it("should match forms by id when name does not match", async () => {

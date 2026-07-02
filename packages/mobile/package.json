@@ -47,7 +47,7 @@
     "@mdi/font": "^7.4.47",
     "@mosip/pixelpass": "^0.6.0",
     "@xstate/vue": "^5.0.0",
-    "axios": "^1.13.5",
+    "axios": "^1.16.0",
     "bootstrap": "^5.3.8",
     "claim169": "0.1.0-alpha.3",
     "flatpickr": "^4.6.13",
