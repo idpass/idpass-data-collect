@@ -5,8 +5,9 @@
 // FAIL-CLOSED document loader (zero network) using only bundled @context files.
 // This is the gating de-risk for the ldp_vc verifier. Mirrors what the real
 // mobile verifier will do (WebCrypto Ed25519 + jsonld.canonize + bundled loader).
+/* eslint-disable @typescript-eslint/no-explicit-any -- jsonld ships no usable types; spike uses `any` casts like ldpVc.test.ts */
 import { describe, it, expect } from 'vitest'
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 import * as jsonldMod from 'jsonld'
 import { createOfflineDocumentLoader } from '../verifiers/jsonldContexts'
 const jsonld: any = (jsonldMod as any).default ?? jsonldMod

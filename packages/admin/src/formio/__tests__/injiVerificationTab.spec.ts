@@ -62,8 +62,11 @@ describe('Inji Verification field tab', () => {
     registerBuilderComponents()
     const Button: any = (Formio as any).Components.components.button
     const form = Button.editForm?.()
-    if (form && Array.isArray(form.components)) {
-      expect(form.components.some((c: any) => c && c.key === 'inji')).toBe(false)
-    }
+    const hasInjiTab = !!(
+      form &&
+      Array.isArray(form.components) &&
+      form.components.some((c: any) => c && c.key === 'inji')
+    )
+    expect(hasInjiTab).toBe(false)
   })
 })
