@@ -20,10 +20,10 @@
 import { Router } from "express";
 import { FormSubmission, ReviewService, EventApplierService } from "@idpass/data-collect-core";
 import { authenticateJWT, AuthenticatedRequest, validateTenantAccess } from "../middlewares/authentication";
-import { requireAction, verifyRoleFromDatabase } from "../middlewares/rbac";
+import { requireAction, verifyRoleFromDatabase, canPerformActionInTenant } from "../middlewares/rbac";
 import { asyncHandler } from "../middlewares/errorHandlers";
 import { stripServerManagedEventFields } from "../utils/eventSanitize";
-import { AppInstanceStore, Role, UserStore } from "../types";
+import { AppInstanceStore, UserStore } from "../types";
 import { ReviewStore } from "../stores/ReviewStore";
 import { createLogger } from "../utils/logger";
 
@@ -182,16 +182,27 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
       const { id } = req.params;
       const user = (req as AuthenticatedRequest).user;
 
-      // Find the review across tenant review services the user has access to
-      const userTenantIds = user.tenantIds ?? [];
+      // Resolve the review's owning tenant FIRST, then enforce the approve right
+      // WITHIN that tenant. The requireAction("approve") gate above uses the
+      // user's global-max role, which is not tenant-scoped: a user who is an
+      // approver in tenant A but a viewer in tenant B would otherwise pass it and
+      // approve B's review, applying a FormSubmission to B's entities (#1135).
       let review = null;
+      let forbidden = false;
       for (const [tenantId, reviewService] of reviewServiceCache) {
-        if (user.role !== Role.ADMIN && !userTenantIds.includes(tenantId)) continue;
         const found = reviewService.getReviewById(id);
-        if (found) {
-          review = await reviewService.approve(id, user.email);
+        if (!found) continue;
+        if (!canPerformActionInTenant(user, tenantId, "approve")) {
+          forbidden = true;
+          log.warn({ userId: user.id, tenantId }, "Denied review approval: no approve right in tenant");
           break;
         }
+        review = await reviewService.approve(id, user.email);
+        break;
+      }
+
+      if (forbidden) {
+        return res.status(403).json({ error: "Forbidden: Insufficient permission for this tenant" });
       }
 
       if (!review) {
@@ -225,15 +236,24 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
         return res.status(400).json({ error: "Missing rejection reason" });
       }
 
-      const userTenantIds = user.tenantIds ?? [];
+      // Same tenant-scoped enforcement as /approve — reject also resolves the
+      // review's owning tenant and requires the approve right within it (#1135).
       let review = null;
+      let forbidden = false;
       for (const [tenantId, reviewService] of reviewServiceCache) {
-        if (user.role !== Role.ADMIN && !userTenantIds.includes(tenantId)) continue;
         const found = reviewService.getReviewById(id);
-        if (found) {
-          review = await reviewService.reject(id, user.email, reason);
+        if (!found) continue;
+        if (!canPerformActionInTenant(user, tenantId, "approve")) {
+          forbidden = true;
+          log.warn({ userId: user.id, tenantId }, "Denied review rejection: no approve right in tenant");
           break;
         }
+        review = await reviewService.reject(id, user.email, reason);
+        break;
+      }
+
+      if (forbidden) {
+        return res.status(403).json({ error: "Forbidden: Insufficient permission for this tenant" });
       }
 
       if (!review) {
@@ -271,21 +291,42 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
       let totalFailed = 0;
       const allErrors: Array<{ reviewId: string; error: string }> = [];
 
-      // Group review IDs by their tenant's review service, filtered by user access
-      const userTenantIds = user.tenantIds ?? [];
+      // Per-tenant authorization (#1135). A bulk call may span several tenants;
+      // the user is resolved against EACH review's owning tenant independently.
+      // Semantics: approve only the reviews in tenants where the user holds the
+      // approve right; silently skip reviews in tenants where they do not. The
+      // batch is only rejected (403) when the user is unauthorized for EVERY
+      // tenant that owns a matched review — otherwise partial success is returned.
+      let authorizedTenantMatched = false;
+      let unauthorizedTenantMatched = false;
       for (const [tenantId, reviewService] of reviewServiceCache) {
-        if (user.role !== Role.ADMIN && !userTenantIds.includes(tenantId)) continue;
         const tenantReviewIds = reviewIds.filter((rid: string) => {
           const review = reviewService.getReviewById(rid);
           return review !== null;
         });
 
-        if (tenantReviewIds.length > 0) {
-          const result = await reviewService.bulkApprove(tenantReviewIds, user.email);
-          totalApproved += result.approved;
-          totalFailed += result.failed;
-          allErrors.push(...result.errors);
+        if (tenantReviewIds.length === 0) continue;
+
+        if (!canPerformActionInTenant(user, tenantId, "approve")) {
+          unauthorizedTenantMatched = true;
+          log.warn(
+            { userId: user.id, tenantId, count: tenantReviewIds.length },
+            "Skipped bulk-approve for tenant: no approve right",
+          );
+          continue;
         }
+
+        authorizedTenantMatched = true;
+        const result = await reviewService.bulkApprove(tenantReviewIds, user.email);
+        totalApproved += result.approved;
+        totalFailed += result.failed;
+        allErrors.push(...result.errors);
+      }
+
+      if (!authorizedTenantMatched && unauthorizedTenantMatched) {
+        return res
+          .status(403)
+          .json({ error: "Forbidden: Insufficient permission for the requested tenant(s)" });
       }
 
       res.json({ approved: totalApproved, failed: totalFailed, errors: allErrors });
