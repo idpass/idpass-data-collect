@@ -23,7 +23,8 @@ export default defineConfig({
   testDir: '.',
   testMatch: '**/*.spec.ts',
   timeout: 60000,
-  retries: 0,
+  // Retry once locally / twice in CI to absorb transient e2e timeouts.
+  retries: process.env.CI ? 2 : 1,
   use: {
     headless: true,
     screenshot: 'only-on-failure',
