@@ -49,4 +49,22 @@ describe("stripServerManagedEventFields", () => {
     const out = stripServerManagedEventFields(event({}));
     expect(out.data).toEqual({});
   });
+
+  it("removes forbidden fields nested inside objects and arrays (defense-in-depth)", () => {
+    const out = stripServerManagedEventFields(
+      event({
+        name: "Erin",
+        metadata: { externalId: "victim-1", note: "keep" },
+        members: [
+          { name: "child", identifierType: "national_id" },
+          { name: "spouse", externalId: "victim-2" },
+        ],
+      }),
+    );
+    expect(out.data).toEqual({
+      name: "Erin",
+      metadata: { note: "keep" },
+      members: [{ name: "child" }, { name: "spouse" }],
+    });
+  });
 });

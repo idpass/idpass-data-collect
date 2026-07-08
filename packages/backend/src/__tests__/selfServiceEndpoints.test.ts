@@ -830,6 +830,31 @@ describe("POST /api/auth/self-service/submit — entity form name routing", () =
     expect(mockSubmitForm.mock.calls[0][0].type).toBe("update-individual");
   });
 
+  it("strips client-supplied externalId/identifierType from a self-service submission (#41)", async () => {
+    const token = createValidToken();
+
+    const response = await request(app)
+      .post("/api/auth/self-service/submit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        formType: "individual",
+        formData: {
+          name: "Jane Doe",
+          externalId: "victim-openspp-id",
+          identifierType: "national_id",
+          metadata: { externalId: "nested-victim" },
+        },
+      });
+
+    expect(response.status).toBe(200);
+    expect(mockSubmitForm).toHaveBeenCalledTimes(1);
+    const applied = mockSubmitForm.mock.calls[0][0];
+    expect(applied.data.externalId).toBeUndefined();
+    expect(applied.data.identifierType).toBeUndefined();
+    expect(applied.data.metadata).toEqual({});
+    expect(applied.data.name).toBe("Jane Doe");
+  });
+
   it("should route 'association' (top-level group) as entity update with update-group", async () => {
     const token = createValidToken();
 
