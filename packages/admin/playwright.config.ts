@@ -38,8 +38,10 @@ export default defineConfig({
   webServer: {
     command: 'pnpm dev',
     port: 5173,
-    // Always let Playwright own the server lifecycle, both locally and in CI,
-    // so runs never depend on a leftover server on this port.
-    reuseExistingServer: false,
+    // Reuse a server already listening on this port. The e2e.yml CI workflow
+    // starts `pnpm run dev:admin` in the background before invoking these tests,
+    // so Playwright must reuse it rather than try to bind an occupied 5173.
+    // (Unlike mobile, whose server Playwright owns exclusively.)
+    reuseExistingServer: true,
   },
 })
