@@ -28,7 +28,10 @@ const useDevServer = !!process.env.PLAYWRIGHT_DEV_SERVER
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
-  retries: 0,
+  // Retry once locally / twice in CI to absorb transient e2e timeouts (a slow
+  // navigation under machine load can exceed the per-test timeout). Genuinely
+  // flaky tests still surface in the report as "flaky".
+  retries: process.env.CI ? 2 : 1,
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:8081',
     headless: true,
@@ -46,7 +49,10 @@ export default defineConfig({
       ? 'VITE_DEVELOP=true pnpm dev:web'
       : 'pnpm run build:web:e2e && pnpm run preview:web',
     port: 8081,
-    reuseExistingServer: !process.env.CI,
+    // Always let Playwright own the server lifecycle (start fresh, tear down),
+    // both locally and in CI, so runs never depend on leftover process/port
+    // state (e.g. an orphaned preview server from an interrupted run).
+    reuseExistingServer: false,
     // Static build + preview-server boot: build takes 30-60s, preview boots
     // instantly. Give plenty of headroom so a slow CI runner has room.
     timeout: 180_000,

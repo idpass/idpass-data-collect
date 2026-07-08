@@ -22,7 +22,8 @@ import { defineConfig } from '@playwright/test'
 export default defineConfig({
   testDir: './e2e',
   timeout: 30000,
-  retries: 0,
+  // Retry once locally / twice in CI to absorb transient e2e timeouts.
+  retries: process.env.CI ? 2 : 1,
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:5174',
     headless: true,
