@@ -47,6 +47,9 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
       - EXTERNAL_SYNC_ENABLED=${EXTERNAL_SYNC_ENABLED:-false}
+      # Coolify's proxy terminates ingress and appends the client IP to
+      # X-Forwarded-For, so trust one hop for correct rate-limit keying.
+      - TRUST_PROXY=${TRUST_PROXY:-1}
     expose:
       - "3000"
     depends_on:

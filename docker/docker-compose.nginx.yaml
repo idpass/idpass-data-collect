@@ -52,6 +52,9 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-}
       - EXTERNAL_SYNC_ENABLED=${EXTERNAL_SYNC_ENABLED:-false}
+      # One reverse proxy (nginx) sits in front and appends the client IP to
+      # X-Forwarded-For, so trust exactly one hop for correct rate-limit keying.
+      - TRUST_PROXY=${TRUST_PROXY:-1}
     depends_on:
       postgres:
         condition: service_healthy
