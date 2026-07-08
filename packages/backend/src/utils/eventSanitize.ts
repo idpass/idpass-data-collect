@@ -33,35 +33,39 @@ import { FormSubmission } from "@idpass/data-collect-core";
 const CLIENT_FORBIDDEN_EVENT_DATA_FIELDS: readonly string[] = ["externalId", "identifierType"];
 
 /**
- * Recursively drop the forbidden keys anywhere within a value (objects and
- * arrays, at any depth). Returns the same reference when nothing was removed so
- * callers pay nothing on the common path. `changed` is threaded out so the
- * top-level caller can preserve reference identity of the whole event.
+ * Read-only recursive scan: is any forbidden key present anywhere within the
+ * value (objects and arrays, at any depth)? Allocates nothing — this is the
+ * common `/api/sync/push` path, where events are clean and must stay cheap.
  */
-function deepStrip(value: unknown, state: { changed: boolean }): unknown {
+function containsForbiddenKey(value: unknown): boolean {
   if (Array.isArray(value)) {
-    let arrChanged = false;
-    const next = value.map((item) => {
-      const stripped = deepStrip(item, state);
-      if (stripped !== item) arrChanged = true;
-      return stripped;
-    });
-    return arrChanged ? next : value;
+    return value.some(containsForbiddenKey);
   }
   if (value && typeof value === "object") {
-    let objChanged = false;
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      if (CLIENT_FORBIDDEN_EVENT_DATA_FIELDS.includes(key)) return true;
+      if (containsForbiddenKey(val)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Recursively copy the value with the forbidden keys removed at any depth. Only
+ * called once `containsForbiddenKey` has confirmed a hit, so the throwaway copy
+ * is paid only on the rare malicious/edge path, never on clean events.
+ */
+function stripForbidden(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(stripForbidden);
+  }
+  if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
-      if (CLIENT_FORBIDDEN_EVENT_DATA_FIELDS.includes(key)) {
-        objChanged = true;
-        state.changed = true;
-        continue;
-      }
-      const stripped = deepStrip(val, state);
-      if (stripped !== val) objChanged = true;
-      out[key] = stripped;
+      if (CLIENT_FORBIDDEN_EVENT_DATA_FIELDS.includes(key)) continue;
+      out[key] = stripForbidden(val);
     }
-    return objChanged ? out : value;
+    return out;
   }
   return value;
 }
@@ -83,10 +87,8 @@ export function stripServerManagedEventFields(event: FormSubmission): FormSubmis
   if (!data || typeof data !== "object") {
     return event;
   }
-  const state = { changed: false };
-  const cleaned = deepStrip(data, state);
-  if (!state.changed) {
+  if (!containsForbiddenKey(data)) {
     return event;
   }
-  return { ...event, data: cleaned as Record<string, unknown> };
+  return { ...event, data: stripForbidden(data) as Record<string, unknown> };
 }
