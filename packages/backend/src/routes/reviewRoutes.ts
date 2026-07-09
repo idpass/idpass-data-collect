@@ -139,9 +139,20 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
     requireAction("create"),
     asyncHandler(async (req, res) => {
       const { tenantId, formData } = req.body;
+      const user = (req as AuthenticatedRequest).user;
 
       if (!tenantId || !formData) {
         return res.status(400).json({ error: "Missing tenantId or formData" });
+      }
+
+      // Enforce the create right WITHIN the target tenant (from the request body),
+      // not the user's global-max role. requireAction("create") above only checks
+      // the aggregate role, so a user who is an enumerator in tenant A but a viewer
+      // in tenant B would otherwise pass it and submit a form that gets applied to
+      // B's entities (auto-approve) or queued against B (#1146, follow-up to #1135).
+      if (!canPerformActionInTenant(user, tenantId, "create")) {
+        log.warn({ userId: user.id, tenantId }, "Denied review submit: no create right in tenant");
+        return res.status(403).json({ error: "Forbidden: Insufficient permission for this tenant" });
       }
 
       const reviewService = await getReviewService(appInstanceStore, reviewStore, tenantId);
@@ -364,6 +375,17 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
     asyncHandler(async (req, res) => {
       const { tenantId, eventType } = req.params;
       const { policy, requiredRole, externalAdapterType } = req.body;
+      const user = (req as AuthenticatedRequest).user;
+
+      // Enforce the manage-config right WITHIN the target tenant (the :tenantId
+      // path param), not the user's global-max role. requireAction("manage-config")
+      // above only checks the aggregate role, so a user who is a system-admin in
+      // tenant A but lower-privileged in tenant B could otherwise rewrite B's review
+      // config on the strength of their privilege in A (#1146, follow-up to #1135).
+      if (!canPerformActionInTenant(user, tenantId, "manage-config")) {
+        log.warn({ userId: user.id, tenantId }, "Denied review config change: no manage-config right in tenant");
+        return res.status(403).json({ error: "Forbidden: Insufficient permission for this tenant" });
+      }
 
       if (!policy) {
         return res.status(400).json({ error: "Missing policy" });
