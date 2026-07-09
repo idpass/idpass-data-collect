@@ -28,6 +28,7 @@ import {
   PostgresEntityStorageAdapter,
   PostgresEventStorageAdapter,
   FormSubmission,
+  SubmitFormOptions,
   createDrizzleFromPool,
 } from "@idpass/data-collect-core";
 import { ConflictStorePg } from "../stores/ConflictStorePg";
@@ -63,12 +64,17 @@ export interface BatchResult {
  * @param pool Shared PostgreSQL connection pool (managed by the caller).
  * @param tenantId Tenant identifier for multi-tenant isolation.
  * @param events Ordered list of form submissions to process atomically.
+ * @param options Optional apply-path options forwarded to every event. Used by
+ *   the bounded `/api/sync/push` caller to enforce the member sub-write scope
+ *   guard (#1145) so an out-of-scope pre-existing member GUID cannot be
+ *   injected into a group event. Omit for unbounded/admin callers.
  * @returns A BatchResult describing the outcome.
  */
 export async function processTransactionalBatch(
   pool: Pool,
   tenantId: string,
   events: FormSubmission[],
+  options?: SubmitFormOptions,
 ): Promise<BatchResult> {
   const db = createDrizzleFromPool(pool);
 
@@ -130,7 +136,7 @@ export async function processTransactionalBatch(
               batchApplied++;
               continue;
             }
-            await edm.submitForm(events[i]);
+            await edm.submitForm(events[i], options);
             batchApplied++;
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
