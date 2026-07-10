@@ -206,8 +206,8 @@ importers:
         specifier: 4.7.0
         version: 4.7.0
       js-yaml:
-        specifier: ^4.2.0
-        version: 4.3.0
+        specifier: ^5.2.1
+        version: 5.2.1
       lodash:
         specifier: ^4.17.23
         version: 4.17.23
@@ -230,9 +230,6 @@ importers:
       '@playwright/test':
         specifier: ^1.58.2
         version: 1.58.2
-      '@types/js-yaml':
-        specifier: ^4.0.9
-        version: 4.0.9
       '@types/jsdom':
         specifier: ^21.1.7
         version: 21.1.7
@@ -932,8 +929,8 @@ importers:
         specifier: ^1.4.2
         version: 1.4.2(typedoc-plugin-markdown@4.10.0(typedoc@0.28.17(typescript@5.6.3)))
       js-yaml:
-        specifier: ^4.2.0
-        version: 4.3.0
+        specifier: ^5.2.1
+        version: 5.2.1
       openapi-to-postmanv2:
         specifier: ^5.8.0
         version: 5.8.0
@@ -4741,9 +4738,6 @@ packages:
   '@types/jest@29.5.14':
     resolution: {integrity: sha512-ZN+4sdnLUbo8EVvVc2ao0GFW6oVrQRPn4K2lglySj7APvSrgzxHiNNK99us4WDMi57xxA2yggblIAMNhXOotLQ==}
 
-  '@types/js-yaml@4.0.9':
-    resolution: {integrity: sha512-k4MGaQl5TGo/iipqb2UDG2UwjXziSWkh0uysQelTlJpX1qGlpUZYm8PnO4DxG1qBomtJUdYJ6qR6xdIah10JLg==}
-
   '@types/jsdom@20.0.1':
     resolution: {integrity: sha512-d0r18sZPmMQr1eG35u12FZfhIXNrnsPU/g5wvRKCUf/tOGilKKwYMYGqh33BNR6ba+2gkHw1EUiHoN3mn7E5IQ==}
 
@@ -8442,6 +8436,10 @@ packages:
 
   js-yaml@4.3.0:
     resolution: {integrity: sha512-1td788aAnnZ5qs7V2QIRl1owjtYpbKt749Y3xauqQgwIIGF/xXWz1wMTEBx5O3LK3lXLVuqXPdPxj2BoFHaW9Q==}
+    hasBin: true
+
+  js-yaml@5.2.1:
+    resolution: {integrity: sha512-zfLtNfQqxVqq3uaTqSkh4x4hZw3KHobGUA0fJUj4wawW8bsQLTVqpHdXSIzidh7o+4lEW36tANuAGdaFx6Zgnw==}
     hasBin: true
 
   jsdom@20.0.3:
@@ -14484,7 +14482,7 @@ snapshots:
       '@types/react-router-config': 5.0.11
       combine-promises: 1.2.0
       fs-extra: 11.3.3
-      js-yaml: 4.3.0
+      js-yaml: 5.2.1
       lodash: 4.17.23
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
@@ -14940,7 +14938,7 @@ snapshots:
       '@docusaurus/utils-common': 3.8.1(@swc/core@1.15.11(@swc/helpers@0.5.17))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       fs-extra: 11.3.3
       joi: 17.13.3
-      js-yaml: 4.3.0
+      js-yaml: 5.2.1
       lodash: 4.17.23
       tslib: 2.8.1
     transitivePeerDependencies:
@@ -14965,7 +14963,7 @@ snapshots:
       globby: 11.1.0
       gray-matter: 4.0.3
       jiti: 1.21.7
-      js-yaml: 4.3.0
+      js-yaml: 5.2.1
       lodash: 4.17.23
       micromatch: 4.0.8
       p-queue: 6.6.2
@@ -16811,7 +16809,7 @@ snapshots:
       colorette: 1.4.0
       https-proxy-agent: 7.0.6
       js-levenshtein: 1.1.6
-      js-yaml: 4.3.0
+      js-yaml: 5.2.1
       minimatch: 5.1.6
       pluralize: 8.0.0
       yaml-ast-parser: 0.0.43
@@ -16826,7 +16824,7 @@ snapshots:
       ajv-formats: 3.0.1(@redocly/ajv@8.17.4)
       colorette: 1.4.0
       js-levenshtein: 1.1.6
-      js-yaml: 4.3.0
+      js-yaml: 5.2.1
       picomatch: 4.0.3
       pluralize: 8.0.0
       yaml-ast-parser: 0.0.43
@@ -17554,8 +17552,6 @@ snapshots:
     dependencies:
       expect: 29.7.0
       pretty-format: 29.7.0
-
-  '@types/js-yaml@4.0.9': {}
 
   '@types/jsdom@20.0.1':
     dependencies:
@@ -19304,7 +19300,7 @@ snapshots:
   cosmiconfig@8.3.6(typescript@5.6.3):
     dependencies:
       import-fresh: 3.3.1
-      js-yaml: 4.3.0
+      js-yaml: 5.2.1
       parse-json: 5.2.0
       path-type: 4.0.0
     optionalDependencies:
@@ -22127,6 +22123,10 @@ snapshots:
     dependencies:
       argparse: 2.0.1
 
+  js-yaml@5.2.1:
+    dependencies:
+      argparse: 2.0.1
+
   jsdom@20.0.3:
     dependencies:
       abab: 2.0.6
@@ -23611,7 +23611,7 @@ snapshots:
       async: 3.2.6
       commander: 2.20.3
       graphlib: 2.1.8
-      js-yaml: 4.3.0
+      js-yaml: 5.2.1
       json-pointer: 0.6.2
       json-schema-merge-allof: 0.8.1
       lodash: 4.17.23

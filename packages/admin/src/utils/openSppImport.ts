@@ -17,7 +17,7 @@
  * under the License.
  */
 
-import { load } from 'js-yaml'
+import { load, YAML11_SCHEMA } from 'js-yaml'
 import kebabCase from 'lodash/kebabCase'
 import startCase from 'lodash/startCase'
 
@@ -293,7 +293,13 @@ const buildEntityForm = (
 }
 
 export const parseOpenSppProgramSpecification = (yamlText: string): OpenSppImportResult => {
-  const rawResult = load(yamlText)
+  // js-yaml v5 defaults to YAML 1.2 CORE_SCHEMA and throws on empty input.
+  // Keep v1.1 scalar semantics (yes/no booleans, etc.) and the friendly
+  // empty-input error that this importer previously relied on.
+  if (!yamlText || !yamlText.trim()) {
+    throw new Error('Invalid OpenSPP specification: expected a YAML object')
+  }
+  const rawResult = load(yamlText, { schema: YAML11_SCHEMA })
   if (!rawResult || typeof rawResult !== 'object') {
     throw new Error('Invalid OpenSPP specification: expected a YAML object')
   }
