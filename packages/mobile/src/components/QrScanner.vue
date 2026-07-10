@@ -22,11 +22,13 @@ const scanSingleBarcode = async (): Promise<Barcode> => {
   return new Promise(async (resolve) => {
     document.querySelector('body')?.classList.add('barcode-scanner-active')
 
-    const listener = await BarcodeScanner.addListener('barcodeScanned', async (result) => {
+    const listener = await BarcodeScanner.addListener('barcodesScanned', async (event) => {
+      const barcode = event.barcodes[0]
+      if (!barcode) return
       await listener.remove()
       document.querySelector('body')?.classList.remove('barcode-scanner-active')
       await BarcodeScanner.stopScan()
-      resolve(result.barcode)
+      resolve(barcode)
     })
 
     await BarcodeScanner.startScan()
