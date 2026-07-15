@@ -26,6 +26,7 @@ import {
   validateEventScope,
   type EntityScopeRef,
   type FormSubmission,
+  type SubmitFormOptions,
 } from "@idpass/data-collect-core";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
@@ -501,6 +502,42 @@ export function createSyncRouter(
         acceptedEvents = accepted;
       }
 
+      // Member sub-write scope guard (#1145 — follow-up to #1134). The envelope
+      // check above validates each event's OWN entityGuid against scope, but a
+      // group event's `data.members[]` sub-writes are applied to DIFFERENT
+      // entities. A bounded field worker could pass the envelope check on an
+      // in-scope group yet smuggle an out-of-scope PRE-EXISTING entity GUID
+      // into members[], overwriting that victim and attaching it to their
+      // group. Thread the caller's scope into the apply path as an async
+      // predicate so createOrUpdateGroup rejects any such member. Brand-new
+      // member GUIDs (not resolving to an existing entity) stay allowed.
+      // Unbounded/admin callers get no options → member writes stay
+      // unrestricted, preserving legacy sync behaviour.
+      const memberScopeOptions: SubmitFormOptions | undefined = isBounded
+        ? {
+            isMemberGuidAuthorized: async (memberGuid: string): Promise<boolean> => {
+              let ref: EntityScopeRef | undefined;
+              try {
+                const pair = await appInstance.edm.getEntity(memberGuid);
+                const areaIdRaw = (pair.modified.data as Record<string, unknown> | undefined)?.area_id;
+                const areaId = typeof areaIdRaw === "string" ? areaIdRaw : null;
+                ref = { type: pair.modified.type as EntityScopeRef["type"], areaId };
+              } catch {
+                // Not a pre-existing entity — brand-new member, always allowed.
+                return true;
+              }
+              // Reuse the pure /push validator: treat the member as a
+              // non-create event targeting its own entity so its stored
+              // area + type are checked against the caller's scope.
+              return validateEventScope(
+                { type: "member-write", entityGuid: memberGuid, data: {} },
+                scope,
+                () => ref,
+              ).ok;
+            },
+          }
+        : undefined;
+
       const recordPushTelemetry = (eventCount: number) => {
         const deviceId = readDeviceIdHeader(req);
         if (telemetryStore && deviceId) {
@@ -539,7 +576,7 @@ export function createSyncRouter(
 
       if (txPool) {
         // Transactional path: all accepted events succeed or none are applied
-        const result = await processTransactionalBatch(txPool, tenantId, acceptedEvents);
+        const result = await processTransactionalBatch(txPool, tenantId, acceptedEvents, memberScopeOptions);
         if (!result.success) {
           const failedWithReason = result.failed.map((f) => ({ ...f, reason: "submit_failed" as const }));
           return res.status(422).json({
@@ -562,7 +599,7 @@ export function createSyncRouter(
       // Fallback for environments without a direct postgres URL (e.g., tests
       // that don't pass the URL through). Uses the non-transactional path.
       try {
-        const result = await appInstance.edm.submitFormBatch(acceptedEvents);
+        const result = await appInstance.edm.submitFormBatch(acceptedEvents, memberScopeOptions);
         recordPushTelemetry(result.applied);
         const failedWithReason = result.failed.map((f) => ({ ...f, reason: "submit_failed" as const }));
         const status = rejected.length > 0 ? 207 : 200;

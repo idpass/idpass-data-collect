@@ -65,11 +65,30 @@ export interface SubmitFormOptions {
    * plus its current members). Member entries whose guid does not resolve to
    * any existing entity are always allowed (creating a brand-new member).
    *
-   * Omit this option entirely for TRUSTED callers (e.g. field-worker
-   * `/api/sync/push`, whose envelope scope is validated separately) — member
-   * writes are then unrestricted, preserving legacy sync behaviour.
+   * Omit this option entirely for TRUSTED, UNBOUNDED callers (e.g. admin
+   * sync) — member writes are then unrestricted, preserving legacy sync
+   * behaviour.
    */
   authorizedMemberGuids?: string[];
+
+  /**
+   * Async predicate variant of the member sub-write guard (OpenProject #1145 —
+   * follow-up to #1134 for the `/api/sync/push` path).
+   *
+   * A field worker's sync scope is NOT a finite list of GUIDs — it is a
+   * PREDICATE over the member entity (its `area_id` and/or type must fall
+   * inside the caller's effective scope). When provided, this callback is
+   * consulted for any member entry whose `guid` resolves to a PRE-EXISTING
+   * entity that is not already covered by {@link authorizedMemberGuids} (nor
+   * the group's own guid / current members). It must resolve `true` iff the
+   * member entity is inside the caller's scope. Member entries whose guid does
+   * not resolve to any existing entity are always allowed (brand-new member)
+   * and the callback is NOT consulted for them.
+   *
+   * Supplying either this callback or {@link authorizedMemberGuids} enables
+   * RESTRICTED mode. Omit both for unbounded callers.
+   */
+  isMemberGuidAuthorized?(guid: string): Promise<boolean>;
 }
 
 /**
@@ -754,17 +773,38 @@ export class EventApplierService {
 
     if (Array.isArray(formData.data?.members)) {
       // log.debug(`Processing members: ${JSON.stringify(formData.data.members)}`);
-      // Horizontal BOLA guard (#1134): when the caller supplies an authorization
-      // scope (RESTRICTED mode — least-trusted callers such as self-service),
-      // a member entry may only write to a PRE-EXISTING entity if that entity's
-      // guid is in the authorized set. The group's own guid and its current
-      // members are always in scope. Unknown guids (new members) are allowed.
-      const restrictMembers = options?.authorizedMemberGuids !== undefined;
+      // Horizontal BOLA guard (#1134 + #1145): when the caller supplies an
+      // authorization scope (RESTRICTED mode — least-trusted callers such as
+      // self-service, or bounded field-worker `/api/sync/push`), a member entry
+      // may only write to a PRE-EXISTING entity if that entity is inside the
+      // caller's scope. The group's own guid and its current members are always
+      // in scope. Unknown guids (new members) are always allowed.
+      //
+      // Scope is expressed two ways, both handled by `isMemberAuthorized`:
+      //   - `authorizedMemberGuids` — a finite GUID set (#1134, self-service).
+      //   - `isMemberGuidAuthorized` — an async predicate over the member
+      //     entity, for scopes that are area/type membership rather than a
+      //     finite list (#1145, sync-push).
+      const restrictMembers =
+        options?.authorizedMemberGuids !== undefined || options?.isMemberGuidAuthorized !== undefined;
       const authorizedMemberGuids = new Set<string>(options?.authorizedMemberGuids ?? []);
       authorizedMemberGuids.add(group.guid);
       for (const existingMemberId of group.memberIds) {
         authorizedMemberGuids.add(existingMemberId);
       }
+      // Resolves true iff a PRE-EXISTING member guid is inside scope. The set
+      // (own guid + current members + explicit allow-list) is checked first;
+      // otherwise the async predicate decides. Callers pass at most one of the
+      // two mechanisms, but both are honoured so the guard stays single-sourced.
+      const isMemberAuthorized = async (memberGuid: string): Promise<boolean> => {
+        if (authorizedMemberGuids.has(memberGuid)) {
+          return true;
+        }
+        if (options?.isMemberGuidAuthorized) {
+          return await options.isMemberGuidAuthorized(memberGuid);
+        }
+        return false;
+      };
 
       const newMemberIds = await Promise.all(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -777,7 +817,7 @@ export class EventApplierService {
 
           if (memberData && memberData.type === "group") {
             const existingPair = await this.entityStore.getEntity(memberGuid);
-            if (restrictMembers && existingPair && !authorizedMemberGuids.has(memberGuid)) {
+            if (restrictMembers && existingPair && !(await isMemberAuthorized(memberGuid))) {
               throw new AppError(
                 "UNAUTHORIZED_MEMBER",
                 "Member references an entity outside the caller's authorization scope",
@@ -796,7 +836,7 @@ export class EventApplierService {
             return subGroup.guid;
           } else if (memberData) {
             const existingPair = await this.entityStore.getEntity(memberGuid);
-            if (restrictMembers && existingPair && !authorizedMemberGuids.has(memberGuid)) {
+            if (restrictMembers && existingPair && !(await isMemberAuthorized(memberGuid))) {
               throw new AppError(
                 "UNAUTHORIZED_MEMBER",
                 "Member references an entity outside the caller's authorization scope",
