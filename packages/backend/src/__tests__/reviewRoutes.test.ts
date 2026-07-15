@@ -1,6 +1,7 @@
 import "dotenv/config";
 
 import axios from "axios";
+import jwt from "jsonwebtoken";
 import { get } from "lodash";
 import request from "supertest";
 import { v4 as uuidv4 } from "uuid";
@@ -443,6 +444,196 @@ describeIfPostgres("Review Routes", () => {
 
       expect(response.status).toBe(200);
       expect(response.body.status).toBe("success");
+    });
+  });
+
+  // Regression guard for OpenProject #1135 — Cross-tenant review approval via
+  // global role aggregation. A user who is an approver in one tenant but only a
+  // low-privileged member (viewer) in another must NOT be able to approve/reject
+  // reviews in the tenant where they lack the approve right. Approval applies a
+  // FormSubmission to the tenant's entities, so this is a cross-tenant data write.
+  describe("Cross-tenant review approval (#1135)", () => {
+    const password = "Attacker1@";
+    const OTHER_TENANT = "other-tenant-approver";
+    const SECOND_TENANT = "review-test-config-b";
+
+    // Provision a real DB user (so verifyRoleFromDatabase resolves their
+    // authoritative role assignments) and mint a matching JWT directly. We sign
+    // the token instead of calling /login because the login endpoint is rate
+    // limited per-process; the token's tenantIds are what validateTenantAccess
+    // reads (it runs before the DB refresh), and roleAssignments are reloaded
+    // from the DB downstream, so the two stay consistent.
+    const provisionUser = async (
+      email: string,
+      tenantIds: string[],
+      roleAssignments: Array<{ tenantId: string; role: string }>,
+    ): Promise<string> => {
+      const res = await request(requireApp().httpServer)
+        .post("/api/users")
+        .send({ email, password, role: "USER", tenantIds, roleAssignments })
+        .set("Authorization", `Bearer ${adminToken}`);
+      expect(res.status).toBe(201);
+      return jwt.sign(
+        { id: email, email, role: "USER", tenantIds, roleAssignments },
+        process.env.JWT_SECRET as string,
+        { expiresIn: "1h" },
+      );
+    };
+
+    const configureInternalReview = async (tenantId: string): Promise<void> => {
+      const res = await request(requireApp().httpServer)
+        .put(`/api/reviews/config/${tenantId}/create-individual`)
+        .send({ policy: "internal-review", requiredRole: "supervisor" })
+        .set("Authorization", `Bearer ${adminToken}`);
+      expect(res.status).toBe(200);
+    };
+
+    const submitPendingReview = async (tenantId: string, entityGuid: string): Promise<string> => {
+      const res = await request(requireApp().httpServer)
+        .post("/api/reviews/submit")
+        .send({
+          tenantId,
+          formData: {
+            guid: uuidv4(),
+            entityGuid,
+            type: "create-individual",
+            data: { name: "Cross Tenant Person" },
+            timestamp: new Date().toISOString(),
+            userId: "test-user",
+            syncLevel: SyncLevel.LOCAL,
+          },
+        })
+        .set("Authorization", `Bearer ${adminToken}`);
+      expect(res.status).toBe(200);
+      expect(res.body.review.status).toBe("pending");
+      return res.body.review.id;
+    };
+
+    it("returns 403 and does NOT apply when an approver-in-A/viewer-in-B user approves B's review", async () => {
+      const currentApp = requireApp();
+      await configureInternalReview(mockConfig.id);
+      const entityGuid = uuidv4();
+      const reviewId = await submitPendingReview(mockConfig.id, entityGuid);
+
+      // Approver in OTHER_TENANT (drives the global-max role), viewer in the
+      // tenant that actually owns the review.
+      const token = await provisionUser(
+        "attacker-approve@review-test.com",
+        [OTHER_TENANT, mockConfig.id, "default"],
+        [
+          { tenantId: OTHER_TENANT, role: "supervisor" },
+          { tenantId: mockConfig.id, role: "viewer" },
+        ],
+      );
+
+      const res = await request(currentApp.httpServer)
+        .post(`/api/reviews/${reviewId}/approve`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+
+      // The review must NOT have been applied to the tenant's entities.
+      const appInstance = await currentApp.appInstanceStore.getAppInstance(mockConfig.id);
+      await expect(appInstance?.edm.getEntity(entityGuid)).rejects.toThrow(/not found/);
+    });
+
+    it("returns 403 and does NOT reject when an approver-in-A/viewer-in-B user rejects B's review", async () => {
+      const currentApp = requireApp();
+      await configureInternalReview(mockConfig.id);
+      const entityGuid = uuidv4();
+      const reviewId = await submitPendingReview(mockConfig.id, entityGuid);
+
+      const token = await provisionUser(
+        "attacker-reject@review-test.com",
+        [OTHER_TENANT, mockConfig.id, "default"],
+        [
+          { tenantId: OTHER_TENANT, role: "supervisor" },
+          { tenantId: mockConfig.id, role: "viewer" },
+        ],
+      );
+
+      const res = await request(currentApp.httpServer)
+        .post(`/api/reviews/${reviewId}/reject`)
+        .send({ reason: "malicious cross-tenant reject" })
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+
+      // The review must still be pending in the database (not rejected).
+      const listResponse = await request(currentApp.httpServer)
+        .get(`/api/reviews?tenantId=${mockConfig.id}&status=pending`)
+        .set("Authorization", `Bearer ${adminToken}`);
+      expect(listResponse.body.reviews.map((r: { id: string }) => r.id)).toContain(reviewId);
+    });
+
+    it("bulk-approve only applies reviews in tenants where the user has the approve right", async () => {
+      const currentApp = requireApp();
+
+      // Second tenant where the user IS an approver (supervisor).
+      await currentApp.appConfigStore.saveConfig({ ...mockConfig, id: SECOND_TENANT });
+      await currentApp.appInstanceStore.createAppInstance(SECOND_TENANT);
+
+      await configureInternalReview(mockConfig.id);
+      await configureInternalReview(SECOND_TENANT);
+
+      const unauthorizedEntityGuid = uuidv4();
+      const authorizedEntityGuid = uuidv4();
+      const unauthorizedReviewId = await submitPendingReview(mockConfig.id, unauthorizedEntityGuid);
+      const authorizedReviewId = await submitPendingReview(SECOND_TENANT, authorizedEntityGuid);
+
+      // Supervisor in SECOND_TENANT (authorized), viewer in mockConfig (not authorized).
+      const token = await provisionUser(
+        "mixed-bulk@review-test.com",
+        [SECOND_TENANT, mockConfig.id, "default"],
+        [
+          { tenantId: SECOND_TENANT, role: "supervisor" },
+          { tenantId: mockConfig.id, role: "viewer" },
+        ],
+      );
+
+      const res = await request(currentApp.httpServer)
+        .post("/api/reviews/bulk-approve")
+        .send({ reviewIds: [unauthorizedReviewId, authorizedReviewId] })
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.approved).toBe(1);
+
+      // Authorized tenant's review WAS applied.
+      const authorizedInstance = await currentApp.appInstanceStore.getAppInstance(SECOND_TENANT);
+      const authorizedEntity = await authorizedInstance?.edm.getEntity(authorizedEntityGuid);
+      expect(authorizedEntity).not.toBeNull();
+
+      // Unauthorized tenant's review was NOT applied.
+      const unauthorizedInstance = await currentApp.appInstanceStore.getAppInstance(mockConfig.id);
+      await expect(unauthorizedInstance?.edm.getEntity(unauthorizedEntityGuid)).rejects.toThrow(
+        /not found/,
+      );
+    });
+
+    it("still allows a legitimate approver (approve right in the review's tenant) to approve", async () => {
+      const currentApp = requireApp();
+      await configureInternalReview(mockConfig.id);
+      const entityGuid = uuidv4();
+      const reviewId = await submitPendingReview(mockConfig.id, entityGuid);
+
+      const token = await provisionUser(
+        "legit-approver@review-test.com",
+        [mockConfig.id, "default"],
+        [{ tenantId: mockConfig.id, role: "supervisor" }],
+      );
+
+      const res = await request(currentApp.httpServer)
+        .post(`/api/reviews/${reviewId}/approve`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.review.status).toBe("approved");
+
+      const appInstance = await currentApp.appInstanceStore.getAppInstance(mockConfig.id);
+      const entity = await appInstance?.edm.getEntity(entityGuid);
+      expect(entity).not.toBeNull();
+      expect(entity?.modified.data.name).toBe("Cross Tenant Person");
     });
   });
 });

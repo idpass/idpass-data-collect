@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { SystemRole } from "@idpass/data-collect-core";
-import { requireRole, requireAction } from "../middlewares/rbac";
-import { AuthenticatedRequest } from "../middlewares/authentication";
+import { requireRole, requireAction, resolveRoleInTenant, canPerformActionInTenant } from "../middlewares/rbac";
+import { AuthenticatedRequest, DecodedPayload } from "../middlewares/authentication";
 import { Role } from "../types";
 
 const JWT_SECRET = "test-rbac-secret";
@@ -222,6 +222,89 @@ describe("RBAC Middleware", () => {
 
       expect(res.status).toHaveBeenCalledWith(403);
       expect(next).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("resolveRoleInTenant()", () => {
+    const user = (
+      roleAssignments: Array<{ tenantId: string; role: string }>,
+      role: Role = Role.USER,
+    ): DecodedPayload => ({
+      id: "user-1",
+      email: "test@example.com",
+      role,
+      tenantIds: roleAssignments.map((a) => a.tenantId),
+      roleAssignments,
+    });
+
+    it("returns the role the user holds in the requested tenant", () => {
+      const u = user([
+        { tenantId: "tenant-a", role: SystemRole.SUPERVISOR },
+        { tenantId: "tenant-b", role: SystemRole.VIEWER },
+      ]);
+      expect(resolveRoleInTenant(u, "tenant-b")).toBe(SystemRole.VIEWER);
+    });
+
+    it("does NOT leak a role from another tenant (global max is ignored)", () => {
+      const u = user([
+        { tenantId: "tenant-a", role: SystemRole.SUPERVISOR },
+        { tenantId: "tenant-b", role: SystemRole.VIEWER },
+      ]);
+      // The user is a supervisor in tenant-a, but only a viewer in tenant-b.
+      expect(resolveRoleInTenant(u, "tenant-b")).not.toBe(SystemRole.SUPERVISOR);
+    });
+
+    it("returns the highest role when the user has several assignments in one tenant", () => {
+      const u = user([
+        { tenantId: "tenant-a", role: SystemRole.VIEWER },
+        { tenantId: "tenant-a", role: SystemRole.SUPERVISOR },
+      ]);
+      expect(resolveRoleInTenant(u, "tenant-a")).toBe(SystemRole.SUPERVISOR);
+    });
+
+    it("returns null when the user has no assignment in the tenant", () => {
+      const u = user([{ tenantId: "tenant-a", role: SystemRole.SUPERVISOR }]);
+      expect(resolveRoleInTenant(u, "tenant-b")).toBeNull();
+    });
+
+    it("treats a legacy admin as system-admin in every tenant", () => {
+      const u = user([], Role.ADMIN);
+      expect(resolveRoleInTenant(u, "any-tenant")).toBe(SystemRole.SYSTEM_ADMIN);
+    });
+
+    it("returns null for an undefined user", () => {
+      expect(resolveRoleInTenant(undefined, "tenant-a")).toBeNull();
+    });
+  });
+
+  describe("canPerformActionInTenant()", () => {
+    const user = (
+      roleAssignments: Array<{ tenantId: string; role: string }>,
+    ): DecodedPayload => ({
+      id: "user-1",
+      email: "test@example.com",
+      role: Role.USER,
+      tenantIds: roleAssignments.map((a) => a.tenantId),
+      roleAssignments,
+    });
+
+    it("allows approve when the user is supervisor IN that tenant", () => {
+      const u = user([{ tenantId: "tenant-a", role: SystemRole.SUPERVISOR }]);
+      expect(canPerformActionInTenant(u, "tenant-a", "approve")).toBe(true);
+    });
+
+    it("denies approve when the user only has approve rights in ANOTHER tenant", () => {
+      const u = user([
+        { tenantId: "tenant-a", role: SystemRole.SUPERVISOR },
+        { tenantId: "tenant-b", role: SystemRole.VIEWER },
+      ]);
+      // This is the #1135 vulnerability: global max would say yes, per-tenant says no.
+      expect(canPerformActionInTenant(u, "tenant-b", "approve")).toBe(false);
+    });
+
+    it("denies approve when the user is not a member of the tenant at all", () => {
+      const u = user([{ tenantId: "tenant-a", role: SystemRole.SUPERVISOR }]);
+      expect(canPerformActionInTenant(u, "tenant-b", "approve")).toBe(false);
     });
   });
 });
