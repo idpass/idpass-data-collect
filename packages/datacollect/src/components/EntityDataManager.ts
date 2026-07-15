@@ -34,7 +34,7 @@ import {
   TokenCredentials,
 } from "../interfaces/types";
 import type { SyncResult } from "../interfaces/adapter";
-import { EventApplierService } from "../services/EventApplierService";
+import { EventApplierService, SubmitFormOptions } from "../services/EventApplierService";
 import { AppError } from "../utils/AppError";
 import { ExternalSyncManager, SyncOptions } from "./ExternalSyncManager";
 import { InternalSyncManager } from "./InternalSyncManager";
@@ -225,8 +225,8 @@ export class EntityDataManager {
    * });
    * ```
    */
-  async submitForm(formData: FormSubmission): Promise<EntityDoc | null> {
-    return await this.eventApplierService.submitForm(formData);
+  async submitForm(formData: FormSubmission, options?: SubmitFormOptions): Promise<EntityDoc | null> {
+    return await this.eventApplierService.submitForm(formData, options);
   }
 
   /**

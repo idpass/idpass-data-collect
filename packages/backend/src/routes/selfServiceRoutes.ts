@@ -614,6 +614,52 @@ export function createSelfServiceRouter(
         return res.json({ status: "success", submissionGuid: submission.guid });
       }
 
+      // Horizontal BOLA guard (#1134): self-service callers are the
+      // least-trusted actors. Their token binds `entityGuid` to their own
+      // household, but member sub-writes inside a group form could otherwise
+      // name an ARBITRARY existing entity GUID — overwriting a victim's record
+      // and attaching that victim to the caller's group. Restrict member
+      // entries to the caller's bound entity and its CURRENT members; a
+      // brand-new member (guid that resolves to no existing entity) is allowed.
+      // This check runs BEFORE both the review pipeline and direct-apply so a
+      // malicious submission never reaches either path.
+      const members = submission.data?.members;
+      let authorizedMemberGuids: string[] | undefined;
+      if (Array.isArray(members)) {
+        authorizedMemberGuids = [entityGuid];
+        try {
+          const boundPair = await appInstance.edm.getEntity(entityGuid);
+          const boundMemberIds = (boundPair.modified as { memberIds?: string[] }).memberIds;
+          if (Array.isArray(boundMemberIds)) {
+            authorizedMemberGuids.push(...boundMemberIds);
+          }
+        } catch {
+          // Bound entity not found — no pre-existing members to authorize.
+        }
+        const authorizedSet = new Set(authorizedMemberGuids);
+        for (const member of members as Array<Record<string, unknown>>) {
+          const memberGuid = typeof member?.guid === "string" ? member.guid : undefined;
+          if (!memberGuid || authorizedSet.has(memberGuid)) {
+            continue;
+          }
+          // Reject only when the GUID names a PRE-EXISTING entity outside scope.
+          let referencesExistingEntity = false;
+          try {
+            await appInstance.edm.getEntity(memberGuid);
+            referencesExistingEntity = true;
+          } catch {
+            referencesExistingEntity = false;
+          }
+          if (referencesExistingEntity) {
+            log.warn(
+              { entityGuid, tenantId, formType },
+              "Self-service submission rejected: member references an entity outside the caller's household",
+            );
+            return res.status(403).json({ error: "Member is not part of your household" });
+          }
+        }
+      }
+
       // Entity update forms route through the full review pipeline
       const requireReview = appInstance.config.selfService?.requireReview;
       if (requireReview && reviewStore) {
@@ -632,8 +678,14 @@ export function createSelfServiceRouter(
         }
       }
 
-      // Apply entity update directly when review is not required
-      await appInstance.edm.submitForm(submission);
+      // Apply entity update directly when review is not required. Pass the
+      // authorized member scope as defense-in-depth so the apply-path guard
+      // (#1134) rejects any out-of-scope member write even if the door check
+      // above is ever bypassed.
+      await appInstance.edm.submitForm(
+        submission,
+        authorizedMemberGuids ? { authorizedMemberGuids } : undefined,
+      );
 
       log.info({ entityGuid, tenantId, formType }, "Self-service form submitted");
 

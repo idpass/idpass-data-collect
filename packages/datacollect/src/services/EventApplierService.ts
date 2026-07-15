@@ -50,6 +50,29 @@ type ConflictResolutionResult =
   | { resolution: "remote-wins"; baseEntity?: EntityDoc };
 
 /**
+ * Options controlling how an event is applied.
+ *
+ * These carry the CALLER's authorization context into the apply path. They are
+ * NOT persisted on the event — they only gate the write.
+ */
+export interface SubmitFormOptions {
+  /**
+   * When provided, enables RESTRICTED mode for `create-group`/`update-group`
+   * member sub-writes (OpenProject #1134 — horizontal BOLA guard).
+   *
+   * A member entry whose `guid` resolves to a PRE-EXISTING entity is only
+   * accepted when that guid is present in this set (the caller's own group,
+   * plus its current members). Member entries whose guid does not resolve to
+   * any existing entity are always allowed (creating a brand-new member).
+   *
+   * Omit this option entirely for TRUSTED callers (e.g. field-worker
+   * `/api/sync/push`, whose envelope scope is validated separately) — member
+   * writes are then unrestricted, preserving legacy sync behaviour.
+   */
+  authorizedMemberGuids?: string[];
+}
+
+/**
  * Service responsible for applying events (FormSubmissions) to entities in the event sourcing system.
  *
  * The EventApplierService is the core component that transforms events into entity state changes.
@@ -325,7 +348,7 @@ export class EventApplierService {
    * });
    * ```
    */
-  async submitForm(formDataParam: FormSubmission): Promise<EntityDoc | null> {
+  async submitForm(formDataParam: FormSubmission, options?: SubmitFormOptions): Promise<EntityDoc | null> {
     try {
       const formData = cloneDeep(formDataParam);
       validateFormSubmission(formData);
@@ -345,7 +368,7 @@ export class EventApplierService {
 
       const eventGuid = await this.eventStore.saveEvent(formData);
 
-      const updatedEntity = await this.applyEventToEntity(formData, eventGuid, entityPair);
+      const updatedEntity = await this.applyEventToEntity(formData, eventGuid, entityPair, options);
 
       // Enqueue the entity for asynchronous duplicate detection so the write
       // path is never blocked by the O(n) entity scan.
@@ -404,6 +427,7 @@ export class EventApplierService {
     formData: FormSubmission,
     eventGuid: string,
     entityPair: EntityPair | null,
+    options?: SubmitFormOptions,
   ): Promise<EntityDoc | null> {
     const conflictResult = await this.handleIncomingConflict(entityPair, formData, eventGuid);
 
@@ -421,6 +445,7 @@ export class EventApplierService {
         eventGuid,
         baseEntity as GroupDoc | undefined,
         formData,
+        options,
       );
     } else if (formData.type === "create-individual" || formData.type === "update-individual") {
       // log.debug(`Creating or updating individual: ${JSON.stringify(formData)}`);
@@ -702,6 +727,7 @@ export class EventApplierService {
     eventGuid: string,
     existingGroup: GroupDoc | undefined,
     formData: FormSubmission,
+    options?: SubmitFormOptions,
   ): Promise<GroupDoc> {
     // log.debug(
     //   `Creating or updating group: ${JSON.stringify({
@@ -728,6 +754,18 @@ export class EventApplierService {
 
     if (Array.isArray(formData.data?.members)) {
       // log.debug(`Processing members: ${JSON.stringify(formData.data.members)}`);
+      // Horizontal BOLA guard (#1134): when the caller supplies an authorization
+      // scope (RESTRICTED mode — least-trusted callers such as self-service),
+      // a member entry may only write to a PRE-EXISTING entity if that entity's
+      // guid is in the authorized set. The group's own guid and its current
+      // members are always in scope. Unknown guids (new members) are allowed.
+      const restrictMembers = options?.authorizedMemberGuids !== undefined;
+      const authorizedMemberGuids = new Set<string>(options?.authorizedMemberGuids ?? []);
+      authorizedMemberGuids.add(group.guid);
+      for (const existingMemberId of group.memberIds) {
+        authorizedMemberGuids.add(existingMemberId);
+      }
+
       const newMemberIds = await Promise.all(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         formData.data.members.map(async (member: Record<string, any>) => {
@@ -739,6 +777,12 @@ export class EventApplierService {
 
           if (memberData && memberData.type === "group") {
             const existingPair = await this.entityStore.getEntity(memberGuid);
+            if (restrictMembers && existingPair && !authorizedMemberGuids.has(memberGuid)) {
+              throw new AppError(
+                "UNAUTHORIZED_MEMBER",
+                "Member references an entity outside the caller's authorization scope",
+              );
+            }
             const existingGroup = existingPair?.modified as GroupDoc | undefined;
             const subGroup = await this.createOrUpdateGroup(eventGuid, existingGroup, {
               guid: uuidv4(),
@@ -752,6 +796,12 @@ export class EventApplierService {
             return subGroup.guid;
           } else if (memberData) {
             const existingPair = await this.entityStore.getEntity(memberGuid);
+            if (restrictMembers && existingPair && !authorizedMemberGuids.has(memberGuid)) {
+              throw new AppError(
+                "UNAUTHORIZED_MEMBER",
+                "Member references an entity outside the caller's authorization scope",
+              );
+            }
             const existingIndividual = existingPair?.modified as IndividualDoc | undefined;
             const individualDoc = await this.createOrUpdateIndividual(eventGuid, existingIndividual, {
               guid: uuidv4(),
