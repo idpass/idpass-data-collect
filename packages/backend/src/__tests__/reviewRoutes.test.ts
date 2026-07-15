@@ -1,8 +1,6 @@
 import "dotenv/config";
 
-import axios from "axios";
 import jwt from "jsonwebtoken";
-import { get } from "lodash";
 import request from "supertest";
 import { v4 as uuidv4 } from "uuid";
 import { SyncLevel } from "@idpass/data-collect-core";
@@ -34,7 +32,6 @@ const postgresUrl = getConnectionString("review_routes");
 
 describeIfPostgres("Review Routes", () => {
   let app: SyncServerInstance | null = null;
-  let baseUrl = "";
   let adminToken = "";
 
   const requireApp = (): SyncServerInstance => {
@@ -42,14 +39,6 @@ describeIfPostgres("Review Routes", () => {
       throw new Error("Sync server instance is not initialized");
     }
     return app;
-  };
-
-  const resolveBaseUrl = (instance: SyncServerInstance): string => {
-    const address = instance.httpServer.address();
-    if (typeof address === "object" && address && address.port) {
-      return `http://127.0.0.1:${address.port}`;
-    }
-    return "http://127.0.0.1";
   };
 
   beforeAll(async () => {
@@ -70,15 +59,25 @@ describeIfPostgres("Review Routes", () => {
       postgresUrl: postgresUrl as string,
     });
     const currentApp = requireApp();
-    baseUrl = resolveBaseUrl(currentApp);
     await currentApp.appConfigStore.saveConfig(mockConfig);
     await currentApp.appInstanceStore.createAppInstance(mockConfig.id);
 
-    const loginResponse = await axios.post(baseUrl + "/api/users/login", {
-      email: "admin@review-test.com",
-      password: "admin1@",
-    });
-    adminToken = get(loginResponse.data, "token") ?? "";
+    // Mint the admin JWT directly rather than calling /login. The login endpoint
+    // is rate limited to 15 attempts / 15 min per process; with a per-test
+    // beforeEach that limit is exhausted as the suite grows (#1146 added tests).
+    // The signed payload mirrors exactly what POST /api/users/login returns.
+    const adminUser = await currentApp.userStore.getUser("admin@review-test.com");
+    adminToken = jwt.sign(
+      {
+        id: adminUser?.id,
+        email: adminUser?.email,
+        role: adminUser?.role,
+        tenantIds: adminUser?.tenantIds,
+        roleAssignments: adminUser?.roleAssignments ?? [],
+      },
+      process.env.JWT_SECRET as string,
+      { expiresIn: "1h" },
+    );
   });
 
   afterEach(async () => {
@@ -634,6 +633,192 @@ describeIfPostgres("Review Routes", () => {
       const entity = await appInstance?.edm.getEntity(entityGuid);
       expect(entity).not.toBeNull();
       expect(entity?.modified.data.name).toBe("Cross Tenant Person");
+    });
+  });
+
+  // Regression guard for OpenProject #1146 — follow-up to #1135. The /submit and
+  // /config/:tenantId/:eventType endpoints authorized on the user's GLOBAL-max
+  // role (requireAction) instead of their role WITHIN the target tenant. A user
+  // who holds `create` (enumerator) or `manage-config` (system-admin) in tenant A
+  // but is only a low-privileged member (viewer) in tenant B could therefore
+  // submit a form to B's entities, or rewrite B's review config, purely on the
+  // strength of their privilege in A. Both endpoints must now be gated per-tenant.
+  describe("Cross-tenant submit/config authorization (#1146)", () => {
+    const password = "Attacker1@";
+    const TENANT_A = "tenant-a-1146";
+
+    const provisionUser = async (
+      email: string,
+      tenantIds: string[],
+      roleAssignments: Array<{ tenantId: string; role: string }>,
+    ): Promise<string> => {
+      const res = await request(requireApp().httpServer)
+        .post("/api/users")
+        .send({ email, password, role: "USER", tenantIds, roleAssignments })
+        .set("Authorization", `Bearer ${adminToken}`);
+      expect(res.status).toBe(201);
+      return jwt.sign(
+        { id: email, email, role: "USER", tenantIds, roleAssignments },
+        process.env.JWT_SECRET as string,
+        { expiresIn: "1h" },
+      );
+    };
+
+    it("returns 403 and does NOT apply when a create-in-A/viewer-in-B user submits to B", async () => {
+      const currentApp = requireApp();
+
+      // No review config on mockConfig.id → a successful submit auto-approves and
+      // applies the FormSubmission immediately. So a missing 403 is observable as
+      // a created entity.
+      const entityGuid = uuidv4();
+      const token = await provisionUser(
+        "submit-attacker@review-test.com",
+        [TENANT_A, mockConfig.id, "default"],
+        [
+          { tenantId: TENANT_A, role: "enumerator" },
+          { tenantId: mockConfig.id, role: "viewer" },
+        ],
+      );
+
+      const res = await request(currentApp.httpServer)
+        .post("/api/reviews/submit")
+        .send({
+          tenantId: mockConfig.id,
+          formData: {
+            guid: uuidv4(),
+            entityGuid,
+            type: "create-individual",
+            data: { name: "Cross Tenant Submit" },
+            timestamp: new Date().toISOString(),
+            userId: "test-user",
+            syncLevel: SyncLevel.LOCAL,
+          },
+        })
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+
+      // No entity created, and no review persisted for the tenant.
+      const appInstance = await currentApp.appInstanceStore.getAppInstance(mockConfig.id);
+      await expect(appInstance?.edm.getEntity(entityGuid)).rejects.toThrow(/not found/);
+
+      const listResponse = await request(currentApp.httpServer)
+        .get(`/api/reviews?tenantId=${mockConfig.id}`)
+        .set("Authorization", `Bearer ${adminToken}`);
+      expect(listResponse.body.reviews).toHaveLength(0);
+    });
+
+    it("returns 403 and does NOT persist when a sysadmin-in-A/viewer-in-B user sets B's config", async () => {
+      const currentApp = requireApp();
+
+      const token = await provisionUser(
+        "config-attacker@review-test.com",
+        [TENANT_A, mockConfig.id, "default"],
+        [
+          { tenantId: TENANT_A, role: "system-admin" },
+          { tenantId: mockConfig.id, role: "viewer" },
+        ],
+      );
+
+      const res = await request(currentApp.httpServer)
+        .put(`/api/reviews/config/${mockConfig.id}/create-individual`)
+        .send({ policy: "auto-approve" })
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(403);
+
+      // Config must NOT have been written.
+      const getResponse = await request(currentApp.httpServer)
+        .get(`/api/reviews/config/${mockConfig.id}`)
+        .set("Authorization", `Bearer ${adminToken}`);
+      expect(getResponse.body.configs).toHaveLength(0);
+    });
+
+    it("still allows a user WITH the create right in the target tenant to submit", async () => {
+      const currentApp = requireApp();
+
+      const entityGuid = uuidv4();
+      const token = await provisionUser(
+        "legit-submitter@review-test.com",
+        [mockConfig.id, "default"],
+        [{ tenantId: mockConfig.id, role: "enumerator" }],
+      );
+
+      const res = await request(currentApp.httpServer)
+        .post("/api/reviews/submit")
+        .send({
+          tenantId: mockConfig.id,
+          formData: {
+            guid: uuidv4(),
+            entityGuid,
+            type: "create-individual",
+            data: { name: "Legit Submit" },
+            timestamp: new Date().toISOString(),
+            userId: "test-user",
+            syncLevel: SyncLevel.LOCAL,
+          },
+        })
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+
+      const appInstance = await currentApp.appInstanceStore.getAppInstance(mockConfig.id);
+      const entity = await appInstance?.edm.getEntity(entityGuid);
+      expect(entity).not.toBeNull();
+      expect(entity?.modified.data.name).toBe("Legit Submit");
+    });
+
+    it("still allows a user WITH manage-config in the target tenant to set config", async () => {
+      const currentApp = requireApp();
+
+      const token = await provisionUser(
+        "legit-config@review-test.com",
+        [mockConfig.id, "default"],
+        [{ tenantId: mockConfig.id, role: "system-admin" }],
+      );
+
+      const res = await request(currentApp.httpServer)
+        .put(`/api/reviews/config/${mockConfig.id}/create-individual`)
+        .send({ policy: "auto-approve" })
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("success");
+
+      const getResponse = await request(currentApp.httpServer)
+        .get(`/api/reviews/config/${mockConfig.id}`)
+        .set("Authorization", `Bearer ${adminToken}`);
+      expect(getResponse.body.configs).toHaveLength(1);
+      expect(getResponse.body.configs[0].policy).toBe("auto-approve");
+    });
+
+    it("still allows a legacy SYSTEM_ADMIN (Role.ADMIN) to submit and set config", async () => {
+      const currentApp = requireApp();
+
+      // adminToken is a legacy Role.ADMIN user → SYSTEM_ADMIN in every tenant.
+      const configRes = await request(currentApp.httpServer)
+        .put(`/api/reviews/config/${mockConfig.id}/create-individual`)
+        .send({ policy: "auto-approve" })
+        .set("Authorization", `Bearer ${adminToken}`);
+      expect(configRes.status).toBe(200);
+
+      const entityGuid = uuidv4();
+      const submitRes = await request(currentApp.httpServer)
+        .post("/api/reviews/submit")
+        .send({
+          tenantId: mockConfig.id,
+          formData: {
+            guid: uuidv4(),
+            entityGuid,
+            type: "create-individual",
+            data: { name: "Admin Submit" },
+            timestamp: new Date().toISOString(),
+            userId: "test-user",
+            syncLevel: SyncLevel.LOCAL,
+          },
+        })
+        .set("Authorization", `Bearer ${adminToken}`);
+      expect(submitRes.status).toBe(200);
     });
   });
 });
