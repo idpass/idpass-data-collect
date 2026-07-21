@@ -156,7 +156,12 @@ Before committing:
 ---
 
 ### Playwright Browser Configuration
-If Chromium is not found in the usual places, check Flatpak as well and do not use `npx playwright install`. Use the system's **Chromium Flatpak** to avoid library compatibility issues with the host.
+
+**e2e browsers (CI parity).** `pnpm pr-check` self-installs the exact Chromium build pinned by the workspace's `@playwright/test` via `pnpm --filter @idpass/data-collect-admin exec playwright install chromium` before the browser-based e2e stages. This is the project-pinned binary (not a global `npx playwright install`) and it self-heals the version drift you get after a Playwright bump — the failure mode where the cache holds an older `chromium_headless_shell-<n>` than the one the new Playwright expects.
+
+The self-installed headless Chromium **launches fine on the Bazzite host** — the drift-fix above is all the e2e suite needs. A `distrobox` (Ubuntu/Fedora) mirroring the CI image is still worth it for full CI parity (it lets `playwright install --with-deps chromium` and the CI Node version — `22.x`, pin via `fnm`/`mise` — behave exactly like the runner), but it is **not required** to run the e2e locally.
+
+**Manual/interactive browsing on the host** (not the e2e suite): use the system **Chromium Flatpak** to avoid the same host library-compatibility issues.
 
 | Setting | Value |
 | :--- | :--- |
