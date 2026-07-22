@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { createActor, fromPromise } from 'xstate'
 import { lockMachine } from '../lockMachine'
+import type { LoadLockStateResult, BiometricResult } from '../types'
 
 function createTestMachine(overrides: {
   loadResult?: { isNativePlatform: boolean; isLocked: boolean }
@@ -185,6 +186,50 @@ describe('lockMachine', () => {
     actor.send({ type: 'USER_ACTIVITY' })
     expect(actor.getSnapshot().matches('unlocked')).toBe(true)
     actor.stop()
+  })
+
+  it('leaves authenticating and returns to locked when biometric never settles', async () => {
+    // Reproduces the on-device hang: the native biometric promise never
+    // resolves nor rejects (e.g. cap8 bridge stall on a device with no
+    // enrolled biometric). The machine must not stay pinned in
+    // `authenticating` — it must self-heal back to `locked` with an error so
+    // the lock flow resolves deterministically instead of hanging until the
+    // AppLockService 30s waitForState rejects and crashes Vue.
+    vi.useFakeTimers()
+    try {
+      const machine = lockMachine.provide({
+        actors: {
+          loadPersistedLockState: fromPromise<LoadLockStateResult>(async () => ({
+            isNativePlatform: true,
+            isLocked: true
+          })),
+          // Never settles.
+          biometricAuthenticate: fromPromise<BiometricResult>(() => new Promise(() => {})),
+          persistLockState: fromPromise(async () => {})
+        }
+      })
+      const actor = createActor(machine)
+      actor.start()
+
+      actor.send({ type: 'INIT' })
+      // Flush the load promise so the machine reaches `locked`.
+      await vi.advanceTimersByTimeAsync(0)
+      expect(actor.getSnapshot().matches('locked')).toBe(true)
+
+      actor.send({ type: 'AUTHENTICATE' })
+      expect(actor.getSnapshot().matches('authenticating')).toBe(true)
+
+      // Advance well past any reasonable biometric deadline. The machine must
+      // have left `authenticating` on its own.
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      expect(actor.getSnapshot().matches('authenticating')).toBe(false)
+      expect(actor.getSnapshot().matches('locked')).toBe(true)
+      expect(actor.getSnapshot().context.error).toBeTruthy()
+      actor.stop()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('handles load error by transitioning to unlocked', async () => {
