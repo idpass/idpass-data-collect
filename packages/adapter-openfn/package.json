@@ -33,7 +33,7 @@
     "jest-fetch-mock": "^3.0.3",
     "ts-jest": "^29.4.11",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.63.0"
+    "typescript-eslint": "^8.64.0"
   },
   "license": "Apache-2.0",
   "publishConfig": {
