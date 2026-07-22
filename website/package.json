@@ -39,7 +39,7 @@
     "@docusaurus/types": "3.10.1",
     "docusaurus-plugin-typedoc": "^1.4.2",
     "js-yaml": "^5.2.1",
-    "openapi-to-postmanv2": "^5.8.0",
+    "openapi-to-postmanv2": "^6.3.0",
     "typedoc": "^0.28.20",
     "typedoc-docusaurus-theme": "^1.4.2",
     "typedoc-plugin-markdown": "^4.12.0",
