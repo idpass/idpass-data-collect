@@ -18,13 +18,13 @@ To access the admin dashboard, you must first log in with your credentials.
 
 Upon successful login, you will be redirected to the main dashboard.
 
-<!-- ![Login Screen]() -->
+{/* ![Login Screen]() */}
 
 ## 2. The Dashboard (App Manager)
 
 The main page after logging in is the App Manager, which displays all available application configurations, often referred to as "Apps".
 
-<!-- ![App Manager]() -->
+{/* ![App Manager]() */}
 
 ### Features
 
@@ -51,7 +51,7 @@ Each app is displayed on a card with the following details and actions:
 
 You can create a new configuration from scratch by clicking the **Create Config** button in the navigation bar, or edit an existing one via the App Card menu.
 
-<!-- ![Config Editor]() -->
+{/* ![Config Editor]() */}
 
 The configuration form is divided into several sections:
 
@@ -74,7 +74,7 @@ This section allows you to define the data collection forms for your application
 
 The Form Builder is a powerful visual tool based on Form.io for creating your data collection forms. You can drag and drop various components (text fields, number inputs, dropdowns, etc.), set validation rules, and define the form's layout. When you save the form in the builder, its JSON schema is saved into your main application configuration.
 
-<!-- ![Form Builder]() -->
+{/* ![Form Builder]() */}
 
 ### External Sync
 
@@ -125,7 +125,7 @@ Define one or more authentication methods for your application.
 
 The "Users" page allows administrators to manage user accounts.
 
-<!-- ![User Management]() -->
+{/* ![User Management]() */}
 
 ### Features
 

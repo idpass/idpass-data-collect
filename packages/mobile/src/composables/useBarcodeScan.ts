@@ -72,10 +72,12 @@ export function useBarcodeScan() {
         })
       }
 
-      BarcodeScanner.addListener('barcodeScanned', async (result) => {
+      BarcodeScanner.addListener('barcodesScanned', async (event) => {
+        const barcode = event.barcodes[0]
+        if (!barcode) return
         try {
           await cleanup()
-          resolve(result.barcode)
+          resolve(barcode)
         } catch (error) {
           reject(error)
         }

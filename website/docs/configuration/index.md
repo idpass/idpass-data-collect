@@ -137,6 +137,6 @@ This configuration system supports various data collection scenarios:
 - [Entity Forms](./entity-forms.md) - Learn how to create and configure data collection forms
 - [External Sync Configuration](./external-sync.md) - Configure integration with external systems
 
-<!-- - [Installation Guide](./installation.md) - Learn how to set up the system
+{/* - [Installation Guide](./installation.md) - Learn how to set up the system
 - [Form Builder Guide](./form-builder.md) - Create dynamic forms using FormIO
-- [Authentication Setup](./authentication.md) - Set up user authentication -->
+- [Authentication Setup](./authentication.md) - Set up user authentication */}

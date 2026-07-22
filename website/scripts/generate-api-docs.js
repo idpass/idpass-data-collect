@@ -356,7 +356,8 @@ function generateApiDocs() {
   }
   
   const specContent = fs.readFileSync(specPath, 'utf8');
-  const spec = yaml.load(specContent);
+  // js-yaml v5 defaults to YAML 1.2 CORE_SCHEMA; keep v1.1 semantics for the spec.
+  const spec = yaml.load(specContent, { schema: yaml.YAML11_SCHEMA });
   
   console.log(`📖 Loaded OpenAPI spec: ${spec.info.title} v${spec.info.version}`);
   

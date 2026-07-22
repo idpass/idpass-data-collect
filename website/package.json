@@ -20,31 +20,31 @@
     "clear-api-docs": "rm -rf docs/packages/backend/api-reference-generated && rm -rf docs/packages/datacollect/api"
   },
   "dependencies": {
-    "@docusaurus/core": "3.8.1",
-    "@docusaurus/preset-classic": "3.8.1",
-    "@mdx-js/react": "3.0.0",
-    "clsx": "2.0.0",
+    "@docusaurus/core": "3.10.1",
+    "@docusaurus/preset-classic": "3.10.1",
+    "@mdx-js/react": "3.1.1",
+    "clsx": "2.1.1",
     "docusaurus-lunr-search": "^3.6.0",
     "lunr": "^2.3.9",
-    "mermaid": "^11.12.2",
-    "prism-react-renderer": "2.3.0",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
+    "mermaid": "^11.16.0",
+    "prism-react-renderer": "2.4.1",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
-    "@docusaurus/faster": "^3.9.2",
-    "@docusaurus/module-type-aliases": "3.8.1",
-    "@docusaurus/tsconfig": "3.8.1",
-    "@docusaurus/types": "3.8.1",
+    "@docusaurus/faster": "^3.10.1",
+    "@docusaurus/module-type-aliases": "3.10.1",
+    "@docusaurus/tsconfig": "3.10.1",
+    "@docusaurus/types": "3.10.1",
     "docusaurus-plugin-typedoc": "^1.4.2",
-    "js-yaml": "^4.2.0",
+    "js-yaml": "^5.2.1",
     "openapi-to-postmanv2": "^5.8.0",
-    "typedoc": "^0.28.17",
+    "typedoc": "^0.28.20",
     "typedoc-docusaurus-theme": "^1.4.2",
-    "typedoc-plugin-markdown": "^4.10.0",
+    "typedoc-plugin-markdown": "^4.12.0",
     "typescript": "~5.6.3",
-    "wrangler": "^4.65.0"
+    "wrangler": "^4.107.1"
   },
   "browserslist": {
     "production": [
