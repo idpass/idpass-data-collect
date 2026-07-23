@@ -20,5 +20,4 @@ module.exports = {
   moduleNameMapper: {
     "^@idpass/data-collect-core$": "<rootDir>/../datacollect/src/index.ts",
   },
-  setupFilesAfterEnv: ["jest-fetch-mock"],
 };
