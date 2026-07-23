@@ -12,7 +12,7 @@
   ],
   "scripts": {
     "test": "jest --silent",
-    "test:e2e": "jest --silent --testPathPattern=e2e",
+    "test:e2e": "jest --silent --testPathPatterns=e2e",
     "dev": "nodemon",
     "clean": "rimraf dist/",
     "copy-files": "copyfiles -u 1 src/public/**/* dist && copyfiles openapi.yaml dist/",
