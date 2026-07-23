@@ -72,7 +72,7 @@
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-vue": "^5.2.4",
     "@vitest/ui": "^3.2.4",
-    "dotenv": "^16.6.1",
+    "dotenv": "^17.4.2",
     "eslint": "^9.39.2",
     "eslint-plugin-vue": "^10.9.2",
     "globals": "^17.7.0",
