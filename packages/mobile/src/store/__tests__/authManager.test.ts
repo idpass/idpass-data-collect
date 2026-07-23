@@ -34,21 +34,41 @@ vi.mock('@/router', () => ({
 
 // Mock IndexedDB-related modules from idpass-data-collect with proper implementations
 vi.mock('@idpass/data-collect-core', () => ({
-  AuthConfig: vi.fn().mockImplementation(() => ({})),
-  AuthManager: vi.fn().mockImplementation(() => ({
-    login: vi.fn(),
-    logout: vi.fn(),
-    isAuthenticated: vi.fn().mockResolvedValue(false),
-    handleCallback: vi.fn(),
-  })),
-  EntityDataManager: vi.fn().mockImplementation(() => ({})),
-  EntityStoreImpl: vi.fn().mockImplementation(() => ({})),
-  EventStoreImpl: vi.fn().mockImplementation(() => ({})),
-  IndexedDbEventStorageAdapter: vi.fn().mockImplementation(() => ({})),
-  IndexedDbEntityStorageAdapter: vi.fn().mockImplementation(() => ({})),
-  EventApplierService: vi.fn().mockImplementation(() => ({})),
-  InternalSyncManager: vi.fn().mockImplementation(() => ({})),
-  IndexedDbAuthStorageAdapter: vi.fn().mockImplementation(() => ({})),
+  AuthConfig: vi.fn().mockImplementation(function () {
+    return {}
+  }),
+  AuthManager: vi.fn().mockImplementation(function () {
+    return {
+      login: vi.fn(),
+      logout: vi.fn(),
+      isAuthenticated: vi.fn().mockResolvedValue(false),
+      handleCallback: vi.fn(),
+    }
+  }),
+  EntityDataManager: vi.fn().mockImplementation(function () {
+    return {}
+  }),
+  EntityStoreImpl: vi.fn().mockImplementation(function () {
+    return {}
+  }),
+  EventStoreImpl: vi.fn().mockImplementation(function () {
+    return {}
+  }),
+  IndexedDbEventStorageAdapter: vi.fn().mockImplementation(function () {
+    return {}
+  }),
+  IndexedDbEntityStorageAdapter: vi.fn().mockImplementation(function () {
+    return {}
+  }),
+  EventApplierService: vi.fn().mockImplementation(function () {
+    return {}
+  }),
+  InternalSyncManager: vi.fn().mockImplementation(function () {
+    return {}
+  }),
+  IndexedDbAuthStorageAdapter: vi.fn().mockImplementation(function () {
+    return {}
+  }),
 }))
 
 // Mock the store index properly - all variables must be inside the factory
@@ -104,7 +124,9 @@ describe('AuthManager Store', () => {
       clearTemporaryOAuthData: vi.fn().mockResolvedValue(undefined),
       getTemporaryOAuthData: vi.fn().mockResolvedValue({ appId: null, provider: null }),
     }
-    vi.mocked(MobileAuthStorage).mockImplementation(() => mockMobileAuthStorage as unknown as MobileAuthStorage)
+    vi.mocked(MobileAuthStorage).mockImplementation(function () {
+      return mockMobileAuthStorage as unknown as MobileAuthStorage
+    })
 
     // Mock console methods
     vi.spyOn(console, 'error').mockImplementation(() => {})

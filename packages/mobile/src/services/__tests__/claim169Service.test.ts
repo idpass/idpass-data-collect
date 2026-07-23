@@ -81,7 +81,9 @@ const {
   mockVerifyEcdsaP256.mockImplementation(() => createMockDecoder())
   mockAllowUnverified.mockImplementation(() => createMockDecoder())
 
-  const MockDecoder = vi.fn().mockImplementation(() => createMockDecoder())
+  const MockDecoder = vi.fn().mockImplementation(function () {
+    return createMockDecoder()
+  })
 
   return { mockVerifyEd25519, mockVerifyEcdsaP256, mockAllowUnverified, mockDecode, MockDecoder }
 })
@@ -104,7 +106,9 @@ describe('claim169Service', () => {
     mockVerifyEcdsaP256.mockImplementation(() => createMockDecoder())
     mockAllowUnverified.mockImplementation(() => createMockDecoder())
     mockDecode.mockReturnValue(decodedData)
-    MockDecoder.mockImplementation(() => createMockDecoder())
+    MockDecoder.mockImplementation(function () {
+      return createMockDecoder()
+    })
   })
 
   describe('genderToString', () => {
