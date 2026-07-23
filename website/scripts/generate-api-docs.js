@@ -42,18 +42,12 @@ function getMethodClass(method) {
 }
 
 function generateMarkdownContent(frontMatter, content) {
-  const frontMatterStr = Object.entries(frontMatter)
-    .map(([key, value]) => {
-      if (Array.isArray(value)) {
-        return `${key}:\n${value.map(item => `  - "${item}"`).join('\n')}`;
-      } else if (typeof value === 'string') {
-        return `${key}: "${value}"`;
-      } else {
-        return `${key}: ${value}`;
-      }
-    })
-    .join('\n');
-  
+  // Serialize front matter with js-yaml so values (titles/descriptions from the
+  // OpenAPI spec) are always correctly quoted/escaped. The previous hand-rolled
+  // `key: "${value}"` did not escape embedded quotes/special characters, which
+  // Docusaurus' stricter front-matter parser rejects.
+  const frontMatterStr = yaml.dump(frontMatter, { lineWidth: -1 }).trimEnd();
+
   return `---
 ${frontMatterStr}
 ---

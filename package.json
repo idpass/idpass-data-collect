@@ -43,12 +43,12 @@
     "test:e2e:integration": "pnpm --filter @idpass/data-collect-admin exec playwright test --config ../../e2e/playwright.config.ts"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
+    "@eslint/js": "^9.39.5",
     "glob": "^10.5.0",
     "globals": "^17.7.0",
     "husky": "^8.0.3",
     "lint-staged": "^17.0.8",
-    "typescript-eslint": "^8.63.0"
+    "typescript-eslint": "^8.64.0"
   },
   "lint-staged": {
     "packages/**/*.{ts,tsx,js,jsx}": [
