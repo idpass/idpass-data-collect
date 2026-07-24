@@ -1,5 +1,11 @@
 /**
- * @jest-environment jsdom
+ * @jest-environment node
+ *
+ * Runs in the node environment (not jsdom) so `window` is absent by default and
+ * freely (re)assignable — the tests toggle `global.window` to exercise the
+ * adapter's frontend/backend environment detection. jsdom defines `window` as a
+ * non-configurable global that cannot be removed, which is the opposite of what
+ * these detection tests need.
  */
 import { KeycloakAuthAdapter } from "../KeycloakAuthAdapter";
 import OIDCClient from "../OIDCClient";
@@ -119,7 +125,8 @@ describe("KeycloakAuthAdapter", () => {
       // Mock window object
       Object.defineProperty(global, 'window', {
         value: { localStorage: {} },
-        writable: true
+        writable: true,
+        configurable: true
       });
 
       const frontendAdapter = new KeycloakAuthAdapter(mockAuthStorage, authConfig);
