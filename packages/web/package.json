@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@idpass/data-collect-core": "workspace:*",
-    "@formio/vue": "^5.0.0",
+    "@formio/vue": "^6.2.3",
     "axios": "^1.18.1",
     "bootstrap": "4.6.2",
     "formiojs": "^4.21.7",
