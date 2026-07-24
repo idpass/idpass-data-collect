@@ -25,12 +25,16 @@ const mockSigninRedirectCallback = vi.fn()
 const mockRemoveUser = vi.fn()
 
 vi.mock('oidc-client-ts', () => ({
-  UserManager: vi.fn().mockImplementation(() => ({
-    signinRedirect: mockSigninRedirect,
-    signinRedirectCallback: mockSigninRedirectCallback,
-    removeUser: mockRemoveUser,
-  })),
-  WebStorageStateStore: vi.fn().mockImplementation(() => ({})),
+  UserManager: vi.fn().mockImplementation(function () {
+    return {
+      signinRedirect: mockSigninRedirect,
+      signinRedirectCallback: mockSigninRedirectCallback,
+      removeUser: mockRemoveUser,
+    }
+  }),
+  WebStorageStateStore: vi.fn().mockImplementation(function () {
+    return {}
+  }),
 }))
 
 import {

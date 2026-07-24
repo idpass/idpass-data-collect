@@ -26,32 +26,52 @@ const purgeEntitiesNotInMock = vi.fn().mockResolvedValue({
 
 vi.mock('@idpass/data-collect-core', () => {
   return {
-    AuthConfig: vi.fn().mockImplementation(() => ({})),
-    AuthManager: vi.fn().mockImplementation(() => ({
-      initialize: vi.fn().mockResolvedValue(undefined),
-    })),
-    DeviceIdentity: vi.fn().mockImplementation(() => ({
-      getOrCreateDeviceId: vi.fn().mockResolvedValue('device-test'),
-    })),
-    EntityDataManager: vi.fn().mockImplementation(() => ({
-      purgeEntitiesNotIn: purgeEntitiesNotInMock,
-    })),
-    EntityStoreImpl: vi.fn().mockImplementation(() => ({
-      initialize: vi.fn().mockResolvedValue(undefined),
-    })),
-    EventStoreImpl: vi.fn().mockImplementation(() => ({
-      initialize: vi.fn().mockResolvedValue(undefined),
-    })),
-    IndexedDbEventStorageAdapter: vi.fn().mockImplementation(() => ({})),
-    IndexedDbEntityStorageAdapter: vi.fn().mockImplementation(() => ({})),
-    EventApplierService: vi.fn().mockImplementation(() => ({})),
-    InternalSyncManager: vi.fn().mockImplementation((...args: unknown[]) => {
+    AuthConfig: vi.fn().mockImplementation(function () {
+      return {}
+    }),
+    AuthManager: vi.fn().mockImplementation(function () {
+      return {
+        initialize: vi.fn().mockResolvedValue(undefined),
+      }
+    }),
+    DeviceIdentity: vi.fn().mockImplementation(function () {
+      return {
+        getOrCreateDeviceId: vi.fn().mockResolvedValue('device-test'),
+      }
+    }),
+    EntityDataManager: vi.fn().mockImplementation(function () {
+      return {
+        purgeEntitiesNotIn: purgeEntitiesNotInMock,
+      }
+    }),
+    EntityStoreImpl: vi.fn().mockImplementation(function () {
+      return {
+        initialize: vi.fn().mockResolvedValue(undefined),
+      }
+    }),
+    EventStoreImpl: vi.fn().mockImplementation(function () {
+      return {
+        initialize: vi.fn().mockResolvedValue(undefined),
+      }
+    }),
+    IndexedDbEventStorageAdapter: vi.fn().mockImplementation(function () {
+      return {}
+    }),
+    IndexedDbEntityStorageAdapter: vi.fn().mockImplementation(function () {
+      return {}
+    }),
+    EventApplierService: vi.fn().mockImplementation(function () {
+      return {}
+    }),
+    InternalSyncManager: vi.fn().mockImplementation(function (...args: unknown[]) {
       ismCalls.push(args)
       return {}
     }),
-    IndexedDbAuthStorageAdapter: vi.fn().mockImplementation(() => ({
-      initialize: vi.fn().mockResolvedValue(undefined),
-    })),
+    IndexedDbAuthStorageAdapter: vi.fn().mockImplementation(function () {
+      return {
+        initialize: vi.fn().mockResolvedValue(undefined),
+      }
+    }),
   }
 })
 
