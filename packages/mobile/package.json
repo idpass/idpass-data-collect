@@ -42,7 +42,7 @@
     "@capacitor/keyboard": "^8.0.5",
     "@capacitor/network": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
-    "@formio/vue": "^5.0.0",
+    "@formio/vue": "^6.3.0",
     "@idpass/data-collect-core": "workspace:*",
     "@mdi/font": "^7.4.47",
     "@xstate/vue": "^5.0.1",
