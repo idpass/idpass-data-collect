@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "description": "Reference V2 HTTP sync adapter for the mock registry server",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.12.0"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

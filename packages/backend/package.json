@@ -3,7 +3,7 @@
   "version": "2.0.0",
   "description": "Library to support offline data capture for a beneficiary management system",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.12.0"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
