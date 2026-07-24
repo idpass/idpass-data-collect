@@ -21,7 +21,7 @@
     "@idpass/data-collect-core": "workspace:*",
     "@formio/vue": "^5.0.0",
     "axios": "^1.18.1",
-    "bootstrap": "4.6.2",
+    "bootstrap": "5.3.8",
     "formiojs": "^4.21.7",
     "oidc-client-ts": "^3.5.0",
     "pinia": "^3.0.4",
