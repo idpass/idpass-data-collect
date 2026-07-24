@@ -191,8 +191,8 @@ importers:
         specifier: ^1.18.1
         version: 1.18.1
       bootstrap:
-        specifier: 4.6.2
-        version: 4.6.2(jquery@3.7.1)(popper.js@1.16.1)
+        specifier: ^5.3.8
+        version: 5.3.8(@popperjs/core@2.11.8)
       font-awesome:
         specifier: 4.7.0
         version: 4.7.0
@@ -771,8 +771,8 @@ importers:
         specifier: ^1.18.1
         version: 1.18.1
       bootstrap:
-        specifier: 4.6.2
-        version: 4.6.2(jquery@3.7.1)(popper.js@1.16.1)
+        specifier: ^5.3.8
+        version: 5.3.8(@popperjs/core@2.11.8)
       formiojs:
         specifier: ^4.21.7
         version: 4.21.7
@@ -6053,13 +6053,6 @@ packages:
   boolbase@1.0.0:
     resolution: {integrity: sha512-JZOSA7Mo9sNGB8+UjSgzdLtokWAky1zbztM3WRLCbZ70/3cTANmQmOdR7y2g+J0e2WXywy1yS468tY+IruqEww==}
 
-  bootstrap@4.6.2:
-    resolution: {integrity: sha512-51Bbp/Uxr9aTuy6ca/8FbFloBUJZLHwnhTcnjIeRn2suQWsWzcuJhGjKDB5eppVte/8oCdOL3VuwxvZDUggwGQ==}
-    deprecated: This version of Bootstrap is no longer supported. Please upgrade to the latest version.
-    peerDependencies:
-      jquery: 1.9.1 - 3
-      popper.js: ^1.16.1
-
   bootstrap@5.3.8:
     resolution: {integrity: sha512-HP1SZDqaLDPwsNiqRqi5NcP0SSXciX2s9E+RyqJIIqGo+vJeN5AJVM98CXmW/Wux0nQ5L7jeWUdplCEf0Ee+tg==}
     peerDependencies:
@@ -8708,9 +8701,6 @@ packages:
   jose@6.2.3:
     resolution: {integrity: sha512-YYVDInQKFJfR/xa3ojUTl8c2KoTwiL1R5Wg9YCydwH0x0B9grbzlg5HC7mMjCtUJjbQ/YnGEZIhI5tCgfTb4Hw==}
 
-  jquery@3.7.1:
-    resolution: {integrity: sha512-m4avr8yL8kmFN8psrbFFFmB/If14iN5o9nw/NgnnM+kybDJpRsAynV2BsfpTYrTRysYUdADVD7CkUUizgkpLfg==}
-
   js-base64@3.7.7:
     resolution: {integrity: sha512-7rCnleh0z2CkXhH67J8K1Ytz0b2Y+yxTPL+/KOJoa20hfnVQ/3/T6W/KflYI4bRHRagNeXeU2bkNGI3v1oS/lw==}
 
@@ -10218,10 +10208,6 @@ packages:
 
   points-on-path@0.2.1:
     resolution: {integrity: sha512-25ClnWWuw7JbWZcgqY/gJ4FQWadKxGWk+3kR/7kD0tCaDtPPMj7oHu2ToLaVhfpnHrZzYby2w6tUA0eOIuUg8g==}
-
-  popper.js@1.16.1:
-    resolution: {integrity: sha512-Wb4p1J4zyFTbM+u6WuO4XstYx4Ky9Cewe4DWrel7B0w6VVICvPwdOpotjzcf6eD8TsckVnIMNONQyPIUFOUbCQ==}
-    deprecated: You can find the new Popper v2 at @popperjs/core, this package is dedicated to the legacy v1
 
   possible-typed-array-names@1.1.0:
     resolution: {integrity: sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg==}
@@ -19160,11 +19146,6 @@ snapshots:
 
   boolbase@1.0.0: {}
 
-  bootstrap@4.6.2(jquery@3.7.1)(popper.js@1.16.1):
-    dependencies:
-      jquery: 3.7.1
-      popper.js: 1.16.1
-
   bootstrap@5.3.8(@popperjs/core@2.11.8):
     dependencies:
       '@popperjs/core': 2.11.8
@@ -22341,8 +22322,6 @@ snapshots:
 
   jose@6.2.3: {}
 
-  jquery@3.7.1: {}
-
   js-base64@3.7.7: {}
 
   js-beautify@1.15.4:
@@ -24152,8 +24131,6 @@ snapshots:
     dependencies:
       path-data-parser: 0.1.0
       points-on-curve: 0.2.0
-
-  popper.js@1.16.1: {}
 
   possible-typed-array-names@1.1.0: {}
 

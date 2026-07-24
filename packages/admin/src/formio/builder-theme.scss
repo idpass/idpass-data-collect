@@ -92,8 +92,26 @@ $enable-gradients: false;
 $card-cap-bg: #f8f9fa; // --secondary
 $nav-tabs-link-active-color: $primary;
 
+// Bootstrap 5 requires functions → (overrides) → variables → variables-dark →
+// maps → mixins in this order before any component partial. `maps` and
+// `variables-dark` are new in BS 5.3 and are consumed by `root` and several
+// component partials, so they must be present.
 @import 'bootstrap/scss/variables';
+@import 'bootstrap/scss/variables-dark';
+@import 'bootstrap/scss/maps';
 @import 'bootstrap/scss/mixins';
+
+// Builds the `$utilities` map (config only — emits no CSS). The actual utility
+// classes are emitted, scoped, via `utilities/api` at the end of the scope.
+@import 'bootstrap/scss/utilities';
+
+// BS5 components reference CSS custom properties (e.g. `var(--bs-border-color)`,
+// `var(--bs-body-font-family)`) that `_root.scss` defines on `:root`. Scoping
+// the `:root` rule under the host would leave those vars undefined and break
+// every BS5 component, so `root` is emitted once, globally. The `--bs-*`
+// namespace does not collide with Vuetify's `--v-*` tokens, so this is inert
+// for the dashboard.
+@import 'bootstrap/scss/root';
 
 // ---------------------------------------------------------------------------
 // Bootstrap, scoped. `:is()` keeps a single compilation covering the in-app
@@ -102,18 +120,18 @@ $nav-tabs-link-active-color: $primary;
 // their job is done by the host base styles further down.
 // ---------------------------------------------------------------------------
 :is(.formio-builder-host, .formio-dialog) {
-  @import 'bootstrap/scss/root';
   @import 'bootstrap/scss/reboot';
   @import 'bootstrap/scss/type';
   @import 'bootstrap/scss/grid';
   @import 'bootstrap/scss/tables';
+  // BS5 folds the old `custom-forms` and standalone `input-group` partials into
+  // `forms/` (form-check, form-select, input-group, …), so `forms` alone now
+  // covers custom controls and input groups.
   @import 'bootstrap/scss/forms';
   @import 'bootstrap/scss/buttons';
   @import 'bootstrap/scss/transitions';
   @import 'bootstrap/scss/dropdown';
   @import 'bootstrap/scss/button-group';
-  @import 'bootstrap/scss/input-group';
-  @import 'bootstrap/scss/custom-forms';
   @import 'bootstrap/scss/nav';
   @import 'bootstrap/scss/card';
   @import 'bootstrap/scss/breadcrumb';
@@ -124,7 +142,7 @@ $nav-tabs-link-active-color: $primary;
   @import 'bootstrap/scss/list-group';
   @import 'bootstrap/scss/close';
   @import 'bootstrap/scss/popover';
-  @import 'bootstrap/scss/utilities';
+  @import 'bootstrap/scss/utilities/api';
 
   // Replaces reboot's dead `body` rule.
   font-family: $font-family-sans-serif;
