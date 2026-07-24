@@ -38,7 +38,7 @@
     "@docusaurus/tsconfig": "3.10.2",
     "@docusaurus/types": "3.10.2",
     "docusaurus-plugin-typedoc": "^1.4.2",
-    "js-yaml": "^5.2.1",
+    "js-yaml": "^5.2.2",
     "openapi-to-postmanv2": "^6.3.0",
     "typedoc": "^0.28.20",
     "typedoc-docusaurus-theme": "^1.4.2",
