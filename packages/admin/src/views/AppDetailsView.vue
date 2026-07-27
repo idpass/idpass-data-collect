@@ -18,6 +18,7 @@ import SyncStatusPanel from '@/components/SyncStatusPanel.vue'
 import SyncScopeCard from '@/components/SyncScopeCard.vue'
 import ProgramsCard from '@/components/ProgramsCard.vue'
 import Claim169Card from '@/components/Claim169Card.vue'
+import FormPreviewDialog from '@/components/FormPreviewDialog.vue'
 import { useFeatureFlag } from '@/composables/useFeatureFlag'
 import type { SyncScopePolicy } from '@idpass/data-collect-core'
 import type { AppProgram, Claim169Config } from '@/api'
@@ -87,6 +88,7 @@ interface FormOverviewItem {
   records: number
   dependsOn?: string
   fields: number
+  formio?: Record<string, unknown>
 }
 
 const authStore = useAuthStore()
@@ -256,9 +258,24 @@ const formOverview = computed<FormOverviewItem[]>(() => {
       dependsOn: form.dependsOn,
       fields: countFormFields(form.formio),
       records: entityDataMap.value.get(form.name) ?? 0,
+      formio: form.formio,
     }
   })
 })
+
+const showPreviewDialog = ref(false)
+const previewForm = ref<{ title: string; formio: Record<string, unknown> }>({
+  title: '',
+  formio: {},
+})
+
+const openFormPreview = (item: FormOverviewItem) => {
+  previewForm.value = {
+    title: item.title,
+    formio: item.formio ?? {},
+  }
+  showPreviewDialog.value = true
+}
 
 const downloadUrl = computed(() => {
   const artifactId = app.value?.artifactId
@@ -697,7 +714,17 @@ watch(
                       cols="12"
                       md="6"
                     >
-                      <v-card class="form-card" border="md" elevation="0">
+                      <v-card
+                        class="form-card form-card--clickable"
+                        border="md"
+                        elevation="0"
+                        role="button"
+                        tabindex="0"
+                        :title="`Preview ${item.title}`"
+                        @click="openFormPreview(item)"
+                        @keydown.enter="openFormPreview(item)"
+                        @keydown.space.prevent="openFormPreview(item)"
+                      >
                         <v-card-text>
                           <div class="form-card__header">
                             <div>
@@ -1064,6 +1091,12 @@ watch(
     @submit="onCredentialsSubmit"
   />
 
+  <FormPreviewDialog
+    v-model="showPreviewDialog"
+    :title="previewForm.title"
+    :formio="previewForm.formio"
+  />
+
   <v-dialog v-model="showArchiveDialog" :max-width="540">
     <v-card>
       <v-card-title class="text-h6">
@@ -1404,6 +1437,21 @@ watch(
 .form-card {
   border-radius: var(--radius-xl);
   height: 100%;
+}
+
+.form-card--clickable {
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.form-card--clickable:hover,
+.form-card--clickable:focus-visible {
+  border-color: rgb(var(--v-theme-primary));
+  box-shadow: var(--shadow-card);
+  transform: translateY(-2px);
 }
 
 .form-card__header {

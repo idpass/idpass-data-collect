@@ -27,6 +27,7 @@
  * rule is scoped under:
  *
  *   .formio-builder-host  — the FormioBuilder.vue mount element
+ *   .formio-renderer-host — the FormioRenderer.vue (read-only preview) element
  *   .formio-dialog        — Form.io component-edit dialogs (mounted on body)
  *
  * SCSS variables cannot read CSS custom properties at compile time, so token
@@ -101,7 +102,7 @@ $nav-tabs-link-active-color: $primary;
 // `html`/`body` rules from reboot become dead descendants of the scope —
 // their job is done by the host base styles further down.
 // ---------------------------------------------------------------------------
-:is(.formio-builder-host, .formio-dialog) {
+:is(.formio-builder-host, .formio-renderer-host, .formio-dialog) {
   @import 'bootstrap/scss/root';
   @import 'bootstrap/scss/reboot';
   @import 'bootstrap/scss/type';
