@@ -40,6 +40,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/collection-programs/:id/forms/:formIndex/edit',
+      name: 'form-edit',
+      component: () => import('../views/FormEditView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/collection-programs/:id/entity/:guid',
       name: 'entity-details',
       component: () => import('../views/EntityDetailView.vue'),

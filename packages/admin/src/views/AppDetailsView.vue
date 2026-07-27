@@ -84,6 +84,7 @@ interface AppConfig {
 
 interface FormOverviewItem {
   id: string
+  index: number
   title: string
   records: number
   dependsOn?: string
@@ -254,6 +255,7 @@ const formOverview = computed<FormOverviewItem[]>(() => {
     const formId = form.name || `entity-${index}`
     return {
       id: formId,
+      index,
       title: form.title || formId,
       dependsOn: form.dependsOn,
       fields: countFormFields(form.formio),
@@ -430,6 +432,16 @@ const openEditor = (step: string = 'general') => {
   router.push({
     name: `wizard-${step}`,
     query: { mode: 'edit', id: routeId.value },
+  })
+}
+
+// Open the standalone single-form designer (#17) for one form, bypassing the
+// wizard. `index` is the form's position in entityForms.
+const editForm = (index: number) => {
+  if (!routeId.value) return
+  router.push({
+    name: 'form-edit',
+    params: { id: routeId.value, formIndex: String(index) },
   })
 }
 
@@ -731,9 +743,20 @@ watch(
                               <h3 class="form-card__title">{{ item.title }}</h3>
                               <p class="form-card__id">Entity ID • {{ item.id }}</p>
                             </div>
-                            <v-chip color="primary" size="small" variant="tonal">
-                              {{ item.records }} records
-                            </v-chip>
+                            <div class="form-card__header-actions">
+                              <v-chip color="primary" size="small" variant="tonal">
+                                {{ item.records }} records
+                              </v-chip>
+                              <v-btn
+                                variant="tonal"
+                                color="primary"
+                                size="small"
+                                prepend-icon="mdi-pencil"
+                                @click.stop="editForm(item.index)"
+                              >
+                                Edit
+                              </v-btn>
+                            </div>
                           </div>
                           <p class="form-card__summary">
                             This form currently has {{ item.fields }} configured field{{ item.fields === 1 ? '' : 's' }}
@@ -1460,6 +1483,12 @@ watch(
   justify-content: space-between;
   gap: var(--spacing-md);
   flex-wrap: wrap;
+}
+
+.form-card__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
 }
 
 .form-card__title {
