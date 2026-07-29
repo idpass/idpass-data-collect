@@ -121,6 +121,11 @@ const config: Config = {
           position: 'left',
         },
         {
+          to: 'security',
+          label: 'Security',
+          position: 'left',
+        },
+        {
           href: 'https://github.com/idpass/idpass-data-collect',
           position: 'right',
           className: 'header-github-link',

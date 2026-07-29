@@ -493,6 +493,15 @@ const sidebars = {
       collapsed: false,
       items: userSidebarItems,
     },
+    {
+      type: "category",
+      label: "Security",
+      collapsed: false,
+      link: { type: "doc", id: "security/security-overview" },
+      items: [
+        { type: "doc", id: "security/report-a-vulnerability" },
+      ],
+    },
   ],
 };
 

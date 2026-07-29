@@ -8,12 +8,16 @@ The ID PASS DataCollect project takes security seriously. This document outlines
 
 We actively maintain and provide security updates for the following versions:
 
-| Version | Supported | Status                                      |
-| ------- | --------- | ------------------------------------------- |
-| 1.1.x   | ✅ Yes    | Active development                          |
-| < 1.0   | ❌ No     | Pre-release, not recommended for production |
+| Version | Supported | Status                          |
+| ------- | --------- | ------------------------------- |
+| 2.x     | ✅ Yes    | Active development              |
+| < 2.0   | ❌ No     | Upgrade to the latest 2.x       |
 
 **Note**: We recommend always using the latest stable release for security updates.
+
+> 📖 The full, current policy — reporting steps, scope, and coordinated disclosure — lives on
+> the documentation site: **https://data-collect.idpass.org/security/** (source in
+> `website/docs/security/`).
 
 ## Security Considerations
 
@@ -31,18 +35,21 @@ We encourage responsible disclosure of security vulnerabilities. **Please do not
 
 ### How to Report
 
-1. **Email**: Send details to `security@acn.fr`
-2. **Subject Line**: `[SECURITY] ID PASS DataCollect - [Brief Description]`
+1. **Preferred — GitHub private vulnerability reporting**: open a private report at
+   https://github.com/idpass/idpass-data-collect/security/advisories/new (or the repository's
+   **Security** tab → *Report a vulnerability*).
+2. **Fallback — Email**: if you cannot use GitHub, send details to `security@acn.fr` with the
+   subject line `[SECURITY] ID PASS DataCollect - [Brief Description]`.
 3. **Include**:
    - Description of the vulnerability
-   - Steps to reproduce the issue
+   - Steps to reproduce the issue (use synthetic data — never real credentials or beneficiary records)
    - Potential impact assessment
    - Suggested fix (if available)
    - Your contact information
 
 ### What to Expect
 
-- **Acknowledgment**: We will acknowledge receipt within 48 hours
+- **Acknowledgment**: We will acknowledge receipt within 2 business days
 - **Initial Assessment**: We will provide an initial assessment within 5 business days
 - **Regular Updates**: We will keep you informed of our progress
 - **Resolution Timeline**: We aim to resolve critical vulnerabilities within 30 days
@@ -121,7 +128,7 @@ _To be updated as we receive and resolve security reports._
 
 ---
 
-**Last Updated**: June 2025
-**Next Review**: July 2025
+**Last Updated**: July 2026
+**Next Review**: January 2027
 
 This security policy is subject to change. Please check this document regularly for updates.
