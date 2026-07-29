@@ -15,7 +15,7 @@
 -- specific language governing permissions and limitations
 -- under the License.
 
--- Adds per-device sync telemetry tables for OpenProject WP #947.
+-- Adds per-device sync telemetry tables.
 -- These tables back the admin "Devices" view and per-device sync history.
 -- Both are observability-only — they do not gate sync or scope enforcement.
 

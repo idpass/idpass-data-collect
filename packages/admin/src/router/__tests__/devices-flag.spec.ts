@@ -18,7 +18,7 @@
  */
 
 /**
- * OP #947 Phase 4 (C4) — verify the `/devices/:configId` route is gated by
+ * Verify the `/devices/:configId` route is gated by
  * the `scopedSync` feature flag. With the flag off, navigation should be
  * redirected to the `home` route instead of mounting `DevicesView`.
  */

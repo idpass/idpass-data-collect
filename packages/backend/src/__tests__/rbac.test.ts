@@ -298,7 +298,7 @@ describe("RBAC Middleware", () => {
         { tenantId: "tenant-a", role: SystemRole.SUPERVISOR },
         { tenantId: "tenant-b", role: SystemRole.VIEWER },
       ]);
-      // This is the #1135 vulnerability: global max would say yes, per-tenant says no.
+      // Cross-tenant privilege leak: global max would say yes, per-tenant says no.
       expect(canPerformActionInTenant(u, "tenant-b", "approve")).toBe(false);
     });
 

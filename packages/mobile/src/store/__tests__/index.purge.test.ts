@@ -84,7 +84,7 @@ vi.mock('@/services/SecureStorageService', () => ({
   },
 }))
 
-describe('initStore — purgeOutOfScope wiring (#947)', () => {
+describe('initStore — purgeOutOfScope wiring', () => {
   beforeEach(() => {
     ismCalls.length = 0
     purgeEntitiesNotInMock.mockClear()

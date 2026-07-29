@@ -64,7 +64,7 @@ Configure the adapter via the tenant's `externalSync` config block:
 
 For configurable field mappings see the `OpenSppAdapterOptions` type and the `opensppAdapterOptions` extra field documented in `packages/datacollect/README.md`.
 
-## Change Request Push Mode (#948)
+## Change Request Push Mode
 
 Set `externalSync.adapterConfig.submitVia: "change-request"` (or pass `submitVia: "change-request"` via `OpenSppV2AdapterOptions`) to route DataCollect pushes through OpenSPP's `/ChangeRequest` workflow instead of writing directly to `/Individual` and `/Group`. Required when OpenSPP has CR governance enabled for the registry.
 
@@ -74,7 +74,7 @@ When enabled, every push:
 2. Submits it via `POST /ChangeRequest/{ref}/$submit` (status `pending`).
 3. Persists the reference + status under metadata key `cr:{entityGuid}` for idempotency on re-push.
 
-OpenSPP operator actions (`$approve` / `$reject` / `$apply`) are out of scope for DataCollect — see #948 for design.
+OpenSPP operator actions (`$approve` / `$reject` / `$apply`) are out of scope for DataCollect.
 
 ### Idempotency on re-push
 

@@ -1,8 +1,8 @@
 /**
  * @jest-environment jsdom
  *
- * Regression tests for OpenProject #1145 — Sync-push member-GUID injection.
- * Follow-up to #1134. The self-service door (#1134) guards member sub-writes
+ * Regression tests: sync-push member-GUID injection guard.
+ * The self-service door guards member sub-writes
  * with a finite `authorizedMemberGuids` set. A field worker's sync scope is
  * NOT a finite GUID list — it is a PREDICATE over the member entity's area /
  * type. This test exercises the async predicate variant of the apply-path
@@ -39,7 +39,7 @@ function makeForm(overrides: Partial<FormSubmission> = {}): FormSubmission {
   };
 }
 
-describe("EventApplierService – sync-push member scope predicate guard (#1145)", () => {
+describe("EventApplierService – sync-push member scope predicate guard", () => {
   let entityStore: EntityStore;
   let eventStore: EventStore;
   let service: EventApplierService;

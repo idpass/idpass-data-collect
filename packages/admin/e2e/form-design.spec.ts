@@ -18,7 +18,7 @@
  */
 
 /**
- * Playwright e2e for OP #1059 — Form.io builder iframe -> Vue migration.
+ * Playwright e2e for the Form.io builder iframe -> Vue migration.
  *
  * Goal: prove the form-design surface
  *   (a) no longer ships the legacy iframe pointing at `/formio-builder.html`,
@@ -77,7 +77,7 @@ async function mockApi(page: Page) {
   })
 }
 
-test.describe('FormioBuilder migration smoke (OP #1059)', () => {
+test.describe('FormioBuilder migration smoke', () => {
   test.beforeEach(async ({ page }) => {
     await seedAuth(page)
     await mockApi(page)

@@ -231,7 +231,7 @@ describeIfPostgres("SECURITY: Tenant isolation vulnerabilities", () => {
     });
   });
 
-  describe("Review cross-tenant approval (#1135)", () => {
+  describe("Review cross-tenant approval", () => {
     // These tests verify the remediation at the code-structure level. The
     // reviewRoutes.ts approve/reject handlers iterate over reviewServiceCache to
     // locate a review, then must enforce the approve right WITHIN the review's

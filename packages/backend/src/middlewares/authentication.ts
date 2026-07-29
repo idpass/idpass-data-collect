@@ -30,7 +30,7 @@ export interface DecodedPayload {
   email: string;
   role?: Role;
   tenantIds?: string[];
-  // Phase 2 (#947): JWT now carries `syncScopeOverride` so scopeContext
+  // JWT now carries `syncScopeOverride` so scopeContext
   // middleware can narrow tenant scope without an extra DB round-trip.
   roleAssignments?: Array<{
     tenantId: string;

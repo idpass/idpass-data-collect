@@ -69,7 +69,7 @@ function getEffectiveRole(req: Request): SystemRole | null {
  * ALL tenant assignments, this scopes the role to a single tenant. Use this for
  * any per-tenant authorization decision (e.g. approving a review that belongs to
  * a particular tenant) so that a high privilege in tenant A never leaks into
- * tenant B. See OpenProject #1135.
+ * tenant B.
  *
  * Legacy admin users (Role.ADMIN) are treated as system-admin in every tenant.
  *

@@ -384,7 +384,7 @@ describeIfPostgres("Sync route — scope advertisement & enforcement", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // /push scope enforcement (Phase 3 — WP #947, T5)
+  // /push scope enforcement (Phase 3, T5)
   // ---------------------------------------------------------------------------
 
   describe("Sync route — /push scope enforcement", () => {
@@ -846,7 +846,7 @@ describeIfPostgres("Sync route — scope advertisement & enforcement", () => {
     });
 
     test("scoped /push: in-batch rejected create followed by update of same entity → both rejected for same reason (out_of_scope)", async () => {
-      // Decision rule (#947 fixup): when an in-batch create is rejected by
+      // Decision rule: when an in-batch create is rejected by
       // scope, we still seed its synthetic ref into the lookup map so a
       // following update gets the SAME reason (out_of_scope) instead of the
       // confusing "unknown_entity". This gives clients a consistent error

@@ -1135,8 +1135,8 @@ describe("Scope hardening", () => {
   });
 });
 
-// ─── 6. POST /api/auth/self-service/submit — horizontal BOLA member guard (#1134) ───
-describe("POST /api/auth/self-service/submit — member-GUID injection guard (#1134)", () => {
+// ─── 6. POST /api/auth/self-service/submit — horizontal member-scope guard ───
+describe("POST /api/auth/self-service/submit — member-GUID injection guard", () => {
   const BOUND_GROUP_GUID = "household-guid-1";
   const EXISTING_MEMBER_GUID = "member-guid-existing";
   const VICTIM_GUID = "victim-guid-other-household";

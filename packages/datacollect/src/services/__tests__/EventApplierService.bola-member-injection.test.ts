@@ -1,7 +1,7 @@
 /**
  * @jest-environment jsdom
  *
- * Regression tests for OpenProject #1134 — Horizontal BOLA via member-GUID
+ * Regression tests: horizontal authorization guard against member-GUID
  * injection. A least-trusted caller (self-service beneficiary) must not be
  * able to name an arbitrary existing entity GUID as a "member" of their group
  * and thereby overwrite that entity's data or attach it to their group.
@@ -37,7 +37,7 @@ function makeForm(overrides: Partial<FormSubmission> = {}): FormSubmission {
   };
 }
 
-describe("EventApplierService – BOLA member-GUID injection guard (#1134)", () => {
+describe("EventApplierService – member-GUID injection authorization guard", () => {
   let entityStore: EntityStore;
   let eventStore: EventStore;
   let service: EventApplierService;

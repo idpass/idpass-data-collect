@@ -429,7 +429,7 @@ onMounted(() => {
                   @update:model-value="reconcileRoleAssignments"
                 />
 
-                <!-- Per-assignment sync scope override editor (#947). Hidden
+                <!-- Per-assignment sync scope override editor. Hidden
                      when the scopedSync feature flag is off, so legacy admins
                      keep the simple programs-only UI. -->
                 <div

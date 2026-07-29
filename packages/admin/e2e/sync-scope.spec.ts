@@ -18,7 +18,7 @@
  */
 
 /**
- * Playwright e2e for OP #947 bounded sync scope (Phase 4 admin UI).
+ * Playwright e2e for the bounded sync scope admin UI.
  *
  * All HTTP calls are mocked via `page.route` — no backend or DB needed; the
  * Playwright dev server (vite, port 5173) runs the admin SPA in isolation.

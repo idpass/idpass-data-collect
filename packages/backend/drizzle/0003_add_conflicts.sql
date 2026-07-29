@@ -15,7 +15,7 @@
 -- specific language governing permissions and limitations
 -- under the License.
 
--- Adds the conflicts table that backs the Postgres ConflictStore (#202).
+-- Adds the conflicts table that backs the Postgres ConflictStore.
 -- Records detected version conflicts between local and remote entity versions
 -- during sync. Resolution is performed via the /api/conflicts/:guid/resolve
 -- endpoint.

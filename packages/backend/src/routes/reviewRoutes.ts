@@ -149,7 +149,7 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
       // not the user's global-max role. requireAction("create") above only checks
       // the aggregate role, so a user who is an enumerator in tenant A but a viewer
       // in tenant B would otherwise pass it and submit a form that gets applied to
-      // B's entities (auto-approve) or queued against B (#1146, follow-up to #1135).
+      // B's entities (auto-approve) or queued against B.
       if (!canPerformActionInTenant(user, tenantId, "create")) {
         log.warn({ userId: user.id, tenantId }, "Denied review submit: no create right in tenant");
         return res.status(403).json({ error: "Forbidden: Insufficient permission for this tenant" });
@@ -197,7 +197,7 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
       // WITHIN that tenant. The requireAction("approve") gate above uses the
       // user's global-max role, which is not tenant-scoped: a user who is an
       // approver in tenant A but a viewer in tenant B would otherwise pass it and
-      // approve B's review, applying a FormSubmission to B's entities (#1135).
+      // approve B's review, applying a FormSubmission to B's entities.
       let review = null;
       let forbidden = false;
       for (const [tenantId, reviewService] of reviewServiceCache) {
@@ -248,7 +248,7 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
       }
 
       // Same tenant-scoped enforcement as /approve — reject also resolves the
-      // review's owning tenant and requires the approve right within it (#1135).
+      // review's owning tenant and requires the approve right within it.
       let review = null;
       let forbidden = false;
       for (const [tenantId, reviewService] of reviewServiceCache) {
@@ -302,7 +302,7 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
       let totalFailed = 0;
       const allErrors: Array<{ reviewId: string; error: string }> = [];
 
-      // Per-tenant authorization (#1135). A bulk call may span several tenants;
+      // Per-tenant authorization. A bulk call may span several tenants;
       // the user is resolved against EACH review's owning tenant independently.
       // Semantics: approve only the reviews in tenants where the user holds the
       // approve right; silently skip reviews in tenants where they do not. The
@@ -381,7 +381,7 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
       // path param), not the user's global-max role. requireAction("manage-config")
       // above only checks the aggregate role, so a user who is a system-admin in
       // tenant A but lower-privileged in tenant B could otherwise rewrite B's review
-      // config on the strength of their privilege in A (#1146, follow-up to #1135).
+      // config on the strength of their privilege in A.
       if (!canPerformActionInTenant(user, tenantId, "manage-config")) {
         log.warn({ userId: user.id, tenantId }, "Denied review config change: no manage-config right in tenant");
         return res.status(403).json({ error: "Forbidden: Insufficient permission for this tenant" });

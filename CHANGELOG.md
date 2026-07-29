@@ -19,14 +19,14 @@ Second release candidate for v2.0.0. Major additions: async external sync with p
 - Display name field indicator on mobile entity forms
 
 ### Security
-- **Access control hardening** — non-admin users now only see and sync programs they are assigned to (#904, #905)
+- **Access control hardening** — non-admin users now only see and sync programs they are assigned to
 - Tenant access validation added to sync status, events, and job cancel endpoints
-- Sync machine retries with refreshed token on 403 before failing (#858)
-- Role assignments now persist correctly through all API layers (#906)
+- Sync machine retries with refreshed token on 403 before failing
+- Role assignments now persist correctly through all API layers
 - Concurrent external sync requests rejected with 409 to prevent data races
 
 ### Fixed
-- Mobile shows user-friendly messages for 401, 403, and 429 instead of raw HTTP codes (#849)
+- Mobile shows user-friendly messages for 401, 403, and 429 instead of raw HTTP codes
 - OpenSPP adapter returns partial results on entity failures instead of throwing (allows "partial" sync status)
 - OpenSPP adapter identifier type now configurable per entity type (was hardcoded to `national_id`)
 - Backend forwards real push/pull counts from V2 adapter wrapper (was returning zeros)
@@ -136,14 +136,14 @@ See pre-release changelogs for per-change detail: [rc.2](#200-rc2---2026-04-14),
 - JWT 1-hour expiry with token refresh endpoint
 - OIDC hardening: JWKS URI origin validation, issuer pre-validation (prevents SSRF), audience + nonce checks
 - Tenant isolation middleware on all tenant-scoped routes
-- Program-level access control: non-admin users only see and sync assigned programs (#904, #905)
+- Program-level access control: non-admin users only see and sync assigned programs
 - Self-service token scope enforcement and entity isolation (prevents cross-entity enumeration)
 - OTP codes hashed with HMAC-SHA256 and verified with constant-time comparison
 - Rate limiting on OTP, verification, and public endpoints
 - Zod input validation on all self-service endpoints
 - Filename sanitization on ingestion (null bytes, path traversal, header injection)
 - Concurrent external sync requests rejected with 409 to prevent data races
-- Sync machine retries with refreshed token on 403 before failing (#858)
+- Sync machine retries with refreshed token on 403 before failing
 - HTTPS-only in production mobile builds
 - Non-root Docker containers
 - Cross-origin resource policy on static artifact files
@@ -183,7 +183,7 @@ See pre-release changelogs for per-change detail: [rc.2](#200-rc2---2026-04-14),
 - Polling handles 404 race condition on first sync job poll
 - Display name resolution uses `_displayName` field with fallback chain across all packages
 - Internal `_`-prefixed fields stripped from sync push payloads
-- Mobile: user-friendly messages for 401, 403, and 429 instead of raw HTTP codes (#849)
+- Mobile: user-friendly messages for 401, 403, and 429 instead of raw HTTP codes
 - Mobile: loading overlay when adding programs, re-login button for stuck auth, login error surfacing
 - Mobile: `authConfigs` added to RxDB schema so QR-loaded programs show login form
 - Router guard blocking login pages and `window.db` race condition

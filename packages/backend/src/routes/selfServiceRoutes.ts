@@ -614,7 +614,7 @@ export function createSelfServiceRouter(
         return res.json({ status: "success", submissionGuid: submission.guid });
       }
 
-      // Horizontal BOLA guard (#1134): self-service callers are the
+      // Horizontal member-scope guard: self-service callers are the
       // least-trusted actors. Their token binds `entityGuid` to their own
       // household, but member sub-writes inside a group form could otherwise
       // name an ARBITRARY existing entity GUID — overwriting a victim's record
@@ -680,7 +680,7 @@ export function createSelfServiceRouter(
 
       // Apply entity update directly when review is not required. Pass the
       // authorized member scope as defense-in-depth so the apply-path guard
-      // (#1134) rejects any out-of-scope member write even if the door check
+      // rejects any out-of-scope member write even if the door check
       // above is ever bypassed.
       await appInstance.edm.submitForm(
         submission,
