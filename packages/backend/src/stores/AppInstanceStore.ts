@@ -47,7 +47,7 @@ export class AppInstanceStoreImpl implements AppInstanceStore {
    * from the event/entity adapters' internal pools (which they own and close
    * themselves) to avoid cross-coupling lifecycles.
    *
-   * TODO(#202 Phase 2): consolidate to a single shared pool per tenant.
+   * TODO: consolidate to a single shared pool per tenant.
    * Today we open 3 pools per tenant (event adapter, entity adapter,
    * conflict store). At ~10 connections/pool default, this is 30 max
    * connections per tenant. Plausible exhaustion at >=30 active tenants.

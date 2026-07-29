@@ -66,7 +66,7 @@ export interface BatchResult {
  * @param events Ordered list of form submissions to process atomically.
  * @param options Optional apply-path options forwarded to every event. Used by
  *   the bounded `/api/sync/push` caller to enforce the member sub-write scope
- *   guard (#1145) so an out-of-scope pre-existing member GUID cannot be
+ *   guard so an out-of-scope pre-existing member GUID cannot be
  *   injected into a group event. Omit for unbounded/admin callers.
  * @returns A BatchResult describing the outcome.
  */

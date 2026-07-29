@@ -22,7 +22,7 @@
  *
  * Ports the two custom components that used to be loaded as a global script
  * (`public/biometric-component.js`) inside the now-removed builder iframe
- * (OP #1059). They are registered against the bundled `@formio/js` so they
+ * They are registered against the bundled `@formio/js` so they
  * appear in the builder palette (Advanced group) with their settings panels.
  *
  * These are BUILDER-side definitions only — schema, palette entry

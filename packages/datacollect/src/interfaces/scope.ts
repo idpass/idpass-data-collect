@@ -21,7 +21,7 @@ import { z } from "zod";
 
 /**
  * Allowed entity types for scope filtering. The Phase-1-and-2 goal explicitly
- * limits the data model to individuals and groups (see WP #947). Programs and
+ * limits the data model to individuals and groups. Programs and
  * entitlements are out of scope.
  */
 export const ENTITY_TYPE_VALUES = ["individual", "group"] as const;

@@ -22,7 +22,7 @@ import { computed, toRef } from 'vue'
 import { useFeatureFlag } from '@/composables/useFeatureFlag'
 import { useSyncScope } from '@/composables/useSyncScope'
 
-// OP #947 — Phase 4-D — Surfaces the last persisted EffectiveScopeBody on the
+// Surfaces the last persisted EffectiveScopeBody on the
 // sync screen so a field worker can see whether their device is bounded
 // (e.g. "3 areas · individual+group · last 90d"). Hidden via the
 // `scopedSync` feature flag so we can ship the screen behind a kill switch.

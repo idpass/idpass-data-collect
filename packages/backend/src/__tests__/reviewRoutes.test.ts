@@ -64,7 +64,7 @@ describeIfPostgres("Review Routes", () => {
 
     // Mint the admin JWT directly rather than calling /login. The login endpoint
     // is rate limited to 15 attempts / 15 min per process; with a per-test
-    // beforeEach that limit is exhausted as the suite grows (#1146 added tests).
+    // beforeEach that limit is exhausted as the suite grows.
     // The signed payload mirrors exactly what POST /api/users/login returns.
     const adminUser = await currentApp.userStore.getUser("admin@review-test.com");
     adminToken = jwt.sign(
@@ -446,12 +446,12 @@ describeIfPostgres("Review Routes", () => {
     });
   });
 
-  // Regression guard for OpenProject #1135 — Cross-tenant review approval via
-  // global role aggregation. A user who is an approver in one tenant but only a
+  // Regression guard: tenant-scoped review approval (rejects cross-tenant approve/reject via
+  // global role aggregation). A user who is an approver in one tenant but only a
   // low-privileged member (viewer) in another must NOT be able to approve/reject
   // reviews in the tenant where they lack the approve right. Approval applies a
   // FormSubmission to the tenant's entities, so this is a cross-tenant data write.
-  describe("Cross-tenant review approval (#1135)", () => {
+  describe("Cross-tenant review approval", () => {
     const password = "Attacker1@";
     const OTHER_TENANT = "other-tenant-approver";
     const SECOND_TENANT = "review-test-config-b";
@@ -636,14 +636,15 @@ describeIfPostgres("Review Routes", () => {
     });
   });
 
-  // Regression guard for OpenProject #1146 — follow-up to #1135. The /submit and
+  // Regression guard: per-tenant submit/config authorization (follow-up to the
+  // cross-tenant approval guard). The /submit and
   // /config/:tenantId/:eventType endpoints authorized on the user's GLOBAL-max
   // role (requireAction) instead of their role WITHIN the target tenant. A user
   // who holds `create` (enumerator) or `manage-config` (system-admin) in tenant A
   // but is only a low-privileged member (viewer) in tenant B could therefore
   // submit a form to B's entities, or rewrite B's review config, purely on the
   // strength of their privilege in A. Both endpoints must now be gated per-tenant.
-  describe("Cross-tenant submit/config authorization (#1146)", () => {
+  describe("Cross-tenant submit/config authorization", () => {
     const password = "Attacker1@";
     const TENANT_A = "tenant-a-1146";
 

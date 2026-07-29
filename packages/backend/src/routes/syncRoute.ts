@@ -64,7 +64,7 @@ function readDeviceIdHeader(req: { header(name: string): string | undefined }): 
 }
 
 /**
- * Phase 3 (#947): on scoped tenants, the X-Device-Id header is mandatory so
+ * On scoped tenants, the X-Device-Id header is mandatory so
  * pre-upgrade clients fail loud rather than silently bypassing scope-aware
  * telemetry. A tenant is "scoped" when its effective scope constrains areaIds
  * or entityTypes; time-window-only is treated as unscoped (enforcement
@@ -77,7 +77,7 @@ function requireDeviceIdIfScoped(
   | { ok: true }
   | { ok: false; status: 400; body: { status: "error"; code: "DEVICE_ID_REQUIRED"; message: string } } {
   const eff = req.scope!.effective;
-  // TODO(#947 Phase 4): timeWindow-only scopes intentionally bypass the
+  // TODO: timeWindow-only scopes intentionally bypass the
   // X-Device-Id requirement (and the scope-aware telemetry it gates) until
   // time-window enforcement is wired in /pull and /push. When that lands,
   // include `eff.timeWindow !== null` in `isBounded` below so scoped clients
@@ -422,7 +422,7 @@ export function createSyncRouter(
       );
 
       // ---------------------------------------------------------------
-      // Per-event scope validation (Phase 3 — WP #947)
+      // Per-event scope validation (Phase 3)
       // ---------------------------------------------------------------
       const scope = (req as ScopeAwareRequest).scope!.effective;
       const isBounded = scope.areaIds !== null || scope.entityTypes !== null;
@@ -502,7 +502,7 @@ export function createSyncRouter(
         acceptedEvents = accepted;
       }
 
-      // Member sub-write scope guard (#1145 — follow-up to #1134). The envelope
+      // Member sub-write scope guard (follow-up to the envelope-scope check). The envelope
       // check above validates each event's OWN entityGuid against scope, but a
       // group event's `data.members[]` sub-writes are applied to DIFFERENT
       // entities. A bounded field worker could pass the envelope check on an

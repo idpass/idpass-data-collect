@@ -18,8 +18,8 @@
  */
 
 /*
- * OpenProject #1145 — sync-push member-GUID injection guard (follow-up to
- * #1134). A bounded field worker whose events pass the envelope scope check
+ * Sync-push member-GUID injection guard (follow-up to the self-service
+ * member-scope guard). A bounded field worker whose events pass the envelope scope check
  * on `/api/sync/push` must NOT be able to smuggle an out-of-scope pre-existing
  * entity GUID into a group event's `data.members[]` and thereby overwrite that
  * victim's record or attach it to their group. In-scope members and brand-new
@@ -58,7 +58,7 @@ const baseConfig: AppConfig = {
 const postgresUrl = getConnectionString("sync_route_member_scope");
 const DEVICE_ID = "device-member-scope-1";
 
-describeIfPostgres("Sync route — /push member sub-write scope guard (#1145)", () => {
+describeIfPostgres("Sync route — /push member sub-write scope guard", () => {
   let app: SyncServerInstance | null = null;
   let baseUrl = "";
   let adminToken = "";

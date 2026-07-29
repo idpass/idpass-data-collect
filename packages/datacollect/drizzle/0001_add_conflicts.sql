@@ -15,7 +15,7 @@
 -- specific language governing permissions and limitations
 -- under the License.
 
--- Adds the conflicts table that backs the Postgres ConflictStore (#202).
+-- Adds the conflicts table that backs the Postgres ConflictStore.
 -- Mirrors the canonical definition in src/db/schema.ts. The runtime backend
 -- table create is in packages/backend/drizzle/0003_add_conflicts.sql.
 

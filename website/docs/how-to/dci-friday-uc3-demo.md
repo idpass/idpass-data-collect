@@ -2,7 +2,6 @@
 
 **Date:** 2026-05-15
 **Branch:** `demo/dci-friday`
-**OpenProject:** OP #985 (UC3 widow enrolment) — driven by demo branch, not the full UC3 plan.
 
 This runbook gets a demo presenter from a cold machine to a working
 "household → assign_program CR → OpenSPP approves → membership applied" walk
@@ -63,7 +62,7 @@ What is **in DataCollect scope but wired in this build**:
 
 | Item | Detail |
 |------|--------|
-| Branch | `demo/dci-friday` (3 demo commits on top of #948 CR work) |
+| Branch | `demo/dci-friday` (3 demo commits on top of the change-request work) |
 | Backend | Postgres + Express, default port 3000 |
 | Admin UI | Vite dev or built, default 5173 |
 | Mobile | PWA at `/mobile/`, or APK from `pnpm --filter @idpass/data-collect-mobile build:android:apk` |

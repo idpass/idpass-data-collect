@@ -58,7 +58,7 @@ type ConflictResolutionResult =
 export interface SubmitFormOptions {
   /**
    * When provided, enables RESTRICTED mode for `create-group`/`update-group`
-   * member sub-writes (OpenProject #1134 — horizontal BOLA guard).
+   * member sub-writes (horizontal authorization guard on member GUIDs).
    *
    * A member entry whose `guid` resolves to a PRE-EXISTING entity is only
    * accepted when that guid is present in this set (the caller's own group,
@@ -72,8 +72,8 @@ export interface SubmitFormOptions {
   authorizedMemberGuids?: string[];
 
   /**
-   * Async predicate variant of the member sub-write guard (OpenProject #1145 —
-   * follow-up to #1134 for the `/api/sync/push` path).
+   * Async predicate variant of the member sub-write guard, for the
+   * `/api/sync/push` path.
    *
    * A field worker's sync scope is NOT a finite list of GUIDs — it is a
    * PREDICATE over the member entity (its `area_id` and/or type must fall
@@ -773,7 +773,7 @@ export class EventApplierService {
 
     if (Array.isArray(formData.data?.members)) {
       // log.debug(`Processing members: ${JSON.stringify(formData.data.members)}`);
-      // Horizontal BOLA guard (#1134 + #1145): when the caller supplies an
+      // Horizontal authorization guard: when the caller supplies an
       // authorization scope (RESTRICTED mode — least-trusted callers such as
       // self-service, or bounded field-worker `/api/sync/push`), a member entry
       // may only write to a PRE-EXISTING entity if that entity is inside the
@@ -781,10 +781,10 @@ export class EventApplierService {
       // in scope. Unknown guids (new members) are always allowed.
       //
       // Scope is expressed two ways, both handled by `isMemberAuthorized`:
-      //   - `authorizedMemberGuids` — a finite GUID set (#1134, self-service).
+      //   - `authorizedMemberGuids` — a finite GUID set (self-service).
       //   - `isMemberGuidAuthorized` — an async predicate over the member
       //     entity, for scopes that are area/type membership rather than a
-      //     finite list (#1145, sync-push).
+      //     finite list (sync-push).
       const restrictMembers =
         options?.authorizedMemberGuids !== undefined || options?.isMemberGuidAuthorized !== undefined;
       const authorizedMemberGuids = new Set<string>(options?.authorizedMemberGuids ?? []);

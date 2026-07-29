@@ -89,7 +89,7 @@ const STUDIO_INDIVIDUAL_EXTENSION_KEY = "urn:openspp:extension:studio-individual
  * (i.e. a `create-*` CR). OpenSPP will assign the real identifier when the CR
  * is `$apply`-ed.
  *
- * v1 limitation (#948): some OpenSPP deployments may reject CR payloads whose
+ * v1 limitation: some OpenSPP deployments may reject CR payloads whose
  * `registrant` does not refer to an existing record. If your registry rejects
  * this placeholder, override the strategy in a successor adapter — see README.
  */
@@ -1016,7 +1016,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
    * writing directly. The actual entity write is deferred to the OpenSPP
    * operator's `$apply` step and flows back via pull.
    *
-   * v1 mapping (#948): `add-member` / `remove-member` events on members of a
+   * v1 mapping: `add-member` / `remove-member` events on members of a
    * group are NOT distinguished here — they show up as plain
    * `update-individual` / `update-group` and map to `edit_*` codes. Granular
    * member-CR mapping is deferred.
@@ -1869,7 +1869,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
  * Read `submitVia` from `ExternalSyncConfig.adapterConfig`, falling back to
  * the legacy `extraFields` shape. Anything other than `"change-request"`
  * (including `undefined`) resolves to `"direct"` so tenants without explicit
- * config retain the pre-#948 behaviour.
+ * config retain the pre-change-request behaviour.
  */
 function readSubmitVia(config: ExternalSyncConfig): ChangeRequestSubmitMode {
   const raw = getAdapterConfigValue<string>(config, "submitVia");

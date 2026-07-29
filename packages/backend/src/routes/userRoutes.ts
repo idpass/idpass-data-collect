@@ -33,7 +33,7 @@ const RoleAssignmentSchema = z.object({
   tenantId: z.string(),
   role: z.string(),
   areaId: z.string().optional(),
-  // Phase 2 (#947): per-role narrowing of tenant sync scope. Optional; when
+  // Per-role narrowing of tenant sync scope. Optional; when
   // omitted the role inherits the tenant's syncScope policy unchanged. Strips
   // unknown keys via Zod, so operators cannot smuggle additional dimensions.
   // Uses the strict admin schema (rejects empty `areaIds`/`entityTypes`) so

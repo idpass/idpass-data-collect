@@ -200,7 +200,7 @@ export async function run(config: SyncServerConfig): Promise<SyncServerInstance>
   // Shared pool for health checks to verify database connectivity
   const healthCheckPool = new Pool({ connectionString: config.postgresUrl, max: 2 });
 
-  // Per-device sync telemetry store (OpenProject WP #947). Pool is registered
+  // Per-device sync telemetry store. Pool is registered
   // for cleanup so tests don't leak connections across server boots.
   const telemetryPool = config.postgresUrl ? new Pool({ connectionString: config.postgresUrl }) : null;
   const telemetryStore = telemetryPool ? new SyncTelemetryStore(telemetryPool) : undefined;

@@ -30,8 +30,8 @@ import { computed, type ComputedRef } from 'vue'
 export type FeatureFlagName = 'scopedSync'
 
 const FLAG_DEFAULTS: Record<FeatureFlagName, boolean> = {
-  // OP #947 — bounded sync scope UI (sync-scope card, devices view,
-  // user override editor). Default-on per Phase 4 spec.
+  // Bounded sync scope UI (sync-scope card, devices view,
+  // user override editor). Default-on.
   scopedSync: true,
 }
 
