@@ -12,6 +12,9 @@ on:
       - "examples/mock-server/**"
       - ".github/workflows/mock-server.yml"
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
