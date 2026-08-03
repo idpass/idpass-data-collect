@@ -17,11 +17,25 @@
  * under the License.
  */
 
+import { Capacitor } from '@capacitor/core'
+import { Network } from '@capacitor/network'
+
+// `navigator.onLine` is unreliable inside Android WebView (Chromium bug
+// 151887): it reflects the last broadcast connectivity state, not real-time.
+// On Android 10 and Samsung-custom WebViews it can be stuck `false` while
+// WiFi is actually connected. On native platforms we delegate to the
+// Capacitor Network plugin, which queries ConnectivityManager directly.
+const isNative = Capacitor.isNativePlatform()
+
 /**
  * Check if the device is currently online
  * @returns Promise<boolean> - true if online, false if offline
  */
 export async function isOnline(): Promise<boolean> {
+  if (isNative) {
+    const status = await Network.getStatus()
+    return status.connected
+  }
   return navigator.onLine
 }
 
@@ -31,12 +45,22 @@ export async function isOnline(): Promise<boolean> {
  * @returns Cleanup function to remove the listener
  */
 export function onNetworkChange(callback: (isOnline: boolean) => void): () => void {
+  if (isNative) {
+    const handle = Network.addListener('networkStatusChange', (status) => {
+      callback(status.connected)
+    })
+    return () => {
+      // `addListener` returns a Promise<PluginListenerHandle> in Capacitor 6+.
+      void Promise.resolve(handle).then((h) => h.remove())
+    }
+  }
+
   const handleOnline = () => callback(true)
   const handleOffline = () => callback(false)
-  
+
   window.addEventListener('online', handleOnline)
   window.addEventListener('offline', handleOffline)
-  
+
   return () => {
     window.removeEventListener('online', handleOnline)
     window.removeEventListener('offline', handleOffline)
@@ -104,6 +128,9 @@ export function isNetworkError(error: unknown): boolean {
   
   const err = error as Record<string, unknown>
   
+  // Only inspect the error itself — do not corroborate with navigator.onLine
+  // because it reports stale state on Android WebView (see isOnline() above)
+  // and would misclassify timeouts/5xx as network errors on affected devices.
   return (
     err.code === 'NETWORK_ERROR' ||
     (typeof err.message === 'string' && (
@@ -111,7 +138,6 @@ export function isNetworkError(error: unknown): boolean {
       err.message.includes('Failed to fetch') ||
       err.message.includes('ERR_NETWORK') ||
       err.message.includes('ERR_INTERNET_DISCONNECTED')
-    )) ||
-    !navigator.onLine
+    ))
   )
 } 

@@ -1,3 +1,22 @@
+<!--
+ * Licensed to the Association pour la cooperation numerique (ACN) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ACN licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+-->
+
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -15,6 +34,13 @@ import { useAuthStore } from '@/stores/auth'
 import { useSnackBarStore } from '@/stores/snackBar'
 import DataDiagnostics from '@/components/DataDiagnostics.vue'
 import SyncStatusPanel from '@/components/SyncStatusPanel.vue'
+import SyncScopeCard from '@/components/SyncScopeCard.vue'
+import ProgramsCard from '@/components/ProgramsCard.vue'
+import Claim169Card from '@/components/Claim169Card.vue'
+import FormPreviewDialog from '@/components/FormPreviewDialog.vue'
+import { useFeatureFlag } from '@/composables/useFeatureFlag'
+import type { SyncScopePolicy } from '@idpass/data-collect-core'
+import type { AppProgram, Claim169Config } from '@/api'
 
 interface EntityForm {
   name: string
@@ -68,16 +94,21 @@ interface AppConfig {
   externalSync?: ExternalSyncConfig
   authConfigs?: AuthConfig[]
   selfService?: SelfServiceConfig
+  syncScope?: SyncScopePolicy | null
+  programs?: AppProgram[]
+  claim169?: Claim169Config | null
   createdAt?: string
   updatedAt?: string
 }
 
 interface FormOverviewItem {
   id: string
+  index: number
   title: string
   records: number
   dependsOn?: string
   fields: number
+  formio?: Record<string, unknown>
 }
 
 const authStore = useAuthStore()
@@ -88,13 +119,37 @@ const router = useRouter()
 const app = ref<AppConfig | null>(null)
 const isLoading = ref(true)
 const error = ref<string | null>(null)
-const activeTab = ref<'entities' | 'forms' | 'integration' | 'mapping' | 'auth'>('entities')
+const activeTab = ref<'entities' | 'forms' | 'integration' | 'mapping' | 'auth' | 'programs' | 'claim169'>('entities')
 const showQrDialog = ref(false)
 const showAuthDialog = ref(false)
 const isDeleting = ref(false)
 const qrError = ref(false)
 const entityRecords = ref<Record<string, unknown[]>>({})
 const syncPanelRef = ref<InstanceType<typeof SyncStatusPanel> | null>(null)
+const scopedSyncEnabled = useFeatureFlag('scopedSync')
+
+function onSyncScopeUpdated(policy: SyncScopePolicy | null) {
+  if (!app.value) return
+  app.value = { ...app.value, syncScope: policy }
+}
+
+function onProgramsUpdated(programs: AppProgram[]) {
+  if (!app.value) return
+  app.value = { ...app.value, programs }
+}
+
+const editableClaim169 = computed<Claim169Config>({
+  get: () => app.value?.claim169 ?? { enabled: false, trustedIssuers: [] },
+  set: (value) => {
+    if (!app.value) return
+    app.value = { ...app.value, claim169: value }
+  },
+})
+
+const isOpenSppAdapter = computed(() => {
+  const type = app.value?.externalSync?.type
+  return type === 'openspp-v1-adapter' || type === 'openspp-v2-adapter'
+})
 
 const routeId = computed(() => route.params.id as string)
 
@@ -219,13 +274,29 @@ const formOverview = computed<FormOverviewItem[]>(() => {
     const formId = form.name || `entity-${index}`
     return {
       id: formId,
+      index,
       title: form.title || formId,
       dependsOn: form.dependsOn,
       fields: countFormFields(form.formio),
       records: entityDataMap.value.get(form.name) ?? 0,
+      formio: form.formio,
     }
   })
 })
+
+const showPreviewDialog = ref(false)
+const previewForm = ref<{ title: string; formio: Record<string, unknown> }>({
+  title: '',
+  formio: {},
+})
+
+const openFormPreview = (item: FormOverviewItem) => {
+  previewForm.value = {
+    title: item.title,
+    formio: item.formio ?? {},
+  }
+  showPreviewDialog.value = true
+}
 
 const downloadUrl = computed(() => {
   const artifactId = app.value?.artifactId
@@ -383,6 +454,16 @@ const openEditor = (step: string = 'general') => {
   })
 }
 
+// Open the standalone single-form designer (#17) for one form, bypassing the
+// wizard. `index` is the form's position in entityForms.
+const editForm = (index: number) => {
+  if (!routeId.value) return
+  router.push({
+    name: 'form-edit',
+    params: { id: routeId.value, formIndex: String(index) },
+  })
+}
+
 const duplicateConfig = () => {
   if (!routeId.value) return
   router.push({ name: 'copy', params: { id: routeId.value } })
@@ -501,6 +582,19 @@ watch(
                 @click="router.push({ name: 'duplicates', params: { id: routeId } })"
               />
               <v-list-item
+                v-if="scopedSyncEnabled"
+                data-testid="app-details-devices-link"
+                prepend-icon="mdi-cellphone-link"
+                title="View device sync activity"
+                @click="router.push({ name: 'devices', params: { configId: app.id } })"
+              />
+              <v-list-item
+                prepend-icon="mdi-merge"
+                title="Conflicts"
+                data-testid="app-details-conflicts-link"
+                @click="router.push({ name: 'conflicts', params: { id: routeId } })"
+              />
+              <v-list-item
                 prepend-icon="mdi-content-copy"
                 title="Duplicate Config"
                 @click="duplicateConfig"
@@ -535,6 +629,13 @@ watch(
         @request-credentials="showAuthDialog = true"
       />
 
+      <SyncScopeCard
+        v-if="scopedSyncEnabled"
+        :app-id="app.id"
+        :policy="app.syncScope ?? null"
+        @update:policy="onSyncScopeUpdated"
+      />
+
       <div class="details-grid">
         <div>
           <v-card class="details-content" border="md" elevation="0">
@@ -542,6 +643,8 @@ watch(
               <v-tab value="entities">Entities</v-tab>
               <v-tab value="forms">Forms</v-tab>
               <v-tab value="integration">Integration</v-tab>
+              <v-tab v-if="isOpenSppAdapter" value="programs">Programs</v-tab>
+              <v-tab v-if="isOpenSppAdapter" value="claim169">Claim-169</v-tab>
               <v-tab value="mapping">Field Mapping</v-tab>
               <v-tab value="auth">Authentication</v-tab>
             </v-tabs>
@@ -642,16 +745,37 @@ watch(
                       cols="12"
                       md="6"
                     >
-                      <v-card class="form-card" border="md" elevation="0">
+                      <v-card
+                        class="form-card form-card--clickable"
+                        border="md"
+                        elevation="0"
+                        role="button"
+                        tabindex="0"
+                        :title="`Preview ${item.title}`"
+                        @click="openFormPreview(item)"
+                        @keydown.enter="openFormPreview(item)"
+                        @keydown.space.prevent="openFormPreview(item)"
+                      >
                         <v-card-text>
                           <div class="form-card__header">
                             <div>
                               <h3 class="form-card__title">{{ item.title }}</h3>
                               <p class="form-card__id">Entity ID • {{ item.id }}</p>
                             </div>
-                            <v-chip color="primary" size="small" variant="tonal">
-                              {{ item.records }} records
-                            </v-chip>
+                            <div class="form-card__header-actions">
+                              <v-chip color="primary" size="small" variant="tonal">
+                                {{ item.records }} records
+                              </v-chip>
+                              <v-btn
+                                variant="tonal"
+                                color="primary"
+                                size="small"
+                                prepend-icon="mdi-pencil"
+                                @click.stop="editForm(item.index)"
+                              >
+                                Edit
+                              </v-btn>
+                            </div>
                           </div>
                           <p class="form-card__summary">
                             This form currently has {{ item.fields }} configured field{{ item.fields === 1 ? '' : 's' }}
@@ -730,6 +854,42 @@ watch(
                       Configure Integration
                     </v-btn>
                   </div>
+                </div>
+              </v-window-item>
+
+              <v-window-item v-if="isOpenSppAdapter" value="programs">
+                <div class="section-panel">
+                  <div class="section-panel__header">
+                    <div>
+                      <h2 class="section-panel__title">Programs</h2>
+                      <p class="section-panel__subtitle">
+                        OpenSPP programs offered for enrolment via the
+                        <code>assign_program</code> ChangeRequest workflow. Mobile clients render
+                        the "Enroll in Program" picker from this list.
+                      </p>
+                    </div>
+                  </div>
+                  <ProgramsCard
+                    :app-id="app.id"
+                    :programs="app.programs ?? []"
+                    @update:programs="onProgramsUpdated"
+                  />
+                </div>
+              </v-window-item>
+
+              <v-window-item v-if="isOpenSppAdapter" value="claim169">
+                <div class="section-panel">
+                  <div class="section-panel__header">
+                    <div>
+                      <h2 class="section-panel__title">Claim-169</h2>
+                      <p class="section-panel__subtitle">
+                        Tenant-level trust anchors for Claim-169 verifiable
+                        identity attestations. Mobile clients require at least one
+                        trusted issuer to verify signed credentials.
+                      </p>
+                    </div>
+                  </div>
+                  <Claim169Card :app-id="app.id" v-model="editableClaim169" />
                 </div>
               </v-window-item>
 
@@ -890,11 +1050,11 @@ watch(
               <div class="overview-card__details">
                 <div class="overview-card__row">
                   <span class="overview-card__row-label">Config ID</span>
-                  <span class="overview-card__row-value">{{ app.id }}</span>
+                  <span class="overview-card__row-value overview-card__row-value--mono">{{ app.id }}</span>
                 </div>
                 <div class="overview-card__row" v-if="app.artifactId">
                   <span class="overview-card__row-label">Artifact ID</span>
-                  <span class="overview-card__row-value">{{ app.artifactId }}</span>
+                  <span class="overview-card__row-value overview-card__row-value--mono">{{ app.artifactId }}</span>
                 </div>
                 <div class="overview-card__row">
                   <span class="overview-card__row-label">Version</span>
@@ -973,6 +1133,12 @@ watch(
     @submit="onCredentialsSubmit"
   />
 
+  <FormPreviewDialog
+    v-model="showPreviewDialog"
+    :title="previewForm.title"
+    :formio="previewForm.formio"
+  />
+
   <v-dialog v-model="showArchiveDialog" :max-width="540">
     <v-card>
       <v-card-title class="text-h6">
@@ -1030,8 +1196,10 @@ watch(
 }
 
 .details-header__title {
+  font-family: var(--font-family-display);
   font-size: clamp(1.75rem, 1.6rem + 0.5vw, 2.4rem);
   font-weight: 600;
+  letter-spacing: -0.015em;
   margin: 0;
   color: var(--text-main);
 }
@@ -1166,7 +1334,7 @@ watch(
 }
 
 .entity-guid {
-  font-family: monospace;
+  font-family: var(--font-family-mono);
   font-size: var(--font-size-sm);
   color: var(--text-main);
 }
@@ -1313,12 +1481,33 @@ watch(
   height: 100%;
 }
 
+.form-card--clickable {
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.form-card--clickable:hover,
+.form-card--clickable:focus-visible {
+  border-color: rgb(var(--v-theme-primary));
+  box-shadow: var(--shadow-card);
+  transform: translateY(-2px);
+}
+
 .form-card__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--spacing-md);
   flex-wrap: wrap;
+}
+
+.form-card__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
 }
 
 .form-card__title {
@@ -1446,6 +1635,13 @@ watch(
 
 .overview-card__row-value--muted {
   color: var(--text-muted);
+}
+
+.overview-card__row-value--mono {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+  font-weight: 400;
+  letter-spacing: 0.01em;
 }
 
 .overview-card__link {

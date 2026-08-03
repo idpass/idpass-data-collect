@@ -34,31 +34,36 @@ export interface PublicArtifactPaths {
   qrPath: string;
 }
 
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
 export function resolvePublicBaseUrl(req: Request): string {
-  // Allow explicit configuration via environment variable (recommended for production)
+  // Trusted, explicit configuration — required for any non-local deployment.
   const configured = process.env.PUBLIC_BASE_URL?.trim();
   if (configured) {
     return configured.replace(/\/+$/, "");
   }
 
-  // Check for Railway's public domain (when behind Railway's proxy)
-  const railwayPublicDomain = process.env.RAILWAY_PUBLIC_DOMAIN;
+  // Railway's public domain (when behind Railway's proxy). Railway always uses
+  // HTTPS for public domains.
+  const railwayPublicDomain = process.env.RAILWAY_PUBLIC_DOMAIN?.trim();
   if (railwayPublicDomain) {
-    // Railway always uses HTTPS for public domains
-    return `https://${railwayPublicDomain}`;
+    return `https://${railwayPublicDomain.replace(/\/+$/, "")}`;
   }
 
-  // Check for X-Forwarded-Host header (when behind a reverse proxy)
-  const forwardedHost = req.get("x-forwarded-host");
-  const forwardedProto = req.get("x-forwarded-proto") || req.protocol;
-  if (forwardedHost) {
-    // Don't include port for standard HTTP/HTTPS (80/443)
-    return `${forwardedProto}://${forwardedHost}`;
-  }
-
-  // Fallback: construct from request (for local development)
-  const protocol = req.protocol;
+  // No trusted base URL is configured. This value is persisted into the public
+  // artifact (syncServerUrl + QR target), so it must NOT be derived from
+  // client-controllable host headers (Host / X-Forwarded-Host): an attacker who
+  // can reach an artifact endpoint could otherwise repoint onboarding at their
+  // own sync server. Accept the request host only when it is loopback (local
+  // development); for anything else, fail closed and require explicit config.
   const hostname = req.hostname;
+  if (!LOOPBACK_HOSTS.has(hostname)) {
+    throw new Error(
+      "Cannot resolve a trusted public base URL. Set PUBLIC_BASE_URL (or RAILWAY_PUBLIC_DOMAIN) for non-local deployments.",
+    );
+  }
+
+  const protocol = req.protocol;
   const port = req.socket.localPort;
   const isDefaultPort = (protocol === "http" && port === 80) || (protocol === "https" && port === 443);
   return `${protocol}://${hostname}${isDefaultPort ? "" : `:${port}`}`;
@@ -68,6 +73,62 @@ function assertValidArtifactId(artifactId: string) {
   if (!/^[a-zA-Z0-9_-]+$/.test(artifactId)) {
     throw new Error("Invalid artifact identifier");
   }
+}
+
+/**
+ * Matches field names that hold credentials/secrets. Used to strip secret
+ * values out of authConfigs.fields, which is a free-form bag that also carries
+ * legitimately-public OIDC client params (authority, clientId, scope, …) that
+ * client auth adapters need, so we deny by name rather than dropping the bag.
+ */
+const SECRET_FIELD_PATTERN = /(secret|password|passwd|token|api[_-]?key|private[_-]?key|credential)/i;
+
+function redactSecretFields(fields: Record<string, string>): Record<string, string> {
+  const safe: Record<string, string> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (!SECRET_FIELD_PATTERN.test(key)) {
+      safe[key] = value;
+    }
+  }
+  return safe;
+}
+
+/**
+ * Produces a copy of an AppConfig safe to publish in an unauthenticated public
+ * artifact (downloadable JSON / QR onboarding payload).
+ *
+ * Public artifacts are served without authentication, so any secret in the
+ * config would be disclosed to anyone with the artifact/QR URL. This strips:
+ *  - externalSync.adapterConfig and externalSync.extraFields (OAuth client
+ *    secrets, adapter passwords, OpenFn apiKey/callbackToken, OpenSPP
+ *    username/password) and the server-side registry url. Only the fields a
+ *    client legitimately needs are kept (type, auth, fieldMappings).
+ *  - authConfigs[].fields whose name looks like a credential (client_secret,
+ *    JWT secret, …), keeping public OIDC client params.
+ *
+ * The returned config is a deep clone; the caller's config is never mutated, so
+ * the server keeps using the real secrets for external sync.
+ */
+export function redactConfigForPublicArtifact(appConfig: AppConfig): AppConfig {
+  const redacted = cloneDeep(appConfig);
+
+  if (redacted.externalSync) {
+    const { type, auth, fieldMappings } = redacted.externalSync;
+    redacted.externalSync = {
+      type,
+      ...(auth !== undefined ? { auth } : {}),
+      ...(fieldMappings !== undefined ? { fieldMappings } : {}),
+    } as AppConfig["externalSync"];
+  }
+
+  if (redacted.authConfigs) {
+    redacted.authConfigs = redacted.authConfigs.map((c) => ({
+      type: c.type,
+      fields: redactSecretFields(c.fields ?? {}),
+    }));
+  }
+
+  return redacted;
 }
 
 export function getPublicArtifactPaths(artifactId: string): PublicArtifactPaths {
@@ -89,8 +150,17 @@ export async function generatePublicArtifacts(baseUrl: string, appConfig: AppCon
   await fs.mkdir(PUBLIC_FOLDER, { recursive: true });
   const { jsonPath, qrPath } = getPublicArtifactPaths(appConfig.artifactId);
 
-  const publicConfig = cloneDeep(appConfig);
+  const publicConfig = redactConfigForPublicArtifact(appConfig);
   set(publicConfig, "syncServerUrl", baseUrl);
+  // The public artifact is served unauthenticated for QR onboarding. entityData
+  // holds seeded beneficiary records (names, national IDs, dates of birth) which
+  // would otherwise be publicly downloadable — and, when self-service ID auth is
+  // enabled, those values are the login factors. Clients receive entities via
+  // sync, not from the onboarding config, and the server seeds entityData from
+  // its own stored config, so emptying it here removes the disclosure without
+  // affecting onboarding or server-side seeding. The field is kept (as an empty
+  // array) because the mobile tenant-app schema requires it.
+  set(publicConfig, "entityData", []);
   const publicJson = JSON.stringify(publicConfig, null, 2);
 
   await fs.writeFile(jsonPath, publicJson);

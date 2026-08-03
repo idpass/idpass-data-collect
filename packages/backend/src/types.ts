@@ -18,7 +18,9 @@
  */
 
 import { EntityDataManager, ExternalSyncConfig } from "@idpass/data-collect-core";
+import type { ConflictStore, SyncScopeOverride, SyncScopePolicy } from "@idpass/data-collect-core";
 import { Server } from "http";
+import type { SyncTelemetryStore } from "./stores/SyncTelemetryStore";
 export interface SyncServerConfig {
   port: number;
   adminPassword: string;
@@ -32,6 +34,7 @@ export interface SyncServerInstance {
   appInstanceStore: AppInstanceStore;
   appConfigStore: AppConfigStore;
   userStore: UserStore;
+  telemetryStore?: SyncTelemetryStore;
   clearStore: () => Promise<void>;
   closeConnection: () => Promise<void>;
 }
@@ -45,6 +48,7 @@ export interface RoleAssignment {
   tenantId: string;
   role: string;
   areaId?: string;
+  syncScopeOverride?: SyncScopeOverride;
 }
 
 export interface User {
@@ -137,6 +141,35 @@ export interface SelfServiceConfig {
   };
 }
 
+/**
+ * Program enrolment offering surfaced to mobile clients via tenant config.
+ * The `id` is the OpenSPP `spp.program` primary key sent as
+ * `detail.program_id` on `assign_program` ChangeRequest pushes.
+ */
+export interface AppProgram {
+  id: number;
+  name: string;
+  code?: string;
+}
+
+/**
+ * Claim-169 identity verification config carried at the tenant level.
+ * Powers the mobile AppView "scan-as-search" feature and the verify-confirm
+ * overlay. `enabled` false hides the quick-scan button entirely.
+ * `trustedIssuers` is the operator-curated list of issuer DIDs whose
+ * signatures the device accepts offline (no network call at verify time).
+ */
+export interface Claim169Config {
+  enabled: boolean;
+  trustedIssuers: Array<{
+    issuerId: string;
+    publicKey: {
+      ed25519?: string;
+      es256?: string;
+    };
+  }>;
+}
+
 export interface AppConfig {
   id: string;
   artifactId?: string;
@@ -149,7 +182,25 @@ export interface AppConfig {
   externalSync?: ExternalSyncConfig;
   authConfigs?: AuthConfig[];
   selfService?: SelfServiceConfig;
+  syncScope?: SyncScopePolicy;
   archivedAt?: Date | null;
+  /**
+   * Programs offered for enrolment via the OpenSPP `assign_program` CR
+   * workflow. Empty/omitted hides the mobile "Enrol in Program" action.
+   */
+  programs?: AppProgram[];
+  /**
+   * Claim-169 trust anchors + enable flag. See {@link Claim169Config}.
+   * Null/undefined means feature off; mobile resolver returns enabled:false.
+   */
+  claim169?: Claim169Config | null;
+  /**
+   * Backend URL the mobile/admin clients call for sync push + pull. Stored
+   * per-tenant so a single backend can serve tenants whose clients connect
+   * via different reverse-proxy domains (e.g. Coolify multi-instance setups).
+   * If absent, mobile falls back to `VITE_SYNC_URL` from the build env.
+   */
+  syncServerUrl?: string;
 }
 
 export interface AppConfigStore {
@@ -169,6 +220,16 @@ export interface AppInstance {
   configId: string;
   config: AppConfig;
   edm: EntityDataManager;
+  /**
+   * Per-tenant conflict store backing the ConflictService wired into
+   * EventApplierService. Routes (B2) construct a ConflictService per request
+   * around this same store instance instead of opening a parallel connection.
+   *
+   * Typed as the `ConflictStore` interface (not `ConflictStorePg`) so route
+   * handlers depend on the abstract contract — the concrete Postgres backing
+   * is an implementation detail of `AppInstanceStore`.
+   */
+  conflictStore: ConflictStore;
 }
 
 export interface AppInstanceStore {

@@ -32,7 +32,18 @@ import {
   createLogger,
 } from "@idpass/data-collect-core";
 import { EventApplierService } from "@idpass/data-collect-core";
-import { OpenSppV2Client, PreconditionFailedError, ConflictError } from "./OpenSppV2Client";
+import {
+  OpenSppV2Client,
+  PreconditionFailedError,
+  ConflictError,
+  ChangeRequestRevisionNeededError,
+} from "./OpenSppV2Client";
+import type {
+  ChangeRequestSubmitMode,
+  EventTypeKey,
+  OpenSppV2AdapterOptions,
+} from "./OpenSppV2AdapterOptions";
+import { resolveCRTypeCode } from "./OpenSppV2AdapterOptions";
 import type {
   IndividualResource,
   GroupResource,
@@ -40,6 +51,11 @@ import type {
   CodeableConcept,
   Extension,
 } from "./types";
+import type {
+  ChangeRequestCreate,
+  RegistrantRef,
+} from "./ChangeRequestTypes";
+import { getCR, setCR, listInFlightCRs, type CRRecord } from "./changeRequestStore";
 import { v4 as uuidv4 } from "uuid";
 
 const log = createLogger("adapter-openspp:v2");
@@ -47,8 +63,49 @@ const log = createLogger("adapter-openspp:v2");
 /** User ID for sync-originated events */
 const SYNC_USER_ID = "openspp-v2-sync";
 
+/**
+ * A CR record persisted with a numeric program discriminator (see
+ * `pushPendingProgramEnrolments`) encodes the enrolment's `programId` in the
+ * metadata key suffix as a stringified integer. `listInFlightCRs` returns the
+ * suffix as a raw string; this helper coerces back to a finite positive
+ * integer, or returns `null` for anything else (entity-level CRs, malformed
+ * discriminators).
+ */
+function parseProgramEnrolmentDiscriminator(discriminator: string): number | null {
+  if (!discriminator) return null;
+  // Only digits — reject negatives, floats, NaN, embedded text. Program ids
+  // in OpenSPP are Odoo record ids (positive integers).
+  if (!/^\d+$/.test(discriminator)) return null;
+  const parsed = Number.parseInt(discriminator, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
 /** Extension key for Studio individual custom fields (OpenSPP V2 API) */
 const STUDIO_INDIVIDUAL_EXTENSION_KEY = "urn:openspp:extension:studio-individual";
+
+/**
+ * Placeholder identifier system used in `registrant.system` when a CR is
+ * created for an entity that does not yet have an OpenSPP-issued external id
+ * (i.e. a `create-*` CR). OpenSPP will assign the real identifier when the CR
+ * is `$apply`-ed.
+ *
+ * v1 limitation: some OpenSPP deployments may reject CR payloads whose
+ * `registrant` does not refer to an existing record. If your registry rejects
+ * this placeholder, override the strategy in a successor adapter — see README.
+ */
+const CR_GUID_REGISTRANT_SYSTEM = "datacollect:guid";
+
+/**
+ * Strip a URI fragment (`#…`) from an identifier system URI. OpenSPP's CR
+ * `find_registrant_by_identifier` matches on the BASE vocabulary namespace
+ * (`urn:openspp:vocab:id-type`), not the per-code URI
+ * (`urn:openspp:vocab:id-type#system_id`) — the latter is rejected. Direct
+ * `/Group` / `/Individual` create paths still want the full URI.
+ */
+const stripFragment = (uri: string): string => {
+  const idx = uri.indexOf("#");
+  return idx >= 0 ? uri.slice(0, idx) : uri;
+};
 
 /**
  * Gender codes per ISO/IEC 5218 (representation of human sexes).
@@ -94,6 +151,10 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   private readonly maxRetries: number;
   private readonly identifierType: string;
   private readonly groupIdentifierType: string;
+  /** ChangeRequest push mode. Defaults to `"direct"` for backward compat. */
+  private readonly submitVia: ChangeRequestSubmitMode;
+  /** Tenant override for CR request-type codes. Empty when unset. */
+  private readonly changeRequestTypeMap: Partial<Record<EventTypeKey, string>>;
 
   constructor(
     private eventStore: EventStore,
@@ -114,6 +175,8 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       getAdapterConfigValue<string>(config, "identifierType") ?? "system_id";
     this.groupIdentifierType =
       getAdapterConfigValue<string>(config, "groupIdentifierType") ?? this.identifierType;
+    this.submitVia = readSubmitVia(config);
+    this.changeRequestTypeMap = readChangeRequestTypeMap(config);
   }
 
   /**
@@ -147,7 +210,19 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     // After pull, the baseline is reset (initial.version === modified.version).
     // Without this filter, pulled entities would be pushed back, overwriting
     // any changes made directly in OpenSPP between pull and push.
+    // BUT: entities with un-pushed `pendingProgramEnrolments` must always be
+    // included. EventApplierService resets the baseline after applying any
+    // SyncLevel.REMOTE event (mobile push lands as REMOTE on the backend),
+    // which makes initial.version === modified.version even for genuinely
+    // local-origin events like enrol-in-program. The original filter would
+    // then hide those from the push pipeline and the CR would never reach
+    // OpenSPP. Pending enrolments are a positive signal of un-synced state.
     const entitiesToSync = allModified.filter((pair) => {
+      const data = pair.modified.data as Record<string, unknown> | undefined;
+      const pendingEnrol = data?.pendingProgramEnrolments;
+      if (Array.isArray(pendingEnrol) && pendingEnrol.length > 0) {
+        return true;
+      }
       if (pair.modified.externalId && pair.initial && pair.initial.version === pair.modified.version) {
         return false;
       }
@@ -171,11 +246,11 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       totalPushed += result.pushed;
       totalFailed += result.failed;
       totalSkipped += result.skipped;
-      allErrors.push(...result.errors.map(e => ({
+      allErrors.push(...result.errors.map((e) => ({
         entityGuid: e.guid,
-        code: "PUSH_FAILED",
+        code: e.code,
         message: e.error,
-        retryable: true,
+        retryable: e.code !== "CR_REVISION_NEEDED",
       })));
     }
 
@@ -184,18 +259,20 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
       totalPushed += result.pushed;
       totalFailed += result.failed;
       totalSkipped += result.skipped;
-      allErrors.push(...result.errors.map(e => ({
+      allErrors.push(...result.errors.map((e) => ({
         entityGuid: e.guid,
-        code: "PUSH_FAILED",
+        code: e.code,
         message: e.error,
-        retryable: true,
+        retryable: e.code !== "CR_REVISION_NEEDED",
       })));
     }
 
-    // Only advance the push watermark when all entities were pushed successfully.
-    // Failed entities have lastUpdated from before this cycle — advancing the
-    // watermark past them would permanently exclude them from future push attempts.
-    if (totalFailed === 0) {
+    // Advance the watermark when only permanently-blocked CR failures remain.
+    // Operator must $reset rejected CRs on OpenSPP; A5 polling will rediscover
+    // them as `draft` and the next push will re-submit. Holding the watermark
+    // for these would inflate the push set across cycles.
+    const permanentlyBlocked = allErrors.filter((e) => e.code === "CR_REVISION_NEEDED").length;
+    if (totalFailed - permanentlyBlocked === 0) {
       await this.eventStore.setLastPushExternalSyncTimestamp(new Date().toISOString());
     }
 
@@ -212,13 +289,316 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
     const indResult = await this.pullIndividuals(since);
     const grpResult = await this.pullGroups(since);
+    const errors: SyncError[] = [...indResult.errors, ...grpResult.errors];
+
+    // Poll in-flight CR statuses. Always runs: program enrolments
+    // (`enrol-in-program` → `assign_program` CR) flow through CRs even when
+    // `submitVia: direct`, so a mode gate would silently drop those polls.
+    // `listInFlightCRs` short-circuits empty in O(1) when no CRs exist.
+    const pollErrors = await this.pollChangeRequestStatuses();
+    errors.push(...pollErrors);
 
     return {
       pulled: indResult.pulled + grpResult.pulled,
       failed: indResult.failed + grpResult.failed,
       skipped: indResult.skipped + grpResult.skipped,
-      errors: [...indResult.errors, ...grpResult.errors],
+      errors,
     };
+  }
+
+  /**
+   * Per-pull cap on in-flight CR status polls.
+   *
+   * Bounds the per-pull fan-out: a small entity pull must never amplify into a
+   * large `/ChangeRequest/{ref}` GET storm. Beyond this cap we defer to the
+   * next pull; ordering by oldest `submittedAt` first ensures stuck CRs make
+   * progress and rejected/applied transitions surface quickly.
+   */
+  private static readonly CR_POLL_CAP = 100;
+
+  /**
+   * Poll status for in-flight CRs and project transitions into local
+   * metadata. Runs after the entity pull so any operator-applied CR's entity
+   * changes are already ingested in the same pull cycle.
+   *
+   * Per-record errors never abort the loop: an individual 404 / network blip
+   * must not fail the surrounding pull.
+   *
+   * Returns the list of `SyncError` entries surfaced during polling so callers
+   * (i.e. {@link pullData}) can merge them into the pull's `errors[]` and the
+   * admin/orchestration layer regains visibility into rejected CR transitions
+   * and per-record poll failures.
+   */
+  private async pollChangeRequestStatuses(): Promise<SyncError[]> {
+    const errors: SyncError[] = [];
+    const inFlight = await listInFlightCRs(this.eventStore);
+    if (inFlight.length === 0) {
+      return errors;
+    }
+
+    // Oldest first, nulls last — stuck CRs surface fastest.
+    const sorted = [...inFlight].sort((a, b) => {
+      const ta = a.record.submittedAt ?? "";
+      const tb = b.record.submittedAt ?? "";
+      if (ta === tb) return 0;
+      if (ta === "") return 1;
+      if (tb === "") return -1;
+      return ta < tb ? -1 : 1;
+    });
+
+    const bounded = sorted.slice(0, OpenSppV2SyncAdapter.CR_POLL_CAP);
+
+    for (const { entityGuid, discriminator, record } of bounded) {
+      if (record.status === "applied" || record.status === "rejected") {
+        // Defensive: listInFlightCRs filters these out, but if a stale list
+        // leaks through, skip the network call.
+        continue;
+      }
+      try {
+        const fresh = await this.getClient().getChangeRequest(record.reference);
+        if (fresh === null) {
+          // 404 — CR vanished from OpenSPP. Log warn, leave metadata as-is
+          // so admin can still surface the audit record.
+          log.warn(
+            { entityGuid, reference: record.reference },
+            "Change request not found on OpenSPP; keeping local metadata",
+          );
+          continue;
+        }
+
+        if (fresh.status !== record.status) {
+          // For `applied` and `rejected` transitions on program-enrolment CRs,
+          // emit the projection event BEFORE persisting the terminal status.
+          // If the emit fails we leave the CR record in its pre-transition
+          // status so the next pull retries — once the metadata flips terminal,
+          // listInFlightCRs filters it out and the event would never re-emit.
+          let projectionEmitted = false;
+          let projectionError: unknown | null = null;
+          const isTerminalEnrolmentTransition =
+            fresh.status === "applied" || fresh.status === "rejected";
+
+          if (isTerminalEnrolmentTransition) {
+            const programId = parseProgramEnrolmentDiscriminator(discriminator);
+            if (programId !== null) {
+              try {
+                if (fresh.status === "applied") {
+                  await this.emitProgramEnrolmentApplied(entityGuid, programId, fresh);
+                } else {
+                  await this.emitProgramEnrolmentRejected(entityGuid, programId, fresh);
+                }
+                projectionEmitted = true;
+              } catch (emitErr) {
+                projectionError = emitErr;
+                log.warn(
+                  { entityGuid, reference: fresh.reference, programId, status: fresh.status, err: emitErr },
+                  `Failed to emit program-enrolment-${fresh.status} event; keeping CR in-flight for retry`,
+                );
+                errors.push({
+                  entityGuid,
+                  code: "CR_PROJECTION_FAILED",
+                  message: emitErr instanceof Error ? emitErr.message : String(emitErr),
+                  retryable: true,
+                });
+              }
+            } else {
+              // Non-program-enrolment CR — no projection needed.
+              projectionEmitted = true;
+            }
+          }
+
+          // If this is a terminal program-enrolment transition and the
+          // projection failed, do NOT persist the terminal status. Bump
+          // lastPolledAt only so observability survives + retry on next pull.
+          if (isTerminalEnrolmentTransition && projectionError !== null && !projectionEmitted) {
+            await setCR(
+              this.eventStore,
+              entityGuid,
+              {
+                ...record,
+                lastPolledAt: new Date().toISOString(),
+              },
+              discriminator,
+            );
+          } else {
+            await setCR(
+              this.eventStore,
+              entityGuid,
+              {
+                reference: fresh.reference,
+                status: fresh.status,
+                submittedAt: record.submittedAt,
+                lastPolledAt: new Date().toISOString(),
+                rejectionReason: fresh.rejectionReason,
+                appliedDate: fresh.appliedDate,
+                approvedDate: fresh.approvedDate,
+              },
+              discriminator,
+            );
+          }
+
+          if (fresh.status === "rejected") {
+            log.warn(
+              { entityGuid, reference: fresh.reference, reason: fresh.rejectionReason, projectionEmitted },
+              "Change request rejected by OpenSPP operator",
+            );
+            errors.push({
+              entityGuid,
+              code: "CR_REJECTED",
+              message: `Change request ${fresh.reference} rejected by OpenSPP operator${fresh.rejectionReason ? `: ${fresh.rejectionReason}` : ""}`,
+              retryable: false,
+            });
+          } else if (fresh.status === "applied" && projectionEmitted) {
+            log.info(
+              { entityGuid, reference: fresh.reference },
+              "Change request applied by OpenSPP — projection emitted",
+            );
+          }
+        } else {
+          // Status unchanged — bump only lastPolledAt to avoid unnecessary writes.
+          await setCR(
+            this.eventStore,
+            entityGuid,
+            {
+              ...record,
+              lastPolledAt: new Date().toISOString(),
+            },
+            discriminator,
+          );
+        }
+      } catch (err) {
+        log.warn(
+          { entityGuid, reference: record.reference, err },
+          "Failed to poll change request status; will retry next pull",
+        );
+        errors.push({
+          entityGuid,
+          code: "CR_POLL_FAILED",
+          message: err instanceof Error ? err.message : String(err),
+          retryable: true,
+        });
+      }
+    }
+
+    return errors;
+  }
+
+  /**
+   * Emit a `program-enrolment-applied` event locally for one
+   * `(entityGuid, programId)` pair. Marked `EXTERNAL` so:
+   *   - `EventApplierService.submitForm` treats it as a remote event and
+   *     skips duplicate-detection enqueue (per CLAUDE.md "isRemoteEvent" rule)
+   *   - the conflict-resolution path uses the remote-timestamp branch
+   *   - mobile consumes it via the regular /pull endpoint without special
+   *     casing
+   *
+   * Program name is best-effort: read from the persisted pending entry on
+   * the entity (we don't have a guaranteed lookup table here) and falls back
+   * to `undefined` so the mobile chip renders `Program #N`.
+   *
+   * Throws if `submitForm` throws — callers in `pollChangeRequestStatuses`
+   * wrap this in try/catch so the surrounding pull is unaffected.
+   */
+  private async emitProgramEnrolmentApplied(
+    entityGuid: string,
+    programId: number,
+    fresh: { reference: string; appliedDate?: string },
+  ): Promise<void> {
+    // Best-effort program name from the existing pending entry; missing if
+    // the entity payload was scrubbed or the enrolment originated server-side.
+    let programName: string | undefined;
+    try {
+      const pair = await this.eventApplierService.getEntityStore().getEntity(entityGuid);
+      const pending = (pair?.modified?.data as Record<string, unknown> | undefined)
+        ?.pendingProgramEnrolments;
+      if (Array.isArray(pending)) {
+        const entry = (pending as Array<{ programId?: unknown; programName?: unknown }>).find(
+          (p) => p && typeof p === "object" && p.programId === programId,
+        );
+        if (entry && typeof entry.programName === "string") {
+          programName = entry.programName;
+        }
+      }
+    } catch {
+      // Best-effort only; missing name is acceptable.
+    }
+
+    const appliedAt = fresh.appliedDate ?? new Date().toISOString();
+    // `timestamp` is the event-emission time, NOT `appliedAt`. The conflict
+    // resolver (`handleIncomingConflict`) compares this against the local
+    // entity's `lastUpdated`: if the field worker's pending-enrolment was
+    // stamped after OpenSPP's approval (clock skew, slow approval), an
+    // `appliedAt`-based timestamp would lose to the local pending event and
+    // the chip would never flip. The emission moment is always later than
+    // the most recent local edit on this device, so it always wins.
+    // `appliedAt` is preserved on `data.appliedAt` for audit.
+    await this.eventApplierService.submitForm({
+      guid: uuidv4(),
+      entityGuid,
+      type: "program-enrolment-applied",
+      data: {
+        programId,
+        ...(programName ? { programName } : {}),
+        appliedAt,
+        crId: fresh.reference,
+        crName: fresh.reference,
+      },
+      timestamp: new Date().toISOString(),
+      userId: SYNC_USER_ID,
+      syncLevel: SyncLevel.EXTERNAL,
+    });
+  }
+
+  /**
+   * Emit a `program-enrolment-rejected` event locally for one
+   * `(entityGuid, programId)` pair. Mirrors
+   * {@link emitProgramEnrolmentApplied} for the rejection terminal state.
+   * Same EXTERNAL syncLevel + remote-event semantics so:
+   *   - the entity's `pendingProgramEnrolments[]` slot is dropped
+   *   - a `rejectedPrograms[]` entry is appended with the operator's reason
+   *   - mobile pulls the event via the standard /pull endpoint and the
+   *     DetailView re-offers the programme for re-submission
+   */
+  private async emitProgramEnrolmentRejected(
+    entityGuid: string,
+    programId: number,
+    fresh: { reference: string; rejectionReason?: string },
+  ): Promise<void> {
+    // Best-effort program name from the existing pending entry (same approach
+    // as the applied path — missing name is acceptable).
+    let programName: string | undefined;
+    try {
+      const pair = await this.eventApplierService.getEntityStore().getEntity(entityGuid);
+      const pending = (pair?.modified?.data as Record<string, unknown> | undefined)
+        ?.pendingProgramEnrolments;
+      if (Array.isArray(pending)) {
+        const entry = (pending as Array<{ programId?: unknown; programName?: unknown }>).find(
+          (p) => p && typeof p === "object" && p.programId === programId,
+        );
+        if (entry && typeof entry.programName === "string") {
+          programName = entry.programName;
+        }
+      }
+    } catch {
+      // Best-effort only; missing name is acceptable.
+    }
+
+    const rejectedAt = new Date().toISOString();
+    await this.eventApplierService.submitForm({
+      guid: uuidv4(),
+      entityGuid,
+      type: "program-enrolment-rejected",
+      data: {
+        programId,
+        ...(programName ? { programName } : {}),
+        rejectedAt,
+        crId: fresh.reference,
+        crName: fresh.reference,
+        ...(fresh.rejectionReason ? { rejectionReason: fresh.rejectionReason } : {}),
+      },
+      timestamp: rejectedAt,
+      userId: SYNC_USER_ID,
+      syncLevel: SyncLevel.EXTERNAL,
+    });
   }
 
   /**
@@ -234,10 +614,13 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   // ==================== Push Logic ====================
 
   private async pushEntities(
-    entities: Array<{ modified: { guid: string; type: EntityType; externalId?: string; data: Record<string, unknown> } }>,
+    entities: Array<{
+      initial?: { version: number } | null;
+      modified: { guid: string; type: EntityType; version: number; externalId?: string; data: Record<string, unknown> };
+    }>,
     entityType: "individual" | "group",
-  ): Promise<{ pushed: number; failed: number; skipped: number; errors: Array<{ guid: string; error: string }> }> {
-    const failedEntities: Array<{ guid: string; error: string }> = [];
+  ): Promise<{ pushed: number; failed: number; skipped: number; errors: Array<{ guid: string; error: string; code: string }> }> {
+    const failedEntities: Array<{ guid: string; error: string; code: string }> = [];
     let skipped = 0;
 
     for (let i = 0; i < entities.length; i += this.batchSize) {
@@ -246,6 +629,17 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
         const entity = entityPair.modified;
         const externalId = this.resolveExternalId(entity);
 
+        // An entity at baseline parity (no genuine local entity edit) that was
+        // force-included only because it carries pending enrolments must push
+        // ONLY the enrolment CRs — never re-PATCH the entity, which would
+        // overwrite OpenSPP fields with stale/pull-sourced data using a fresh
+        // If-Match. pendingProgramEnrolments is user-controllable (H4).
+        const pending = entity.data?.pendingProgramEnrolments;
+        const hasPending = Array.isArray(pending) && pending.length > 0;
+        const baselineParity =
+          !!entity.externalId && !!entityPair.initial && entityPair.initial.version === entity.version;
+        const enrolmentsOnly = baselineParity && hasPending;
+
         let attempt = 0;
         let lastError: Error | null = null;
         let success = false;
@@ -253,14 +647,34 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
         while (attempt <= this.maxRetries && !success) {
           try {
             if (entityType === "individual") {
-              await this.pushIndividual(entity.guid, entity.data, externalId);
+              await this.pushIndividual(entity.guid, entity.data, externalId, enrolmentsOnly);
             } else {
-              await this.pushGroup(entity.guid, entity.data, externalId);
+              await this.pushGroup(entity.guid, entity.data, externalId, enrolmentsOnly);
             }
             success = true;
           } catch (error) {
             if (error instanceof PreconditionFailedError) {
               skipped++;
+              break;
+            }
+
+            // Operator must reset the CR on the OpenSPP side before DC can
+            // re-submit. Don't retry — log + record + move on.
+            if (error instanceof ChangeRequestRevisionNeededError) {
+              failedEntities.push({
+                guid: entity.guid,
+                error: error.message,
+                code: "CR_REVISION_NEEDED",
+              });
+              log.warn(
+                {
+                  entityType,
+                  guid: entity.guid,
+                  reference: error.reference,
+                  status: error.status,
+                },
+                "Push aborted: CR in terminal state needing operator reset",
+              );
               break;
             }
 
@@ -273,7 +687,11 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
               log.warn({ entityType, guid: entity.guid, attempt, maxRetries: this.maxRetries, delayMs }, `${reason}, retrying push`);
               await this.delay(delayMs);
             } else {
-              failedEntities.push({ guid: entity.guid, error: lastError.message });
+              failedEntities.push({
+                guid: entity.guid,
+                error: lastError.message,
+                code: "PUSH_FAILED",
+              });
               log.error({ entityType, guid: entity.guid, err: lastError }, "Push failed after retries");
             }
           }
@@ -297,6 +715,26 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     guid: string,
     data: Record<string, unknown>,
     externalId?: string,
+    enrolmentsOnly = false,
+  ): Promise<void> {
+    if (!enrolmentsOnly) {
+      if (this.submitVia === "change-request") {
+        await this.pushIndividualViaCR(guid, data, externalId);
+      } else {
+        await this.pushIndividualDirect(guid, data, externalId);
+      }
+    }
+    // Direct create writes the new externalId via `saveExternalIdToEntity`;
+    // re-resolve from the store so the program-enrolment CR registrant
+    // references the OpenSPP-issued identifier instead of a stale undefined.
+    const refreshedId = await this.refreshExternalIdAfterPush(guid, externalId);
+    await this.pushPendingProgramEnrolments(guid, "individual", data, refreshedId);
+  }
+
+  private async pushIndividualDirect(
+    guid: string,
+    data: Record<string, unknown>,
+    externalId?: string,
   ): Promise<void> {
     const resource = this.buildIndividualResource(guid, data);
     const system = this.resolveIdentifierSystem(data);
@@ -304,28 +742,170 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     if (externalId) {
       const identifier = this.getClient().formatIdentifier(system, externalId);
       // Fetch current versionId for optimistic locking (If-Match).
-      // Falls back to patching without If-Match if GET fails (e.g., 403 scope issue).
+      // `getIndividual` returns `null` on 404 → may indicate a stale stored
+      // externalId (target server redeployed, identifier-type mismatch,
+      // partner archived). Before assuming the partner is gone, attempt a
+      // discovery pass that probes the partner's other identity documents.
+      // Only POST when discovery also comes up empty — avoids creating
+      // duplicates when the partner exists under a different identifier
+      // type than the one we originally submitted.
       let versionId: string | undefined;
+      let remoteExists = true;
       try {
         const current = await this.getClient().getIndividual(identifier);
-        versionId = current?.meta?.versionId;
+        if (current === null) {
+          remoteExists = false;
+        } else {
+          versionId = current?.meta?.versionId;
+        }
       } catch (err) {
         log.warn({ guid, err }, "Could not fetch individual for optimistic locking, proceeding without If-Match");
       }
-      await this.getClient().patchIndividual(identifier, {
-        name: resource.name,
-        birthDate: resource.birthDate,
-        gender: resource.gender,
-        telecom: resource.telecom,
-        extension: resource.extension,
-      }, versionId);
+
+      if (!remoteExists) {
+        const discovered = await this.tryDiscoverIndividual(data, externalId);
+        if (discovered) {
+          log.info(
+            { guid, staleExternalId: externalId, discoveredIdentifier: discovered.identifier },
+            "Partner found under different identifier — rebinding externalId and patching via discovered identifier",
+          );
+          await this.saveExternalIdToEntity(guid, discovered.resource);
+          await this.getClient().patchIndividual(discovered.identifier, {
+            name: resource.name,
+            birthDate: resource.birthDate,
+            gender: resource.gender,
+            telecom: resource.telecom,
+            extension: resource.extension,
+          }, discovered.resource?.meta?.versionId);
+          return;
+        }
+
+        log.warn(
+          { guid, externalId },
+          "No matching partner found via discovery — creating new individual via POST",
+        );
+        const created = await this.getClient().createIndividual(resource);
+        await this.saveExternalIdToEntity(guid, created);
+        return;
+      }
+
+      try {
+        await this.getClient().patchIndividual(identifier, {
+          name: resource.name,
+          birthDate: resource.birthDate,
+          gender: resource.gender,
+          telecom: resource.telecom,
+          extension: resource.extension,
+        }, versionId);
+      } catch (err) {
+        // Race window: record vanished or identifier mismatch between GET +
+        // PATCH. Run discovery before falling back to POST.
+        const is404 = err instanceof Error && /Resource not found/i.test(err.message);
+        if (!is404) throw err;
+        const discovered = await this.tryDiscoverIndividual(data, externalId);
+        if (discovered) {
+          log.info(
+            { guid, staleExternalId: externalId, discoveredIdentifier: discovered.identifier },
+            "PATCH 404 — partner discovered under different identifier; rebinding + retrying PATCH",
+          );
+          await this.saveExternalIdToEntity(guid, discovered.resource);
+          await this.getClient().patchIndividual(discovered.identifier, {
+            name: resource.name,
+            birthDate: resource.birthDate,
+            gender: resource.gender,
+            telecom: resource.telecom,
+            extension: resource.extension,
+          }, discovered.resource?.meta?.versionId);
+          return;
+        }
+        log.warn({ guid, externalId }, "PATCH 404 + discovery empty — creating new individual via POST");
+        const created = await this.getClient().createIndividual(resource);
+        await this.saveExternalIdToEntity(guid, created);
+      }
     } else {
       const created = await this.getClient().createIndividual(resource);
       await this.saveExternalIdToEntity(guid, created);
     }
   }
 
+  /**
+   * Probe OpenSPP for an existing partner that matches the entity by any of
+   * its known identity documents. Used as a recovery step before assuming
+   * a stored externalId is dead (and POSTing a duplicate).
+   *
+   * Tries each (system, value) candidate via GET — stops at the first hit.
+   * Candidates assembled from common identity fields on the entity data
+   * (national_id, reg_id, registration_id, passport_id, uin) plus the
+   * stored externalId probed under the tenant's configured identifierType.
+   * Errors per candidate are swallowed so a 403/network blip on one path
+   * doesn't kill the discovery sweep.
+   */
+  private async tryDiscoverIndividual(
+    _data: Record<string, unknown>,
+    storedExternalId?: string,
+  ): Promise<{ resource: IndividualResource; identifier: string } | null> {
+    // Discovery is restricted to the server-resolved externalId probed under
+    // the tenant's configured identifier type. Probing client-supplied identity
+    // fields (uin/national_id/...), alternate casings, or other id-type
+    // namespaces would let a client name a victim's OpenSPP record and have it
+    // rebound + overwritten with the server's privileged credentials
+    // (findings H1/H2/H3). externalId itself is server-managed: clients can no
+    // longer set it (stripped at the /api/sync/push boundary).
+    if (typeof storedExternalId !== "string" || storedExternalId.length === 0) {
+      return null;
+    }
+    const system = this.ensureNamespace(this.identifierType);
+    const id = this.getClient().formatIdentifier(system, storedExternalId);
+    try {
+      const found = await this.getClient().getIndividual(id);
+      if (found) return { resource: found, identifier: id };
+    } catch {
+      // ignore — discovery is best-effort
+    }
+    return null;
+  }
+
   private async pushGroup(
+    guid: string,
+    data: Record<string, unknown>,
+    externalId?: string,
+    enrolmentsOnly = false,
+  ): Promise<void> {
+    if (!enrolmentsOnly) {
+      if (this.submitVia === "change-request") {
+        await this.pushGroupViaCR(guid, data, externalId);
+      } else {
+        await this.pushGroupDirect(guid, data, externalId);
+      }
+    }
+    const refreshedId = await this.refreshExternalIdAfterPush(guid, externalId);
+    await this.pushPendingProgramEnrolments(guid, "group", data, refreshedId);
+  }
+
+  /**
+   * Re-read the entity's externalId from the EntityStore after a direct push.
+   *
+   * `pushXxxDirect.saveExternalIdToEntity` may have just assigned a new
+   * OpenSPP-issued identifier; the local `externalId` closure var is stale
+   * after that. `pushPendingProgramEnrolments` needs the fresh value so the
+   * CR registrant can resolve on OpenSPP.
+   *
+   * Silent on lookup failures — falls back to the input value.
+   */
+  private async refreshExternalIdAfterPush(
+    guid: string,
+    fallback: string | undefined,
+  ): Promise<string | undefined> {
+    try {
+      const fresh = await this.eventApplierService.getEntityStore().getEntity(guid);
+      const id = fresh?.modified?.externalId ?? (fresh?.modified?.data?.externalId as string | undefined);
+      return id ?? fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  private async pushGroupDirect(
     guid: string,
     data: Record<string, unknown>,
     externalId?: string,
@@ -335,22 +915,325 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
     if (externalId) {
       const identifier = this.getClient().formatIdentifier(system, externalId);
+      // Same discovery-first 404 recovery as `pushIndividualDirect`.
       let versionId: string | undefined;
+      let remoteExists = true;
       try {
         const current = await this.getClient().getGroup(identifier);
-        versionId = current?.meta?.versionId;
+        if (current === null) {
+          remoteExists = false;
+        } else {
+          versionId = current?.meta?.versionId;
+        }
       } catch (err) {
         log.warn({ guid, err }, "Could not fetch group for optimistic locking, proceeding without If-Match");
       }
-      await this.getClient().patchGroup(identifier, {
-        name: resource.name,
-        groupType: resource.groupType,
-        extension: resource.extension,
-      }, versionId);
+
+      if (!remoteExists) {
+        const discovered = await this.tryDiscoverGroup(data, externalId);
+        if (discovered) {
+          log.info(
+            { guid, staleExternalId: externalId, discoveredIdentifier: discovered.identifier },
+            "Group found under different identifier — rebinding externalId and patching",
+          );
+          await this.saveExternalIdToEntity(guid, discovered.resource);
+          await this.getClient().patchGroup(discovered.identifier, {
+            name: resource.name,
+            groupType: resource.groupType,
+            extension: resource.extension,
+          }, discovered.resource?.meta?.versionId);
+          return;
+        }
+        log.warn({ guid, externalId }, "No matching group found via discovery — creating new group via POST");
+        const created = await this.getClient().createGroup(resource);
+        await this.saveExternalIdToEntity(guid, created);
+        return;
+      }
+
+      try {
+        await this.getClient().patchGroup(identifier, {
+          name: resource.name,
+          groupType: resource.groupType,
+          extension: resource.extension,
+        }, versionId);
+      } catch (err) {
+        const is404 = err instanceof Error && /Resource not found/i.test(err.message);
+        if (!is404) throw err;
+        const discovered = await this.tryDiscoverGroup(data, externalId);
+        if (discovered) {
+          log.info(
+            { guid, staleExternalId: externalId, discoveredIdentifier: discovered.identifier },
+            "PATCH 404 on group — discovered under different identifier; rebinding + retrying PATCH",
+          );
+          await this.saveExternalIdToEntity(guid, discovered.resource);
+          await this.getClient().patchGroup(discovered.identifier, {
+            name: resource.name,
+            groupType: resource.groupType,
+            extension: resource.extension,
+          }, discovered.resource?.meta?.versionId);
+          return;
+        }
+        log.warn({ guid, externalId }, "PATCH 404 + discovery empty — creating new group via POST");
+        const created = await this.getClient().createGroup(resource);
+        await this.saveExternalIdToEntity(guid, created);
+      }
     } else {
       const created = await this.getClient().createGroup(resource);
       await this.saveExternalIdToEntity(guid, created);
     }
+  }
+
+  /**
+   * Group counterpart of `tryDiscoverIndividual`. Same probe strategy:
+   * walk known identity fields on the group data + the stored externalId,
+   * GET each candidate, return the first hit.
+   */
+  private async tryDiscoverGroup(
+    _data: Record<string, unknown>,
+    storedExternalId?: string,
+  ): Promise<{ resource: GroupResource; identifier: string } | null> {
+    // Restricted to the server-resolved externalId under the configured group
+    // identifier type — see tryDiscoverIndividual. Client identity fields,
+    // alternate casings and cross-namespace probing removed (H1/H2/H3).
+    if (typeof storedExternalId !== "string" || storedExternalId.length === 0) {
+      return null;
+    }
+    const system = this.ensureNamespace(this.groupIdentifierType);
+    const id = this.getClient().formatIdentifier(system, storedExternalId);
+    try {
+      const found = await this.getClient().getGroup(id);
+      if (found) return { resource: found, identifier: id };
+    } catch {
+      // ignore — discovery is best-effort
+    }
+    return null;
+  }
+
+  // ==================== Push Logic — Change Request mode ====================
+
+  /**
+   * Push an Individual via the OpenSPP `/ChangeRequest` workflow instead of
+   * writing directly. The actual entity write is deferred to the OpenSPP
+   * operator's `$apply` step and flows back via pull.
+   *
+   * v1 mapping: `add-member` / `remove-member` events on members of a
+   * group are NOT distinguished here — they show up as plain
+   * `update-individual` / `update-group` and map to `edit_*` codes. Granular
+   * member-CR mapping is deferred.
+   */
+  private async pushIndividualViaCR(
+    guid: string,
+    data: Record<string, unknown>,
+    externalId?: string,
+  ): Promise<void> {
+    const eventTypeKey: EventTypeKey = externalId ? "update-individual" : "create-individual";
+    const detail = this.buildIndividualResource(guid, data) as unknown as Record<string, unknown>;
+    const system = this.resolveIdentifierSystem(data);
+    const display =
+      typeof data.name === "string"
+        ? data.name
+        : typeof data.fullName === "string"
+          ? data.fullName
+          : undefined;
+    await this.pushViaChangeRequest(guid, "individual", eventTypeKey, detail, system, externalId, display);
+  }
+
+  /**
+   * Push a Group via the OpenSPP `/ChangeRequest` workflow.
+   * See {@link pushIndividualViaCR} for v1 mapping limitations.
+   */
+  private async pushGroupViaCR(
+    guid: string,
+    data: Record<string, unknown>,
+    externalId?: string,
+  ): Promise<void> {
+    const eventTypeKey: EventTypeKey = externalId ? "update-group" : "create-group";
+    const detail = this.buildGroupResource(guid, data) as unknown as Record<string, unknown>;
+    const system = this.resolveIdentifierSystem(data, "group");
+    const display =
+      typeof data._displayName === "string"
+        ? data._displayName
+        : typeof data.name === "string"
+          ? data.name
+          : typeof data.groupName === "string"
+            ? data.groupName
+            : undefined;
+    await this.pushViaChangeRequest(guid, "group", eventTypeKey, detail, system, externalId, display);
+  }
+
+  /**
+   * Shared CR push path. Idempotent across re-runs:
+   *
+   * - If a CR record already exists for the entity:
+   *   - `draft`: $submit was never reached (or failed); re-attempt $submit only.
+   *   - `pending` / `approved` / `applied`: in flight or done; skip silently.
+   *   - `rejected` / `revision`: throw {@link ChangeRequestRevisionNeededError}
+   *     so the push loop records the failure without retrying.
+   * - Otherwise create + submit a fresh CR and persist its reference + status.
+   *
+   * Note on partial failures: if `$create` succeeds but `$submit` fails, the
+   * persisted record stays in `draft` so the next push run picks up exactly at
+   * the recovery branch above (no second CR is created).
+   */
+  private async pushViaChangeRequest(
+    entityGuid: string,
+    entityKind: "individual" | "group",
+    eventTypeKey: EventTypeKey,
+    detail: Record<string, unknown>,
+    identifierSystem: string,
+    externalId: string | undefined,
+    display: string | undefined,
+    discriminator?: string | number,
+  ): Promise<void> {
+    const existing = await getCR(this.eventStore, entityGuid, discriminator);
+    if (existing) {
+      if (existing.status === "draft") {
+        // Recovery: $submit was never reached or failed last run. Try again.
+        const submitted = await this.getClient().submitChangeRequest(existing.reference);
+        const next: CRRecord = {
+          ...existing,
+          status: submitted.status,
+          submittedAt: submitted.submittedDate ?? new Date().toISOString(),
+        };
+        await setCR(this.eventStore, entityGuid, next, discriminator);
+        return;
+      }
+
+      if (
+        existing.status === "pending" ||
+        existing.status === "approved" ||
+        existing.status === "applied"
+      ) {
+        // Already in flight or done. Pull projects status updates separately.
+        log.debug(
+          { entityGuid, reference: existing.reference, status: existing.status, discriminator },
+          "Skipping CR push: existing CR already in flight or applied",
+        );
+        return;
+      }
+
+      if (existing.status === "rejected" || existing.status === "revision") {
+        throw new ChangeRequestRevisionNeededError(
+          entityGuid,
+          existing.reference,
+          existing.status,
+        );
+      }
+    }
+
+    const requestTypeCode = resolveCRTypeCode(eventTypeKey, entityKind, this.changeRequestTypeMap);
+    const registrant = this.buildRegistrantRef(entityGuid, identifierSystem, externalId, display);
+    const payload: ChangeRequestCreate = {
+      type: "ChangeRequest",
+      requestType: { code: requestTypeCode },
+      registrant,
+      detail,
+      description: `DataCollect entity ${entityGuid}`,
+    };
+
+    const created = await this.getClient().createChangeRequest(payload);
+    const draftRecord: CRRecord = {
+      reference: created.reference,
+      status: created.status,
+    };
+    await setCR(this.eventStore, entityGuid, draftRecord, discriminator);
+
+    const submitted = await this.getClient().submitChangeRequest(created.reference);
+    const submittedRecord: CRRecord = {
+      reference: created.reference,
+      status: submitted.status,
+      submittedAt: submitted.submittedDate ?? new Date().toISOString(),
+    };
+    await setCR(this.eventStore, entityGuid, submittedRecord, discriminator);
+  }
+
+  /**
+   * Push any pending program enrolments stored on an entity via the OpenSPP
+   * ChangeRequest workflow (CR type `assign_program`).
+   *
+   * Each entry in `data.pendingProgramEnrolments[]` becomes one CR keyed on
+   * the program id so concurrent enrolments into distinct programs do not
+   * collide on the idempotency store.
+   *
+   * Runs regardless of `submitVia` mode — program enrolment is approval-gated
+   * on OpenSPP and has no `direct` equivalent in the V2 API.
+   *
+   * Per-enrolment errors are swallowed with `log.warn` so an enrolment that
+   * fails to submit does not abort the surrounding entity push.
+   */
+  private async pushPendingProgramEnrolments(
+    entityGuid: string,
+    entityKind: "individual" | "group",
+    data: Record<string, unknown>,
+    externalId: string | undefined,
+  ): Promise<void> {
+    const raw = data.pendingProgramEnrolments;
+    if (!Array.isArray(raw) || raw.length === 0) return;
+
+    const fullSystem = this.resolveIdentifierSystem(data, entityKind === "group" ? "group" : "individual");
+    const crSystem = stripFragment(fullSystem);
+    const display =
+      typeof data._displayName === "string"
+        ? data._displayName
+        : typeof data.name === "string"
+          ? data.name
+          : typeof data.groupName === "string"
+            ? data.groupName
+            : undefined;
+
+    for (const entry of raw) {
+      if (!entry || typeof entry !== "object") continue;
+      const programId = (entry as { programId?: unknown }).programId;
+      if (typeof programId !== "number" || !Number.isFinite(programId)) {
+        log.warn({ entityGuid, entry }, "Skipping invalid pendingProgramEnrolment entry");
+        continue;
+      }
+      try {
+        await this.pushViaChangeRequest(
+          entityGuid,
+          entityKind,
+          "enrol-in-program",
+          { program_id: programId },
+          crSystem,
+          externalId,
+          display,
+          programId,
+        );
+      } catch (err) {
+        if (err instanceof ChangeRequestRevisionNeededError) {
+          // Bubble to caller — already classified.
+          throw err;
+        }
+        log.warn(
+          { entityGuid, programId, err },
+          "Pending program enrolment CR push failed; will retry next sync",
+        );
+      }
+    }
+  }
+
+  /**
+   * Build the `registrant` field for a CR payload.
+   *
+   * - When `externalId` is present (UPDATE CRs), point at the OpenSPP-issued
+   *   identifier so the operator's `$apply` resolves the existing registrant.
+   * - When absent (CREATE CRs), fall back to a `datacollect:guid` placeholder.
+   *   See {@link CR_GUID_REGISTRANT_SYSTEM} for caveats.
+   */
+  private buildRegistrantRef(
+    entityGuid: string,
+    identifierSystem: string,
+    externalId: string | undefined,
+    display: string | undefined,
+  ): RegistrantRef {
+    if (externalId) {
+      const ref: RegistrantRef = { system: identifierSystem, value: externalId };
+      if (display) ref.display = display;
+      return ref;
+    }
+    const ref: RegistrantRef = { system: CR_GUID_REGISTRANT_SYSTEM, value: entityGuid };
+    if (display) ref.display = display;
+    return ref;
   }
 
   // ==================== Pull Logic ====================
@@ -557,20 +1440,31 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
    * Checks for an `identifierType` field in the form data, falling back to `national_id`.
    */
   private resolveIdentifierSystem(data: Record<string, unknown>, entityType: "individual" | "group" = "individual"): string {
-    const formCode = data.identifierType as string | undefined;
+    // identifierType is server-managed and must be a string. A non-string value
+    // (e.g. an object smuggled in entity data) would throw on `.startsWith`,
+    // failing every sync. Ignore anything that is not a usable string. (H22)
+    const formCode =
+      typeof data.identifierType === "string" && data.identifierType.length > 0 ? data.identifierType : undefined;
     const defaultCode = entityType === "group" ? this.groupIdentifierType : this.identifierType;
-    const code = formCode || defaultCode;
-    if (code.startsWith(this.identifierNamespace)) {
-      return code;
-    }
-    return `${this.identifierNamespace}${code}`;
+    return this.ensureNamespace(formCode || defaultCode);
   }
 
   /**
-   * Check if an identifier system matches the configured namespace.
+   * Prefix a bare id-type code with the configured OpenSPP namespace, leaving
+   * already-namespaced values untouched. Single source of truth so the discover
+   * and resolve paths can't diverge.
    */
-  private isOpenSppIdentifier(system: string): boolean {
-    return system.startsWith(this.identifierNamespace);
+  private ensureNamespace(code: string): string {
+    return code.startsWith(this.identifierNamespace) ? code : `${this.identifierNamespace}${code}`;
+  }
+
+  /**
+   * Check if an identifier system matches the configured namespace. Guards
+   * against non-string `system` values in malformed OpenSPP responses, which
+   * would otherwise throw on `.startsWith` and fail the whole pull.
+   */
+  private isOpenSppIdentifier(system: unknown): boolean {
+    return typeof system === "string" && system.startsWith(this.identifierNamespace);
   }
 
   /**
@@ -747,28 +1641,41 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   // ==================== Identifier Extraction ====================
 
   private extractIdentifier(individual: IndividualResource): string | undefined {
-    const matchingId = individual.identifier?.find(
-      (id) => this.isOpenSppIdentifier(id.system),
-    );
-    return matchingId?.value;
+    return this.extractMatchingId(individual)?.value;
   }
 
   private extractGroupIdentifier(group: GroupResource): string | undefined {
-    const matchingId = group.identifier?.find(
+    return this.extractMatchingId(group)?.value;
+  }
+
+  /**
+   * Return the first identifier on the resource whose `system` lives under
+   * the configured OpenSPP namespace. Caller decides whether it wants the
+   * value alone, or both `system` + `value` (for learning which vocab code
+   * the partner actually carries — see {@link saveExternalIdToEntity}).
+   */
+  private extractMatchingId(
+    resource: IndividualResource | GroupResource,
+  ): { system: string; value: string } | undefined {
+    const matchingId = resource.identifier?.find(
       (id) => this.isOpenSppIdentifier(id.system),
     );
-    return matchingId?.value;
+    if (!matchingId) return undefined;
+    return { system: matchingId.system, value: matchingId.value };
   }
 
   /**
    * Fallback identifier extraction for records created directly in OpenSPP
-   * that don't carry a DataCollect-issued identifier.
-   * Uses system|value composite so round-trips are stable.
+   * that don't carry a DataCollect-issued identifier. Restricted to the
+   * configured OpenSPP namespace: a record whose only identifiers live in other
+   * id-type namespaces is NOT adopted — importing it would pull unrelated
+   * beneficiary PII and make it a confused-deputy PATCH target on the next
+   * push (H12). Uses system|value composite so round-trips are stable.
    */
   private extractAnyIdentifier(resource: IndividualResource | GroupResource): string | undefined {
-    const first = resource.identifier?.[0];
-    if (!first) return undefined;
-    return `${first.system}|${first.value}`;
+    const matched = resource.identifier?.find((id) => this.isOpenSppIdentifier(id.system));
+    if (!matched) return undefined;
+    return `${matched.system}|${matched.value}`;
   }
 
   // ==================== Transform to Form Submissions ====================
@@ -786,7 +1693,8 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     userId: string;
     syncLevel: SyncLevel;
   } {
-    const identifier = resolvedIdentifier ?? this.extractIdentifier(individual);
+    const matched = this.extractMatchingId(individual);
+    const identifier = resolvedIdentifier ?? matched?.value;
     const guid = existingGuid || identifier || uuidv4();
 
     const data: Record<string, unknown> = {
@@ -833,6 +1741,15 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
 
     data.externalId = identifier;
 
+    // Preserve the OpenSPP identifier system so a later push targets the same
+    // id-type instead of defaulting to system_id and overwriting a different
+    // record (H10).
+    if (matched?.system) {
+      data.identifierType = matched.system.startsWith(this.identifierNamespace)
+        ? matched.system.slice(this.identifierNamespace.length)
+        : matched.system;
+    }
+
     return {
       guid: uuidv4(),
       entityGuid: guid,
@@ -857,7 +1774,8 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     userId: string;
     syncLevel: SyncLevel;
   } {
-    const identifier = resolvedIdentifier ?? this.extractGroupIdentifier(group);
+    const matched = this.extractMatchingId(group);
+    const identifier = resolvedIdentifier ?? matched?.value;
     const guid = existingGuid || identifier || uuidv4();
 
     const data: Record<string, unknown> = {
@@ -874,6 +1792,14 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     }
 
     data.externalId = identifier;
+
+    // Preserve the OpenSPP identifier system so a later push targets the same
+    // id-type instead of defaulting and overwriting a different record (H10).
+    if (matched?.system) {
+      data.identifierType = matched.system.startsWith(this.identifierNamespace)
+        ? matched.system.slice(this.identifierNamespace.length)
+        : matched.system;
+    }
 
     return {
       guid: uuidv4(),
@@ -906,20 +1832,25 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
         return;
       }
 
-      const identifier =
-        created.type === "Individual"
-          ? this.extractIdentifier(created as IndividualResource)
-          : this.extractGroupIdentifier(created as GroupResource);
-      if (!identifier) {
+      const matching = this.extractMatchingId(created);
+      if (!matching) {
         return;
       }
+      // Persist the vocab code (e.g. `UIN`, `HOUSEHOLD_ID`) that OpenSPP
+      // actually carries this partner under. `resolveIdentifierSystem` reads
+      // `data.identifierType` ahead of the tenant default, so next push
+      // skips the discovery sweep and PATCHes the right URI directly.
+      const learnedCode = matching.system.startsWith(this.identifierNamespace)
+        ? matching.system.slice(this.identifierNamespace.length)
+        : matching.system;
 
       const updatedEntity = {
         ...entityPair.modified,
-        externalId: identifier,
+        externalId: matching.value,
         data: {
           ...entityPair.modified.data,
-          externalId: identifier,
+          externalId: matching.value,
+          identifierType: learnedCode,
         },
       };
 
@@ -934,4 +1865,54 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
   }
 }
 
+/**
+ * Read `submitVia` from `ExternalSyncConfig.adapterConfig`, falling back to
+ * the legacy `extraFields` shape. Anything other than `"change-request"`
+ * (including `undefined`) resolves to `"direct"` so tenants without explicit
+ * config retain the pre-change-request behaviour.
+ */
+function readSubmitVia(config: ExternalSyncConfig): ChangeRequestSubmitMode {
+  const raw = getAdapterConfigValue<string>(config, "submitVia");
+  return raw === "change-request" ? "change-request" : "direct";
+}
+
+/**
+ * Read `changeRequestTypeMap` from config. The map is an object, not a
+ * primitive, so we accept either:
+ *   - `adapterConfig.changeRequestTypeMap` as a JSON-stringified record, or
+ *   - the same field on the parent config as a real object (forwarded by
+ *     callers that bypass `adapterConfig`'s primitive constraint).
+ *
+ * Returns `{}` when absent or unparseable so the resolver falls through to
+ * {@link DEFAULT_CR_TYPE_MAP}.
+ */
+function readChangeRequestTypeMap(
+  config: ExternalSyncConfig,
+): Partial<Record<EventTypeKey, string>> {
+  // Direct object on the parent config (set by V2 callers that hold the typed
+  // options; not exposed on adapterConfig because it's not a primitive).
+  const direct = (config as ExternalSyncConfig & {
+    changeRequestTypeMap?: Partial<Record<EventTypeKey, string>>;
+  }).changeRequestTypeMap;
+  if (direct && typeof direct === "object") {
+    return direct;
+  }
+
+  // String fallback for tenants that round-trip config through JSON.
+  const raw = getAdapterConfigValue<string>(config, "changeRequestTypeMap");
+  if (typeof raw !== "string" || raw.trim() === "") {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Partial<Record<EventTypeKey, string>>;
+    }
+  } catch {
+    // Fall through to {} — the resolver will use defaults.
+  }
+  return {};
+}
+
+export type { OpenSppV2AdapterOptions };
 export default OpenSppV2SyncAdapter;

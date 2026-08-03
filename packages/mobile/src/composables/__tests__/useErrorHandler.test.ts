@@ -38,6 +38,8 @@ describe('useErrorHandler', () => {
 
     // Setup network utils mocks
     vi.mocked(is401Error).mockReturnValue(false)
+    vi.mocked(is403Error).mockReturnValue(false)
+    vi.mocked(is429Error).mockReturnValue(false)
     vi.mocked(isNetworkError).mockReturnValue(false)
 
     // Mock console methods

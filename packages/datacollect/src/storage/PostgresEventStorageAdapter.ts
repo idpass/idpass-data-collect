@@ -18,8 +18,9 @@
  */
 
 import { Pool } from "pg";
-import { and, eq, gt, sql, asc, desc, count } from "drizzle-orm";
+import { and, eq, gt, like, sql, asc, desc, count } from "drizzle-orm";
 import { AuditLogEntry, EventStorageAdapter, FormSubmission, SyncLevel } from "../interfaces/types";
+import type { EffectiveScopeBody } from "../interfaces/scope";
 import { createDrizzleFromPool, DrizzleDatabase, withClient } from "../db/connection";
 import { events, auditLog, syncMetadata } from "../db/schema";
 import { createLogger } from "../utils/logger";
@@ -553,7 +554,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
    * @throws {Error} If the database query fails.
    */
   async getLastRemoteSyncTimestamp(): Promise<string> {
-    return this.getSyncMetadataValue("last_remote_sync_timestamp");
+    return (await this.getMetadataValue("last_remote_sync_timestamp")) ?? "";
   }
 
   /**
@@ -566,7 +567,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
    * @throws {Error} If the database operation fails.
    */
   async setLastRemoteSyncTimestamp(timestamp: string): Promise<void> {
-    await this.setSyncMetadataValue("last_remote_sync_timestamp", timestamp);
+    await this.setMetadataValue("last_remote_sync_timestamp", timestamp);
   }
 
   /**
@@ -576,7 +577,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
    * @throws {Error} If the database query fails.
    */
   async getLastLocalSyncTimestamp(): Promise<string> {
-    return this.getSyncMetadataValue("last_local_sync_timestamp");
+    return (await this.getMetadataValue("last_local_sync_timestamp")) ?? "";
   }
 
   /**
@@ -589,7 +590,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
    * @throws {Error} If the database operation fails.
    */
   async setLastLocalSyncTimestamp(timestamp: string): Promise<void> {
-    await this.setSyncMetadataValue("last_local_sync_timestamp", timestamp);
+    await this.setMetadataValue("last_local_sync_timestamp", timestamp);
   }
 
   /**
@@ -599,7 +600,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
    * @throws {Error} If the database query fails.
    */
   async getLastPullExternalSyncTimestamp(): Promise<string> {
-    return this.getSyncMetadataValue("last_pull_external_sync_timestamp");
+    return (await this.getMetadataValue("last_pull_external_sync_timestamp")) ?? "";
   }
 
   /**
@@ -612,7 +613,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
    * @throws {Error} If the database operation fails.
    */
   async setLastPullExternalSyncTimestamp(timestamp: string): Promise<void> {
-    await this.setSyncMetadataValue("last_pull_external_sync_timestamp", timestamp);
+    await this.setMetadataValue("last_pull_external_sync_timestamp", timestamp);
   }
 
   /**
@@ -622,7 +623,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
    * @throws {Error} If the database query fails.
    */
   async getLastPushExternalSyncTimestamp(): Promise<string> {
-    return this.getSyncMetadataValue("last_push_external_sync_timestamp");
+    return (await this.getMetadataValue("last_push_external_sync_timestamp")) ?? "";
   }
 
   /**
@@ -635,7 +636,64 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
    * @throws {Error} If the database operation fails.
    */
   async setLastPushExternalSyncTimestamp(timestamp: string): Promise<void> {
-    await this.setSyncMetadataValue("last_push_external_sync_timestamp", timestamp);
+    await this.setMetadataValue("last_push_external_sync_timestamp", timestamp);
+  }
+
+  /**
+   * Scope hash tracking is a client-only concern; the server is stateless on client scope state.
+   *
+   * @throws {Error} Always throws; this method is not supported on the server-side adapter.
+   */
+  async getLastScopeHash(): Promise<string | null> {
+    throw new Error(
+      "PostgresEventStorageAdapter.getLastScopeHash is client-only; the server is stateless on client scope state",
+    );
+  }
+
+  /**
+   * Scope hash tracking is a client-only concern; the server is stateless on client scope state.
+   *
+   * @throws {Error} Always throws; this method is not supported on the server-side adapter.
+   */
+  async setLastScopeHash(_hash: string): Promise<void> {
+    throw new Error(
+      "PostgresEventStorageAdapter.setLastScopeHash is client-only; the server is stateless on client scope state",
+    );
+  }
+
+  /**
+   * Effective-scope-body persistence is a client-only concern; the server is stateless on client scope state.
+   *
+   * @throws {Error} Always throws; this method is not supported on the server-side adapter.
+   */
+  async getLastScope(): Promise<EffectiveScopeBody | null> {
+    throw new Error(
+      "PostgresEventStorageAdapter.getLastScope is client-only; the server is stateless on client scope state",
+    );
+  }
+
+  /**
+   * Effective-scope-body persistence is a client-only concern; the server is stateless on client scope state.
+   *
+   * @throws {Error} Always throws; this method is not supported on the server-side adapter.
+   */
+  async setLastScope(_scope: EffectiveScopeBody): Promise<void> {
+    throw new Error(
+      "PostgresEventStorageAdapter.setLastScope is client-only; the server is stateless on client scope state",
+    );
+  }
+
+  /**
+   * Per-entity event deletion is a client-only data-minimization operation
+   * used during scope-purge. The server retains the full audit trail and
+   * MUST NOT support this method.
+   *
+   * @throws {Error} Always throws; this method is not supported on the server-side adapter.
+   */
+  async deleteEventsForEntity(_entityGuid: string): Promise<number> {
+    throw new Error(
+      "PostgresEventStorageAdapter.deleteEventsForEntity is client-only; the server is stateless on client scope state",
+    );
   }
 
   /**
@@ -710,7 +768,7 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
    * @returns A Promise that resolves when the hash is persisted.
    */
   async persistHashAnchor(hash: string): Promise<void> {
-    await this.setSyncMetadataValue("hash_anchor", hash);
+    await this.setMetadataValue("hash_anchor", hash);
   }
 
   /**
@@ -719,26 +777,35 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
    * @returns The persisted hash string, or null if no anchor has been saved.
    */
   async getPersistedHashAnchor(): Promise<string | null> {
-    const value = await this.getSyncMetadataValue("hash_anchor");
-    return value || null;
+    return this.getMetadataValue("hash_anchor");
   }
 
   /**
-   * Helper to get a sync metadata value by key.
+   * Generic key-value metadata accessor scoped to this adapter's tenant.
+   *
+   * Reads from `sync_metadata` (tenant_id, key) → value. Returns `null` when
+   * the key is absent (do not return empty-string sentinel — empty string is
+   * a legitimate stored value).
+   *
+   * @param key The metadata key (tenant scope is implicit).
+   * @returns The stored value, or `null` if the key does not exist.
    */
-  private async getSyncMetadataValue(key: string): Promise<string> {
+  async getMetadataValue(key: string): Promise<string | null> {
     const result = await this.db
       .select({ value: syncMetadata.value })
       .from(syncMetadata)
       .where(and(eq(syncMetadata.tenantId, this.tenantId), eq(syncMetadata.key, key)));
 
-    return result[0]?.value || "";
+    return result[0]?.value ?? null;
   }
 
   /**
-   * Helper to set a sync metadata value by key (upsert).
+   * Persist (upsert) a metadata value under `key` for this adapter's tenant.
+   *
+   * @param key The metadata key.
+   * @param value The value to store.
    */
-  private async setSyncMetadataValue(key: string, value: string): Promise<void> {
+  async setMetadataValue(key: string, value: string): Promise<void> {
     await this.db
       .insert(syncMetadata)
       .values({
@@ -754,6 +821,41 @@ export class PostgresEventStorageAdapter implements EventStorageAdapter {
           updatedAt: new Date(),
         },
       });
+  }
+
+  /**
+   * Delete the metadata row for `key` (tenant-scoped). No-op if absent.
+   *
+   * @param key The metadata key to remove.
+   */
+  async deleteMetadataValue(key: string): Promise<void> {
+    await this.db
+      .delete(syncMetadata)
+      .where(and(eq(syncMetadata.tenantId, this.tenantId), eq(syncMetadata.key, key)));
+  }
+
+  /**
+   * List metadata keys whose name starts with `prefix` (tenant-scoped).
+   *
+   * Uses SQL `LIKE prefix%` with the prefix passed verbatim — callers should
+   * not include `%` themselves. LIKE metacharacters (`%`, `_`, `\`) in the
+   * caller-supplied prefix are escaped so a prefix like `"cr:%"` matches the
+   * literal `"cr:%"` rather than treating `%` as a wildcard. Returns keys in
+   * insertion-order-agnostic order (no sort applied).
+   *
+   * @param prefix Key prefix to filter on (e.g. `"cr:"`).
+   */
+  async listMetadataKeys(prefix: string): Promise<string[]> {
+    // Escape LIKE metacharacters so callers can pass literal prefixes safely.
+    // PostgreSQL's default LIKE escape character is `\`, so `\%` / `\_` /
+    // `\\` are interpreted as literal `%` / `_` / `\` without an explicit
+    // ESCAPE clause.
+    const escaped = prefix.replace(/[\\%_]/g, (c) => `\\${c}`);
+    const rows = await this.db
+      .select({ key: syncMetadata.key })
+      .from(syncMetadata)
+      .where(and(eq(syncMetadata.tenantId, this.tenantId), like(syncMetadata.key, `${escaped}%`)));
+    return rows.map((r) => r.key);
   }
 
   /**

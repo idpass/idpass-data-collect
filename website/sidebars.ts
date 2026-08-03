@@ -378,6 +378,10 @@ const developerSidebarItems = [
             type: "doc",
             id: "how-to/create-custom-auth-adapter",
           },
+          {
+            type: "doc",
+            id: "how-to/security-testing",
+          },
         ],
       },
       {
@@ -488,6 +492,15 @@ const sidebars = {
       label: "For Admins & Field Teams",
       collapsed: false,
       items: userSidebarItems,
+    },
+    {
+      type: "category",
+      label: "Security",
+      collapsed: false,
+      link: { type: "doc", id: "security/security-overview" },
+      items: [
+        { type: "doc", id: "security/report-a-vulnerability" },
+      ],
     },
   ],
 };

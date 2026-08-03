@@ -63,6 +63,75 @@ function getEffectiveRole(req: Request): SystemRole | null {
 }
 
 /**
+ * Resolve the user's highest role WITHIN a specific tenant.
+ *
+ * Unlike {@link getEffectiveRole}, which returns the global maximum role across
+ * ALL tenant assignments, this scopes the role to a single tenant. Use this for
+ * any per-tenant authorization decision (e.g. approving a review that belongs to
+ * a particular tenant) so that a high privilege in tenant A never leaks into
+ * tenant B.
+ *
+ * Legacy admin users (Role.ADMIN) are treated as system-admin in every tenant.
+ *
+ * @param user The decoded JWT payload (or undefined).
+ * @param tenantId The tenant to resolve the role for.
+ * @returns The highest SystemRole the user holds in that tenant, or null.
+ */
+export function resolveRoleInTenant(
+  user: DecodedPayload | undefined,
+  tenantId: string,
+): SystemRole | null {
+  if (!user) {
+    return null;
+  }
+
+  // Legacy admin users bypass RBAC entirely.
+  if (user.role === Role.ADMIN) {
+    return SystemRole.SYSTEM_ADMIN;
+  }
+
+  const roleAssignments = user.roleAssignments ?? [];
+  let highestRole: SystemRole | null = null;
+  let highestLevel = -1;
+
+  for (const assignment of roleAssignments) {
+    if (assignment.tenantId !== tenantId) {
+      continue;
+    }
+    const level = ROLE_HIERARCHY[assignment.role] ?? -1;
+    if (level > highestLevel) {
+      highestLevel = level;
+      highestRole = assignment.role as SystemRole;
+    }
+  }
+
+  return highestRole;
+}
+
+/**
+ * Check whether the user can perform an action WITHIN a specific tenant.
+ *
+ * Combines {@link resolveRoleInTenant} with the RBAC action map so callers get a
+ * tenant-scoped permission check that does not aggregate roles across tenants.
+ *
+ * @param user The decoded JWT payload (or undefined).
+ * @param tenantId The tenant the action targets.
+ * @param action The action being attempted.
+ * @returns true only if the user's role in that tenant permits the action.
+ */
+export function canPerformActionInTenant(
+  user: DecodedPayload | undefined,
+  tenantId: string,
+  action: RbacAction,
+): boolean {
+  const role = resolveRoleInTenant(user, tenantId);
+  if (!role) {
+    return false;
+  }
+  return rbacService.canPerformAction(role, action);
+}
+
+/**
  * Middleware that enforces a minimum role requirement.
  *
  * Checks if the authenticated user's highest role meets or exceeds

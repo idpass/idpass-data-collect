@@ -141,6 +141,23 @@ describeIfPostgres("AppConfigStore", () => {
       expect(configs[0].version).toBeNull();
       expect(configs[0].url).toBeNull();
     });
+
+    it("should save a minimal config with no entityForms/entityData/authConfigs", async () => {
+      // The route schema treats these as optional, so a sparse config can
+      // reach the store. entity_forms is JSONB NOT NULL, and
+      // JSON.stringify(undefined) is `undefined` (not a string) which Drizzle
+      // omits — previously a NOT NULL violation / 500. They must default to [].
+      const minimalConfig = {
+        id: "minimal-config-1",
+        name: "Minimal Config",
+      } as unknown as AppConfig;
+
+      await expect(adapter.saveConfig(minimalConfig)).resolves.not.toThrow();
+      const saved = await adapter.getConfig("minimal-config-1");
+      expect(saved.entityForms).toEqual([]);
+      expect(saved.entityData).toEqual([]);
+      expect(saved.authConfigs).toEqual([]);
+    });
   });
 
   describe("getConfig", () => {
@@ -231,6 +248,36 @@ describeIfPostgres("AppConfigStore", () => {
       const badAdapter = new AppConfigStoreImpl("postgresql://bad:connection@string");
       await expect(badAdapter.initialize()).rejects.toThrow();
     }, 10000);
+  });
+
+  describe("syncScope round-trip", () => {
+    it("round-trips syncScope policy", async () => {
+      const policy = {
+        areaIds: ["DIST-001"],
+        entityTypes: ["individual" as const, "group" as const],
+        timeWindow: { type: "rolling" as const, days: 90 },
+      };
+      await adapter.saveConfig({
+        id: "tenant-syncscope-test",
+        name: "Test",
+        entityForms: [],
+        entityData: [],
+        syncScope: policy,
+      });
+      const loaded = await adapter.getConfig("tenant-syncscope-test");
+      expect(loaded.syncScope).toEqual(policy);
+    });
+
+    it("getConfig returns syncScope=undefined for tenants without the policy", async () => {
+      await adapter.saveConfig({
+        id: "tenant-no-syncscope",
+        name: "Test",
+        entityForms: [],
+        entityData: [],
+      });
+      const loaded = await adapter.getConfig("tenant-no-syncscope");
+      expect(loaded.syncScope).toBeUndefined();
+    });
   });
 
   describe("initialization", () => {

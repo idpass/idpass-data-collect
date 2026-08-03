@@ -20,6 +20,7 @@
 import { useAuthStore } from '@/stores/auth'
 import { useProgramDraftStore } from '@/stores/programDraft'
 import { useSnackBarStore } from '@/stores/snackBar'
+import { useFeatureFlag } from '@/composables/useFeatureFlag'
 import { createRouter, createWebHistory } from 'vue-router'
 import AppManagerView from '../views/AppManagerView.vue'
 
@@ -39,6 +40,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/collection-programs/:id/forms/:formIndex/edit',
+      name: 'form-edit',
+      component: () => import('../views/FormEditView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/collection-programs/:id/entity/:guid',
       name: 'entity-details',
       component: () => import('../views/EntityDetailView.vue'),
@@ -54,6 +61,28 @@ const router = createRouter({
       path: '/collection-programs/:id/duplicates',
       name: 'duplicates',
       component: () => import('../views/DuplicatesView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/devices/:configId',
+      name: 'devices',
+      component: () => import('../views/DevicesView.vue'),
+      props: true,
+      meta: { requiresAuth: true, featureFlag: 'scopedSync' as const },
+      // Gate per-device sync UI behind VITE_FEATURE_SCOPED_SYNC.
+      // When the flag is off, redirect to home rather than render the view.
+      beforeEnter: (_to, _from, next) => {
+        if (useFeatureFlag('scopedSync').value) {
+          next()
+        } else {
+          next({ name: 'home' })
+        }
+      },
+    },
+    {
+      path: '/collection-programs/:id/conflicts',
+      name: 'conflicts',
+      component: () => import('../views/ConflictsView.vue'),
       meta: { requiresAuth: true },
     },
     {
@@ -115,6 +144,16 @@ const router = createRouter({
           path: 'mapping',
           name: 'wizard-mapping',
           component: () => import('../views/wizard/MappingStep.vue'),
+        },
+        {
+          path: 'programs',
+          name: 'wizard-programs',
+          component: () => import('../views/wizard/ProgramsStep.vue'),
+        },
+        {
+          path: 'claim169',
+          name: 'wizard-claim169',
+          component: () => import('../views/wizard/Claim169Step.vue'),
         },
         {
           path: 'auth',

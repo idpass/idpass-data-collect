@@ -1,36 +1,41 @@
+<!--
+ * Licensed to the Association pour la cooperation numerique (ACN) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ACN licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+-->
+
 <script setup lang="ts">
 import { useDatabase } from '@/database'
 import { TenantAppData } from '@/schemas/tenantApp.schema'
-import { store } from '@/store'
 import { EntityForm } from '@/utils/formIoUtils'
-import { SyncLevel } from '@idpass/data-collect-core'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useNetworkStatus } from '@/composables/useNetworkStatus'
-
-type SubmissionSnapshot = {
-  lastUpdated: string
-  version: number
-  data: Record<string, unknown>
-  name?: string
-}
-
-type SubmissionStatus = 'synced' | 'pending' | 'draft' | 'unknown'
-
-type SubmissionRecord = {
-  guid: string
-  initial: SubmissionSnapshot
-  modified: SubmissionSnapshot
-  status: SubmissionStatus
-}
+import {
+  useEntitySubmissions,
+  type SubmissionRecord,
+  type SubmissionStatus,
+} from '@/composables/useEntitySubmissions'
 
 const route = useRoute()
 const router = useRouter()
 const database = useDatabase()
 const tenantapp = ref<TenantAppData>()
 const entityForm = ref<EntityForm>()
+const { submissions: allSubmissions, load: loadAllSubmissions } = useEntitySubmissions()
 const submissions = ref<SubmissionRecord[]>([])
-const { isOffline } = useNetworkStatus()
 
 const searchTerm = ref('')
 
@@ -39,47 +44,6 @@ const props = defineProps<{
   parentGuid: string
   entity: string
 }>()
-
-const resolveStatusSync = (
-  snapshot: { initial: SubmissionSnapshot; modified: SubmissionSnapshot },
-  entityGuid: string,
-  latestEvent?: { syncLevel: SyncLevel } | undefined
-): SubmissionStatus => {
-  if (snapshot.modified.data.externalId) {
-    return 'synced'
-  }
-
-  const syncLevel =
-    (snapshot.modified.data.syncLevel as SyncLevel | undefined) ??
-    (snapshot.modified.data.sync_status as SyncLevel | undefined)
-
-  if (syncLevel === SyncLevel.REMOTE || syncLevel === SyncLevel.EXTERNAL) {
-    return 'synced'
-  }
-
-  if (syncLevel === SyncLevel.LOCAL) {
-    return 'pending'
-  }
-
-  if (latestEvent) {
-    if (latestEvent.syncLevel === SyncLevel.REMOTE || latestEvent.syncLevel === SyncLevel.EXTERNAL) {
-      return 'synced'
-    }
-    if (latestEvent.syncLevel === SyncLevel.LOCAL) {
-      return 'pending'
-    }
-  }
-
-  if ((snapshot.modified.data.status as string | undefined)?.toLowerCase() === 'draft') {
-    return 'draft'
-  }
-
-  if (snapshot.modified.version !== snapshot.initial.version) {
-    return 'pending'
-  }
-
-  return 'synced'
-}
 
 const navigateToParent = () => {
   const appId = route.params.id as string
@@ -115,13 +79,10 @@ onMounted(async () => {
       (entity) => entity.name === route.params.entity
     )
 
-    const [allEntities, allEvents] = await Promise.all([
-      store.getAllEntities(),
-      store.getAllEvents()
-    ])
+    await loadAllSubmissions()
 
-    const entityList = allEntities.filter((entity) => {
-      const entityName = entity.modified.data.entityName as string | undefined
+    submissions.value = allSubmissions.value.filter((record) => {
+      const entityName = record.modified.data.entityName as string | undefined
       const formName = entityForm.value?.name
 
       const matchesEntityName = entityName && (
@@ -136,43 +97,12 @@ onMounted(async () => {
       const matchesEntityType = !matchesEntityName && entityName &&
         entityForm.value?.entityType &&
         (entityName === entityForm.value.entityType ||
-         entity.modified.type === entityForm.value.entityType)
+         record.modified.type === entityForm.value.entityType)
 
-      const matchesParent = !entity.modified.data.parentGuid ||
-        entity.modified.data.parentGuid === props.parentGuid
+      const matchesParent = !record.modified.data.parentGuid ||
+        record.modified.data.parentGuid === props.parentGuid
 
       return (matchesEntityName || matchesEntityType || (!entityName && matchesParent)) && matchesParent
-    })
-
-    const entityEventsMap = new Map<string, typeof allEvents[0]>()
-    for (const event of allEvents) {
-      const existing = entityEventsMap.get(event.entityGuid)
-      if (!existing || new Date(event.timestamp) > new Date(existing.timestamp)) {
-        entityEventsMap.set(event.entityGuid, event)
-      }
-    }
-
-    submissions.value = entityList.map((entity) => {
-      const base = {
-        guid: entity.modified.guid,
-        initial: {
-          lastUpdated: entity.initial.lastUpdated,
-          version: entity.initial.version,
-          data: entity.initial.data,
-          name: entity.initial.name
-        },
-        modified: {
-          lastUpdated: entity.modified.lastUpdated,
-          version: entity.modified.version,
-          data: entity.modified.data,
-          name: entity.modified.name
-        }
-      }
-
-      return {
-        ...base,
-        status: resolveStatusSync(base, entity.modified.guid, entityEventsMap.get(entity.modified.guid))
-      }
     })
   } catch (error) {
     console.error('Error loading entity list:', error)
@@ -214,9 +144,6 @@ const formatTimestamp = (timestamp: string) => {
     <div class="d-flex justify-end align-center mb-4">
       <div class="d-flex align-center ga-2">
         <v-chip size="small" color="info" variant="tonal">{{ entityForm?.displayTemplate || 'Form' }}</v-chip>
-        <v-chip v-if="isOffline" size="x-small" color="warning" variant="tonal" prepend-icon="mdi-wifi-off">
-          Offline
-        </v-chip>
       </div>
     </div>
 

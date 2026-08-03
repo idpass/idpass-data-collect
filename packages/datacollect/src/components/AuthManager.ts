@@ -220,7 +220,14 @@ export class AuthManager {
     }
 
     try {
-      // Ensure syncServerUrl has a proper protocol
+      // Ensure syncServerUrl has a proper protocol. A missing/empty value is
+      // a tenant-config error — surface it clearly instead of letting the
+      // call below crash with `Cannot read properties of undefined`.
+      if (!this.syncServerUrl) {
+        throw new Error(
+          "AuthManager: syncServerUrl is not configured. Set the tenant config's `syncServerUrl` field or pass it explicitly to the AuthManager constructor.",
+        );
+      }
       let url = this.syncServerUrl;
       if (!url.startsWith("http://") && !url.startsWith("https://")) {
         url = `http://${url}`;

@@ -34,7 +34,7 @@ import {
   TokenCredentials,
 } from "../interfaces/types";
 import type { SyncResult } from "../interfaces/adapter";
-import { EventApplierService } from "../services/EventApplierService";
+import { EventApplierService, SubmitFormOptions } from "../services/EventApplierService";
 import { AppError } from "../utils/AppError";
 import { ExternalSyncManager, SyncOptions } from "./ExternalSyncManager";
 import { InternalSyncManager } from "./InternalSyncManager";
@@ -225,8 +225,8 @@ export class EntityDataManager {
    * });
    * ```
    */
-  async submitForm(formData: FormSubmission): Promise<EntityDoc | null> {
-    return await this.eventApplierService.submitForm(formData);
+  async submitForm(formData: FormSubmission, options?: SubmitFormOptions): Promise<EntityDoc | null> {
+    return await this.eventApplierService.submitForm(formData, options);
   }
 
   /**
@@ -243,6 +243,8 @@ export class EntityDataManager {
    * retried on the next push.
    *
    * @param events The ordered list of form submissions to process.
+   * @param options Optional apply-path options forwarded to every event (e.g.
+   *   the member sub-write scope guard for bounded `/api/sync/push` callers).
    * @returns An object describing the outcome: applied count and any error details.
    *
    * @example
@@ -255,13 +257,14 @@ export class EntityDataManager {
    */
   async submitFormBatch(
     events: FormSubmission[],
+    options?: SubmitFormOptions,
   ): Promise<{ success: boolean; applied: number; failed: FormSubmission[]; errors: string[] }> {
     let applied = 0;
     const failed: FormSubmission[] = [];
     const errors: string[] = [];
     for (const event of events) {
       try {
-        await this.eventApplierService.submitForm(event);
+        await this.eventApplierService.submitForm(event, options);
         applied += 1;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -748,6 +751,45 @@ export class EntityDataManager {
   async clearStore(): Promise<void> {
     await this.entityStore.clearStore();
     await this.eventStore.clearStore();
+  }
+
+  /**
+   * Drops local entities outside `keepGuids` and any events targeting them.
+   *
+   * Used by the client when the server advertises a new scope hash on
+   * `/pull` — out-of-scope entities are purged before the next pull's events
+   * are applied. Returns counts for telemetry / UI surfacing.
+   *
+   * Purge does NOT generate `delete-entity` events. It is a local data-
+   * minimization operation, not a state change visible to the server.
+   *
+   * @param keepGuids The entity guids that should remain after the purge.
+   * @returns Counts of purged entities and events.
+   *
+   * @example
+   * ```typescript
+   * // After receiving a new scopeHash on /pull, retain only allowed entities.
+   * const allowed = pullResponse.scope?.allowedEntityGuids ?? [];
+   * const result = await manager.purgeEntitiesNotIn(allowed);
+   * console.log(`Removed ${result.purgedEntities} entities and ${result.purgedEvents} events.`);
+   * ```
+   */
+  async purgeEntitiesNotIn(
+    keepGuids: readonly string[],
+  ): Promise<{ purgedEntities: number; purgedEvents: number }> {
+    const keep = new Set(keepGuids);
+    const allEntities = await this.entityStore.getAllEntities();
+    const toPurge = allEntities
+      .map((pair) => pair.modified.guid)
+      .filter((guid) => !keep.has(guid));
+
+    let purgedEvents = 0;
+    for (const guid of toPurge) {
+      purgedEvents += await this.eventStore.deleteEventsForEntity(guid);
+      await this.entityStore.deleteEntity(guid);
+    }
+
+    return { purgedEntities: toPurge.length, purgedEvents };
   }
 
   /**

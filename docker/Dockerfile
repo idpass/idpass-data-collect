@@ -11,10 +11,13 @@ RUN pnpm run build:backend
 
 FROM base AS backend
 WORKDIR /app
-COPY --from=build /app .
+# Own the app tree as the unprivileged built-in node user so the server can
+# write generated public artifacts at runtime while running as non-root.
+COPY --from=build --chown=node:node /app .
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://localhost:3000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
+USER node
 CMD ["node", "packages/backend/dist/index.js"]
 
 FROM build AS admin-build

@@ -50,6 +50,48 @@ type ConflictResolutionResult =
   | { resolution: "remote-wins"; baseEntity?: EntityDoc };
 
 /**
+ * Options controlling how an event is applied.
+ *
+ * These carry the CALLER's authorization context into the apply path. They are
+ * NOT persisted on the event — they only gate the write.
+ */
+export interface SubmitFormOptions {
+  /**
+   * When provided, enables RESTRICTED mode for `create-group`/`update-group`
+   * member sub-writes (horizontal authorization guard on member GUIDs).
+   *
+   * A member entry whose `guid` resolves to a PRE-EXISTING entity is only
+   * accepted when that guid is present in this set (the caller's own group,
+   * plus its current members). Member entries whose guid does not resolve to
+   * any existing entity are always allowed (creating a brand-new member).
+   *
+   * Omit this option entirely for TRUSTED, UNBOUNDED callers (e.g. admin
+   * sync) — member writes are then unrestricted, preserving legacy sync
+   * behaviour.
+   */
+  authorizedMemberGuids?: string[];
+
+  /**
+   * Async predicate variant of the member sub-write guard, for the
+   * `/api/sync/push` path.
+   *
+   * A field worker's sync scope is NOT a finite list of GUIDs — it is a
+   * PREDICATE over the member entity (its `area_id` and/or type must fall
+   * inside the caller's effective scope). When provided, this callback is
+   * consulted for any member entry whose `guid` resolves to a PRE-EXISTING
+   * entity that is not already covered by {@link authorizedMemberGuids} (nor
+   * the group's own guid / current members). It must resolve `true` iff the
+   * member entity is inside the caller's scope. Member entries whose guid does
+   * not resolve to any existing entity are always allowed (brand-new member)
+   * and the callback is NOT consulted for them.
+   *
+   * Supplying either this callback or {@link authorizedMemberGuids} enables
+   * RESTRICTED mode. Omit both for unbounded callers.
+   */
+  isMemberGuidAuthorized?(guid: string): Promise<boolean>;
+}
+
+/**
  * Service responsible for applying events (FormSubmissions) to entities in the event sourcing system.
  *
  * The EventApplierService is the core component that transforms events into entity state changes.
@@ -325,7 +367,7 @@ export class EventApplierService {
    * });
    * ```
    */
-  async submitForm(formDataParam: FormSubmission): Promise<EntityDoc | null> {
+  async submitForm(formDataParam: FormSubmission, options?: SubmitFormOptions): Promise<EntityDoc | null> {
     try {
       const formData = cloneDeep(formDataParam);
       validateFormSubmission(formData);
@@ -345,7 +387,7 @@ export class EventApplierService {
 
       const eventGuid = await this.eventStore.saveEvent(formData);
 
-      const updatedEntity = await this.applyEventToEntity(formData, eventGuid, entityPair);
+      const updatedEntity = await this.applyEventToEntity(formData, eventGuid, entityPair, options);
 
       // Enqueue the entity for asynchronous duplicate detection so the write
       // path is never blocked by the O(n) entity scan.
@@ -404,6 +446,7 @@ export class EventApplierService {
     formData: FormSubmission,
     eventGuid: string,
     entityPair: EntityPair | null,
+    options?: SubmitFormOptions,
   ): Promise<EntityDoc | null> {
     const conflictResult = await this.handleIncomingConflict(entityPair, formData, eventGuid);
 
@@ -421,6 +464,7 @@ export class EventApplierService {
         eventGuid,
         baseEntity as GroupDoc | undefined,
         formData,
+        options,
       );
     } else if (formData.type === "create-individual" || formData.type === "update-individual") {
       // log.debug(`Creating or updating individual: ${JSON.stringify(formData)}`);
@@ -446,6 +490,14 @@ export class EventApplierService {
     } else if (formData.type === "delete-entity") {
       // log.debug(`Deleting entity: ${JSON.stringify(formData)}`);
       await this.deleteEntity(entityPair, eventGuid, formData.userId);
+    } else if (formData.type === "enrol-in-program") {
+      updatedEntity = await this.enrolInProgram(eventGuid, entityGuid, formData);
+    } else if (formData.type === "program-enrolment-applied") {
+      updatedEntity = await this.applyProgramEnrolment(eventGuid, entityGuid, formData);
+    } else if (formData.type === "program-enrolment-rejected") {
+      updatedEntity = await this.rejectProgramEnrolment(eventGuid, entityGuid, formData);
+    } else if (formData.type === "claim169-verified") {
+      updatedEntity = await this.applyClaim169Verified(eventGuid, entityGuid, formData);
     } else if (formData.type === "resolve-duplicate") {
       log.debug(
         `Resolving duplicate: ${JSON.stringify(formData)} with shouldDelete: ${formData.data.shouldDelete}`,
@@ -694,6 +746,7 @@ export class EventApplierService {
     eventGuid: string,
     existingGroup: GroupDoc | undefined,
     formData: FormSubmission,
+    options?: SubmitFormOptions,
   ): Promise<GroupDoc> {
     // log.debug(
     //   `Creating or updating group: ${JSON.stringify({
@@ -720,6 +773,39 @@ export class EventApplierService {
 
     if (Array.isArray(formData.data?.members)) {
       // log.debug(`Processing members: ${JSON.stringify(formData.data.members)}`);
+      // Horizontal authorization guard: when the caller supplies an
+      // authorization scope (RESTRICTED mode — least-trusted callers such as
+      // self-service, or bounded field-worker `/api/sync/push`), a member entry
+      // may only write to a PRE-EXISTING entity if that entity is inside the
+      // caller's scope. The group's own guid and its current members are always
+      // in scope. Unknown guids (new members) are always allowed.
+      //
+      // Scope is expressed two ways, both handled by `isMemberAuthorized`:
+      //   - `authorizedMemberGuids` — a finite GUID set (self-service).
+      //   - `isMemberGuidAuthorized` — an async predicate over the member
+      //     entity, for scopes that are area/type membership rather than a
+      //     finite list (sync-push).
+      const restrictMembers =
+        options?.authorizedMemberGuids !== undefined || options?.isMemberGuidAuthorized !== undefined;
+      const authorizedMemberGuids = new Set<string>(options?.authorizedMemberGuids ?? []);
+      authorizedMemberGuids.add(group.guid);
+      for (const existingMemberId of group.memberIds) {
+        authorizedMemberGuids.add(existingMemberId);
+      }
+      // Resolves true iff a PRE-EXISTING member guid is inside scope. The set
+      // (own guid + current members + explicit allow-list) is checked first;
+      // otherwise the async predicate decides. Callers pass at most one of the
+      // two mechanisms, but both are honoured so the guard stays single-sourced.
+      const isMemberAuthorized = async (memberGuid: string): Promise<boolean> => {
+        if (authorizedMemberGuids.has(memberGuid)) {
+          return true;
+        }
+        if (options?.isMemberGuidAuthorized) {
+          return await options.isMemberGuidAuthorized(memberGuid);
+        }
+        return false;
+      };
+
       const newMemberIds = await Promise.all(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         formData.data.members.map(async (member: Record<string, any>) => {
@@ -731,6 +817,12 @@ export class EventApplierService {
 
           if (memberData && memberData.type === "group") {
             const existingPair = await this.entityStore.getEntity(memberGuid);
+            if (restrictMembers && existingPair && !(await isMemberAuthorized(memberGuid))) {
+              throw new AppError(
+                "UNAUTHORIZED_MEMBER",
+                "Member references an entity outside the caller's authorization scope",
+              );
+            }
             const existingGroup = existingPair?.modified as GroupDoc | undefined;
             const subGroup = await this.createOrUpdateGroup(eventGuid, existingGroup, {
               guid: uuidv4(),
@@ -744,6 +836,12 @@ export class EventApplierService {
             return subGroup.guid;
           } else if (memberData) {
             const existingPair = await this.entityStore.getEntity(memberGuid);
+            if (restrictMembers && existingPair && !(await isMemberAuthorized(memberGuid))) {
+              throw new AppError(
+                "UNAUTHORIZED_MEMBER",
+                "Member references an entity outside the caller's authorization scope",
+              );
+            }
             const existingIndividual = existingPair?.modified as IndividualDoc | undefined;
             const individualDoc = await this.createOrUpdateIndividual(eventGuid, existingIndividual, {
               guid: uuidv4(),
@@ -953,6 +1051,373 @@ export class EventApplierService {
       return;
     }
     await this.cascadeDeleteEntity(entityPair.modified.guid, eventGuid, userId);
+  }
+
+  /**
+   * Stamp a pending program-enrolment intent on an entity. The adapter push
+   * path reads `data.pendingProgramEnrolments[]` and emits one
+   * `assign_program` ChangeRequest per entry against OpenSPP.
+   *
+   * Idempotent on `programId`: re-applying the same enrolment is a no-op.
+   *
+   * @param eventGuid    GUID of the triggering form submission.
+   * @param entityGuid   Target entity (typically a household group).
+   * @param formData     Form submission carrying `{ programId, programName? }`.
+   * @returns The updated entity with the new pending-enrolment marker.
+   *
+   * @private
+   */
+  private async enrolInProgram(
+    eventGuid: string,
+    entityGuid: string,
+    formData: FormSubmission,
+  ): Promise<EntityDoc> {
+    const programIdRaw = (formData.data as Record<string, unknown>).programId;
+    const programId =
+      typeof programIdRaw === "number"
+        ? programIdRaw
+        : typeof programIdRaw === "string"
+          ? Number.parseInt(programIdRaw, 10)
+          : NaN;
+    if (!Number.isFinite(programId)) {
+      throw new AppError(
+        "INVALID_PROGRAM_ID",
+        "Enrol-in-program event requires a numeric data.programId",
+      );
+    }
+    const programName = (formData.data as Record<string, unknown>).programName;
+
+    const entityPair = await this.entityStore.getEntity(entityGuid);
+    if (!entityPair) {
+      throw new AppError("ENTITY_NOT_FOUND", `Entity ${entityGuid} not found`);
+    }
+
+    const entity = entityPair.modified;
+    const existing = (entity.data as Record<string, unknown>).pendingProgramEnrolments;
+    const pending: Array<{ programId: number; programName?: string; enrolledAt: string }> =
+      Array.isArray(existing)
+        ? (existing as Array<{ programId: number; programName?: string; enrolledAt: string }>).slice()
+        : [];
+
+    if (pending.some((p) => p.programId === programId)) {
+      // Already pending — keep idempotent, just log + audit.
+      await this.logAudit(formData.userId, formData.type, eventGuid, entityGuid, {
+        programId,
+        skipped: true,
+        reason: "already-pending",
+      });
+      return entity;
+    }
+
+    pending.push({
+      programId,
+      ...(typeof programName === "string" ? { programName } : {}),
+      enrolledAt: formData.timestamp ?? new Date().toISOString(),
+    });
+    (entity.data as Record<string, unknown>).pendingProgramEnrolments = pending;
+    entity.version += 1;
+    entity.lastUpdated = new Date().toISOString();
+
+    await this.entityStore.saveEntity(entityPair.initial, entity);
+    await this.logAudit(formData.userId, formData.type, eventGuid, entityGuid, {
+      programId,
+      programName,
+    });
+    return entity;
+  }
+
+  /**
+   * Project a server-applied program enrolment back onto an entity. Triggered
+   * by the OpenSPP V2 adapter when a previously-submitted `assign_program`
+   * ChangeRequest transitions to `applied` on OpenSPP. The mobile pending
+   * chip flips to "enrolled" on the next sync because:
+   *   - the matching `(programId)` entry is removed from
+   *     `data.pendingProgramEnrolments[]`
+   *   - the program is appended to `data.enrolledPrograms[]`
+   *
+   * Idempotent on `programId`: re-applying the same applied-event is a no-op
+   * (the pending slot stays removed, the enrolled slot is not duplicated).
+   * This matches the "test the second sync" rule — if a re-pull leaks the
+   * same event, entity state is unchanged.
+   *
+   * Expected `formData.data` shape:
+   *   `{ programId: number, programName?: string, appliedAt?: string,
+   *      crId?: string, crName?: string }`
+   *
+   * @param eventGuid    GUID of the triggering form submission.
+   * @param entityGuid   Target entity (typically a household group).
+   * @param formData     Form submission carrying enrolment-applied metadata.
+   * @returns The updated entity with pending slot removed + enrolled slot added.
+   *
+   * @private
+   */
+  private async applyProgramEnrolment(
+    eventGuid: string,
+    entityGuid: string,
+    formData: FormSubmission,
+  ): Promise<EntityDoc> {
+    const data = formData.data as Record<string, unknown>;
+    const programIdRaw = data.programId;
+    const programId =
+      typeof programIdRaw === "number"
+        ? programIdRaw
+        : typeof programIdRaw === "string"
+          ? Number.parseInt(programIdRaw, 10)
+          : NaN;
+    if (!Number.isFinite(programId)) {
+      throw new AppError(
+        "INVALID_PROGRAM_ID",
+        "program-enrolment-applied event requires a numeric data.programId",
+      );
+    }
+    const programName = typeof data.programName === "string" ? data.programName : undefined;
+    const appliedAt =
+      typeof data.appliedAt === "string"
+        ? data.appliedAt
+        : (formData.timestamp ?? new Date().toISOString());
+    const crId = typeof data.crId === "string" ? data.crId : undefined;
+    const crName = typeof data.crName === "string" ? data.crName : undefined;
+
+    const entityPair = await this.entityStore.getEntity(entityGuid);
+    if (!entityPair) {
+      throw new AppError("ENTITY_NOT_FOUND", `Entity ${entityGuid} not found`);
+    }
+
+    const entity = entityPair.modified;
+    const entityData = entity.data as Record<string, unknown>;
+
+    // Drop matching pending entry (idempotent: missing entry is fine).
+    const pendingRaw = entityData.pendingProgramEnrolments;
+    const pending: Array<{ programId: number; programName?: string; enrolledAt?: string }> =
+      Array.isArray(pendingRaw)
+        ? (pendingRaw as Array<{ programId: number; programName?: string; enrolledAt?: string }>)
+            .filter((p) => p && typeof p === "object" && p.programId !== programId)
+        : [];
+    entityData.pendingProgramEnrolments = pending;
+
+    // Add to enrolled list (idempotent on programId).
+    const enrolledRaw = entityData.enrolledPrograms;
+    const enrolled: Array<{
+      programId: number;
+      programName?: string;
+      appliedAt: string;
+      crId?: string;
+      crName?: string;
+    }> = Array.isArray(enrolledRaw)
+      ? (enrolledRaw as Array<{
+          programId: number;
+          programName?: string;
+          appliedAt: string;
+          crId?: string;
+          crName?: string;
+        }>).slice()
+      : [];
+
+    if (!enrolled.some((p) => p.programId === programId)) {
+      enrolled.push({
+        programId,
+        ...(programName ? { programName } : {}),
+        appliedAt,
+        ...(crId ? { crId } : {}),
+        ...(crName ? { crName } : {}),
+      });
+    }
+    entityData.enrolledPrograms = enrolled;
+
+    entity.version += 1;
+    entity.lastUpdated = new Date().toISOString();
+
+    await this.entityStore.saveEntity(entityPair.initial, entity);
+    await this.logAudit(formData.userId, formData.type, eventGuid, entityGuid, {
+      programId,
+      programName,
+      appliedAt,
+      crId,
+      crName,
+    });
+    return entity;
+  }
+
+  /**
+   * Applies a `program-enrolment-rejected` event. Mirrors
+   * {@link applyProgramEnrolment} for the rejection terminal state of an
+   * OpenSPP `assign_program` ChangeRequest.
+   *
+   * Effects on the target entity's `data`:
+   *   1. Drops the matching entry from `pendingProgramEnrolments[]`
+   *      (idempotent — missing entries are tolerated).
+   *   2. Appends to `rejectedPrograms[]` (idempotent on `programId`):
+   *      `{ programId, programName?, rejectedAt, crId?, crName?, rejectionReason? }`.
+   *
+   * The program is **not** added to `enrolledPrograms`, so the mobile
+   * "Enroll in Program" picker will re-offer it on next render — the field
+   * worker can resubmit after correcting whatever caused the rejection.
+   *
+   * Expected `formData.data` shape:
+   *   `{ programId: number, programName?: string, rejectedAt?: string,
+   *      crId?: string, crName?: string, rejectionReason?: string }`
+   *
+   * @private
+   */
+  private async rejectProgramEnrolment(
+    eventGuid: string,
+    entityGuid: string,
+    formData: FormSubmission,
+  ): Promise<EntityDoc> {
+    const data = formData.data as Record<string, unknown>;
+    const programIdRaw = data.programId;
+    const programId =
+      typeof programIdRaw === "number"
+        ? programIdRaw
+        : typeof programIdRaw === "string"
+          ? Number.parseInt(programIdRaw, 10)
+          : NaN;
+    if (!Number.isFinite(programId)) {
+      throw new AppError(
+        "INVALID_PROGRAM_ID",
+        "program-enrolment-rejected event requires a numeric data.programId",
+      );
+    }
+    const programName = typeof data.programName === "string" ? data.programName : undefined;
+    const rejectedAt =
+      typeof data.rejectedAt === "string"
+        ? data.rejectedAt
+        : (formData.timestamp ?? new Date().toISOString());
+    const crId = typeof data.crId === "string" ? data.crId : undefined;
+    const crName = typeof data.crName === "string" ? data.crName : undefined;
+    const rejectionReason =
+      typeof data.rejectionReason === "string" && data.rejectionReason.length > 0
+        ? data.rejectionReason
+        : undefined;
+
+    const entityPair = await this.entityStore.getEntity(entityGuid);
+    if (!entityPair) {
+      throw new AppError("ENTITY_NOT_FOUND", `Entity ${entityGuid} not found`);
+    }
+
+    const entity = entityPair.modified;
+    const entityData = entity.data as Record<string, unknown>;
+
+    // Drop matching pending entry (idempotent: missing entry is fine).
+    const pendingRaw = entityData.pendingProgramEnrolments;
+    const pending: Array<{ programId: number; programName?: string; enrolledAt?: string }> =
+      Array.isArray(pendingRaw)
+        ? (pendingRaw as Array<{ programId: number; programName?: string; enrolledAt?: string }>)
+            .filter((p) => p && typeof p === "object" && p.programId !== programId)
+        : [];
+    entityData.pendingProgramEnrolments = pending;
+
+    // Add to rejected list (idempotent on programId — newer event replaces older).
+    const rejectedRaw = entityData.rejectedPrograms;
+    const rejected: Array<{
+      programId: number;
+      programName?: string;
+      rejectedAt: string;
+      crId?: string;
+      crName?: string;
+      rejectionReason?: string;
+    }> = Array.isArray(rejectedRaw)
+      ? (rejectedRaw as Array<{
+          programId: number;
+          programName?: string;
+          rejectedAt: string;
+          crId?: string;
+          crName?: string;
+          rejectionReason?: string;
+        }>).filter((p) => p && typeof p === "object" && p.programId !== programId)
+      : [];
+
+    rejected.push({
+      programId,
+      ...(programName ? { programName } : {}),
+      rejectedAt,
+      ...(crId ? { crId } : {}),
+      ...(crName ? { crName } : {}),
+      ...(rejectionReason ? { rejectionReason } : {}),
+    });
+    entityData.rejectedPrograms = rejected;
+
+    entity.version += 1;
+    entity.lastUpdated = new Date().toISOString();
+
+    await this.entityStore.saveEntity(entityPair.initial, entity);
+    await this.logAudit(formData.userId, formData.type, eventGuid, entityGuid, {
+      programId,
+      programName,
+      rejectedAt,
+      crId,
+      crName,
+      rejectionReason,
+    });
+    return entity;
+  }
+
+  /**
+   * Applies a `claim169-verified` event. Records that an operator scanned a
+   * Claim-169 verifiable credential against this entity and the signature
+   * verified offline against a trusted issuer. The event is provenance-only:
+   * it does not modify identity fields (those are already correct or filled
+   * by the form scanner's fieldMappings). It just stamps WHO vouched + WHEN
+   * + WHEN-the-credential-expires onto entity.data so downstream auditors
+   * can distinguish field-verified records from self-attested ones.
+   *
+   * Expected `formData.data`:
+   *   - `verifiedBy`     — issuer DID (e.g. did:web:demo-issuer.example.gov)
+   *   - `verifiedAt`     — ISO timestamp when the scan happened (defaults to event time)
+   *   - `vcIssuedAt`     — ISO of cwt.issuedAt (optional)
+   *   - `vcExpiry`       — ISO of cwt.expiresAt (optional)
+   *   - `subjectId`      — claim subject id (for cross-checks; not authoritative)
+   */
+  private async applyClaim169Verified(
+    eventGuid: string,
+    entityGuid: string,
+    formData: FormSubmission,
+  ): Promise<EntityDoc> {
+    const data = formData.data as Record<string, unknown>;
+    const verifiedBy = typeof data.verifiedBy === "string" ? data.verifiedBy : undefined;
+    if (!verifiedBy) {
+      throw new AppError(
+        "INVALID_CLAIM169_VERIFIED",
+        "claim169-verified event requires a string data.verifiedBy (issuer DID)",
+      );
+    }
+    const verifiedAt =
+      typeof data.verifiedAt === "string"
+        ? data.verifiedAt
+        : (formData.timestamp ?? new Date().toISOString());
+    const vcIssuedAt = typeof data.vcIssuedAt === "string" ? data.vcIssuedAt : undefined;
+    const vcExpiry = typeof data.vcExpiry === "string" ? data.vcExpiry : undefined;
+    const subjectId = typeof data.subjectId === "string" ? data.subjectId : undefined;
+
+    const entityPair = await this.entityStore.getEntity(entityGuid);
+    if (!entityPair) {
+      throw new AppError("ENTITY_NOT_FOUND", `Entity ${entityGuid} not found`);
+    }
+
+    const entity = entityPair.modified;
+    const entityData = entity.data as Record<string, unknown>;
+
+    entityData.claim169_verifiedBy = verifiedBy;
+    entityData.claim169_verifiedAt = verifiedAt;
+    if (vcIssuedAt) entityData.claim169_vcIssuedAt = vcIssuedAt;
+    if (vcExpiry) entityData.claim169_vcExpiry = vcExpiry;
+    if (subjectId) entityData.claim169_subjectId = subjectId;
+    // Coarse-grained signal used by older form configs; keep in sync with
+    // the structured fields above so legacy reports still flip correctly.
+    entityData.claim169_verified = "verified";
+
+    entity.version += 1;
+    entity.lastUpdated = new Date().toISOString();
+
+    await this.entityStore.saveEntity(entityPair.initial, entity);
+    await this.logAudit(formData.userId, formData.type, eventGuid, entityGuid, {
+      verifiedBy,
+      verifiedAt,
+      vcIssuedAt,
+      vcExpiry,
+      subjectId,
+    });
+    return entity;
   }
 
   /**

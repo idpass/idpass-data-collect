@@ -24,10 +24,11 @@ import rateLimit from "express-rate-limit";
 import { v4 as uuidv4 } from "uuid";
 import { FormClassifier, FormCategory } from "@idpass/data-collect-core";
 import { asyncHandler } from "../middlewares/errorHandlers";
+import { stripServerManagedEventFields } from "../utils/eventSanitize";
 import { extractBearerToken } from "../middlewares/authentication";
 import { OtpStore } from "../stores/OtpStore";
 import { ReviewStore } from "../stores/ReviewStore";
-import { AppInstanceStore } from "../types";
+import { AppInstance, AppInstanceStore } from "../types";
 import { getReviewService } from "./reviewRoutes";
 import { createLogger } from "../utils/logger";
 
@@ -133,6 +134,24 @@ export function createSelfServiceRouter(
   const router = Router();
 
   /**
+   * Self-service is gated behind a per-tenant feature flag that defaults to OFF.
+   * Token issuance and every self-service data route are unavailable unless the
+   * tenant config explicitly sets `selfService.enabled === true`. The feature is
+   * under rework and must stay hidden/disabled for any config that has not opted
+   * in — this is the server-side enforcement that `selfService.enabled` lacked.
+   * Returns the resolved AppInstance on success, or null after writing a 403.
+   * Security finding: C2 (self-service auth ignored tenant settings).
+   */
+  async function requireSelfServiceEnabled(tenantId: string, res: Response): Promise<AppInstance | null> {
+    const appInstance = await appInstanceStore.getAppInstance(tenantId);
+    if (!appInstance || appInstance.config?.selfService?.enabled !== true) {
+      res.status(403).json({ error: "Self-service is not enabled for this tenant" });
+      return null;
+    }
+    return appInstance;
+  }
+
+  /**
    * POST /otp/request
    * Request a one-time password to be sent to the given identifier.
    * In production, this would integrate with an SMS/email gateway.
@@ -152,6 +171,9 @@ export function createSelfServiceRouter(
 
       const { identifier, tenantId } = parseResult.data;
 
+      const appInstance = await requireSelfServiceEnabled(tenantId, res);
+      if (!appInstance) return;
+
       // Per-identifier rate limit: reject if >= 5 codes requested for
       // this identifier+tenant in the last 15 minutes.
       const recentCodes = await otpStore.getActiveCodesByIdentifier(identifier, tenantId);
@@ -166,31 +188,29 @@ export function createSelfServiceRouter(
       // This allows the self-service token to include entityGuid for data access.
       // SearchCriteria items are AND'd, so search phone and email separately.
       let entityGuid: string | undefined;
-      const appInstance = await appInstanceStore.getAppInstance(tenantId);
-      if (appInstance) {
-        const edm = appInstance.edm;
-        let searchResults = await edm.searchEntities([{ phone: identifier }]);
-        if (searchResults.length === 0) {
-          searchResults = await edm.searchEntities([{ email: identifier }]);
-        }
-        if (searchResults.length > 0) {
-          entityGuid = searchResults[0].modified.guid;
-        }
+      const edm = appInstance.edm;
+      let searchResults = await edm.searchEntities([{ phone: identifier }]);
+      if (searchResults.length === 0) {
+        searchResults = await edm.searchEntities([{ email: identifier }]);
+      }
+      if (searchResults.length > 0) {
+        entityGuid = searchResults[0].modified.guid;
       }
 
       const otpCode = await otpStore.createOtp(identifier, tenantId, entityGuid);
 
-      // In production, send the code via SMS or email here.
-      // For development/testing, the plaintext code is included in the
-      // response so it can be displayed in the UI without an SMS gateway.
+      // The OTP is delivered out of band via the SMS or email gateway. The
+      // plaintext code is returned in the response body only when
+      // OTP_EXPOSE_DEV_CODE is explicitly set, enabling local development
+      // without a gateway. It is omitted from the response in every other case.
       log.info({ tenantId, codeId: otpCode.id }, "OTP code generated");
 
-      const isProduction = process.env.NODE_ENV === "production";
+      const exposeDevCode = process.env.OTP_EXPOSE_DEV_CODE === "true";
 
       res.json({
         success: true,
         expiresIn: 300, // 5 minutes in seconds
-        ...(isProduction ? {} : { devCode: otpCode.code }),
+        ...(exposeDevCode ? { devCode: otpCode.code } : {}),
       });
     }),
   );
@@ -212,6 +232,8 @@ export function createSelfServiceRouter(
       }
 
       const { identifier, otp, tenantId } = parseResult.data;
+
+      if (!(await requireSelfServiceEnabled(tenantId, res))) return;
 
       // Verify the OTP using constant-time hash comparison in the store.
       // The store atomically locks the row, verifies the hash, increments
@@ -262,11 +284,8 @@ export function createSelfServiceRouter(
 
       const { nationalId, dateOfBirth, tenantId } = parseResult.data;
 
-      // Look up the entity with matching national ID and date of birth
-      const appInstance = await appInstanceStore.getAppInstance(tenantId);
-      if (!appInstance) {
-        return res.status(401).json({ error: "Verification failed" });
-      }
+      const appInstance = await requireSelfServiceEnabled(tenantId, res);
+      if (!appInstance) return;
 
       const edm = appInstance.edm;
 
@@ -353,11 +372,9 @@ export function createSelfServiceRouter(
 
       const { idToken, tenantId, nonce } = parseResult.data;
 
-      // Load tenant config
-      const appInstance = await appInstanceStore.getAppInstance(tenantId);
-      if (!appInstance) {
-        return res.status(401).json({ error: "Authentication failed" });
-      }
+      // Load tenant config (also enforces the self-service feature flag)
+      const appInstance = await requireSelfServiceEnabled(tenantId, res);
+      if (!appInstance) return;
 
       // Validate that OIDC is configured for this tenant
       const oidcConfig = appInstance.config.selfService?.oidcConfig;
@@ -468,10 +485,8 @@ export function createSelfServiceRouter(
         return res.status(400).json({ error: "No entity associated with this token" });
       }
 
-      const appInstance = await appInstanceStore.getAppInstance(tenantId);
-      if (!appInstance) {
-        return res.status(404).json({ error: "Tenant not found" });
-      }
+      const appInstance = await requireSelfServiceEnabled(tenantId, res);
+      if (!appInstance) return;
 
       let entityPair;
       try {
@@ -539,10 +554,8 @@ export function createSelfServiceRouter(
         return res.status(400).json({ error: "No entity associated with this token" });
       }
 
-      const appInstance = await appInstanceStore.getAppInstance(tenantId);
-      if (!appInstance) {
-        return res.status(404).json({ error: "Tenant not found" });
-      }
+      const appInstance = await requireSelfServiceEnabled(tenantId, res);
+      if (!appInstance) return;
 
       // Validate formType against tenant's allowed forms
       const selfServiceConfig = appInstance.config.selfService;
@@ -563,7 +576,12 @@ export function createSelfServiceRouter(
 
       const eventType = classification.updateEventType;
 
-      const submission = {
+      // Self-service form data is untrusted client input. Strip server-managed
+      // identifier fields (externalId/identifierType) here, at the ingestion
+      // door, so they can't reach the entity via direct apply OR through the
+      // review pipeline — closing the confused-deputy vector for this door
+      // (#41; same protection as /api/sync/push).
+      const submission = stripServerManagedEventFields({
         guid: uuidv4(),
         entityGuid,
         type: eventType,
@@ -571,7 +589,7 @@ export function createSelfServiceRouter(
         timestamp: new Date().toISOString(),
         userId: `self-service:${identifier}`,
         syncLevel: 0, // LOCAL
-      };
+      });
 
       // Standalone forms (life_event, grievance, etc.) are stored as review
       // records but never applied as entity events.
@@ -596,6 +614,52 @@ export function createSelfServiceRouter(
         return res.json({ status: "success", submissionGuid: submission.guid });
       }
 
+      // Horizontal member-scope guard: self-service callers are the
+      // least-trusted actors. Their token binds `entityGuid` to their own
+      // household, but member sub-writes inside a group form could otherwise
+      // name an ARBITRARY existing entity GUID — overwriting a victim's record
+      // and attaching that victim to the caller's group. Restrict member
+      // entries to the caller's bound entity and its CURRENT members; a
+      // brand-new member (guid that resolves to no existing entity) is allowed.
+      // This check runs BEFORE both the review pipeline and direct-apply so a
+      // malicious submission never reaches either path.
+      const members = submission.data?.members;
+      let authorizedMemberGuids: string[] | undefined;
+      if (Array.isArray(members)) {
+        authorizedMemberGuids = [entityGuid];
+        try {
+          const boundPair = await appInstance.edm.getEntity(entityGuid);
+          const boundMemberIds = (boundPair.modified as { memberIds?: string[] }).memberIds;
+          if (Array.isArray(boundMemberIds)) {
+            authorizedMemberGuids.push(...boundMemberIds);
+          }
+        } catch {
+          // Bound entity not found — no pre-existing members to authorize.
+        }
+        const authorizedSet = new Set(authorizedMemberGuids);
+        for (const member of members as Array<Record<string, unknown>>) {
+          const memberGuid = typeof member?.guid === "string" ? member.guid : undefined;
+          if (!memberGuid || authorizedSet.has(memberGuid)) {
+            continue;
+          }
+          // Reject only when the GUID names a PRE-EXISTING entity outside scope.
+          let referencesExistingEntity = false;
+          try {
+            await appInstance.edm.getEntity(memberGuid);
+            referencesExistingEntity = true;
+          } catch {
+            referencesExistingEntity = false;
+          }
+          if (referencesExistingEntity) {
+            log.warn(
+              { entityGuid, tenantId, formType },
+              "Self-service submission rejected: member references an entity outside the caller's household",
+            );
+            return res.status(403).json({ error: "Member is not part of your household" });
+          }
+        }
+      }
+
       // Entity update forms route through the full review pipeline
       const requireReview = appInstance.config.selfService?.requireReview;
       if (requireReview && reviewStore) {
@@ -614,8 +678,14 @@ export function createSelfServiceRouter(
         }
       }
 
-      // Apply entity update directly when review is not required
-      await appInstance.edm.submitForm(submission);
+      // Apply entity update directly when review is not required. Pass the
+      // authorized member scope as defense-in-depth so the apply-path guard
+      // rejects any out-of-scope member write even if the door check
+      // above is ever bypassed.
+      await appInstance.edm.submitForm(
+        submission,
+        authorizedMemberGuids ? { authorizedMemberGuids } : undefined,
+      );
 
       log.info({ entityGuid, tenantId, formType }, "Self-service form submitted");
 
@@ -638,10 +708,8 @@ export function createSelfServiceRouter(
         return res.status(400).json({ error: "No entity associated with this token" });
       }
 
-      const appInstance = await appInstanceStore.getAppInstance(tenantId);
-      if (!appInstance) {
-        return res.status(404).json({ error: "Tenant not found" });
-      }
+      const appInstance = await requireSelfServiceEnabled(tenantId, res);
+      if (!appInstance) return;
 
       // Build submission history from both applied events and pending reviews
       const submissions: Array<{

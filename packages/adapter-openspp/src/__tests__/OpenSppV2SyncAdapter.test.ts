@@ -55,6 +55,8 @@ const mockV2ClientImplementation = {
   })),
   updateGroup: jest.fn().mockImplementation((_: string, resource: GroupResource) => resource),
   patchGroup: jest.fn().mockImplementation(() => ({ type: "Group", identifier: [] })),
+  createChangeRequest: jest.fn().mockResolvedValue({ id: "cr-1", status: "pending" }),
+  getChangeRequest: jest.fn().mockResolvedValue(null),
 };
 
 jest.mock("../v2/OpenSppV2Client", () => {
@@ -64,6 +66,8 @@ jest.mock("../v2/OpenSppV2Client", () => {
     OpenSppV2Client: jest.fn().mockImplementation(() => mockV2ClientImplementation),
     default: jest.fn().mockImplementation(() => mockV2ClientImplementation),
     PreconditionFailedError: actual.PreconditionFailedError,
+    ConflictError: actual.ConflictError,
+    ChangeRequestRevisionNeededError: actual.ChangeRequestRevisionNeededError,
   };
 });
 
@@ -83,6 +87,10 @@ describe("OpenSppV2SyncAdapter", () => {
       setLastPushExternalSyncTimestamp: jest.fn(),
       getLastPullExternalSyncTimestamp: jest.fn().mockResolvedValue("1970-01-01T00:00:00.000Z"),
       setLastPullExternalSyncTimestamp: jest.fn(),
+      getMetadataValue: jest.fn().mockResolvedValue(null),
+      setMetadataValue: jest.fn(),
+      deleteMetadataValue: jest.fn(),
+      listMetadataKeys: jest.fn().mockResolvedValue([]),
     } as unknown as jest.Mocked<EventStore>;
 
     const mockEntityStore = {
@@ -223,6 +231,15 @@ describe("OpenSppV2SyncAdapter", () => {
       };
       eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
 
+      // Adapter probes GET first to fetch current versionId for optimistic
+      // locking; only PATCHes when the remote actually exists. A null GET
+      // sends the push down the discovery-then-POST recovery path.
+      mockV2ClientImplementation.getIndividual.mockResolvedValueOnce({
+        type: "Individual",
+        identifier: [{ system: "urn:openspp:vocab:id-type#system_id", value: "individual-1" }],
+        meta: { versionId: "remote-version-1" },
+      });
+
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
       const result = await adapter.pushData();
       expect(result).toEqual({ pushed: 1, failed: 0, skipped: 0, errors: [] });
@@ -235,9 +252,184 @@ describe("OpenSppV2SyncAdapter", () => {
         expect.objectContaining({
           name: expect.objectContaining({ family: "Smith" }),
         }),
-        undefined,
+        "remote-version-1",
       );
       expect(mockV2ClientImplementation.createIndividual).not.toHaveBeenCalled();
+    });
+
+    it("does not discover/patch a record via a client-supplied identifier (H1/H2/H3)", async () => {
+      // Entity carries a server-set externalId that no longer resolves on
+      // OpenSPP, plus an attacker-controlled national_id pointing at a victim.
+      const entityPair: EntityPair = {
+        guid: "attacker-1",
+        initial: {
+          id: "e-att", guid: "attacker-1", type: EntityType.Individual, version: 1,
+          externalId: "stale-ext",
+          data: { entityName: "individual", firstName: "Mal", lastName: "Lory", externalId: "stale-ext" },
+          lastUpdated: "2024-01-01T12:00:00.000Z",
+        },
+        modified: {
+          id: "e-att", guid: "attacker-1", type: EntityType.Individual, version: 2,
+          externalId: "stale-ext",
+          data: {
+            entityName: "individual", firstName: "Mal", lastName: "Lory", externalId: "stale-ext",
+            national_id: "VICTIM-NID", uin: "VICTIM-NID",
+          },
+          lastUpdated: "2024-01-02T12:00:00.000Z",
+        },
+      };
+
+      const mockEntityStore = {
+        getAllEntities: jest.fn().mockResolvedValue([entityPair]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([entityPair]),
+        getEntity: jest.fn().mockResolvedValue(entityPair),
+        getEntityByExternalId: jest.fn().mockResolvedValue(entityPair),
+        saveEntity: jest.fn(),
+      };
+      eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
+
+      // The victim resolves ONLY if queried by the client-supplied identifier.
+      // The stale externalId resolves to nothing.
+      mockV2ClientImplementation.getIndividual.mockImplementation(async (id: string) => {
+        if (id.includes("VICTIM-NID")) {
+          return {
+            type: "Individual",
+            identifier: [{ system: "urn:openspp:vocab:id-type#national_id", value: "VICTIM-NID" }],
+            meta: { versionId: "victim-version" },
+          } as IndividualResource;
+        }
+        return null;
+      });
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      await adapter.pushData();
+
+      // Discovery must never probe the victim's client-supplied identifier...
+      const queried = mockV2ClientImplementation.getIndividual.mock.calls.map((c) => c[0] as string);
+      expect(queried.some((id) => id.includes("VICTIM-NID"))).toBe(false);
+      // ...so the victim is never PATCHed; the entity is POSTed as new instead.
+      expect(mockV2ClientImplementation.patchIndividual).not.toHaveBeenCalled();
+      expect(mockV2ClientImplementation.createIndividual).toHaveBeenCalled();
+    });
+
+    it("pushes back under the preserved identifierType, not the default system (H10 cycle 2)", async () => {
+      const entityPair: EntityPair = {
+        guid: "ind-h10",
+        initial: {
+          id: "e", guid: "ind-h10", type: EntityType.Individual, version: 1, externalId: "PH-123",
+          data: { entityName: "individual", firstName: "Ana", lastName: "Cruz", externalId: "PH-123", identifierType: "national_id" },
+          lastUpdated: "2024-01-01T12:00:00.000Z",
+        },
+        modified: {
+          id: "e", guid: "ind-h10", type: EntityType.Individual, version: 2, externalId: "PH-123",
+          data: { entityName: "individual", firstName: "Ana", lastName: "Cruz", externalId: "PH-123", identifierType: "national_id" },
+          lastUpdated: "2024-01-02T12:00:00.000Z",
+        },
+      };
+      const mockEntityStore = {
+        getAllEntities: jest.fn().mockResolvedValue([entityPair]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([entityPair]),
+        getEntity: jest.fn().mockResolvedValue(entityPair),
+        getEntityByExternalId: jest.fn().mockResolvedValue(entityPair),
+        saveEntity: jest.fn(),
+      };
+      eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
+      mockV2ClientImplementation.getIndividual.mockResolvedValue({
+        type: "Individual",
+        identifier: [{ system: "urn:openspp:vocab:id-type#national_id", value: "PH-123" }],
+        meta: { versionId: "v9" },
+      });
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      const result = await adapter.pushData();
+
+      expect(result.failed).toBe(0);
+      expect(mockV2ClientImplementation.patchIndividual).toHaveBeenCalledWith(
+        "urn:openspp:vocab:id-type#national_id|PH-123",
+        expect.anything(),
+        "v9",
+      );
+    });
+
+    it("tolerates a non-string identifierType without failing the push (H22)", async () => {
+      const entityPair: EntityPair = {
+        guid: "ind-h22",
+        initial: {
+          id: "e", guid: "ind-h22", type: EntityType.Individual, version: 1, externalId: "ind-h22",
+          data: { entityName: "individual", firstName: "Sam", lastName: "Ng", externalId: "ind-h22" },
+          lastUpdated: "2024-01-01T12:00:00.000Z",
+        },
+        modified: {
+          id: "e", guid: "ind-h22", type: EntityType.Individual, version: 2, externalId: "ind-h22",
+          data: {
+            entityName: "individual", firstName: "Sam", lastName: "Ng", externalId: "ind-h22",
+            identifierType: { malicious: true } as unknown as string,
+          },
+          lastUpdated: "2024-01-02T12:00:00.000Z",
+        },
+      };
+      const mockEntityStore = {
+        getAllEntities: jest.fn().mockResolvedValue([entityPair]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([entityPair]),
+        getEntity: jest.fn().mockResolvedValue(entityPair),
+        getEntityByExternalId: jest.fn().mockResolvedValue(entityPair),
+        saveEntity: jest.fn(),
+      };
+      eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
+      mockV2ClientImplementation.getIndividual.mockResolvedValue({
+        type: "Individual",
+        identifier: [{ system: "urn:openspp:vocab:id-type#system_id", value: "ind-h22" }],
+        meta: { versionId: "v1" },
+      });
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      const result = await adapter.pushData();
+
+      expect(result.failed).toBe(0);
+      // Falls back to the configured default system, not the bogus identifierType.
+      expect(mockV2ClientImplementation.patchIndividual).toHaveBeenCalledWith(
+        "urn:openspp:vocab:id-type#system_id|ind-h22",
+        expect.anything(),
+        "v1",
+      );
+    });
+
+    it("pushes enrolments only, without re-patching a baseline-parity entity (H4)", async () => {
+      // initial.version === modified.version (no genuine local entity edit), but
+      // the entity carries client-controllable pendingProgramEnrolments.
+      const entityPair: EntityPair = {
+        guid: "ind-enr",
+        initial: {
+          id: "e", guid: "ind-enr", type: EntityType.Individual, version: 3, externalId: "ind-enr",
+          data: { entityName: "individual", firstName: "Pat", lastName: "Lee", externalId: "ind-enr" },
+          lastUpdated: "2024-01-01T12:00:00.000Z",
+        },
+        modified: {
+          id: "e", guid: "ind-enr", type: EntityType.Individual, version: 3, externalId: "ind-enr",
+          data: {
+            entityName: "individual", firstName: "Pat", lastName: "Lee", externalId: "ind-enr",
+            pendingProgramEnrolments: [{ programId: 42 }],
+          },
+          lastUpdated: "2024-01-01T12:00:00.000Z",
+        },
+      };
+      const mockEntityStore = {
+        getAllEntities: jest.fn().mockResolvedValue([entityPair]),
+        getModifiedEntitiesSince: jest.fn().mockResolvedValue([entityPair]),
+        getEntity: jest.fn().mockResolvedValue(entityPair),
+        getEntityByExternalId: jest.fn().mockResolvedValue(entityPair),
+        saveEntity: jest.fn(),
+      };
+      eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      await adapter.pushData();
+
+      // The entity itself must NOT be written (no stale overwrite)...
+      expect(mockV2ClientImplementation.patchIndividual).not.toHaveBeenCalled();
+      expect(mockV2ClientImplementation.createIndividual).not.toHaveBeenCalled();
+      // ...but the enrolment CR still flows.
+      expect(mockV2ClientImplementation.createChangeRequest).toHaveBeenCalled();
     });
 
     it("handles empty entity list", async () => {
@@ -394,6 +586,14 @@ describe("OpenSppV2SyncAdapter", () => {
       };
       eventApplierService.getEntityStore = jest.fn().mockReturnValue(mockEntityStore);
 
+      // GET first to fetch versionId; mock the existence so the push hits the
+      // PATCH branch instead of the discovery-then-POST recovery path.
+      mockV2ClientImplementation.getGroup.mockResolvedValueOnce({
+        type: "Group",
+        identifier: [{ system: "urn:openspp:vocab:id-type#system_id", value: "group-1" }],
+        meta: { versionId: "remote-group-version-1" },
+      });
+
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
       const result = await adapter.pushData();
       expect(result).toEqual({ pushed: 1, failed: 0, skipped: 0, errors: [] });
@@ -404,7 +604,7 @@ describe("OpenSppV2SyncAdapter", () => {
       expect(mockV2ClientImplementation.patchGroup).toHaveBeenCalledWith(
         "urn:openspp:vocab:id-type#system_id|group-1",
         expect.objectContaining({ name: "New Name" }),
-        undefined,
+        "remote-group-version-1",
       );
     });
   });
@@ -445,6 +645,39 @@ describe("OpenSppV2SyncAdapter", () => {
             dateOfBirth: "1990-05-15",
             gender: "male",
           }),
+        }),
+      );
+    });
+
+    it("preserves the OpenSPP identifier system as identifierType on pull (H10)", async () => {
+      const mockSearchResult: SearchResult<IndividualResource> = {
+        data: [
+          {
+            type: "Individual",
+            identifier: [{ system: "urn:openspp:vocab:id-type#national_id", value: "PH-123" }],
+            name: { given: "Ana", family: "Cruz", text: "Cruz, Ana" },
+          },
+        ],
+        meta: { total: 1, count: 1, offset: 0 },
+        links: { self: "/api/v2/spp/Individual?_count=100&_offset=0" },
+      };
+      // Reset to drop any mockResolvedValueOnce queue left by earlier tests.
+      mockV2ClientImplementation.searchIndividuals.mockReset();
+      mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce(mockSearchResult);
+      mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce({
+        data: [],
+        meta: { total: 1, count: 0, offset: 1 },
+        links: { self: "/api/v2/spp/Individual?_count=100&_offset=1" },
+      });
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      await adapter.pullData();
+
+      // externalId keeps the value; identifierType keeps the system's vocab code
+      // so a later push targets national_id|PH-123 — not the default system_id.
+      expect(eventApplierService.submitForm).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ externalId: "PH-123", identifierType: "national_id" }),
         }),
       );
     });
@@ -546,7 +779,7 @@ describe("OpenSppV2SyncAdapter", () => {
       expect(freshEventApplierService.submitForm).not.toHaveBeenCalled();
     });
 
-    it("pulls individuals with non-matching identifier system", async () => {
+    it("skips individuals whose only identifier system is out-of-namespace (H12)", async () => {
       mockV2ClientImplementation.searchIndividuals.mockReset();
       mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce({
         data: [{
@@ -572,17 +805,42 @@ describe("OpenSppV2SyncAdapter", () => {
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
       const result = await adapter.pullData();
 
-      expect(result.pulled).toBe(1);
-      expect(result.skipped).toBe(0);
-      expect(eventApplierService.submitForm).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: "create-individual",
-          data: expect.objectContaining({
-            firstName: "Maria",
-            lastName: "Santos",
-          }),
-        }),
-      );
+      // Out-of-namespace records must not be imported as DataCollect entities.
+      expect(result.pulled).toBe(0);
+      expect(result.skipped).toBe(1);
+      expect(eventApplierService.submitForm).not.toHaveBeenCalled();
+    });
+
+    it("does not crash the pull on a non-string identifier system (malformed response)", async () => {
+      mockV2ClientImplementation.searchIndividuals.mockReset();
+      mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce({
+        data: [{
+          type: "Individual",
+          // Malformed: `system` is not a string. isOpenSppIdentifier must not throw.
+          identifier: [{ system: 12345 as unknown as string, value: "x" }],
+          name: { given: "Mal", family: "Formed" },
+        }],
+        meta: { total: 1, count: 1, offset: 0 },
+        links: { self: "/api/v2/spp/Individual" },
+      } as SearchResult<IndividualResource>);
+      mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce({
+        data: [],
+        meta: { total: 1, count: 0, offset: 1 },
+        links: { self: "/api/v2/spp/Individual" },
+      });
+      mockV2ClientImplementation.searchGroups.mockReset();
+      mockV2ClientImplementation.searchGroups.mockResolvedValue({
+        data: [],
+        meta: { total: 0, count: 0, offset: 0 },
+        links: { self: "/api/v2/spp/Group" },
+      });
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      const result = await adapter.pullData();
+
+      // Record is skipped (no usable in-namespace identifier), pull does not throw.
+      expect(result.skipped).toBe(1);
+      expect(eventApplierService.submitForm).not.toHaveBeenCalled();
     });
 
     it("pulls individuals with no identifiers at all", async () => {
@@ -957,6 +1215,99 @@ describe("OpenSppV2SyncAdapter", () => {
       adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, legacyConfig);
       await adapter.authenticate();
       expect(mockV2ClientImplementation.authenticate).toHaveBeenCalled();
+    });
+
+    describe("submitVia option", () => {
+      // Reading a private field is intentional — A2 only wires the option
+      // into the ctor; A4 will exercise it via push behaviour. Until then,
+      // tests verify the wiring via the stored field directly.
+      const readSubmitVia = (a: OpenSppV2SyncAdapter): unknown =>
+        (a as unknown as { submitVia: unknown }).submitVia;
+      const readCRTypeMap = (a: OpenSppV2SyncAdapter): unknown =>
+        (a as unknown as { changeRequestTypeMap: unknown }).changeRequestTypeMap;
+
+      it("defaults submitVia to 'direct' when not provided", () => {
+        adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+        expect(readSubmitVia(adapter)).toBe("direct");
+      });
+
+      it("preserves explicit submitVia: 'change-request'", () => {
+        const crConfig: ExternalSyncConfig = {
+          ...config,
+          adapterConfig: {
+            ...(config.adapterConfig ?? {}),
+            submitVia: "change-request",
+          },
+        };
+        adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, crConfig);
+        expect(readSubmitVia(adapter)).toBe("change-request");
+      });
+
+      it("treats unknown submitVia values as 'direct'", () => {
+        const weirdConfig: ExternalSyncConfig = {
+          ...config,
+          adapterConfig: {
+            ...(config.adapterConfig ?? {}),
+            submitVia: "auto",
+          },
+        };
+        adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, weirdConfig);
+        expect(readSubmitVia(adapter)).toBe("direct");
+      });
+
+      it("reads submitVia via legacy extraFields", () => {
+        const legacyConfig: ExternalSyncConfig = {
+          type: "openspp-v2-adapter",
+          url: "http://legacy.openspp.com",
+          extraFields: [
+            { name: "clientId", value: "x" },
+            { name: "clientSecret", value: "y" },
+            { name: "submitVia", value: "change-request" },
+          ],
+        };
+        adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, legacyConfig);
+        expect(readSubmitVia(adapter)).toBe("change-request");
+      });
+
+      it("defaults changeRequestTypeMap to {} when absent", () => {
+        adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+        expect(readCRTypeMap(adapter)).toEqual({});
+      });
+
+      it("preserves an inline changeRequestTypeMap object on config", () => {
+        const override = { "update-individual": "custom_edit" };
+        const overrideConfig = {
+          ...config,
+          changeRequestTypeMap: override,
+        } as ExternalSyncConfig;
+        adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, overrideConfig);
+        expect(readCRTypeMap(adapter)).toEqual(override);
+      });
+
+      it("parses a JSON-stringified changeRequestTypeMap from adapterConfig", () => {
+        const override = { "delete-entity": "custom_archive_group" };
+        const stringConfig: ExternalSyncConfig = {
+          ...config,
+          adapterConfig: {
+            ...(config.adapterConfig ?? {}),
+            changeRequestTypeMap: JSON.stringify(override),
+          },
+        };
+        adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, stringConfig);
+        expect(readCRTypeMap(adapter)).toEqual(override);
+      });
+
+      it("returns {} for an unparseable changeRequestTypeMap string", () => {
+        const broken: ExternalSyncConfig = {
+          ...config,
+          adapterConfig: {
+            ...(config.adapterConfig ?? {}),
+            changeRequestTypeMap: "not-json",
+          },
+        };
+        adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, broken);
+        expect(readCRTypeMap(adapter)).toEqual({});
+      });
     });
   });
 });

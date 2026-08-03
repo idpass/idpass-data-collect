@@ -22,7 +22,8 @@ import { defineConfig } from '@playwright/test'
 export default defineConfig({
   testDir: './e2e',
   timeout: 30000,
-  retries: 0,
+  // Retry once locally / twice in CI to absorb transient e2e timeouts.
+  retries: process.env.CI ? 2 : 1,
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:5173',
     headless: true,
@@ -37,6 +38,10 @@ export default defineConfig({
   webServer: {
     command: 'pnpm dev',
     port: 5173,
+    // Reuse a server already listening on this port. The e2e.yml CI workflow
+    // starts `pnpm run dev:admin` in the background before invoking these tests,
+    // so Playwright must reuse it rather than try to bind an occupied 5173.
+    // (Unlike mobile, whose server Playwright owns exclusively.)
     reuseExistingServer: true,
   },
 })

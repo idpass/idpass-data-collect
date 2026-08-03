@@ -140,6 +140,31 @@ describeIfPostgres("UserStore", () => {
     expect(hasAdmin).toBe(true);
   });
 
+  test("round-trips syncScopeOverride on a role assignment", async () => {
+    const email = `scope-${Date.now()}@example.com`;
+    await adapter.saveUser({
+      email,
+      passwordHash: "hash",
+      role: Role.USER,
+      tenantIds: ["tenant-x"],
+      roleAssignments: [
+        {
+          tenantId: "tenant-x",
+          role: "FIELD_AGENT",
+          syncScopeOverride: {
+            areaIds: ["DIST-001"],
+            entityTypes: ["individual"],
+          },
+        },
+      ],
+    });
+    const loaded = await adapter.getUser(email);
+    expect(loaded?.roleAssignments?.[0].syncScopeOverride).toEqual({
+      areaIds: ["DIST-001"],
+      entityTypes: ["individual"],
+    });
+  });
+
   test("getAllUsers should return all users", async () => {
     const user1 = {
       email: "user1@example.com",

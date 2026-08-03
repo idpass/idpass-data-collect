@@ -28,7 +28,46 @@ import multer from "multer";
 import fs from "fs/promises";
 import { generatePublicArtifacts, getPublicArtifactPaths, resolvePublicBaseUrl } from "../utils/publicArtifacts";
 import rateLimit from "express-rate-limit";
+import { SYNC_SCOPE_SCHEMA } from "../middlewares/syncScopeSchema";
+import { validateExternalSyncConfig } from "@idpass/data-collect-core";
+import { createLogger } from "../utils/logger";
+
+const log = createLogger("appConfigRoutes");
 const isTest = process.env.NODE_ENV === "test" || process.env.JEST_WORKER_ID !== undefined;
+
+/**
+ * Persist-then-activate helper for the create/update endpoints.
+ *
+ * The config is the source of truth and is already committed by the caller.
+ * Starting the runtime instance and (re)generating public artifacts are
+ * best-effort side effects: if they fail we must NOT turn a committed write
+ * into a 500 — that produced the "save errored but the program is there on
+ * refresh" bug. Failures are logged and returned as advisory `warnings`.
+ */
+async function activateConfigSideEffects(
+  startInstance: () => Promise<unknown>,
+  generateArtifacts: () => Promise<unknown>,
+  configId: string,
+): Promise<string[]> {
+  const warnings: string[] = [];
+  try {
+    await startInstance();
+  } catch (err) {
+    log.warn({ err, configId }, "Config saved but runtime instance init failed");
+    warnings.push(
+      `Program saved, but starting its runtime instance failed: ${err instanceof Error ? err.message : "unknown error"}. External sync may be disabled until corrected.`,
+    );
+  }
+  try {
+    await generateArtifacts();
+  } catch (err) {
+    log.warn({ err, configId }, "Config saved but public artifact generation failed");
+    warnings.push(
+      `Program saved, but public artifact generation failed: ${err instanceof Error ? err.message : "unknown error"}.`,
+    );
+  }
+  return warnings;
+}
 
 const AppConfigSchema = z.object({
   id: z.string().min(1),
@@ -36,6 +75,7 @@ const AppConfigSchema = z.object({
   description: z.string().nullish(),
   version: z.string().nullish(),
   url: z.string().nullish(),
+  syncScope: SYNC_SCOPE_SCHEMA.nullish(),
   entityForms: z.array(z.object({
     id: z.string(),
     name: z.string(),
@@ -77,8 +117,38 @@ const AppConfigSchema = z.object({
       }),
     }).nullish(),
   }).nullish(),
-  // Extra fields present in downloaded artifacts — accepted on upload but not persisted
+  /**
+   * Programs offered for enrolment via the OpenSPP `assign_program` CR
+   * workflow. Mobile clients use this to render the "Enrol in Program"
+   * picker. The `id` is the OpenSPP `spp.program` PK sent as
+   * `detail.program_id` on the CR.
+   */
+  programs: z.array(z.object({
+    id: z.number().int(),
+    name: z.string().min(1),
+    code: z.string().nullish(),
+  })).nullish(),
+  /**
+   * Claim-169 tenant-level trust anchors + enable flag. See type Claim169Config.
+   */
+  claim169: z.object({
+    enabled: z.boolean().default(false),
+    trustedIssuers: z.array(z.object({
+      issuerId: z.string().min(1),
+      publicKey: z.object({
+        ed25519: z.string().nullish(),
+        es256: z.string().nullish(),
+      }),
+    })).default([]),
+  }).nullish(),
+  /**
+   * Backend sync endpoint the mobile/admin clients use for this tenant.
+   * Persisted (was previously accepted-but-dropped). Mobile reads it from
+   * the downloaded tenant config to construct its sync URLs; without it the
+   * AuthManager throws `Cannot read properties of undefined (reading 'startsWith')`.
+   */
   syncServerUrl: z.string().nullish(),
+  // Extra fields present in downloaded artifacts — accepted on upload but not persisted
   artifactId: z.string().nullish(),
   archivedAt: z.unknown().nullish(),
 });
@@ -225,8 +295,17 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
         res.status(403).json({ error: "You do not have permission to view this program." });
         return;
       }
-      const appConfig = await appConfigStore.getConfig(id);
-      res.json(appConfig);
+      try {
+        const appConfig = await appConfigStore.getConfig(id);
+        res.json(appConfig);
+      } catch (error) {
+        // getConfig throws a plain "not found" Error; surface it as 404 rather
+        // than a 500 (mirrors the /:id/public handler below).
+        if (error instanceof Error && error.message.includes("not found")) {
+          return res.status(404).json({ error: "Configuration not found" });
+        }
+        throw error;
+      }
     }),
   );
 
@@ -307,23 +386,46 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
         // validates the shape while the runtime object carries the full type information
         const appConfig = parseResult.data as unknown as AppConfig;
         ensureValidConfigId(appConfig.id);
+
+        // Validate the external-sync adapter config BEFORE persisting, so an
+        // invalid config is rejected with 400 and nothing is half-created.
+        // (createAppInstance would otherwise throw on the same config AFTER
+        // the write committed, surfacing a misleading 500.)
+        if (appConfig.externalSync) {
+          const syncValidation = validateExternalSyncConfig(appConfig.externalSync);
+          if (!syncValidation.valid) {
+            await fs.unlink(req.file.path).catch(() => {});
+            return res.status(400).json({ error: syncValidation.message });
+          }
+        }
+
         const configToPersist: AppConfig = {
           ...appConfig,
           artifactId: generateArtifactId(),
         };
 
         await appConfigStore.saveConfig(configToPersist);
-        await appInstanceStore.createAppInstance(configToPersist.id);
-        await appInstanceStore.loadEntityData(configToPersist.id);
 
         // Clean up - delete the uploaded file
         await fs.unlink(req.file.path);
 
         const baseUrl = resolvePublicBaseUrl(req);
         const persistedConfig = await appConfigStore.getConfig(configToPersist.id);
-        await generatePublicArtifacts(baseUrl, persistedConfig);
+        // Best-effort side effects — never 500 a committed write (see helper).
+        const warnings = await activateConfigSideEffects(
+          async () => {
+            await appInstanceStore.createAppInstance(configToPersist.id);
+            await appInstanceStore.loadEntityData(configToPersist.id);
+          },
+          () => generatePublicArtifacts(baseUrl, persistedConfig),
+          configToPersist.id,
+        );
 
-        res.json({ status: "success", artifactId: persistedConfig.artifactId });
+        res.json({
+          status: "success",
+          artifactId: persistedConfig.artifactId,
+          ...(warnings.length > 0 && { warnings }),
+        });
       } catch (error) {
         // Clean up on error
         if (req.file) {
@@ -361,22 +463,39 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
           throw new AppError("Config id mismatch between payload and URL", 400);
         }
 
+        // Reject an invalid external-sync adapter config up front (see POST).
+        if (updatedAppConfig.externalSync) {
+          const syncValidation = validateExternalSyncConfig(updatedAppConfig.externalSync);
+          if (!syncValidation.valid) {
+            await fs.unlink(req.file.path).catch(() => {});
+            return res.status(400).json({ error: syncValidation.message });
+          }
+        }
+
         const existingConfig = await appConfigStore.getConfig(id);
         const configToPersist: AppConfig = {
           ...updatedAppConfig,
           artifactId: existingConfig.artifactId ?? generateArtifactId(),
         };
         await appConfigStore.saveConfig(configToPersist);
-        await appInstanceStore.updateAppInstance(id);
 
         // Clean up - delete the uploaded file
         await fs.unlink(req.file.path);
 
         const baseUrl = resolvePublicBaseUrl(req);
         const persistedConfig = await appConfigStore.getConfig(id);
-        await generatePublicArtifacts(baseUrl, persistedConfig);
+        // Best-effort side effects — never 500 a committed write (see helper).
+        const warnings = await activateConfigSideEffects(
+          () => appInstanceStore.updateAppInstance(id),
+          () => generatePublicArtifacts(baseUrl, persistedConfig),
+          id,
+        );
 
-        res.json({ status: "success", artifactId: persistedConfig.artifactId });
+        res.json({
+          status: "success",
+          artifactId: persistedConfig.artifactId,
+          ...(warnings.length > 0 && { warnings }),
+        });
       } catch (error) {
         // Clean up on error
         if (req.file) {
@@ -384,6 +503,153 @@ export function createAppConfigRoutes(appConfigStore: AppConfigStore, appInstanc
         }
         throw error;
       }
+    }),
+  );
+
+  // JSON-body PATCH for editing only the syncScope policy. Avoids re-uploading
+  // the full config file from the admin UI for a small scoped diff.
+  // Body: `{ syncScope: SyncScopePolicy | null }` — null clears the policy.
+  router.patch(
+    "/:id/syncScope",
+    adminAuth,
+    asyncHandler(async (req, res) => {
+      const { id } = req.params;
+      ensureValidConfigId(id);
+
+      const SyncScopePatchSchema = z.object({
+        syncScope: SYNC_SCOPE_SCHEMA.nullable(),
+      });
+      const parsed = SyncScopePatchSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res
+          .status(400)
+          .json({ error: "Invalid syncScope payload", details: parsed.error.issues });
+      }
+
+      const existing = await appConfigStore.getConfig(id);
+      const updated: AppConfig = {
+        ...existing,
+        syncScope: parsed.data.syncScope ?? undefined,
+      };
+      await appConfigStore.saveConfig(updated);
+      await appInstanceStore.updateAppInstance(id);
+
+      res.json({ status: "success", syncScope: updated.syncScope ?? null });
+    }),
+  );
+
+  // JSON-body PATCH for editing only the programs[] linkage. Mobile reads
+  // programs from the public artifact, so regenerate after saving — this is
+  // the divergence from the syncScope PATCH.
+  // Body: `{ programs: AppProgram[] | null }` — null clears the list.
+  router.patch(
+    "/:id/programs",
+    adminAuth,
+    asyncHandler(async (req, res) => {
+      const { id } = req.params;
+      ensureValidConfigId(id);
+
+      const ProgramsPatchSchema = z.object({
+        programs: z
+          .array(
+            z.object({
+              id: z.number().int(),
+              name: z.string().min(1),
+              code: z.string().nullish(),
+            }),
+          )
+          .nullable(),
+      });
+      const parsed = ProgramsPatchSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res
+          .status(400)
+          .json({ error: "Invalid programs payload", details: parsed.error.issues });
+      }
+
+      const existing = await appConfigStore.getConfig(id);
+      const normalisedPrograms = parsed.data.programs?.map((p) => ({
+        id: p.id,
+        name: p.name,
+        ...(p.code ? { code: p.code } : {}),
+      }));
+      const updated: AppConfig = {
+        ...existing,
+        programs: normalisedPrograms,
+      };
+      await appConfigStore.saveConfig(updated);
+      await appInstanceStore.updateAppInstance(id);
+
+      const baseUrl = resolvePublicBaseUrl(req);
+      const persistedConfig = await appConfigStore.getConfig(id);
+      await generatePublicArtifacts(baseUrl, persistedConfig);
+
+      res.json({ status: "success", programs: persistedConfig.programs ?? [] });
+    }),
+  );
+
+  // JSON-body PATCH for editing only the claim169 block. Mobile reads
+  // claim169 from the public artifact, so regenerate after saving (same
+  // pattern as the programs PATCH).
+  // Body: `{ claim169: Claim169Config | null }` — null clears the block.
+  router.patch(
+    "/:id/claim169",
+    adminAuth,
+    asyncHandler(async (req, res) => {
+      const { id } = req.params;
+      ensureValidConfigId(id);
+
+      const Claim169PatchSchema = z.object({
+        claim169: z
+          .object({
+            enabled: z.boolean(),
+            trustedIssuers: z.array(z.object({
+              issuerId: z.string().min(1),
+              publicKey: z.object({
+                ed25519: z.string().nullish(),
+                es256: z.string().nullish(),
+              }),
+            })),
+          })
+          .nullable(),
+      });
+      const parsed = Claim169PatchSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res
+          .status(400)
+          .json({ error: "Invalid claim169 payload", details: parsed.error.issues });
+      }
+
+      // Zod `.nullish()` lets clients omit `ed25519`/`es256` as either `null`
+      // or `undefined`; normalise to `undefined` so the persisted shape
+      // matches the `Claim169Config` interface (which omits the field
+      // entirely when no key is provided).
+      const normalisedClaim169 = parsed.data.claim169
+        ? {
+            enabled: parsed.data.claim169.enabled,
+            trustedIssuers: parsed.data.claim169.trustedIssuers.map((issuer) => ({
+              issuerId: issuer.issuerId,
+              publicKey: {
+                ...(issuer.publicKey.ed25519 ? { ed25519: issuer.publicKey.ed25519 } : {}),
+                ...(issuer.publicKey.es256 ? { es256: issuer.publicKey.es256 } : {}),
+              },
+            })),
+          }
+        : null;
+
+      const existing = await appConfigStore.getConfig(id);
+      const updated: AppConfig = {
+        ...existing,
+        claim169: normalisedClaim169,
+      };
+      await appConfigStore.saveConfig(updated);
+      await appInstanceStore.updateAppInstance(id);
+
+      const baseUrl = resolvePublicBaseUrl(req);
+      const persistedConfig = await appConfigStore.getConfig(id);
+      await generatePublicArtifacts(baseUrl, persistedConfig);
+
+      res.json({ status: "success", claim169: persistedConfig.claim169 ?? null });
     }),
   );
 

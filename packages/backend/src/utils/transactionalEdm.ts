@@ -18,7 +18,9 @@
  */
 
 import { Pool } from "pg";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
+  ConflictService,
   EntityDataManager,
   EntityStoreImpl,
   EventStoreImpl,
@@ -26,8 +28,10 @@ import {
   PostgresEntityStorageAdapter,
   PostgresEventStorageAdapter,
   FormSubmission,
+  SubmitFormOptions,
   createDrizzleFromPool,
 } from "@idpass/data-collect-core";
+import { ConflictStorePg } from "../stores/ConflictStorePg";
 import { createLogger } from "./logger";
 
 const log = createLogger("transactionalEdm");
@@ -60,12 +64,17 @@ export interface BatchResult {
  * @param pool Shared PostgreSQL connection pool (managed by the caller).
  * @param tenantId Tenant identifier for multi-tenant isolation.
  * @param events Ordered list of form submissions to process atomically.
+ * @param options Optional apply-path options forwarded to every event. Used by
+ *   the bounded `/api/sync/push` caller to enforce the member sub-write scope
+ *   guard so an out-of-scope pre-existing member GUID cannot be
+ *   injected into a group event. Omit for unbounded/admin callers.
  * @returns A BatchResult describing the outcome.
  */
 export async function processTransactionalBatch(
   pool: Pool,
   tenantId: string,
   events: FormSubmission[],
+  options?: SubmitFormOptions,
 ): Promise<BatchResult> {
   const db = createDrizzleFromPool(pool);
 
@@ -74,6 +83,17 @@ export async function processTransactionalBatch(
     // Tables already exist (created during server startup).
     const eventStorageAdapter = new PostgresEventStorageAdapter(pool, tenantId);
     const entityStorageAdapter = new PostgresEntityStorageAdapter(pool, tenantId);
+    // Conflict store also rides on the same pool — its Drizzle instance is
+    // re-pointed at the transaction below so that any conflict records written
+    // by EventApplierService participate in the same atomic batch.
+    //
+    // IMPORTANT: construct a NEW ConflictStorePg here. Do NOT reuse the one
+    // stored on AppInstance.conflictStore — setDrizzleInstance(tx) below
+    // permanently mutates the store's `db` field, and the AppInstance store
+    // is shared across all requests. Reusing it would leak the tx ref past
+    // the request boundary, causing the next request to write to a closed
+    // transaction.
+    const conflictStore = new ConflictStorePg(pool, tenantId);
 
     // Track the result from inside the transaction callback
     let batchApplied = 0;
@@ -81,11 +101,14 @@ export async function processTransactionalBatch(
 
     try {
       await db.transaction(async (tx) => {
-        // Inject the transaction context into both adapters so ALL database
+        // Inject the transaction context into all three stores so ALL database
         // operations (inserts, updates, queries) run on the same connection
-        // within this transaction.
+        // within this transaction. If any event in the batch fails, the
+        // transaction rolls back and any conflict records recorded for this
+        // batch are rolled back along with the events that triggered them.
         eventStorageAdapter.setDrizzleInstance(tx as unknown as ReturnType<typeof createDrizzleFromPool>);
         entityStorageAdapter.setDrizzleInstance(tx as unknown as ReturnType<typeof createDrizzleFromPool>);
+        conflictStore.setDrizzleInstance(tx as unknown as NodePgDatabase);
 
         // Build the EDM stack using the transaction-bound adapters
         const eventStore = new EventStoreImpl(eventStorageAdapter);
@@ -93,7 +116,15 @@ export async function processTransactionalBatch(
         const entityStore = new EntityStoreImpl(entityStorageAdapter);
         await entityStore.initialize();
 
-        const eventApplierService = new EventApplierService(eventStore, entityStore);
+        const conflictService = new ConflictService(conflictStore);
+        const eventApplierService = new EventApplierService(
+          eventStore,
+          entityStore,
+          undefined,
+          undefined,
+          conflictService,
+          tenantId,
+        );
         const edm = new EntityDataManager(eventStore, entityStore, eventApplierService);
 
         // Process each event sequentially within the transaction.
@@ -105,7 +136,7 @@ export async function processTransactionalBatch(
               batchApplied++;
               continue;
             }
-            await edm.submitForm(events[i]);
+            await edm.submitForm(events[i], options);
             batchApplied++;
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);

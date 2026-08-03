@@ -223,6 +223,7 @@ export { ProjectionRebuildService } from "./services/ProjectionRebuildService";
 export type { RebuildResult } from "./services/ProjectionRebuildService";
 export * from "./services/RbacService";
 export * from "./services/ReviewService";
+export { DeviceIdentity } from "./services/DeviceIdentity";
 
 // Phase 3: Area Management, Data Assignment, and Snapshot Services
 export { AreaService } from "./services/AreaService";
@@ -251,6 +252,9 @@ export * from "./components/AdapterRegistry";
 // Type Definitions and Interfaces
 export * from "./interfaces/types";
 export * from "./interfaces/adapter-configs";
+export * from "./interfaces/scope";
+export { resolveEffectiveScope, computeScopeHash, validateEventScope } from "./services/ScopeResolver";
+export type { ScopeValidationResult, EntityScopeRef } from "./services/ScopeResolver";
 
 // Self-Service Components
 export { SelfServiceManager } from "./services/SelfServiceManager";

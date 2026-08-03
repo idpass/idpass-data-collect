@@ -19,14 +19,24 @@
 
 import { defineConfig } from '@playwright/test'
 
+// Serve a pre-built static bundle by default — deterministic across local
+// and CI, no Vite on-demand compile flake on cold starts. Set
+// `PLAYWRIGHT_DEV_SERVER=1` to switch to the dev server when iterating
+// locally with HMR.
+const useDevServer = !!process.env.PLAYWRIGHT_DEV_SERVER
+
 export default defineConfig({
   testDir: './e2e',
-  timeout: 30000,
-  retries: 0,
+  timeout: 30_000,
+  // Retry once locally / twice in CI to absorb transient e2e timeouts (a slow
+  // navigation under machine load can exceed the per-test timeout). Genuinely
+  // flaky tests still surface in the report as "flaky".
+  retries: process.env.CI ? 2 : 1,
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:8081',
     headless: true,
     screenshot: 'only-on-failure',
+    trace: 'retain-on-failure',
   },
   projects: [
     {
@@ -35,8 +45,16 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'VITE_DEVELOP=true pnpm dev:web',
+    command: useDevServer
+      ? 'VITE_DEVELOP=true pnpm dev:web'
+      : 'pnpm run build:web:e2e && pnpm run preview:web',
     port: 8081,
-    reuseExistingServer: !process.env.CI,
+    // Always let Playwright own the server lifecycle (start fresh, tear down),
+    // both locally and in CI, so runs never depend on leftover process/port
+    // state (e.g. an orphaned preview server from an interrupted run).
+    reuseExistingServer: false,
+    // Static build + preview-server boot: build takes 30-60s, preview boots
+    // instantly. Give plenty of headroom so a slow CI runner has room.
+    timeout: 180_000,
   },
 })

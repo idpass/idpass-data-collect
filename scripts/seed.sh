@@ -8,9 +8,30 @@ CONFIG_ID="demo-household-registry"
 INDIVIDUAL_CONFIG_FILE="$SCRIPT_DIR/seed-individual-registry.json"
 INDIVIDUAL_CONFIG_ID="demo-individual-registry"
 
+# Read a KEY from docker/.env (strips inline "# comment", surrounding quotes,
+# trailing whitespace). Returns empty if file missing or key not found.
+# Safer than sourcing because .env allows inline comments that shell does not.
+DOCKER_ENV_FILE="$SCRIPT_DIR/../docker/.env"
+read_docker_env() {
+  local key="$1"
+  [ -f "$DOCKER_ENV_FILE" ] || return 0
+  awk -F= -v k="$key" '
+    $1 == k {
+      sub(/^[^=]*=/, "")
+      sub(/[[:space:]]+#.*$/, "")
+      sub(/[[:space:]]+$/, "")
+      gsub(/^["'\'']|["'\'']$/, "")
+      print
+      exit
+    }
+  ' "$DOCKER_ENV_FILE"
+}
+
 BACKEND_URL="${BACKEND_URL:-http://localhost:3000}"
+ADMIN_EMAIL="${ADMIN_EMAIL:-$(read_docker_env ADMIN_EMAIL)}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@datacollect.lan}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-correct horse battery staple 42!}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-$(read_docker_env ADMIN_PASSWORD)}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-Correct horse battery staple 42!}"
 
 FIELDWORKER_EMAIL="fieldworker@datacollect.lan"
 FIELDWORKER_PASSWORD="fieldworker123"
@@ -115,9 +136,18 @@ fi
 #
 # Demonstrates DC external sync end-to-end against the reference mock registry
 # server in examples/mock-server. Skipped if the mock server is not running.
-# Override the mock URL with MOCK_REGISTRY_URL=http://host:port.
+#
+# Two URLs are involved — they usually differ in a compose setup:
+#   MOCK_REGISTRY_URL          — seed's view (host): used for the health probe.
+#                                 Defaults to http://localhost:9999.
+#   MOCK_REGISTRY_BACKEND_URL  — backend's view (container): stored in the
+#                                 uploaded config. Defaults to
+#                                 http://mock-registry:9999 (compose service).
+# Override either when running outside compose (e.g. backend on host):
+#   MOCK_REGISTRY_BACKEND_URL=http://localhost:9999 pnpm seed
 
 MOCK_REGISTRY_URL="${MOCK_REGISTRY_URL:-http://localhost:9999}"
+MOCK_REGISTRY_BACKEND_URL="${MOCK_REGISTRY_BACKEND_URL:-http://mock-registry:9999}"
 MOCK_REGISTRY_CONFIG_FILE="$SCRIPT_DIR/seed-mock-registry.json"
 MOCK_REGISTRY_CONFIG_ID="demo-mock-registry"
 MOCK_REGISTRY_COMPOSE_SERVICE="${MOCK_REGISTRY_COMPOSE_SERVICE:-mock-registry}"
@@ -128,26 +158,57 @@ MOCK_HEALTH_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 \
 if [ "$MOCK_HEALTH_CODE" = "200" ] && [ -f "$MOCK_REGISTRY_CONFIG_FILE" ]; then
   log "Mock registry reachable at $MOCK_REGISTRY_URL — configuring external sync demo."
 
-  # Best-effort: seed mock registry fixture data (2 households, 5 persons) via
-  # the compose CLI. Falls through with a hint if we can't detect a compose runtime.
-  COMPOSE_CMD=""
-  if command -v docker &>/dev/null && docker compose ps --services 2>/dev/null | grep -qx "$MOCK_REGISTRY_COMPOSE_SERVICE"; then
-    COMPOSE_CMD="docker compose"
-  elif command -v podman &>/dev/null && podman compose ps --services 2>/dev/null | grep -qx "$MOCK_REGISTRY_COMPOSE_SERVICE"; then
-    COMPOSE_CMD="podman compose"
+  # Best-effort: seed mock registry fixture data (2 households, 5 persons) by
+  # exec'ing directly into the running container. Prefer podman/docker CLI
+  # since `compose ps` requires a compose project file and profile flags.
+  MOCK_SEED_MODE="${MOCK_SEED_MODE:-idempotent}"   # idempotent | reset
+  SEED_ARGS=()
+  [ "$MOCK_SEED_MODE" = "reset" ] && SEED_ARGS+=("--reset")
+
+  # Find a running container whose name contains the compose service name
+  # (docker/podman both publish container names like "<project>-<svc>-1").
+  # Filters kept lenient: podman lacks a reliable cross-runtime port filter,
+  # and compose naming varies (underscores vs hyphens).
+  find_mock_container() {
+    local runtime="$1"
+    "$runtime" ps --format "{{.Names}}" 2>/dev/null \
+      | awk -v s="$MOCK_REGISTRY_COMPOSE_SERVICE" 'index($0, s) { print; exit }'
+  }
+
+  MOCK_CONTAINER=""
+  CONTAINER_CMD=""
+  if command -v podman &>/dev/null; then
+    MOCK_CONTAINER=$(find_mock_container podman || true)
+    [ -n "$MOCK_CONTAINER" ] && CONTAINER_CMD="podman"
+  fi
+  if [ -z "$MOCK_CONTAINER" ] && command -v docker &>/dev/null; then
+    MOCK_CONTAINER=$(find_mock_container docker || true)
+    [ -n "$MOCK_CONTAINER" ] && CONTAINER_CMD="docker"
   fi
 
-  if [ -n "$COMPOSE_CMD" ]; then
-    log "  Seeding mock registry: $COMPOSE_CMD exec $MOCK_REGISTRY_COMPOSE_SERVICE python -m mock_server seed"
-    if $COMPOSE_CMD exec -T "$MOCK_REGISTRY_COMPOSE_SERVICE" python -m mock_server seed >/dev/null 2>&1; then
-      log "  Mock registry seeded (idempotent — skips if data already present)."
+  if [ -n "$MOCK_CONTAINER" ] && [ -n "$CONTAINER_CMD" ]; then
+    log "  Seeding mock registry: $CONTAINER_CMD exec $MOCK_CONTAINER /app/.venv/bin/python -m mock_server seed ${SEED_ARGS[*]:-}"
+    SEED_OUTPUT=$($CONTAINER_CMD exec "$MOCK_CONTAINER" /app/.venv/bin/python -m mock_server seed "${SEED_ARGS[@]}" 2>&1) && SEED_OK=1 || SEED_OK=0
+    if [ "$SEED_OK" = "1" ]; then
+      log "  Mock registry seeded (mode: $MOCK_SEED_MODE)."
     else
-      log "  WARNING: Mock registry seed command failed. Data may already exist."
-      log "  Manual seed: $COMPOSE_CMD exec $MOCK_REGISTRY_COMPOSE_SERVICE python -m mock_server seed"
+      # Schema drift from an older container volume manifests as sqlite errors
+      # like "no such column: person.attributes". Recover with --reset.
+      if echo "$SEED_OUTPUT" | grep -q "no such column"; then
+        log "  Mock registry schema stale — resetting DB (data will be rebuilt from fixtures)."
+        if $CONTAINER_CMD exec "$MOCK_CONTAINER" /app/.venv/bin/python -m mock_server seed --reset >/dev/null 2>&1; then
+          log "  Mock registry schema reset + reseeded."
+        else
+          log "  WARNING: Mock registry reset failed. Manual: $CONTAINER_CMD exec $MOCK_CONTAINER /app/.venv/bin/python -m mock_server seed --reset"
+        fi
+      else
+        log "  WARNING: Mock registry seed command failed."
+        log "  Output: $(echo "$SEED_OUTPUT" | tail -3)"
+      fi
     fi
   else
-    log "  Mock registry reachable but compose runtime not detected — cannot auto-seed."
-    log "  Manual seed: docker compose -f docker/docker-compose.dev.yaml --profile mock exec mock-registry python -m mock_server seed"
+    log "  Mock registry reachable but no container matched service '$MOCK_REGISTRY_COMPOSE_SERVICE' on port 9999."
+    log "  Manual seed: docker compose -f docker/docker-compose.dev.yaml --profile mock exec mock-registry /app/.venv/bin/python -m mock_server seed"
   fi
 
   # Replace existing config if present (idempotent)
@@ -159,17 +220,21 @@ if [ "$MOCK_HEALTH_CODE" = "200" ] && [ -f "$MOCK_REGISTRY_CONFIG_FILE" ]; then
       -H "Authorization: Bearer $TOKEN"
   fi
 
-  # If caller overrode MOCK_REGISTRY_URL, rewrite the embedded url before upload.
+  # Rewrite the embedded url so backend stores the URL it can reach. The JSON
+  # default (http://mock-registry:9999) matches the compose service hostname;
+  # outside compose, the caller overrides MOCK_REGISTRY_BACKEND_URL.
   MOCK_UPLOAD_FILE="$MOCK_REGISTRY_CONFIG_FILE"
-  if [ "$MOCK_REGISTRY_URL" != "http://localhost:9999" ]; then
+  JSON_DEFAULT_URL=$(grep -oE '"url"[[:space:]]*:[[:space:]]*"[^"]*"' "$MOCK_REGISTRY_CONFIG_FILE" | head -1 | sed -E 's/.*"url"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/')
+  if [ "$MOCK_REGISTRY_BACKEND_URL" != "$JSON_DEFAULT_URL" ]; then
     if command -v jq &>/dev/null; then
       MOCK_UPLOAD_FILE="$(mktemp --suffix=.json)"
-      jq --arg url "$MOCK_REGISTRY_URL" '.externalSync.url = $url' \
+      jq --arg url "$MOCK_REGISTRY_BACKEND_URL" '.externalSync.url = $url' \
         "$MOCK_REGISTRY_CONFIG_FILE" > "$MOCK_UPLOAD_FILE"
     else
-      log "  WARNING: MOCK_REGISTRY_URL overridden but jq not installed — uploading config with default URL."
+      log "  WARNING: MOCK_REGISTRY_BACKEND_URL ($MOCK_REGISTRY_BACKEND_URL) differs from config default ($JSON_DEFAULT_URL) but jq not installed — uploading config unchanged."
     fi
   fi
+  log "  Config URL (backend view): $MOCK_REGISTRY_BACKEND_URL"
 
   MOCK_UPLOAD_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BACKEND_URL/api/apps" \
     -H "Authorization: Bearer $TOKEN" \
@@ -653,7 +718,8 @@ log "    3 standalone individuals (entityType override)"
 log "    Assessment + referral forms (dependent on person)"
 if [ "$MOCK_HEALTH_CODE" = "200" ] && [ "${MOCK_UPLOAD_CODE:-}" = "200" -o "${MOCK_UPLOAD_CODE:-}" = "201" ]; then
   log "  Data (mock registry sync):"
-  log "    Config '$MOCK_REGISTRY_CONFIG_ID' wired to $MOCK_REGISTRY_URL"
+  log "    Config '$MOCK_REGISTRY_CONFIG_ID' wired to $MOCK_REGISTRY_BACKEND_URL (backend view)"
+  log "    Host view: $MOCK_REGISTRY_URL"
   log "    Mock fixture: 2 households, 5 persons (3 with identifiers, 2 system_id-only)"
   log "    Trigger external sync from Admin UI to pull mock data into DC"
 fi

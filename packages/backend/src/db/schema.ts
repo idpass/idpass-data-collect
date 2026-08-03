@@ -96,7 +96,11 @@ export const appConfigs = pgTable("app_configs", {
   externalSync: jsonb("external_sync"),
   authConfigs: jsonb("auth_configs"),
   selfService: jsonb("self_service"),
+  syncScope: jsonb("sync_scope"),
   archivedAt: timestamp("archived_at"),
+  programs: jsonb("programs"),
+  syncServerUrl: text("sync_server_url"),
+  claim169: jsonb("claim169"),
 });
 
 /**
@@ -142,6 +146,34 @@ export const verifications = pgTable(
   (table) => [
     index("idx_verifications_submission_guid").on(table.submissionGuid),
     index("idx_verifications_tenant_id").on(table.tenantId),
+  ],
+);
+
+/**
+ * Conflicts table mirror — canonical definition lives in
+ * `packages/datacollect/src/db/schema.ts`. Mirrored here so backend Drizzle
+ * queries (e.g. ConflictStorePg) resolve `conflicts` from the local schema
+ * import path. Keep both definitions in sync.
+ */
+export const conflicts = pgTable(
+  "conflicts",
+  {
+    guid: text("guid").primaryKey(),
+    entityGuid: text("entity_guid").notNull(),
+    tenantId: text("tenant_id").notNull(),
+    localVersion: jsonb("local_version").notNull(),
+    remoteVersion: jsonb("remote_version").notNull(),
+    localEventGuid: text("local_event_guid").notNull(),
+    remoteEventGuid: text("remote_event_guid").notNull(),
+    detectedAt: timestamp("detected_at", { withTimezone: true }).notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    resolution: text("resolution"),
+    resolvedBy: text("resolved_by"),
+    mergedData: jsonb("merged_data"),
+  },
+  (table) => [
+    index("conflicts_tenant_resolved_idx").on(table.tenantId, table.resolvedAt),
+    index("conflicts_entity_idx").on(table.tenantId, table.entityGuid),
   ],
 );
 

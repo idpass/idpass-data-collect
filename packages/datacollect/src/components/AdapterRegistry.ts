@@ -137,7 +137,12 @@ export class AdapterRegistry {
       return cached;
     }
 
-    const adapter = this.create(type);
+    // Descriptors are static metadata. Adapter factories typically destructure
+    // their deps (e.g. `deps!.eventStore`), so pass a stub deps object rather
+    // than nothing — `descriptor()` never reads the deps, and this lets callers
+    // introspect an adapter outside a live sync context (e.g. validating an
+    // external-sync config before persisting it) without crashing.
+    const adapter = this.create(type, {} as AdapterDeps);
     const descriptor = adapter.descriptor();
     this.descriptorCache.set(type, descriptor);
     return descriptor;

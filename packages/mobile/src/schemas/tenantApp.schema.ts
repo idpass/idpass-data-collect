@@ -24,7 +24,7 @@ export type TenantAppData = Config
 
 export const TenantAppSchema: RxJsonSchema<TenantAppData> = {
   title: 'TenantApp',
-  version: 0,
+  version: 2,
   type: 'object',
   primaryKey: 'name',
   properties: {
@@ -44,22 +44,41 @@ export const TenantAppSchema: RxJsonSchema<TenantAppData> = {
       },
       default: []
     },
-    trustedIssuers: {
+    programs: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
-          issuerId: { type: 'string' },
-          publicKey: {
+          id: { type: 'number' },
+          name: { type: 'string' },
+          code: { type: 'string' }
+        },
+        required: ['id', 'name']
+      },
+      default: []
+    },
+    claim169: {
+      type: 'object',
+      properties: {
+        enabled: { type: 'boolean' },
+        trustedIssuers: {
+          type: 'array',
+          items: {
             type: 'object',
             properties: {
-              ed25519: { type: 'string' },
-              es256: { type: 'string' }
+              issuerId: { type: 'string' },
+              publicKey: {
+                type: 'object',
+                properties: {
+                  ed25519: { type: 'string' },
+                  es256: { type: 'string' }
+                }
+              }
             }
           }
         }
       },
-      default: []
+      default: { enabled: false, trustedIssuers: [] }
     }
   },
   required: [

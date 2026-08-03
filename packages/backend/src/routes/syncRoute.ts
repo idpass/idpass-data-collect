@@ -20,18 +20,81 @@
 import { Router } from "express";
 import bodyParser from "body-parser";
 import { Pool } from "pg";
-import { ExternalSyncCredentials, SyncProgress } from "@idpass/data-collect-core";
+import {
+  ExternalSyncCredentials,
+  SyncProgress,
+  validateEventScope,
+  type EntityScopeRef,
+  type FormSubmission,
+  type SubmitFormOptions,
+} from "@idpass/data-collect-core";
 import { v4 as uuidv4 } from "uuid";
 import { z } from "zod";
 import { AuthenticatedRequest, authenticateJWT, createDynamicAuthMiddleware, validateTenantAccess } from "../middlewares/authentication";
 import { asyncHandler } from "../middlewares/errorHandlers";
+import { createScopeContextMiddleware, type ScopeAwareRequest } from "../middlewares/scopeContext";
 import { AppInstanceStore, Role } from "../types";
 import { createLogger } from "../utils/logger";
 import { processTransactionalBatch } from "../utils/transactionalEdm";
+import { stripServerManagedEventFields } from "../utils/eventSanitize";
 import { SyncEventStore } from "../stores/SyncEventStore";
 import { SyncJobRegistry } from "../stores/SyncJobRegistry";
+import { SyncTelemetryStore } from "../stores/SyncTelemetryStore";
 
 const log = createLogger("syncRoute");
+
+/**
+ * Cap on the number of area ids accepted from the `?areaIds=` query hint on
+ * `/pull`. Each area id triggers a separate `searchEntities` call, so an
+ * unbounded list lets a client amplify a single HTTP request into N parallel
+ * Postgres queries (DoS). 64 is well above any realistic admin scope.
+ */
+const QUERY_AREA_ID_LIMIT = 64;
+
+/**
+ * Validate the client-supplied X-Device-Id header. Returns the value if it
+ * looks like a UUID-shaped identifier, null otherwise. Telemetry must not be
+ * recorded for malformed values — clients can otherwise inflate the audit
+ * tables with unbounded unique device ids.
+ */
+function readDeviceIdHeader(req: { header(name: string): string | undefined }): string | null {
+  const raw = req.header("X-Device-Id");
+  if (!raw || raw.length > 64) return null;
+  return /^[A-Za-z0-9_-]+$/.test(raw) ? raw : null;
+}
+
+/**
+ * On scoped tenants, the X-Device-Id header is mandatory so
+ * pre-upgrade clients fail loud rather than silently bypassing scope-aware
+ * telemetry. A tenant is "scoped" when its effective scope constrains areaIds
+ * or entityTypes; time-window-only is treated as unscoped (enforcement
+ * deferred). Returns `{ ok: true }` if the request may proceed, otherwise a
+ * ready-to-send 400 response body.
+ */
+function requireDeviceIdIfScoped(
+  req: ScopeAwareRequest,
+):
+  | { ok: true }
+  | { ok: false; status: 400; body: { status: "error"; code: "DEVICE_ID_REQUIRED"; message: string } } {
+  const eff = req.scope!.effective;
+  // TODO: timeWindow-only scopes intentionally bypass the
+  // X-Device-Id requirement (and the scope-aware telemetry it gates) until
+  // time-window enforcement is wired in /pull and /push. When that lands,
+  // include `eff.timeWindow !== null` in `isBounded` below so scoped clients
+  // on time-windowed tenants must also identify themselves.
+  const isBounded = eff.areaIds !== null || eff.entityTypes !== null;
+  if (!isBounded) return { ok: true };
+  if (readDeviceIdHeader(req) !== null) return { ok: true };
+  return {
+    ok: false,
+    status: 400,
+    body: {
+      status: "error",
+      code: "DEVICE_ID_REQUIRED",
+      message: "X-Device-Id header is required for scoped tenants. Upgrade your client.",
+    },
+  };
+}
 
 const SyncPushPayloadSchema = z.object({
   events: z.array(z.object({
@@ -71,7 +134,11 @@ const ExternalSyncCredentialsSchema = z.object({
   }).optional(),
 });
 
-export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl?: string): Router {
+export function createSyncRouter(
+  appInstanceStore: AppInstanceStore,
+  postgresUrl?: string,
+  telemetryStore?: SyncTelemetryStore,
+): Router {
   const router = Router();
 
   // Create a shared pool for transactional batch processing, reused across requests
@@ -173,6 +240,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
     "/pull",
     createDynamicAuthMiddleware(appInstanceStore),
     validateTenantAccess,
+    createScopeContextMiddleware(appInstanceStore),
     asyncHandler(async (req, res) => {
       // get param timestamp
       const { since, configId = "default", areaIds } = req.query;
@@ -182,6 +250,10 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
       const appInstance = await appInstanceStore.getAppInstance(configId as string);
       if (!appInstance) {
         return res.status(404).json({ status: "error", message: "App instance not found" });
+      }
+      const deviceCheck = requireDeviceIdIfScoped(req as ScopeAwareRequest);
+      if (!deviceCheck.ok) {
+        return res.status(deviceCheck.status).json(deviceCheck.body);
       }
       const edm = appInstance.edm;
 
@@ -193,23 +265,54 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
         warnings.push("Unresolved potential duplicates exist. Please review them on the admin page.");
       }
 
-      const hasAreaFilter = areaIds && typeof areaIds === "string" && areaIds.length > 0;
+      const scope = (req as ScopeAwareRequest).scope!.effective;
+      const queryAreaIdHintRaw = typeof areaIds === "string" && areaIds.length > 0
+        ? areaIds.split(",").map((a) => a.trim()).filter(Boolean)
+        : null;
+      // Dedup + cap to prevent DoS amplification via unbounded ?areaIds=A1,A1,A1,…
+      // — each id fans out to a searchEntities call below.
+      const queryAreaIdHint = queryAreaIdHintRaw
+        ? Array.from(new Set(queryAreaIdHintRaw)).slice(0, QUERY_AREA_ID_LIMIT)
+        : null;
+
+      // Effective area filter = scope.areaIds (server-authoritative) ∩ queryAreaIdHint
+      let effectiveAreaIds: string[] | null = scope.areaIds;
+      if (queryAreaIdHint) {
+        if (effectiveAreaIds === null) {
+          effectiveAreaIds = queryAreaIdHint;
+        } else {
+          const tenantSet = new Set(effectiveAreaIds);
+          effectiveAreaIds = queryAreaIdHint.filter((a) => tenantSet.has(a));
+        }
+      }
+      // shouldFilter distinguishes "tenant has a scope policy" from
+      // "intersection happens to be non-empty". An empty intersection
+      // (effectiveAreaIds.length === 0) means the client requested areas
+      // disjoint from its server-side scope — deliver nothing, never widen.
+      const shouldFilter = effectiveAreaIds !== null;
+      // Time-window enforcement is intentionally NOT wired in Phase 2 (no PM use
+      // case yet). The dimension is advertised in scope.timeWindow but does not
+      // filter events. Wire alongside the area filter when a customer asks.
+
       // Use larger pages when area filtering to reduce empty-page round-trips
-      const pageSize = hasAreaFilter ? 100 : 10;
+      const pageSize = shouldFilter ? 100 : 10;
       const result = await edm.getEventsSincePagination(sinceValue, pageSize);
 
-      // Apply server-side area filtering when areaIds are provided.
+      // Apply server-side area filtering when an effective area list is set.
       // This enables selective sync: clients only receive events for entities
       // in their assigned geographic areas.
-      if (hasAreaFilter) {
-        const areaIdList = (areaIds as string).split(",").filter(Boolean);
-        if (areaIdList.length > 0) {
-          // Query entity store per area ID to build the allowed set without
-          // loading every entity into memory.
+      if (shouldFilter) {
+        if (effectiveAreaIds!.length === 0) {
+          // Disjoint between server scope and query hint — deliver nothing.
+          // Advancing the cursor would never expose anything (the filter list
+          // is empty for the rest of this request), so set nextCursor to null.
+          result.events = [];
+          result.nextCursor = null;
+        } else {
           const allowedEntityGuids = new Set<string>();
 
           const searchResults = await Promise.all(
-            areaIdList.map((areaId) =>
+            effectiveAreaIds!.map((areaId) =>
               edm.searchEntities([{ area_id: areaId }]),
             ),
           );
@@ -227,19 +330,43 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
 
           // Recompute nextCursor from the last *delivered* event so the client
           // doesn't skip events it never received. If all events were filtered
-          // out but the raw page was full, use the original cursor to let the
-          // client fetch the next page.
+          // out but the raw page was full, keep the original nextCursor so the
+          // client advances through pages that don't match until it reaches the
+          // end.
           if (result.events.length > 0) {
             const lastDelivered = result.events[result.events.length - 1];
             result.nextCursor = `${lastDelivered.timestamp}|${lastDelivered.guid}`;
-          } else if (result.nextCursor) {
-            // All events filtered — keep nextCursor so client advances through
-            // pages that don't match its area until it reaches the end.
           }
         }
       }
 
-      res.json(warnings.length > 0 ? { ...result, warnings } : result);
+      const deviceId = readDeviceIdHeader(req);
+      if (telemetryStore && deviceId) {
+        const userId = String((req as AuthenticatedRequest).user?.id ?? "");
+        void telemetryStore
+          .recordPull({
+            tenantId: configId as string,
+            userId,
+            deviceId,
+            eventCount: result.events.length,
+            scopeHash: (req as ScopeAwareRequest).scope?.hash ?? null,
+          })
+          .catch((err) => {
+            log.warn({ err, deviceId, tenantId: configId }, "Failed to record pull telemetry; ignoring");
+          });
+      }
+
+      const scopeBody = {
+        areaIds: scope.areaIds,
+        entityTypes: scope.entityTypes,
+        timeWindow: scope.timeWindow,
+        hash: (req as ScopeAwareRequest).scope!.hash,
+      };
+      res.setHeader("X-Sync-Scope-Hash", scopeBody.hash);
+      const responseBody: Record<string, unknown> = warnings.length > 0
+        ? { ...result, warnings, scope: scopeBody }
+        : { ...result, scope: scopeBody };
+      res.json(responseBody);
     }),
   );
 
@@ -263,6 +390,7 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
     "/push",
     createDynamicAuthMiddleware(appInstanceStore),
     validateTenantAccess,
+    createScopeContextMiddleware(appInstanceStore, { source: "body", defaultConfigId: "default" }),
     asyncHandler(async (req, res) => {
       const parseResult = SyncPushPayloadSchema.safeParse(req.body);
       if (!parseResult.success) {
@@ -275,35 +403,219 @@ export function createSyncRouter(appInstanceStore: AppInstanceStore, postgresUrl
       if (!appInstance) {
         return res.status(404).json({ status: "error", message: "App instance not found" });
       }
+      const deviceCheck = requireDeviceIdIfScoped(req as ScopeAwareRequest);
+      if (!deviceCheck.ok) {
+        return res.status(deviceCheck.status).json(deviceCheck.body);
+      }
 
-      const sorted = events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-      const batchEvents = sorted.map((event) => ({ ...event, syncLevel: 1 }));
+      // Sort the FULL parsed list by timestamp so applied events preserve
+      // submission order. Validation/partition below preserves this order.
+      const sorted = events
+        .slice()
+        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      // Strip client-asserted server-managed identifier fields (externalId,
+      // identifierType) before applying. These select the external record a
+      // later push PATCHes and must come only from a trusted external pull —
+      // never from a client. Findings: H11, H30, H10/H22.
+      const allEvents: FormSubmission[] = sorted.map((event) =>
+        stripServerManagedEventFields({ ...event, syncLevel: 1 }),
+      );
+
+      // ---------------------------------------------------------------
+      // Per-event scope validation (Phase 3)
+      // ---------------------------------------------------------------
+      const scope = (req as ScopeAwareRequest).scope!.effective;
+      const isBounded = scope.areaIds !== null || scope.entityTypes !== null;
+
+      type ScopeRejection = {
+        guid: string;
+        entityGuid: string;
+        type: string;
+        reason: "out_of_scope" | "unknown_entity";
+      };
+
+      let acceptedEvents: FormSubmission[] = allEvents;
+      const rejected: ScopeRejection[] = [];
+
+      if (isBounded) {
+        // Build a lookup map for events that need entity resolution: anything
+        // that is NOT a create-individual / create-group event. The validator
+        // resolves create-* events purely from the payload.
+        const isCreateIndividualOrGroup = (t: string) =>
+          (t.startsWith("create-") && (t.endsWith("-individual") || t.endsWith("-group")));
+        const guidsToLookup = Array.from(
+          new Set(allEvents.filter((e) => !isCreateIndividualOrGroup(e.type)).map((e) => e.entityGuid)),
+        );
+
+        const lookupResults = await Promise.all(
+          guidsToLookup.map(async (guid): Promise<[string, EntityScopeRef | undefined]> => {
+            try {
+              const pair = await appInstance.edm.getEntity(guid);
+              const areaIdRaw = (pair.modified.data as Record<string, unknown> | undefined)?.area_id;
+              const areaId = typeof areaIdRaw === "string" ? areaIdRaw : null;
+              return [guid, { type: pair.modified.type, areaId } as EntityScopeRef];
+            } catch {
+              // getEntity throws ENTITY_NOT_FOUND for unknown ids — surface as
+              // "no ref" so the validator returns unknown_entity (unless an
+              // in-batch create later seeds the same entityGuid below).
+              return [guid, undefined];
+            }
+          }),
+        );
+        const lookupMap = new Map<string, EntityScopeRef | undefined>();
+        // Only insert successful DB lookups; leaving guids absent from the map
+        // (instead of mapped to `undefined`) lets the in-batch seeding below
+        // fill them via `!lookupMap.has(...)`. DB state remains authoritative
+        // because we insert DB entries first and the seeding step is a
+        // no-op for any guid already present.
+        for (const [guid, ref] of lookupResults) {
+          if (ref !== undefined) lookupMap.set(guid, ref);
+        }
+
+        // Seed synthetic refs from in-batch create-individual / create-group
+        // events so a later update-* targeting the same entityGuid resolves
+        // through the lookup. DB prefetch wins over in-batch synthetic refs
+        // (DB state is authoritative); only fill where the map has no entry.
+        // Even if the create itself will be rejected by scope, we still seed
+        // the ref so subsequent updates surface the SAME reason
+        // (out_of_scope) rather than the spurious "unknown_entity" — this
+        // gives clients a consistent error surface across the batch.
+        for (const evt of allEvents) {
+          if (isCreateIndividualOrGroup(evt.type) && !lookupMap.has(evt.entityGuid)) {
+            const areaIdRaw = (evt.data as Record<string, unknown> | undefined)?.area_id;
+            const areaId = typeof areaIdRaw === "string" ? areaIdRaw : null;
+            const type: EntityScopeRef["type"] = evt.type.endsWith("-individual") ? "individual" : "group";
+            lookupMap.set(evt.entityGuid, { type, areaId });
+          }
+        }
+        const lookup = (guid: string): EntityScopeRef | undefined => lookupMap.get(guid);
+
+        const accepted: FormSubmission[] = [];
+        for (const evt of allEvents) {
+          const result = validateEventScope(evt, scope, lookup);
+          if (result.ok) {
+            accepted.push(evt);
+          } else {
+            rejected.push({ guid: evt.guid, entityGuid: evt.entityGuid, type: evt.type, reason: result.reason });
+          }
+        }
+        acceptedEvents = accepted;
+      }
+
+      // Member sub-write scope guard (follow-up to the envelope-scope check). The envelope
+      // check above validates each event's OWN entityGuid against scope, but a
+      // group event's `data.members[]` sub-writes are applied to DIFFERENT
+      // entities. A bounded field worker could pass the envelope check on an
+      // in-scope group yet smuggle an out-of-scope PRE-EXISTING entity GUID
+      // into members[], overwriting that victim and attaching it to their
+      // group. Thread the caller's scope into the apply path as an async
+      // predicate so createOrUpdateGroup rejects any such member. Brand-new
+      // member GUIDs (not resolving to an existing entity) stay allowed.
+      // Unbounded/admin callers get no options → member writes stay
+      // unrestricted, preserving legacy sync behaviour.
+      const memberScopeOptions: SubmitFormOptions | undefined = isBounded
+        ? {
+            isMemberGuidAuthorized: async (memberGuid: string): Promise<boolean> => {
+              let ref: EntityScopeRef | undefined;
+              try {
+                const pair = await appInstance.edm.getEntity(memberGuid);
+                const areaIdRaw = (pair.modified.data as Record<string, unknown> | undefined)?.area_id;
+                const areaId = typeof areaIdRaw === "string" ? areaIdRaw : null;
+                ref = { type: pair.modified.type as EntityScopeRef["type"], areaId };
+              } catch {
+                // Not a pre-existing entity — brand-new member, always allowed.
+                return true;
+              }
+              // Reuse the pure /push validator: treat the member as a
+              // non-create event targeting its own entity so its stored
+              // area + type are checked against the caller's scope.
+              return validateEventScope(
+                { type: "member-write", entityGuid: memberGuid, data: {} },
+                scope,
+                () => ref,
+              ).ok;
+            },
+          }
+        : undefined;
+
+      const recordPushTelemetry = (eventCount: number) => {
+        const deviceId = readDeviceIdHeader(req);
+        if (telemetryStore && deviceId) {
+          const userId = String((req as AuthenticatedRequest).user?.id ?? "");
+          void telemetryStore
+            .recordPush({
+              tenantId,
+              userId,
+              deviceId,
+              eventCount,
+              scopeHash: (req as ScopeAwareRequest).scope?.hash ?? null,
+            })
+            .catch((err) => {
+              log.warn({ err, deviceId, tenantId }, "Failed to record push telemetry; ignoring");
+            });
+        }
+      };
+
+      // All-rejected: never call submit. Emit 422 with rejected list.
+      if (acceptedEvents.length === 0 && rejected.length > 0) {
+        return res.status(422).json({
+          status: "error",
+          message: "All events rejected by scope policy",
+          applied: 0,
+          failed: rejected,
+          errors: [],
+        });
+      }
+
+      // Helper to combine submit-failed entries with scope-rejected entries.
+      // Submit-failed entries keep their existing shape (the FormSubmission for
+      // the fallback path; the {index, eventGuid, error} shape for the
+      // transactional path) and additionally carry a `reason: "submit_failed"`
+      // tag where it's straightforward to add — this is additive and does not
+      // remove or rename any pre-existing field.
 
       if (txPool) {
-        // Transactional path: all events succeed or none are applied
-        const result = await processTransactionalBatch(txPool, tenantId, batchEvents);
+        // Transactional path: all accepted events succeed or none are applied
+        const result = await processTransactionalBatch(txPool, tenantId, acceptedEvents, memberScopeOptions);
         if (!result.success) {
+          const failedWithReason = result.failed.map((f) => ({ ...f, reason: "submit_failed" as const }));
           return res.status(422).json({
             status: "error",
             message: "Batch push failed; no events were applied",
             applied: result.applied,
-            failed: result.failed,
+            failed: [...failedWithReason, ...rejected],
           });
         }
-        return res.json({ status: "success", applied: result.applied, failed: result.failed, errors: [] });
+        recordPushTelemetry(result.applied);
+        const status = rejected.length > 0 ? 207 : 200;
+        return res.status(status).json({
+          status: rejected.length > 0 ? "partial" : "success",
+          applied: result.applied,
+          failed: [...result.failed, ...rejected],
+          errors: [],
+        });
       }
 
       // Fallback for environments without a direct postgres URL (e.g., tests
       // that don't pass the URL through). Uses the non-transactional path.
       try {
-        const result = await appInstance.edm.submitFormBatch(batchEvents);
-        res.json({ status: "success", applied: result.applied, failed: result.failed, errors: result.errors });
+        const result = await appInstance.edm.submitFormBatch(acceptedEvents, memberScopeOptions);
+        recordPushTelemetry(result.applied);
+        const failedWithReason = result.failed.map((f) => ({ ...f, reason: "submit_failed" as const }));
+        const status = rejected.length > 0 ? 207 : 200;
+        res.status(status).json({
+          status: rejected.length > 0 ? "partial" : "success",
+          applied: result.applied,
+          failed: [...failedWithReason, ...rejected],
+          errors: result.errors,
+        });
       } catch (error) {
         log.error({ err: error }, "Batch push failed");
         const message = error instanceof Error ? error.message : String(error);
         res.status(422).json({
           status: "error",
           message: "Batch push failed; no events were applied",
+          failed: rejected,
           errors: [message],
         });
       }

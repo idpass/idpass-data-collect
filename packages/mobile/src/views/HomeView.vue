@@ -1,3 +1,22 @@
+<!--
+ * Licensed to the Association pour la cooperation numerique (ACN) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ACN licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+-->
+
 <script setup lang="ts">
 import { useDatabase } from '@/database'
 import { TenantAppData } from '@/schemas/tenantApp.schema'
@@ -39,11 +58,13 @@ const tenantappsDb = database.tenantapps.find()
 const tenantappsSub = tenantappsDb.$.subscribe((results) => {
   tenantapps.value = results
   results.forEach(app => {
-    if (app.trustedIssuers) {
-      app.trustedIssuers.forEach(issuer => {
-        registerIssuerKey(issuer.issuerId, issuer.publicKey)
+    const issuers = app.claim169?.trustedIssuers ?? []
+    issuers.forEach(issuer => {
+      registerIssuerKey(issuer.issuerId, {
+        ed25519: issuer.publicKey.ed25519,
+        es256: issuer.publicKey.es256,
       })
-    }
+    })
   })
 })
 
@@ -193,7 +214,13 @@ const saveTenantApp = async (config: TenantAppData, sourceUrl = '') => {
       syncServerUrl: config.syncServerUrl,
       externalSync: config.externalSync,
       authConfigs: config.authConfigs,
-      trustedIssuers: config.trustedIssuers,
+      claim169: config.claim169 ?? { enabled: false, trustedIssuers: [] },
+      // Without this the Enrol-in-Program picker silently disappears after
+      // any version-bump re-import: the explicit patch payload overrides
+      // existing fields, and any field NOT listed here is left untouched
+      // ⇒ stays at its prior value, including `undefined` for fresh
+      // installs that didn't carry programs the first time.
+      programs: config.programs,
     })
     return
   }

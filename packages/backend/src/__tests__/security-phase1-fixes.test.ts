@@ -78,11 +78,17 @@ describeIfPostgres("L15: Per-identifier OTP rate limiting", () => {
       createAppInstance: jest.fn(),
       updateAppInstance: jest.fn(),
       loadEntityData: jest.fn(),
-      getAppInstance: jest.fn().mockResolvedValue(null),
+      // Self-service is gated behind selfService.enabled (default off); this
+      // suite exercises the enabled feature, so the instance opts in.
+      getAppInstance: jest.fn().mockResolvedValue({
+        configId: "rate-tenant",
+        config: { selfService: { enabled: true } },
+        edm: { searchEntities: jest.fn().mockResolvedValue([]) },
+      }),
       clearAppInstance: jest.fn(),
       clearStore: jest.fn(),
       closeConnection: jest.fn(),
-    } as jest.Mocked<AppInstanceStore>;
+    } as unknown as jest.Mocked<AppInstanceStore>;
 
     app = express();
     app.use(bodyParser.json());

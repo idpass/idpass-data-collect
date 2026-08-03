@@ -146,8 +146,10 @@
 }
 
 .page-header__title {
+  font-family: var(--font-family-display);
   font-size: clamp(1.5rem, 1.4rem + 0.5vw, 1.875rem);
   font-weight: 600;
+  letter-spacing: -0.015em;
   margin: 0;
   color: var(--text-main);
 }

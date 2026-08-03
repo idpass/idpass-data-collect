@@ -11,7 +11,7 @@ const config: Config = {
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
     v4: true, // Improve compatibility with the upcoming Docusaurus v4
-    experimental_faster: true // if true, causes "Rspack FS Error: No such file or directory"
+    faster: true // renamed from experimental_faster in Docusaurus 3.10; if true, causes "Rspack FS Error: No such file or directory"
   },
 
   // Set the production url of your site here
@@ -118,6 +118,11 @@ const config: Config = {
         {
           to: 'users',
           label: 'Admin & Mobile',
+          position: 'left',
+        },
+        {
+          to: 'security',
+          label: 'Security',
           position: 'left',
         },
         {

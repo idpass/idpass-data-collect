@@ -125,9 +125,21 @@ Backend supports multiple tenants via app config files. Config structure:
 - **Adapter wrappers in `syncServer.ts` must be kept in sync with the `ExternalSyncAdapterV2` interface.** If the interface adds a parameter, the wrapper must forward it. Past bug: wrapper dropped `since` parameter for 30 days, causing full re-pull on every sync.
 - **IndexedDB `objectStore.put()` returns `IDBRequest`, not `Promise`.** Wrapping in `await` does not wait for the transaction to commit. Always wrap in `new Promise` that resolves on `transaction.oncomplete`.
 
+## Security Disclosure Hygiene
+
+This is a **public** repository. Do not expose exploitable vulnerability detail or internal tracker IDs (OpenProject `#nnnn`) in public artifacts — PR titles/descriptions, issue text, commit messages, or code/test comments.
+
+- **Undisclosed vulnerabilities:** develop the fix in a private [GitHub Security Advisory](https://docs.github.com/en/code-security/security-advisories/working-with-repository-security-advisories/about-repository-security-advisories) (GHSA) fork; merge and release; publish the advisory (and a CVE if warranted) only after users can upgrade. The detailed exploit narrative belongs in the post-release advisory, not the PR.
+- **Public PR text** describes *what* changed — the control added, files touched, tests — never the attack path, preconditions, or exploitation steps.
+- **No internal tracker IDs** in public PRs/commits/code. Reference the public advisory ID or omit. Cross-PR references (`#60`, `#61`) are fine (structural).
+- **Code comments / test `describe()` names** name the control or behavior ("tenant-scoped approval guard"), not the vulnerability or ticket ("the #1135 vuln", "BOLA exploit").
+- The goal is timing, not permanent secrecy: once a fix is released, an advisory/CVE and transparency are good — just don't hand attackers a roadmap before the patch ships.
+
 ## Commit Checklist
 
 Before committing:
+
+- [ ] Security fix: no exploit detail or internal tracker IDs in public PR/commit/code text (see Security Disclosure Hygiene)
 
 - [ ] `pnpm pr-check` passes
 - [ ] No `console.log` in `datacollect` or `backend` (use `createLogger`)
@@ -144,7 +156,12 @@ Before committing:
 ---
 
 ### Playwright Browser Configuration
-If Chromium is not found in the usual places, check Flatpak as well and do not use `npx playwright install`. Use the system's **Chromium Flatpak** to avoid library compatibility issues with the host.
+
+**e2e browsers (CI parity).** `pnpm pr-check` self-installs the exact Chromium build pinned by the workspace's `@playwright/test` via `pnpm --filter @idpass/data-collect-admin exec playwright install chromium` before the browser-based e2e stages. This is the project-pinned binary (not a global `npx playwright install`) and it self-heals the version drift you get after a Playwright bump — the failure mode where the cache holds an older `chromium_headless_shell-<n>` than the one the new Playwright expects.
+
+The self-installed headless Chromium **launches fine on the Bazzite host** — the drift-fix above is all the e2e suite needs. A `distrobox` (Ubuntu/Fedora) mirroring the CI image is still worth it for full CI parity (it lets `playwright install --with-deps chromium` and the CI Node version — `22.x`, pin via `fnm`/`mise` — behave exactly like the runner), but it is **not required** to run the e2e locally.
+
+**Manual/interactive browsing on the host** (not the e2e suite): use the system **Chromium Flatpak** to avoid the same host library-compatibility issues.
 
 | Setting | Value |
 | :--- | :--- |

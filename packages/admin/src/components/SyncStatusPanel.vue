@@ -1,3 +1,22 @@
+<!--
+ * Licensed to the Association pour la cooperation numerique (ACN) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ACN licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+-->
+
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { AxiosError } from 'axios'
@@ -75,14 +94,14 @@ const lastSyncSummary = computed(() => {
 })
 
 const panelBorderColor = computed(() => {
-  if (isSyncing.value) return '#BBDEFB'
-  if (!lastEvent.value) return '#E0E0E0'
+  if (isSyncing.value) return 'var(--status-info)'
+  if (!lastEvent.value) return 'transparent'
   const map: Record<string, string> = {
-    success: '#E8F5E9',
-    partial: '#FFF3E0',
-    failed: '#FFEBEE',
+    success: 'var(--status-success)',
+    partial: 'var(--status-warning)',
+    failed: 'var(--status-danger)',
   }
-  return map[lastEvent.value.status] || '#E0E0E0'
+  return map[lastEvent.value.status] || 'transparent'
 })
 
 const hasHistory = computed(() => lastEvent.value !== null)
@@ -295,7 +314,13 @@ watch(() => props.configId, () => {
 </script>
 
 <template>
-  <div v-if="hasExternalSync" class="sync-panel" :style="{ borderBottomColor: panelBorderColor }">
+  <v-card
+    v-if="hasExternalSync"
+    class="sync-panel"
+    :style="{ '--panel-accent': panelBorderColor }"
+    border="md"
+    elevation="0"
+  >
     <div class="sync-panel__bar">
       <div class="sync-panel__status">
         <span
@@ -411,22 +436,34 @@ watch(() => props.configId, () => {
         </tbody>
       </v-table>
     </div>
-  </div>
+  </v-card>
 </template>
 
 <style scoped>
 .sync-panel {
-  border-bottom: 2px solid #E0E0E0;
-  background: rgb(var(--v-theme-surface));
-  margin-bottom: var(--spacing-lg, 16px);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  margin-bottom: var(--spacing-lg);
+  padding: var(--spacing-md) var(--spacing-lg);
+  position: relative;
+  overflow: hidden;
+}
+
+.sync-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--panel-accent, transparent);
+  border-radius: var(--radius-xl) 0 0 var(--radius-xl);
 }
 
 .sync-panel__bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 0;
-  gap: 12px;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
 }
 
 .sync-panel__status {
@@ -479,7 +516,9 @@ watch(() => props.configId, () => {
 }
 
 .sync-panel__history {
-  padding: 0 0 8px;
+  margin-top: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-light);
 }
 
 .sync-history-table thead th {
@@ -503,7 +542,7 @@ watch(() => props.configId, () => {
 }
 
 .sync-panel__error-guid {
-  font-family: monospace;
+  font-family: var(--font-family-mono);
   font-size: 11px;
   background: rgba(var(--v-theme-on-surface), 0.06);
   padding: 1px 6px;

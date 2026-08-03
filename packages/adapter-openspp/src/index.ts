@@ -28,6 +28,36 @@ export { HouseholdTransformer } from "./pullTransformers/HouseholdTransformer";
 export * from "./models";
 
 // OpenSPP V2 — REST API with OAuth2 adapter
-export { OpenSppV2Client, PreconditionFailedError, ConflictError } from "./v2/OpenSppV2Client";
+export {
+  OpenSppV2Client,
+  PreconditionFailedError,
+  ConflictError,
+  ChangeRequestRevisionNeededError,
+} from "./v2/OpenSppV2Client";
 export { default as OpenSppV2SyncAdapter } from "./v2/OpenSppV2SyncAdapter";
 export * from "./v2/types";
+export type {
+  ChangeRequestType,
+  RegistrantRef,
+  ChangeRequestStatus,
+  ChangeRequestCreate,
+  ChangeRequestUpdate,
+  ChangeRequestResponse,
+} from "./v2/ChangeRequestTypes";
+export {
+  DEFAULT_CR_TYPE_MAP,
+  resolveCRTypeCode,
+} from "./v2/OpenSppV2AdapterOptions";
+export type {
+  ChangeRequestSubmitMode,
+  EventTypeKey,
+  OpenSppV2AdapterOptions,
+} from "./v2/OpenSppV2AdapterOptions";
+export {
+  CR_KEY_PREFIX,
+  getCR,
+  setCR,
+  deleteCR,
+  listInFlightCRs,
+} from "./v2/changeRequestStore";
+export type { CRRecord } from "./v2/changeRequestStore";

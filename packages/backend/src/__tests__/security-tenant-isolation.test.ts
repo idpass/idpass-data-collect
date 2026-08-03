@@ -232,24 +232,14 @@ describeIfPostgres("SECURITY: Tenant isolation vulnerabilities", () => {
   });
 
   describe("Review cross-tenant approval", () => {
-    test("review approve endpoint iterates ALL tenants without filtering by user access", () => {
-      // This test verifies the vulnerability at the code structure level.
-      // The reviewRoutes.ts approve endpoint (line 164) iterates over ALL
-      // entries in reviewServiceCache without checking user.tenantIds:
-      //
-      //   for (const [tenantId, reviewService] of reviewServiceCache) {
-      //     const found = reviewService.getReviewById(id);
-      //     if (found) {
-      //       review = await reviewService.approve(id, user.email);
-      //       break;
-      //     }
-      //   }
-      //
-      // There is no check like: if (!user.tenantIds.includes(tenantId)) continue;
-      //
-      // The dynamic import of ReviewService fails in test (needs --experimental-vm-modules),
-      // so we verify the vulnerability by inspecting the route handler source.
-
+    // These tests verify the remediation at the code-structure level. The
+    // reviewRoutes.ts approve/reject handlers iterate over reviewServiceCache to
+    // locate a review, then must enforce the approve right WITHIN the review's
+    // owning tenant — not the global-max role. The remediation resolves that via
+    // canPerformActionInTenant(user, tenantId, "approve"). Behavioural coverage
+    // (real 403 + non-application) lives in reviewRoutes.test.ts; these guard the
+    // handler wiring against a regression to the global-role gate.
+    test("review approve endpoint enforces the approve right within the review's tenant", () => {
       const reviewRoutesSource = fs.readFileSync(
         path.join(__dirname, "..", "routes", "reviewRoutes.ts"),
         "utf8",
@@ -260,14 +250,14 @@ describeIfPostgres("SECURITY: Tenant isolation vulnerabilities", () => {
         reviewRoutesSource.indexOf("/:id/reject"),
       );
 
-      // EXPECTED (secure): The approve handler checks user.tenantIds or user.role
-      // before operating on a review from a different tenant
-      // ACTUAL (vulnerable): No tenantId check -- the loop iterates ALL cached
-      // review services regardless of user access
-      expect(approveSection).toMatch(/tenantIds|user\.tenantId/);
+      // EXPECTED (secure): the approve handler performs a tenant-scoped
+      // authorization check before applying a review from a given tenant.
+      // ACTUAL (vulnerable): no per-tenant check -- the loop approves any review
+      // found in any cached tenant using the user's global-max role.
+      expect(approveSection).toMatch(/canPerformActionInTenant\([^)]*"approve"\)/);
     });
 
-    test("review reject endpoint iterates ALL tenants without filtering by user access", () => {
+    test("review reject endpoint enforces the approve right within the review's tenant", () => {
       const reviewRoutesSource = fs.readFileSync(
         path.join(__dirname, "..", "routes", "reviewRoutes.ts"),
         "utf8",
@@ -275,14 +265,12 @@ describeIfPostgres("SECURITY: Tenant isolation vulnerabilities", () => {
 
       const rejectSection = reviewRoutesSource.substring(
         reviewRoutesSource.indexOf("/:id/reject"),
-        reviewRoutesSource.indexOf("// List all reviews") ||
-          reviewRoutesSource.indexOf("// Get pending reviews") ||
-          reviewRoutesSource.length,
+        reviewRoutesSource.indexOf("/bulk-approve"),
       );
 
-      // EXPECTED (secure): The reject handler checks tenantIds
-      // ACTUAL (vulnerable): No tenantId check in the loop
-      expect(rejectSection).toMatch(/tenantIds|user\.tenantId/);
+      // EXPECTED (secure): the reject handler performs a tenant-scoped check.
+      // ACTUAL (vulnerable): no per-tenant check in the loop.
+      expect(rejectSection).toMatch(/canPerformActionInTenant\([^)]*"approve"\)/);
     });
   });
 });

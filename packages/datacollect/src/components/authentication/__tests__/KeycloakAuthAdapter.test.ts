@@ -1,14 +1,22 @@
 /**
- * @jest-environment jsdom
+ * @jest-environment node
+ *
+ * Runs in the node environment (not jsdom) so `window` is absent by default and
+ * freely (re)assignable — the tests toggle `global.window` to exercise the
+ * adapter's frontend/backend environment detection. jsdom defines `window` as a
+ * non-configurable global that cannot be removed, which is the opposite of what
+ * these detection tests need.
  */
 import { KeycloakAuthAdapter } from "../KeycloakAuthAdapter";
 import OIDCClient from "../OIDCClient";
 import axios from "axios";
 import { AuthConfig, SingleAuthStorage, OIDCConfig } from "../../../interfaces/types";
+import { verifyOidcAccessToken } from "../verifyOidcAccessToken";
 
 // Mock dependencies
 jest.mock("../OIDCClient");
 jest.mock("axios");
+jest.mock("../verifyOidcAccessToken", () => ({ verifyOidcAccessToken: jest.fn() }));
 jest.mock("../../../utils/logger", () => ({
   createLogger: () => ({
     info: jest.fn(),
@@ -23,6 +31,7 @@ jest.mock("../../../utils/logger", () => ({
 
 const MockedOIDCClient = OIDCClient as jest.MockedClass<typeof OIDCClient>;
 const mockedAxios = axios as jest.Mocked<typeof axios>;
+const mockVerify = verifyOidcAccessToken as jest.Mock;
 
 describe("KeycloakAuthAdapter", () => {
   let adapter: KeycloakAuthAdapter;
@@ -116,7 +125,8 @@ describe("KeycloakAuthAdapter", () => {
       // Mock window object
       Object.defineProperty(global, 'window', {
         value: { localStorage: {} },
-        writable: true
+        writable: true,
+        configurable: true
       });
 
       const frontendAdapter = new KeycloakAuthAdapter(mockAuthStorage, authConfig);
@@ -263,66 +273,31 @@ describe("KeycloakAuthAdapter", () => {
       }
     });
 
-    it("should validate token on server side using userinfo", async () => {
-      // Ensure backend environment - window is undefined
+    it("delegates server-side validation to verifyOidcAccessToken with the tenant client binding", async () => {
       (global as unknown as Record<string, unknown>).window = undefined;
 
       const backendAdapter = new KeycloakAuthAdapter(mockAuthStorage, authConfig);
-      const token = "test-token";
-      const mockResponse = {
-        status: 200,
-        data: { sub: "user123", name: "Test User" },
-      };
+      mockVerify.mockResolvedValue(true);
 
-      mockedAxios.get.mockResolvedValue(mockResponse);
-
-      const result = await backendAdapter.validateToken(token);
+      const result = await backendAdapter.validateToken("server-token");
 
       expect(result).toBe(true);
-      expect(mockedAxios.get).toHaveBeenCalledWith(
-        `${authConfig.fields.authority}/protocol/openid-connect/userinfo`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          timeout: 5000,
-        }
-      );
+      expect(mockVerify).toHaveBeenCalledWith("server-token", {
+        authority: authConfig.fields.authority,
+        clientId: authConfig.fields.client_id,
+        audience: authConfig.fields.audience,
+      });
+      expect(mockedAxios.get).not.toHaveBeenCalled();
+      expect(mockOIDCClient.getStoredAuth).not.toHaveBeenCalled();
     });
 
-    it("should explicitly use backend validation when no window object exists", async () => {
-      // Ensure backend environment - window is undefined
+    it("returns false when verifyOidcAccessToken rejects the token (H33)", async () => {
       (global as unknown as Record<string, unknown>).window = undefined;
 
       const backendAdapter = new KeycloakAuthAdapter(mockAuthStorage, authConfig);
-      const token = "backend-test-token";
-      const mockResponse = {
-        status: 200,
-        data: { 
-          sub: "backend-user", 
-          name: "Backend User"
-        },
-      };
+      mockVerify.mockResolvedValue(false);
 
-      mockedAxios.get.mockResolvedValue(mockResponse);
-
-      const result = await backendAdapter.validateToken(token);
-
-      expect(result).toBe(true);
-      // Verify axios was called (server-side validation)
-      expect(mockedAxios.get).toHaveBeenCalledWith(
-        `${authConfig.fields.authority}/protocol/openid-connect/userinfo`,
-        expect.objectContaining({
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          timeout: 5000,
-        })
-      );
-      // Verify OIDC client was NOT called (not client-side validation)
-      expect(mockOIDCClient.getStoredAuth).not.toHaveBeenCalled();
+      expect(await backendAdapter.validateToken("foreign-token")).toBe(false);
     });
 
     it("should validate token on client side", async () => {
@@ -341,114 +316,30 @@ describe("KeycloakAuthAdapter", () => {
 
       expect(result).toBe(true);
       expect(mockOIDCClient.getStoredAuth).toHaveBeenCalled();
-      // Verify axios was NOT called (not server-side validation)
-      expect(mockedAxios.get).not.toHaveBeenCalled();
-    });
-
-    it("should return false for invalid token on server", async () => {
-      // Ensure backend environment - window is undefined
-      (global as unknown as Record<string, unknown>).window = undefined;
-
-      const backendAdapter = new KeycloakAuthAdapter(mockAuthStorage, authConfig);
-      const token = "invalid-token";
-
-      mockedAxios.get.mockRejectedValue(new Error("Unauthorized"));
-
-      const result = await backendAdapter.validateToken(token);
-
-      expect(result).toBe(false);
-    });
-
-    it("should return false when userinfo response has no sub", async () => {
-      // Ensure backend environment - window is undefined
-      (global as unknown as Record<string, unknown>).window = undefined;
-
-      const backendAdapter = new KeycloakAuthAdapter(mockAuthStorage, authConfig);
-      const token = "test-token";
-      const mockResponse = {
-        status: 200,
-        data: { name: "Test User" }, // Missing 'sub' field
-      };
-
-      mockedAxios.get.mockResolvedValue(mockResponse);
-
-      const result = await backendAdapter.validateToken(token);
-
-      expect(result).toBe(false);
-    });
-
-    it("should return false when userinfo response status is not 200", async () => {
-      // Ensure backend environment - window is undefined
-      (global as unknown as Record<string, unknown>).window = undefined;
-
-      const backendAdapter = new KeycloakAuthAdapter(mockAuthStorage, authConfig);
-      const token = "test-token";
-      const mockResponse = {
-        status: 401,
-        data: { error: "Unauthorized" },
-      };
-
-      mockedAxios.get.mockResolvedValue(mockResponse);
-
-      const result = await backendAdapter.validateToken(token);
-
-      expect(result).toBe(false);
+      expect(mockVerify).not.toHaveBeenCalled();
     });
 
     it("should return false for mismatched token on client", async () => {
-      // Mock frontend environment - ensure window exists with localStorage
       (global as unknown as Record<string, unknown>).window = { localStorage: {} };
 
       const frontendAdapter = new KeycloakAuthAdapter(mockAuthStorage, authConfig);
-      const token = "test-token";
 
       mockOIDCClient.getStoredAuth.mockResolvedValue({
         access_token: "different-token",
         expires_in: 3600,
       });
 
-      const result = await frontendAdapter.validateToken(token);
+      const result = await frontendAdapter.validateToken("test-token");
 
       expect(result).toBe(false);
     });
 
-    it("should call validateTokenServer when appType is backend", async () => {
-      // Ensure backend environment - window is undefined
-      (global as unknown as Record<string, unknown>).window = undefined;
-      
-      const backendAdapter = new KeycloakAuthAdapter(mockAuthStorage, authConfig);
-      const token = "test-token";
-      
-      // Mock successful server response
-      const mockResponse = {
-        status: 200,
-        data: { 
-          sub: "user123", 
-          name: "Test User"
-        },
-      };
-      mockedAxios.get.mockResolvedValue(mockResponse);
-      
-      const result = await backendAdapter.validateToken(token);
-      
-      expect(result).toBe(true);
-      // Verify server-side validation was used (axios called)
-      expect(mockedAxios.get).toHaveBeenCalledWith(
-        `${authConfig.fields.authority}/protocol/openid-connect/userinfo`,
-        expect.any(Object)
-      );
-      // Verify client-side validation was NOT used
-      expect(mockOIDCClient.getStoredAuth).not.toHaveBeenCalled();
-    });
-
     it("should call validateTokenClient when appType is frontend", async () => {
-      // Mock frontend environment - ensure window exists with localStorage
       (global as unknown as Record<string, unknown>).window = { localStorage: {} };
 
       const frontendAdapter = new KeycloakAuthAdapter(mockAuthStorage, authConfig);
       const token = "test-token";
 
-      // Mock client-side auth
       mockOIDCClient.getStoredAuth.mockResolvedValue({
         access_token: token,
         expires_in: 3600,
@@ -457,10 +348,8 @@ describe("KeycloakAuthAdapter", () => {
       const result = await frontendAdapter.validateToken(token);
 
       expect(result).toBe(true);
-      // Verify client-side validation was used
       expect(mockOIDCClient.getStoredAuth).toHaveBeenCalled();
-      // Verify server-side validation was NOT used
-      expect(mockedAxios.get).not.toHaveBeenCalled();
+      expect(mockVerify).not.toHaveBeenCalled();
     });
   });
 

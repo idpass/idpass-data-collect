@@ -28,6 +28,11 @@ import type {
   StudioFieldsResponse,
   Identifier,
 } from "./types";
+import type {
+  ChangeRequestCreate,
+  ChangeRequestResponse,
+  ChangeRequestUpdate,
+} from "./ChangeRequestTypes";
 
 /**
  * Thrown when a PATCH request fails with HTTP 412 Precondition Failed,
@@ -44,6 +49,30 @@ export class ConflictError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ConflictError";
+  }
+}
+
+/**
+ * Thrown by the V2 sync adapter when a previously-issued ChangeRequest is in
+ * a terminal-but-not-applied state (`rejected` or `revision`) for an entity
+ * the field worker is trying to push again.
+ *
+ * From DataCollect's perspective these states are terminal: the operator must
+ * `$reset` the CR on the OpenSPP side before DataCollect can re-submit a fresh
+ * CR for the same entity. The push retry loop must therefore NOT retry on
+ * this error — it represents an external-state mismatch, not a transient
+ * fault.
+ */
+export class ChangeRequestRevisionNeededError extends Error {
+  constructor(
+    public readonly entityGuid: string,
+    public readonly reference: string,
+    public readonly status: "rejected" | "revision",
+  ) {
+    super(
+      `Change request ${reference} for entity ${entityGuid} is in '${status}' state — operator must $reset on OpenSPP before re-push`,
+    );
+    this.name = "ChangeRequestRevisionNeededError";
   }
 }
 
@@ -631,6 +660,100 @@ export class OpenSppV2Client {
       return response.data;
     } catch (error) {
       throw this.handleApiError(error, "Failed to get Studio fields");
+    }
+  }
+
+  // ==================== ChangeRequest Operations ====================
+
+  /**
+   * Create a new ChangeRequest in `draft` status.
+   *
+   * @param payload The CR payload (type, requestType, registrant, ...).
+   * @returns The created CR with server-assigned `reference`.
+   */
+  async createChangeRequest(payload: ChangeRequestCreate): Promise<ChangeRequestResponse> {
+    await this.authenticate();
+
+    try {
+      const response = await this.httpClient.post<ChangeRequestResponse>(
+        "/api/v2/spp/ChangeRequest",
+        payload,
+        { headers: this.getAuthHeaders() },
+      );
+      return response.data;
+    } catch (error) {
+      throw this.handleApiError(error, "Failed to create change request");
+    }
+  }
+
+  /**
+   * Submit a draft ChangeRequest for operator review.
+   * Transitions status from `draft` to `pending`.
+   *
+   * @param reference The CR reference (e.g. `CR/2024/00001`).
+   * @returns The updated CR resource.
+   */
+  async submitChangeRequest(reference: string): Promise<ChangeRequestResponse> {
+    await this.authenticate();
+
+    try {
+      const response = await this.httpClient.post<ChangeRequestResponse>(
+        `/api/v2/spp/ChangeRequest/${encodeURIComponent(reference)}/$submit`,
+        {},
+        { headers: this.getAuthHeaders() },
+      );
+      return response.data;
+    } catch (error) {
+      throw this.handleApiError(error, "Failed to submit change request");
+    }
+  }
+
+  /**
+   * Read a ChangeRequest by reference.
+   *
+   * @param reference The CR reference.
+   * @returns The CR resource, or `null` if not found.
+   */
+  async getChangeRequest(reference: string): Promise<ChangeRequestResponse | null> {
+    await this.authenticate();
+
+    try {
+      const response = await this.httpClient.get<ChangeRequestResponse>(
+        `/api/v2/spp/ChangeRequest/${encodeURIComponent(reference)}`,
+        { headers: this.getAuthHeaders() },
+      );
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        return null;
+      }
+      throw this.handleApiError(error, "Failed to get change request");
+    }
+  }
+
+  /**
+   * Update the `detail` payload of a draft ChangeRequest.
+   * Only draft CRs can be updated server-side.
+   *
+   * @param reference The CR reference.
+   * @param payload The fields to update (only `detail` per V2 spec).
+   * @returns The updated CR resource.
+   */
+  async updateChangeRequest(
+    reference: string,
+    payload: ChangeRequestUpdate,
+  ): Promise<ChangeRequestResponse> {
+    await this.authenticate();
+
+    try {
+      const response = await this.httpClient.put<ChangeRequestResponse>(
+        `/api/v2/spp/ChangeRequest/${encodeURIComponent(reference)}`,
+        payload,
+        { headers: this.getAuthHeaders() },
+      );
+      return response.data;
+    } catch (error) {
+      throw this.handleApiError(error, "Failed to update change request");
     }
   }
 

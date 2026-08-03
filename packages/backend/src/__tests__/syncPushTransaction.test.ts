@@ -165,6 +165,46 @@ describeIfPostgres("Transactional Sync Push", () => {
     expect(names).toEqual(["Alice", "Bob", "Charlie"]);
   });
 
+  it("strips client-supplied externalId/identifierType from pushed events (H11/H30)", async () => {
+    const currentApp = requireApp();
+    const entityGuid = uuidv4();
+
+    const events: FormSubmission[] = [
+      {
+        guid: uuidv4(),
+        entityGuid,
+        type: "create-individual",
+        data: {
+          name: "Mallory",
+          // Attacker attempts to bind this entity to a victim's external record.
+          externalId: "victim-openspp-id",
+          identifierType: "national_id",
+        },
+        timestamp: "2024-01-01T00:00:01.000Z",
+        userId: "user-1",
+        syncLevel: SyncLevel.LOCAL,
+      },
+    ];
+
+    const response = await request(currentApp.httpServer)
+      .post("/api/sync/push")
+      .send({ events, configId: mockConfig.id })
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ status: "success", applied: 1 });
+
+    const manager = (await currentApp.appInstanceStore.getAppInstance(mockConfig.id))?.edm;
+    const entity = await manager?.getEntity(entityGuid);
+
+    // The forbidden fields must not reach the entity by any path.
+    expect(entity?.modified.externalId).toBeUndefined();
+    expect(entity?.modified.data.externalId).toBeUndefined();
+    expect(entity?.modified.data.identifierType).toBeUndefined();
+    // Legitimate data is preserved.
+    expect(entity?.modified.data.name).toBe("Mallory");
+  });
+
   it("should rollback all events when one fails", async () => {
     const currentApp = requireApp();
     const entityGuid1 = uuidv4();

@@ -1,3 +1,22 @@
+<!--
+ * Licensed to the Association pour la cooperation numerique (ACN) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ACN licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+-->
+
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -35,6 +54,11 @@ const allValid = computed(() => {
     validationResults.value.mapping &&
     validationResults.value.auth
   )
+})
+
+const isOpenSppAdapter = computed(() => {
+  const type = draftStore.draft.externalSync.type
+  return type === 'openspp-v1-adapter' || type === 'openspp-v2-adapter'
 })
 
 const syncTypeLabel = computed(() => {
@@ -242,6 +266,93 @@ const doSubmit = async () => {
             <span class="summary-field__value">
               {{ draftStore.draft.externalSync.fieldMappings.length }} mapping(s)
             </span>
+          </div>
+        </div>
+      </v-card>
+
+      <!-- Programs -->
+      <v-card
+        v-if="draftStore.draft.programs.length > 0 || isOpenSppAdapter"
+        class="summary-card"
+        variant="outlined"
+      >
+        <div class="summary-card__header" @click="goToStep('programs')">
+          <h3>Programs</h3>
+          <v-chip size="small" color="primary" variant="tonal">
+            {{ draftStore.draft.programs.length }}
+          </v-chip>
+          <v-spacer />
+          <v-btn icon="mdi-pencil" variant="text" size="small" />
+        </div>
+        <v-divider />
+        <div class="summary-card__body">
+          <div v-if="draftStore.draft.programs.length === 0" class="summary-empty">
+            No programs configured (mobile "Enroll in Program" picker will be hidden)
+          </div>
+          <div v-else>
+            <div
+              v-for="program in draftStore.draft.programs"
+              :key="program.id"
+              class="program-summary"
+            >
+              <v-icon icon="mdi-clipboard-list-outline" size="small" color="primary" />
+              <span class="program-summary__id">#{{ program.id }}</span>
+              <span>{{ program.name }}</span>
+              <v-chip v-if="program.code" size="x-small" variant="tonal">{{ program.code }}</v-chip>
+            </div>
+          </div>
+        </div>
+      </v-card>
+
+      <!-- Claim-169 -->
+      <v-card
+        v-if="isOpenSppAdapter && (draftStore.draft.claim169.enabled || draftStore.draft.claim169.trustedIssuers.length > 0)"
+        class="summary-card"
+        variant="outlined"
+      >
+        <div class="summary-card__header" @click="goToStep('claim169')">
+          <h3>Claim-169</h3>
+          <v-chip
+            size="small"
+            :color="draftStore.draft.claim169.enabled ? 'success' : 'grey'"
+            variant="tonal"
+          >
+            {{ draftStore.draft.claim169.enabled ? 'Enabled' : 'Disabled' }}
+          </v-chip>
+          <v-chip size="small" color="primary" variant="tonal">
+            {{ draftStore.draft.claim169.trustedIssuers.length }}
+          </v-chip>
+          <v-spacer />
+          <v-btn icon="mdi-pencil" variant="text" size="small" />
+        </div>
+        <v-divider />
+        <div class="summary-card__body">
+          <div v-if="draftStore.draft.claim169.trustedIssuers.length === 0" class="summary-empty">
+            No trusted issuers configured
+          </div>
+          <div v-else>
+            <div
+              v-for="(iss, index) in draftStore.draft.claim169.trustedIssuers"
+              :key="index"
+              class="claim169-issuer-summary"
+            >
+              <v-icon icon="mdi-shield-key-outline" size="small" color="primary" />
+              <span class="claim169-issuer-summary__id">{{ iss.issuerId }}</span>
+              <v-chip
+                v-if="iss.publicKey.ed25519"
+                size="x-small"
+                variant="tonal"
+              >
+                ed25519
+              </v-chip>
+              <v-chip
+                v-if="iss.publicKey.es256"
+                size="x-small"
+                variant="tonal"
+              >
+                es256
+              </v-chip>
+            </div>
           </div>
         </div>
       </v-card>
@@ -482,6 +593,35 @@ const doSubmit = async () => {
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) 0;
+}
+
+.program-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) 0;
+  font-size: var(--font-size-sm);
+}
+
+.program-summary__id {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--text-muted);
+  min-width: 44px;
+}
+
+.claim169-issuer-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) 0;
+  font-size: var(--font-size-sm);
+}
+
+.claim169-issuer-summary__id {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--text-main);
+  word-break: break-all;
+  flex: 1;
 }
 
 .submit-section {

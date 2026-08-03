@@ -1,3 +1,22 @@
+<!--
+ * Licensed to the Association pour la cooperation numerique (ACN) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ACN licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+-->
+
 <script setup lang="ts">
 import {
   createApp as createAppApi,
@@ -8,7 +27,6 @@ import {
 } from '@/api'
 import AppCard from '@/components/AppCard.vue'
 import OverviewPanel from '@/components/OverviewPanel.vue'
-import RecentActivity, { type ActivityItem } from '@/components/RecentActivity.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSnackBarStore } from '@/stores/snackBar'
 import { AxiosError } from 'axios'
@@ -59,20 +77,6 @@ const totalEntities = computed(() =>
   apps.value.reduce((sum, app) => sum + (app.entitiesCount || 0), 0),
 )
 const localOnlyCount = computed(() => Math.max(totalApps.value - syncEnabledCount.value, 0))
-
-// Generate recent activity from apps data
-const recentActivities = computed<ActivityItem[]>(() => {
-  // Create activity items from apps - this is a simplified version
-  // In a full implementation, this would come from a dedicated API endpoint
-  return apps.value.slice(0, 10).map((app, index) => ({
-    id: `activity-${app.id}-${index}`,
-    programId: app.id,
-    programName: app.name,
-    type: 'entity_created' as const,
-    description: `${app.entitiesCount || 0} entities in ${app.name}`,
-    timestamp: new Date(Date.now() - index * 3600000).toISOString(),
-  }))
-})
 
 let searchDebounce: ReturnType<typeof setTimeout> | undefined
 
@@ -235,10 +239,6 @@ const cancelDuplicateConfirm = () => {
   pendingImportJson.value = null
 }
 
-const handleActivityClick = (activity: ActivityItem) => {
-  router.push({ name: 'app-details', params: { id: activity.programId } })
-}
-
 onMounted(() => {
   fetchApps()
 })
@@ -390,7 +390,13 @@ onBeforeUnmount(() => {
 
         <!-- Programs Grid -->
         <div v-else class="apps-grid">
-          <AppCard v-for="app in apps" :key="app.id" :app="app" @app-deleted="fetchApps" />
+          <AppCard
+            v-for="(app, i) in apps"
+            :key="app.id"
+            :app="app"
+            :style="{ '--i': i }"
+            @app-deleted="fetchApps"
+          />
         </div>
 
         <!-- Pagination -->
@@ -415,11 +421,6 @@ onBeforeUnmount(() => {
           :is-loading="isLoading"
         />
 
-        <RecentActivity
-          :activities="recentActivities"
-          :is-loading="isLoading"
-          @activity-click="handleActivityClick"
-        />
       </aside>
     </div>
 
@@ -543,8 +544,10 @@ onBeforeUnmount(() => {
 }
 
 .empty-state__title {
+  font-family: var(--font-family-display);
   font-size: var(--font-size-xl);
   font-weight: 600;
+  letter-spacing: -0.015em;
   margin: 0 0 var(--spacing-sm);
   color: var(--text-main);
 }
@@ -567,6 +570,28 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: var(--spacing-md);
   margin-top: var(--spacing-md);
+}
+
+.apps-grid > * {
+  animation: card-rise 280ms ease-out both;
+  animation-delay: calc(min(var(--i, 0), 12) * 50ms);
+}
+
+@keyframes card-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .apps-grid > * {
+    animation: none;
+  }
 }
 
 .pagination {
