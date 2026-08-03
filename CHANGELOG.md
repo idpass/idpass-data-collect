@@ -5,6 +5,50 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-08-03
+
+Minor release on top of v2.0.0. Headline additions: opt-in bounded (per-device, area-scoped) sync, a conflict-resolution workflow, the Form.io builder migrated from an iframe to a native Vue component, an OpenSPP Change Request adapter, Claim-169 verifiable-credential support, plus a broad dependency modernization and security-hardening pass. No breaking API changes.
+
+### Added
+- **Bounded sync (opt-in, off by default)** — scope a program's sync by area and entity, enforced on both pull (area-filtered results with scope advertisement) and push (per-event validation with `207` partial responses). Includes per-device identity, out-of-scope entity purge on scope change, and per-device sync telemetry. Admin gains a sync-scope policy editor and per-assignment overrides; mobile shows a sync-scope badge. Gated behind the `scopedSync` feature flag (`VITE_FEATURE_SCOPED_SYNC`), **disabled by default**.
+- **Conflict resolution** — new `conflicts` table and `ConflictStore`, `GET`/resolve routes under `/api/conflicts`, and an admin Conflicts view with a resolve dialog.
+- **Form.io builder as a Vue component** — the form builder and designer no longer use an iframe; they render through a native Vue wrapper backed by `@formio/js`, scoped and themed to ID PASS, with custom biometric and Claim-169 builder components. Programs can now be **previewed read-only** and a **single form edited directly** from the program detail page without the full wizard.
+- **OpenSPP Change Request adapter** — push and pull via the OpenSPP Change Request workflow (`submitVia` option), program enrolment through change requests, and change-request status projected back to clients.
+- **OpenSPP program discovery** — discover and list external programs, an admin multi-select picker, and program-enrolment linkage; the programs editor is now discovery-driven.
+- **Claim-169 verifiable credentials** — verify-confirm-commit flow with issuer identity and expiry surfacing, an ed25519 trusted-issuer list held as tenant trust config, mobile QR scan that jumps directly to the verified individual, and a reference issuer portal.
+- **Reference/demo tooling** — OpenSPP API client provisioning script and demo credential/issuer utilities.
+
+### Changed
+- Editing or previewing a form no longer requires stepping through the whole configuration wizard.
+- Mobile home unified into a single filterable view with an enrolment section and streamlined detail layout.
+- Removed demo-only UI gates from the admin interface.
+
+### Fixed
+- Mobile: lock screen self-heals if biometric authentication stalls; content area respects safe-area insets under Capacitor 8 edge-to-edge rendering.
+- Documentation site build fixed after the Docusaurus 3.10 front-matter parsing change.
+- License-header tooling now covers `.vue` files and validates the complete header (previously only the first line), and all source `.vue` files carry the full header.
+
+### Security
+This release includes a broad security-hardening pass. Notable areas:
+- Authorization: tenant-scoped access enforced on review and configuration endpoints.
+- Input handling: server-managed fields sanitized at all event-ingestion boundaries; self-service submission disabled by default.
+- Authentication: OIDC token verification on sync routes; hardened login and rate-limiting posture.
+- Integrations & deployment: hardened OpenSPP identifier handling, public-artifact exposure, and container runtime.
+
+Upgrading to 2.1.0 is recommended. Where warranted, individual security advisories will be published separately once fixes are broadly available.
+
+### Dependencies
+- **Capacitor 6 → 8** — raises the mobile native build floor: Android compile/target SDK 36, AGP 8.9.1, Gradle 8.11.1; iOS 15.
+- vue-router 5, uuid 14 (ESM-only), js-yaml 5, and multer 2 (addresses upstream advisories).
+- Dev tooling: Jest 30, Vitest 4, and grouped minor/patch updates across the workspace.
+- Node engine raised to `>=22.12.0`.
+
+### Deployment
+- Coolify Compose: host port bindings dropped to allow multiple instances on one host; Postgres healthcheck waits on the system database to avoid racing `initdb`; deployment now requires strong `ADMIN_PASSWORD` / `JWT_SECRET` / `POSTGRES_PASSWORD` instead of falling back to weak defaults.
+
+### Documentation
+- Added a **Security** section to the documentation site: a security-policy overview and a "Report a vulnerability" page documenting the private disclosure process.
+
 ## [2.0.0-rc.2] - 2026-04-14
 
 Second release candidate for v2.0.0. Major additions: async external sync with progress tracking, sync status panel in admin UI, access control hardening, and DPGA compliance documentation.
