@@ -1,6 +1,6 @@
 {
   "name": "@idpass/adapter-openfn",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "OpenFn sync adapter for ID PASS DataCollect",
   "engines": {
     "node": ">=22.12.0"
