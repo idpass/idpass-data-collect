@@ -33,7 +33,7 @@
     "@idpass/adapter-openfn": "workspace:*",
     "@idpass/data-collect-core": "workspace:*",
     "bcrypt": "^5.1.1",
-    "body-parser": "^1.20.6",
+    "body-parser": "^2.3.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
