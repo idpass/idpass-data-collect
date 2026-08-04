@@ -10,16 +10,22 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-datacollect}
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./init-reset-dbs.sh:/docker-entrypoint-initdb.d/init-reset-dbs.sh:ro
+      # NOTE: no /docker-entrypoint-initdb.d bind mount here. Postgres creates
+      # the `${POSTGRES_DB}` database from the env var on first init, which is
+      # all the runtime needs. A single-file bind mount (used by the other
+      # compose files to also create `datacollect_test`) is unreliable on
+      # Coolify — it materialises the host source as a *directory*, so the
+      # entrypoint fails with "init-reset-dbs.sh: Is a directory" and Postgres
+      # never becomes healthy on a fresh volume.
     networks:
       - internal
     command: ["postgres"]
     healthcheck:
       # Target the always-present `postgres` system database rather than
-      # `${POSTGRES_DB}` — the user-facing DB may not exist yet while the
-      # /docker-entrypoint-initdb.d scripts are still running on first init,
-      # which would cause `pg_isready -d datacollect` to report unhealthy and
-      # break the sync-server `depends_on { condition: service_healthy }` gate.
+      # `${POSTGRES_DB}`, which does not exist until Postgres finishes creating
+      # it from POSTGRES_DB on first init — `pg_isready -d datacollect` would
+      # report unhealthy meanwhile and break the sync-server
+      # `depends_on { condition: service_healthy }` gate.
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-admin} -d postgres"]
       interval: 5s
       timeout: 3s
