@@ -61,7 +61,7 @@
     "vue": "^3.5.40",
     "vue-i18n": "^11.2.8",
     "vue-router": "^5.1.0",
-    "vuetify": "^3.11.8",
+    "vuetify": "^4.1.7",
     "xstate": "^5.32.5"
   },
   "devDependencies": {
