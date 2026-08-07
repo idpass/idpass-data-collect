@@ -42,18 +42,12 @@ function getMethodClass(method) {
 }
 
 function generateMarkdownContent(frontMatter, content) {
-  const frontMatterStr = Object.entries(frontMatter)
-    .map(([key, value]) => {
-      if (Array.isArray(value)) {
-        return `${key}:\n${value.map(item => `  - "${item}"`).join('\n')}`;
-      } else if (typeof value === 'string') {
-        return `${key}: "${value}"`;
-      } else {
-        return `${key}: ${value}`;
-      }
-    })
-    .join('\n');
-  
+  // Serialize front matter with js-yaml so values (titles/descriptions from the
+  // OpenAPI spec) are always correctly quoted/escaped. The previous hand-rolled
+  // `key: "${value}"` did not escape embedded quotes/special characters, which
+  // Docusaurus' stricter front-matter parser rejects.
+  const frontMatterStr = yaml.dump(frontMatter, { lineWidth: -1 }).trimEnd();
+
   return `---
 ${frontMatterStr}
 ---
@@ -356,7 +350,8 @@ function generateApiDocs() {
   }
   
   const specContent = fs.readFileSync(specPath, 'utf8');
-  const spec = yaml.load(specContent);
+  // js-yaml v5 defaults to YAML 1.2 CORE_SCHEMA; keep v1.1 semantics for the spec.
+  const spec = yaml.load(specContent, { schema: yaml.YAML11_SCHEMA });
   
   console.log(`📖 Loaded OpenAPI spec: ${spec.info.title} v${spec.info.version}`);
   

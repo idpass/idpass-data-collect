@@ -21,7 +21,7 @@ import { describe, expect, it } from 'vitest'
 import { loadBuilderAssets } from '../loadBuilderAssets'
 
 describe('loadBuilderAssets', () => {
-  it('injects no CDN stylesheets — all builder styling is bundled (#1059 Phase B)', () => {
+  it('injects no CDN stylesheets — all builder styling is bundled', () => {
     loadBuilderAssets()
     loadBuilderAssets()
     // Phase A injected Bootstrap 4 + Font Awesome <link> tags from CDNs, which

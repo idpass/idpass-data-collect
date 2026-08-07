@@ -44,7 +44,7 @@ export interface DeviceSyncSummaryRow {
 }
 
 /**
- * Persistence layer for per-device sync telemetry (OpenProject WP #947).
+ * Persistence layer for per-device sync telemetry.
  *
  * Backs the admin "Devices" view and per-device sync history. Writes are
  * fire-and-forget from the sync routes — they MUST NOT block sync if the

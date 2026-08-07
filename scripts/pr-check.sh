@@ -64,6 +64,11 @@ pnpm run build:datacollect || EXITCODE=$?
 [ "$EXITCODE" -eq 0 ] && pnpm --filter @idpass/data-collect-backend run validate-api || EXITCODE=$?
 [ "$EXITCODE" -eq 0 ] && pnpm run test || EXITCODE=$?
 [ "$EXITCODE" -eq 0 ] && pnpm run test:e2e:backend || EXITCODE=$?
+# Fetch the Chromium build pinned by the installed @playwright/test before the browser-based e2e
+# stages. Self-heals version drift after a Playwright bump so local runs match CI. CI installs the
+# same browser separately with --with-deps (apt, Ubuntu-only); that flag is omitted here so the
+# script stays cross-platform (rpm-ostree host / macOS) — the host already provides the launch libs.
+[ "$EXITCODE" -eq 0 ] && pnpm --filter @idpass/data-collect-admin exec playwright install chromium || EXITCODE=$?
 [ "$EXITCODE" -eq 0 ] && pnpm run test:e2e:admin || EXITCODE=$?
 [ "$EXITCODE" -eq 0 ] && pnpm run test:e2e:mobile || EXITCODE=$?
 [ "$EXITCODE" -eq 0 ] && pnpm run build || EXITCODE=$?

@@ -1,9 +1,9 @@
 {
   "name": "@idpass/adapter-mock",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Reference V2 HTTP sync adapter for the mock registry server",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.12.0"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,22 +18,20 @@
   },
   "dependencies": {
     "@idpass/data-collect-core": "workspace:*",
-    "axios": "^1.16.0",
-    "uuid": "^10.0.0",
-    "zod": "^4.3.6"
+    "axios": "^1.18.1",
+    "uuid": "^14.0.1",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
-    "@types/jest": "^29.5.14",
-    "@types/node": "^20.19.33",
-    "@types/uuid": "^10.0.0",
+    "@eslint/js": "^9.39.5",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.19.11",
     "eslint": "^9.27.0",
-    "globals": "^15.15.0",
-    "jest": "^29.7.0",
-    "jest-fetch-mock": "^3.0.3",
-    "ts-jest": "^29.4.6",
+    "globals": "^17.7.0",
+    "jest": "^30.0.0",
+    "ts-jest": "^29.4.11",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.55.0"
+    "typescript-eslint": "^8.64.0"
   },
   "license": "Apache-2.0",
   "publishConfig": {

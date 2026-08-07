@@ -811,6 +811,38 @@ describe("OpenSppV2SyncAdapter", () => {
       expect(eventApplierService.submitForm).not.toHaveBeenCalled();
     });
 
+    it("does not crash the pull on a non-string identifier system (malformed response)", async () => {
+      mockV2ClientImplementation.searchIndividuals.mockReset();
+      mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce({
+        data: [{
+          type: "Individual",
+          // Malformed: `system` is not a string. isOpenSppIdentifier must not throw.
+          identifier: [{ system: 12345 as unknown as string, value: "x" }],
+          name: { given: "Mal", family: "Formed" },
+        }],
+        meta: { total: 1, count: 1, offset: 0 },
+        links: { self: "/api/v2/spp/Individual" },
+      } as SearchResult<IndividualResource>);
+      mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce({
+        data: [],
+        meta: { total: 1, count: 0, offset: 1 },
+        links: { self: "/api/v2/spp/Individual" },
+      });
+      mockV2ClientImplementation.searchGroups.mockReset();
+      mockV2ClientImplementation.searchGroups.mockResolvedValue({
+        data: [],
+        meta: { total: 0, count: 0, offset: 0 },
+        links: { self: "/api/v2/spp/Group" },
+      });
+
+      adapter = new OpenSppV2SyncAdapter(eventStore, eventApplierService, config);
+      const result = await adapter.pullData();
+
+      // Record is skipped (no usable in-namespace identifier), pull does not throw.
+      expect(result.skipped).toBe(1);
+      expect(eventApplierService.submitForm).not.toHaveBeenCalled();
+    });
+
     it("pulls individuals with no identifiers at all", async () => {
       mockV2ClientImplementation.searchIndividuals.mockReset();
       mockV2ClientImplementation.searchIndividuals.mockResolvedValueOnce({

@@ -1,7 +1,7 @@
 # Form.io Builder (Vue)
 
 The Admin Form Builder is the in-app Vue component `src/components/FormioBuilder.vue`
-(migrated from the legacy `public/formio-builder.html` iframe in OP #1059).
+(migrated from the legacy `public/formio-builder.html` iframe).
 
 ## Styling
 
@@ -29,7 +29,7 @@ properties at compile time). Source of truth: `src/assets/design-tokens.css`
   `Formio.builder(...)`. They are builder-only definitions (schema +
   `builderInfo` palette entry + `editForm` settings); the admin never captures,
   so the default Field render is used. This replaces the legacy global
-  `public/biometric-component.js` loaded by the removed builder iframe (#1059).
+  `public/biometric-component.js` loaded by the removed builder iframe.
 - **Mobile runtime** components live in `packages/mobile/src/formio/components/`
   (`BiometricCapture.ts`, `Claim169Scanner.ts`) — they implement the actual
   capture/scan behaviour. Note mobile uses `formiojs` (v4) while admin uses

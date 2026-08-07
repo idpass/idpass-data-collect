@@ -398,7 +398,7 @@ If you encounter issues not covered in this guide:
 
 ## Next Steps
 
-<!-- - [First App Tutorial](../getting-started/#your-first-application) - Build your first application -->
+{/* - [First App Tutorial](../getting-started/#your-first-application) - Build your first application */}
 - [Configuration](configuration.md) - Learn more about configuration
 - [Packages](../../packages) - Explore the packages
 - [Architecture](../../architecture/) - Architecture Overview

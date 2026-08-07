@@ -40,6 +40,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      path: '/collection-programs/:id/forms/:formIndex/edit',
+      name: 'form-edit',
+      component: () => import('../views/FormEditView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/collection-programs/:id/entity/:guid',
       name: 'entity-details',
       component: () => import('../views/EntityDetailView.vue'),
@@ -63,7 +69,7 @@ const router = createRouter({
       component: () => import('../views/DevicesView.vue'),
       props: true,
       meta: { requiresAuth: true, featureFlag: 'scopedSync' as const },
-      // OP #947 Phase 4 — gate per-device sync UI behind VITE_FEATURE_SCOPED_SYNC.
+      // Gate per-device sync UI behind VITE_FEATURE_SCOPED_SYNC.
       // When the flag is off, redirect to home rather than render the view.
       beforeEnter: (_to, _from, next) => {
         if (useFeatureFlag('scopedSync').value) {

@@ -20,9 +20,10 @@
 import { Router } from "express";
 import { FormSubmission, ReviewService, EventApplierService } from "@idpass/data-collect-core";
 import { authenticateJWT, AuthenticatedRequest, validateTenantAccess } from "../middlewares/authentication";
-import { requireAction, verifyRoleFromDatabase } from "../middlewares/rbac";
+import { requireAction, verifyRoleFromDatabase, canPerformActionInTenant } from "../middlewares/rbac";
 import { asyncHandler } from "../middlewares/errorHandlers";
-import { AppInstanceStore, Role, UserStore } from "../types";
+import { stripServerManagedEventFields } from "../utils/eventSanitize";
+import { AppInstanceStore, UserStore } from "../types";
 import { ReviewStore } from "../stores/ReviewStore";
 import { createLogger } from "../utils/logger";
 
@@ -64,7 +65,10 @@ export async function getReviewService(
     // Create a thin adapter that wraps EDM.submitForm into an EventApplierService-like interface.
     {
       submitForm: async (formData: FormSubmission) => {
-        return appInstance.edm.submitForm(formData);
+        // Review submissions are client-originated; strip server-managed
+        // identifier fields before applying on approval so an approved review
+        // can't re-inject a confused-deputy externalId (#41).
+        return appInstance.edm.submitForm(stripServerManagedEventFields(formData));
       },
     } as InstanceType<typeof EventApplierService>,
   );
@@ -135,9 +139,20 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
     requireAction("create"),
     asyncHandler(async (req, res) => {
       const { tenantId, formData } = req.body;
+      const user = (req as AuthenticatedRequest).user;
 
       if (!tenantId || !formData) {
         return res.status(400).json({ error: "Missing tenantId or formData" });
+      }
+
+      // Enforce the create right WITHIN the target tenant (from the request body),
+      // not the user's global-max role. requireAction("create") above only checks
+      // the aggregate role, so a user who is an enumerator in tenant A but a viewer
+      // in tenant B would otherwise pass it and submit a form that gets applied to
+      // B's entities (auto-approve) or queued against B.
+      if (!canPerformActionInTenant(user, tenantId, "create")) {
+        log.warn({ userId: user.id, tenantId }, "Denied review submit: no create right in tenant");
+        return res.status(403).json({ error: "Forbidden: Insufficient permission for this tenant" });
       }
 
       const reviewService = await getReviewService(appInstanceStore, reviewStore, tenantId);
@@ -178,16 +193,27 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
       const { id } = req.params;
       const user = (req as AuthenticatedRequest).user;
 
-      // Find the review across tenant review services the user has access to
-      const userTenantIds = user.tenantIds ?? [];
+      // Resolve the review's owning tenant FIRST, then enforce the approve right
+      // WITHIN that tenant. The requireAction("approve") gate above uses the
+      // user's global-max role, which is not tenant-scoped: a user who is an
+      // approver in tenant A but a viewer in tenant B would otherwise pass it and
+      // approve B's review, applying a FormSubmission to B's entities.
       let review = null;
+      let forbidden = false;
       for (const [tenantId, reviewService] of reviewServiceCache) {
-        if (user.role !== Role.ADMIN && !userTenantIds.includes(tenantId)) continue;
         const found = reviewService.getReviewById(id);
-        if (found) {
-          review = await reviewService.approve(id, user.email);
+        if (!found) continue;
+        if (!canPerformActionInTenant(user, tenantId, "approve")) {
+          forbidden = true;
+          log.warn({ userId: user.id, tenantId }, "Denied review approval: no approve right in tenant");
           break;
         }
+        review = await reviewService.approve(id, user.email);
+        break;
+      }
+
+      if (forbidden) {
+        return res.status(403).json({ error: "Forbidden: Insufficient permission for this tenant" });
       }
 
       if (!review) {
@@ -221,15 +247,24 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
         return res.status(400).json({ error: "Missing rejection reason" });
       }
 
-      const userTenantIds = user.tenantIds ?? [];
+      // Same tenant-scoped enforcement as /approve — reject also resolves the
+      // review's owning tenant and requires the approve right within it.
       let review = null;
+      let forbidden = false;
       for (const [tenantId, reviewService] of reviewServiceCache) {
-        if (user.role !== Role.ADMIN && !userTenantIds.includes(tenantId)) continue;
         const found = reviewService.getReviewById(id);
-        if (found) {
-          review = await reviewService.reject(id, user.email, reason);
+        if (!found) continue;
+        if (!canPerformActionInTenant(user, tenantId, "approve")) {
+          forbidden = true;
+          log.warn({ userId: user.id, tenantId }, "Denied review rejection: no approve right in tenant");
           break;
         }
+        review = await reviewService.reject(id, user.email, reason);
+        break;
+      }
+
+      if (forbidden) {
+        return res.status(403).json({ error: "Forbidden: Insufficient permission for this tenant" });
       }
 
       if (!review) {
@@ -267,21 +302,42 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
       let totalFailed = 0;
       const allErrors: Array<{ reviewId: string; error: string }> = [];
 
-      // Group review IDs by their tenant's review service, filtered by user access
-      const userTenantIds = user.tenantIds ?? [];
+      // Per-tenant authorization. A bulk call may span several tenants;
+      // the user is resolved against EACH review's owning tenant independently.
+      // Semantics: approve only the reviews in tenants where the user holds the
+      // approve right; silently skip reviews in tenants where they do not. The
+      // batch is only rejected (403) when the user is unauthorized for EVERY
+      // tenant that owns a matched review — otherwise partial success is returned.
+      let authorizedTenantMatched = false;
+      let unauthorizedTenantMatched = false;
       for (const [tenantId, reviewService] of reviewServiceCache) {
-        if (user.role !== Role.ADMIN && !userTenantIds.includes(tenantId)) continue;
         const tenantReviewIds = reviewIds.filter((rid: string) => {
           const review = reviewService.getReviewById(rid);
           return review !== null;
         });
 
-        if (tenantReviewIds.length > 0) {
-          const result = await reviewService.bulkApprove(tenantReviewIds, user.email);
-          totalApproved += result.approved;
-          totalFailed += result.failed;
-          allErrors.push(...result.errors);
+        if (tenantReviewIds.length === 0) continue;
+
+        if (!canPerformActionInTenant(user, tenantId, "approve")) {
+          unauthorizedTenantMatched = true;
+          log.warn(
+            { userId: user.id, tenantId, count: tenantReviewIds.length },
+            "Skipped bulk-approve for tenant: no approve right",
+          );
+          continue;
         }
+
+        authorizedTenantMatched = true;
+        const result = await reviewService.bulkApprove(tenantReviewIds, user.email);
+        totalApproved += result.approved;
+        totalFailed += result.failed;
+        allErrors.push(...result.errors);
+      }
+
+      if (!authorizedTenantMatched && unauthorizedTenantMatched) {
+        return res
+          .status(403)
+          .json({ error: "Forbidden: Insufficient permission for the requested tenant(s)" });
       }
 
       res.json({ approved: totalApproved, failed: totalFailed, errors: allErrors });
@@ -319,6 +375,17 @@ export function createReviewRoutes(appInstanceStore: AppInstanceStore, reviewSto
     asyncHandler(async (req, res) => {
       const { tenantId, eventType } = req.params;
       const { policy, requiredRole, externalAdapterType } = req.body;
+      const user = (req as AuthenticatedRequest).user;
+
+      // Enforce the manage-config right WITHIN the target tenant (the :tenantId
+      // path param), not the user's global-max role. requireAction("manage-config")
+      // above only checks the aggregate role, so a user who is a system-admin in
+      // tenant A but lower-privileged in tenant B could otherwise rewrite B's review
+      // config on the strength of their privilege in A.
+      if (!canPerformActionInTenant(user, tenantId, "manage-config")) {
+        log.warn({ userId: user.id, tenantId }, "Denied review config change: no manage-config right in tenant");
+        return res.status(403).json({ error: "Forbidden: Insufficient permission for this tenant" });
+      }
 
       if (!policy) {
         return res.status(400).json({ error: "Missing policy" });

@@ -25,49 +25,110 @@ import { createLogger } from "../utils/logger";
 import multer from "multer";
 import path from "path";
 import fs from "fs/promises";
+import net from "net";
+import dns from "dns/promises";
 import { OdooClient } from "@idpass/adapter-openspp";
 
 const log = createLogger("openspp-fields");
 
 /**
- * Checks whether a URL targets a private/internal IP range or cloud metadata endpoint.
- * Used to prevent SSRF attacks via the /fetch endpoint.
+ * Loopback / private / link-local / reserved ranges that an operator-supplied
+ * external URL must never resolve to. Used to prevent SSRF via the OpenSPP
+ * connection-test / field-fetch endpoints.
  */
-function isPrivateOrMetadataUrl(urlString: string): boolean {
+const ssrfBlockList = (() => {
+  const bl = new net.BlockList();
+  // IPv4: this-network, RFC1918, CGNAT, loopback, link-local (incl. cloud
+  // metadata 169.254.169.254), IETF protocol assignments, benchmarking,
+  // multicast, broadcast.
+  bl.addSubnet("0.0.0.0", 8, "ipv4");
+  bl.addSubnet("10.0.0.0", 8, "ipv4");
+  bl.addSubnet("100.64.0.0", 10, "ipv4");
+  bl.addSubnet("127.0.0.0", 8, "ipv4");
+  bl.addSubnet("169.254.0.0", 16, "ipv4");
+  bl.addSubnet("172.16.0.0", 12, "ipv4");
+  bl.addSubnet("192.0.0.0", 24, "ipv4");
+  bl.addSubnet("192.168.0.0", 16, "ipv4");
+  bl.addSubnet("198.18.0.0", 15, "ipv4");
+  bl.addSubnet("224.0.0.0", 4, "ipv4");
+  bl.addAddress("255.255.255.255", "ipv4");
+  // IPv6: unspecified, loopback, unique-local (fc00::/7), link-local
+  // (fe80::/10), multicast (ff00::/8). IPv4-mapped addresses are handled in
+  // isBlockedIp by extracting the embedded IPv4 (a mapped /96 rule here would
+  // make net.BlockList match every IPv4 address).
+  bl.addAddress("::", "ipv6");
+  bl.addAddress("::1", "ipv6");
+  bl.addSubnet("fc00::", 7, "ipv6");
+  bl.addSubnet("fe80::", 10, "ipv6");
+  bl.addSubnet("ff00::", 8, "ipv6");
+  return bl;
+})();
+
+/** Extract the embedded IPv4 from an IPv4-mapped IPv6 address, else null. */
+function mappedIpv4(v6: string): string | null {
+  const s = v6.toLowerCase();
+  const dotted = s.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+  if (dotted) return dotted[1];
+  const hex = s.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (hex) {
+    const hi = parseInt(hex[1], 16);
+    const lo = parseInt(hex[2], 16);
+    return `${(hi >> 8) & 255}.${hi & 255}.${(lo >> 8) & 255}.${lo & 255}`;
+  }
+  return null;
+}
+
+function isBlockedIp(ip: string): boolean {
+  const family = net.isIP(ip);
+  if (family === 4) return ssrfBlockList.check(ip, "ipv4");
+  if (family === 6) {
+    const mapped = mappedIpv4(ip);
+    if (mapped && net.isIP(mapped) === 4) return ssrfBlockList.check(mapped, "ipv4");
+    return ssrfBlockList.check(ip, "ipv6");
+  }
+  return true; // not a parseable IP → block
+}
+
+/**
+ * SSRF guard for outbound requests to an operator-supplied external URL.
+ * Blocks non-HTTP(S) schemes, loopback/private/link-local/reserved IPv4 and
+ * IPv6 targets (incl. cloud metadata and IPv4-mapped IPv6), and resolves
+ * hostnames so a name pointing at an internal address is rejected (best-effort
+ * DNS-rebinding mitigation; callers also pass `redirect: "error"` to `fetch` so
+ * a 3xx to an internal host is not followed). Alternate IPv4 encodings
+ * (decimal/octal/hex) are normalised to dotted-quad by the URL parser before
+ * the range check. Returns true when the URL should be BLOCKED.
+ */
+export async function isBlockedExternalUrl(urlString: string): Promise<boolean> {
   let parsed: URL;
   try {
     parsed = new URL(urlString);
   } catch {
-    return true; // Invalid URLs are blocked
+    return true; // invalid URL → block
   }
 
-  const hostname = parsed.hostname.toLowerCase();
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return true; // only http(s) is allowed
+  }
 
-  // Block cloud metadata endpoints
-  if (hostname === "169.254.169.254" || hostname === "metadata.google.internal") {
+  const host = parsed.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (host === "" || host === "localhost" || host.endsWith(".localhost") || host === "metadata.google.internal") {
     return true;
   }
 
-  // Block localhost
-  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]") {
-    return true;
+  // Literal IP (any encoding is already normalised by the URL parser).
+  if (net.isIP(host)) {
+    return isBlockedIp(host);
   }
 
-  // Block private IP ranges
-  const ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (ipv4Match) {
-    const [, a, b] = ipv4Match.map(Number);
-    // 10.0.0.0/8
-    if (a === 10) return true;
-    // 172.16.0.0/12
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    // 192.168.0.0/16
-    if (a === 192 && b === 168) return true;
-    // 0.0.0.0
-    if (a === 0) return true;
+  // Hostname: resolve and block if ANY resolved address is internal.
+  try {
+    const records = await dns.lookup(host, { all: true });
+    if (records.length === 0) return true;
+    return records.some((r) => isBlockedIp(r.address));
+  } catch {
+    return true; // unresolvable → block
   }
-
-  return false;
 }
 
 export interface ParsedOpenSppField {
@@ -377,7 +438,7 @@ export function createOpenSppFieldRoutes(): Router {
         throw new AppError("URL, database, username, and password are required", 400);
       }
 
-      if (isPrivateOrMetadataUrl(url)) {
+      if (await isBlockedExternalUrl(url)) {
         throw new AppError("URLs targeting private or internal networks are not allowed", 400);
       }
 
@@ -426,7 +487,7 @@ export function createOpenSppFieldRoutes(): Router {
         throw new AppError("baseUrl, clientId, and clientSecret are required", 400);
       }
 
-      if (isPrivateOrMetadataUrl(baseUrl)) {
+      if (await isBlockedExternalUrl(baseUrl)) {
         throw new AppError("URLs targeting private or internal networks are not allowed", 400);
       }
 
@@ -434,6 +495,7 @@ export function createOpenSppFieldRoutes(): Router {
 
       try {
         const response = await fetch(tokenUrl, {
+          redirect: "error",
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -484,7 +546,7 @@ export function createOpenSppFieldRoutes(): Router {
         throw new AppError("baseUrl, clientId, and clientSecret are required", 400);
       }
 
-      if (isPrivateOrMetadataUrl(baseUrl)) {
+      if (await isBlockedExternalUrl(baseUrl)) {
         throw new AppError("URLs targeting private or internal networks are not allowed", 400);
       }
 
@@ -495,6 +557,7 @@ export function createOpenSppFieldRoutes(): Router {
       let accessToken: string;
       try {
         const tokenResponse = await fetch(tokenUrl, {
+          redirect: "error",
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -540,6 +603,7 @@ export function createOpenSppFieldRoutes(): Router {
           }
 
           const fieldsResponse = await fetch(`${base}/api/v2/spp/Studio/fields?${params}`, {
+            redirect: "error",
             headers: {
               Authorization: `Bearer ${accessToken}`,
               "Content-Type": "application/json",

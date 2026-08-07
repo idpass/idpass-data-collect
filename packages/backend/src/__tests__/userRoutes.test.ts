@@ -19,7 +19,7 @@
 
 /**
  * Validates that {@link createUserRoutes} rejects deliver-nothing
- * `syncScopeOverride` payloads (#947 Phase 4 fixup).
+ * `syncScopeOverride` payloads.
  *
  * The lenient core schema (`syncScopePolicySchema`) accepts empty arrays for
  * round-tripping legacy/seed payloads, but admin-facing routes use the strict
@@ -78,7 +78,7 @@ function buildApp(userStore: UserStore): express.Express {
   return app;
 }
 
-describe("userRoutes — strict syncScopeOverride Zod (#947 P4 fixup)", () => {
+describe("userRoutes — strict syncScopeOverride Zod", () => {
   beforeAll(() => {
     process.env.JWT_SECRET = JWT_SECRET;
   });

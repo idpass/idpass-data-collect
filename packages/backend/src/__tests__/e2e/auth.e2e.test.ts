@@ -171,7 +171,7 @@ describeIfPostgres("Auth e2e", () => {
       expect(loginRes.status).toBe(401);
     });
 
-    it("POST /api/users persists syncScopeOverride on a role assignment (#947)", async () => {
+    it("POST /api/users persists syncScopeOverride on a role assignment", async () => {
       const email = `scope-${Date.now()}@test.lan`;
       const res = await request(app.httpServer)
         .post("/api/users")

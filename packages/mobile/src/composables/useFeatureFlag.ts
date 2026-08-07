@@ -30,8 +30,8 @@ import { computed, type ComputedRef } from 'vue'
 export type FeatureFlagName = 'scopedSync'
 
 const FLAG_DEFAULTS: Record<FeatureFlagName, boolean> = {
-  // OP #947 — bounded sync scope UI (sync-screen scope badge). Default-on
-  // per Phase 4-D spec.
+  // Bounded sync scope UI (sync-screen scope badge). Default-on
+  // per spec.
   scopedSync: true,
 }
 

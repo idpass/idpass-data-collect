@@ -50,6 +50,48 @@ type ConflictResolutionResult =
   | { resolution: "remote-wins"; baseEntity?: EntityDoc };
 
 /**
+ * Options controlling how an event is applied.
+ *
+ * These carry the CALLER's authorization context into the apply path. They are
+ * NOT persisted on the event — they only gate the write.
+ */
+export interface SubmitFormOptions {
+  /**
+   * When provided, enables RESTRICTED mode for `create-group`/`update-group`
+   * member sub-writes (horizontal authorization guard on member GUIDs).
+   *
+   * A member entry whose `guid` resolves to a PRE-EXISTING entity is only
+   * accepted when that guid is present in this set (the caller's own group,
+   * plus its current members). Member entries whose guid does not resolve to
+   * any existing entity are always allowed (creating a brand-new member).
+   *
+   * Omit this option entirely for TRUSTED, UNBOUNDED callers (e.g. admin
+   * sync) — member writes are then unrestricted, preserving legacy sync
+   * behaviour.
+   */
+  authorizedMemberGuids?: string[];
+
+  /**
+   * Async predicate variant of the member sub-write guard, for the
+   * `/api/sync/push` path.
+   *
+   * A field worker's sync scope is NOT a finite list of GUIDs — it is a
+   * PREDICATE over the member entity (its `area_id` and/or type must fall
+   * inside the caller's effective scope). When provided, this callback is
+   * consulted for any member entry whose `guid` resolves to a PRE-EXISTING
+   * entity that is not already covered by {@link authorizedMemberGuids} (nor
+   * the group's own guid / current members). It must resolve `true` iff the
+   * member entity is inside the caller's scope. Member entries whose guid does
+   * not resolve to any existing entity are always allowed (brand-new member)
+   * and the callback is NOT consulted for them.
+   *
+   * Supplying either this callback or {@link authorizedMemberGuids} enables
+   * RESTRICTED mode. Omit both for unbounded callers.
+   */
+  isMemberGuidAuthorized?(guid: string): Promise<boolean>;
+}
+
+/**
  * Service responsible for applying events (FormSubmissions) to entities in the event sourcing system.
  *
  * The EventApplierService is the core component that transforms events into entity state changes.
@@ -325,7 +367,7 @@ export class EventApplierService {
    * });
    * ```
    */
-  async submitForm(formDataParam: FormSubmission): Promise<EntityDoc | null> {
+  async submitForm(formDataParam: FormSubmission, options?: SubmitFormOptions): Promise<EntityDoc | null> {
     try {
       const formData = cloneDeep(formDataParam);
       validateFormSubmission(formData);
@@ -345,7 +387,7 @@ export class EventApplierService {
 
       const eventGuid = await this.eventStore.saveEvent(formData);
 
-      const updatedEntity = await this.applyEventToEntity(formData, eventGuid, entityPair);
+      const updatedEntity = await this.applyEventToEntity(formData, eventGuid, entityPair, options);
 
       // Enqueue the entity for asynchronous duplicate detection so the write
       // path is never blocked by the O(n) entity scan.
@@ -404,6 +446,7 @@ export class EventApplierService {
     formData: FormSubmission,
     eventGuid: string,
     entityPair: EntityPair | null,
+    options?: SubmitFormOptions,
   ): Promise<EntityDoc | null> {
     const conflictResult = await this.handleIncomingConflict(entityPair, formData, eventGuid);
 
@@ -421,6 +464,7 @@ export class EventApplierService {
         eventGuid,
         baseEntity as GroupDoc | undefined,
         formData,
+        options,
       );
     } else if (formData.type === "create-individual" || formData.type === "update-individual") {
       // log.debug(`Creating or updating individual: ${JSON.stringify(formData)}`);
@@ -702,6 +746,7 @@ export class EventApplierService {
     eventGuid: string,
     existingGroup: GroupDoc | undefined,
     formData: FormSubmission,
+    options?: SubmitFormOptions,
   ): Promise<GroupDoc> {
     // log.debug(
     //   `Creating or updating group: ${JSON.stringify({
@@ -728,6 +773,39 @@ export class EventApplierService {
 
     if (Array.isArray(formData.data?.members)) {
       // log.debug(`Processing members: ${JSON.stringify(formData.data.members)}`);
+      // Horizontal authorization guard: when the caller supplies an
+      // authorization scope (RESTRICTED mode — least-trusted callers such as
+      // self-service, or bounded field-worker `/api/sync/push`), a member entry
+      // may only write to a PRE-EXISTING entity if that entity is inside the
+      // caller's scope. The group's own guid and its current members are always
+      // in scope. Unknown guids (new members) are always allowed.
+      //
+      // Scope is expressed two ways, both handled by `isMemberAuthorized`:
+      //   - `authorizedMemberGuids` — a finite GUID set (self-service).
+      //   - `isMemberGuidAuthorized` — an async predicate over the member
+      //     entity, for scopes that are area/type membership rather than a
+      //     finite list (sync-push).
+      const restrictMembers =
+        options?.authorizedMemberGuids !== undefined || options?.isMemberGuidAuthorized !== undefined;
+      const authorizedMemberGuids = new Set<string>(options?.authorizedMemberGuids ?? []);
+      authorizedMemberGuids.add(group.guid);
+      for (const existingMemberId of group.memberIds) {
+        authorizedMemberGuids.add(existingMemberId);
+      }
+      // Resolves true iff a PRE-EXISTING member guid is inside scope. The set
+      // (own guid + current members + explicit allow-list) is checked first;
+      // otherwise the async predicate decides. Callers pass at most one of the
+      // two mechanisms, but both are honoured so the guard stays single-sourced.
+      const isMemberAuthorized = async (memberGuid: string): Promise<boolean> => {
+        if (authorizedMemberGuids.has(memberGuid)) {
+          return true;
+        }
+        if (options?.isMemberGuidAuthorized) {
+          return await options.isMemberGuidAuthorized(memberGuid);
+        }
+        return false;
+      };
+
       const newMemberIds = await Promise.all(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         formData.data.members.map(async (member: Record<string, any>) => {
@@ -739,6 +817,12 @@ export class EventApplierService {
 
           if (memberData && memberData.type === "group") {
             const existingPair = await this.entityStore.getEntity(memberGuid);
+            if (restrictMembers && existingPair && !(await isMemberAuthorized(memberGuid))) {
+              throw new AppError(
+                "UNAUTHORIZED_MEMBER",
+                "Member references an entity outside the caller's authorization scope",
+              );
+            }
             const existingGroup = existingPair?.modified as GroupDoc | undefined;
             const subGroup = await this.createOrUpdateGroup(eventGuid, existingGroup, {
               guid: uuidv4(),
@@ -752,6 +836,12 @@ export class EventApplierService {
             return subGroup.guid;
           } else if (memberData) {
             const existingPair = await this.entityStore.getEntity(memberGuid);
+            if (restrictMembers && existingPair && !(await isMemberAuthorized(memberGuid))) {
+              throw new AppError(
+                "UNAUTHORIZED_MEMBER",
+                "Member references an entity outside the caller's authorization scope",
+              );
+            }
             const existingIndividual = existingPair?.modified as IndividualDoc | undefined;
             const individualDoc = await this.createOrUpdateIndividual(eventGuid, existingIndividual, {
               guid: uuidv4(),

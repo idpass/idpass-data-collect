@@ -24,8 +24,7 @@ import { UserStore } from "../types";
 import { SyncTelemetryStore } from "../stores/SyncTelemetryStore";
 
 /**
- * Admin-only route exposing per-device sync telemetry summaries
- * (OpenProject WP #947).
+ * Admin-only route exposing per-device sync telemetry summaries.
  *
  * GET /api/admin/devices?configId=<tenantId>
  *   - 200 + JSON array of DeviceSyncSummaryRow for the tenant

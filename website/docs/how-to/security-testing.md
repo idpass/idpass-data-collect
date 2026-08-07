@@ -5,7 +5,7 @@ against DataCollect: the live API attack probes, the durable regression tests
 they became, and the static scanners. It also lists the third-party
 cybersecurity "skills" the assessment drew on and how to install them.
 
-:::warning Authorized targets only
+:::warning[Authorized targets only]
 Only run the offensive probes and scanners against an instance you own or are
 explicitly authorized to test — a local stack or your own staging. Never point
 them at another party's deployment.

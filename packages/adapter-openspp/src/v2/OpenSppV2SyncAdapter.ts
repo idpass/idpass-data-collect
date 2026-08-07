@@ -89,7 +89,7 @@ const STUDIO_INDIVIDUAL_EXTENSION_KEY = "urn:openspp:extension:studio-individual
  * (i.e. a `create-*` CR). OpenSPP will assign the real identifier when the CR
  * is `$apply`-ed.
  *
- * v1 limitation (#948): some OpenSPP deployments may reject CR payloads whose
+ * v1 limitation: some OpenSPP deployments may reject CR payloads whose
  * `registrant` does not refer to an existing record. If your registry rejects
  * this placeholder, override the strategy in a successor adapter — see README.
  */
@@ -854,9 +854,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     if (typeof storedExternalId !== "string" || storedExternalId.length === 0) {
       return null;
     }
-    const system = this.identifierType.startsWith(this.identifierNamespace)
-      ? this.identifierType
-      : `${this.identifierNamespace}${this.identifierType}`;
+    const system = this.ensureNamespace(this.identifierType);
     const id = this.getClient().formatIdentifier(system, storedExternalId);
     try {
       const found = await this.getClient().getIndividual(id);
@@ -1000,9 +998,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     if (typeof storedExternalId !== "string" || storedExternalId.length === 0) {
       return null;
     }
-    const system = this.groupIdentifierType.startsWith(this.identifierNamespace)
-      ? this.groupIdentifierType
-      : `${this.identifierNamespace}${this.groupIdentifierType}`;
+    const system = this.ensureNamespace(this.groupIdentifierType);
     const id = this.getClient().formatIdentifier(system, storedExternalId);
     try {
       const found = await this.getClient().getGroup(id);
@@ -1020,7 +1016,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
    * writing directly. The actual entity write is deferred to the OpenSPP
    * operator's `$apply` step and flows back via pull.
    *
-   * v1 mapping (#948): `add-member` / `remove-member` events on members of a
+   * v1 mapping: `add-member` / `remove-member` events on members of a
    * group are NOT distinguished here — they show up as plain
    * `update-individual` / `update-group` and map to `edit_*` codes. Granular
    * member-CR mapping is deferred.
@@ -1450,18 +1446,25 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
     const formCode =
       typeof data.identifierType === "string" && data.identifierType.length > 0 ? data.identifierType : undefined;
     const defaultCode = entityType === "group" ? this.groupIdentifierType : this.identifierType;
-    const code = formCode || defaultCode;
-    if (code.startsWith(this.identifierNamespace)) {
-      return code;
-    }
-    return `${this.identifierNamespace}${code}`;
+    return this.ensureNamespace(formCode || defaultCode);
   }
 
   /**
-   * Check if an identifier system matches the configured namespace.
+   * Prefix a bare id-type code with the configured OpenSPP namespace, leaving
+   * already-namespaced values untouched. Single source of truth so the discover
+   * and resolve paths can't diverge.
    */
-  private isOpenSppIdentifier(system: string): boolean {
-    return system.startsWith(this.identifierNamespace);
+  private ensureNamespace(code: string): string {
+    return code.startsWith(this.identifierNamespace) ? code : `${this.identifierNamespace}${code}`;
+  }
+
+  /**
+   * Check if an identifier system matches the configured namespace. Guards
+   * against non-string `system` values in malformed OpenSPP responses, which
+   * would otherwise throw on `.startsWith` and fail the whole pull.
+   */
+  private isOpenSppIdentifier(system: unknown): boolean {
+    return typeof system === "string" && system.startsWith(this.identifierNamespace);
   }
 
   /**
@@ -1866,7 +1869,7 @@ class OpenSppV2SyncAdapter implements ExternalSyncAdapter {
  * Read `submitVia` from `ExternalSyncConfig.adapterConfig`, falling back to
  * the legacy `extraFields` shape. Anything other than `"change-request"`
  * (including `undefined`) resolves to `"direct"` so tenants without explicit
- * config retain the pre-#948 behaviour.
+ * config retain the pre-change-request behaviour.
  */
 function readSubmitVia(config: ExternalSyncConfig): ChangeRequestSubmitMode {
   const raw = getAdapterConfigValue<string>(config, "submitVia");

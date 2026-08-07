@@ -1,3 +1,22 @@
+<!--
+ * Licensed to the Association pour la cooperation numerique (ACN) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ACN licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+-->
+
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -18,6 +37,7 @@ import SyncStatusPanel from '@/components/SyncStatusPanel.vue'
 import SyncScopeCard from '@/components/SyncScopeCard.vue'
 import ProgramsCard from '@/components/ProgramsCard.vue'
 import Claim169Card from '@/components/Claim169Card.vue'
+import FormPreviewDialog from '@/components/FormPreviewDialog.vue'
 import { useFeatureFlag } from '@/composables/useFeatureFlag'
 import type { SyncScopePolicy } from '@idpass/data-collect-core'
 import type { AppProgram, Claim169Config } from '@/api'
@@ -83,10 +103,12 @@ interface AppConfig {
 
 interface FormOverviewItem {
   id: string
+  index: number
   title: string
   records: number
   dependsOn?: string
   fields: number
+  formio?: Record<string, unknown>
 }
 
 const authStore = useAuthStore()
@@ -252,13 +274,29 @@ const formOverview = computed<FormOverviewItem[]>(() => {
     const formId = form.name || `entity-${index}`
     return {
       id: formId,
+      index,
       title: form.title || formId,
       dependsOn: form.dependsOn,
       fields: countFormFields(form.formio),
       records: entityDataMap.value.get(form.name) ?? 0,
+      formio: form.formio,
     }
   })
 })
+
+const showPreviewDialog = ref(false)
+const previewForm = ref<{ title: string; formio: Record<string, unknown> }>({
+  title: '',
+  formio: {},
+})
+
+const openFormPreview = (item: FormOverviewItem) => {
+  previewForm.value = {
+    title: item.title,
+    formio: item.formio ?? {},
+  }
+  showPreviewDialog.value = true
+}
 
 const downloadUrl = computed(() => {
   const artifactId = app.value?.artifactId
@@ -413,6 +451,16 @@ const openEditor = (step: string = 'general') => {
   router.push({
     name: `wizard-${step}`,
     query: { mode: 'edit', id: routeId.value },
+  })
+}
+
+// Open the standalone single-form designer (#17) for one form, bypassing the
+// wizard. `index` is the form's position in entityForms.
+const editForm = (index: number) => {
+  if (!routeId.value) return
+  router.push({
+    name: 'form-edit',
+    params: { id: routeId.value, formIndex: String(index) },
   })
 }
 
@@ -697,16 +745,37 @@ watch(
                       cols="12"
                       md="6"
                     >
-                      <v-card class="form-card" border="md" elevation="0">
+                      <v-card
+                        class="form-card form-card--clickable"
+                        border="md"
+                        elevation="0"
+                        role="button"
+                        tabindex="0"
+                        :title="`Preview ${item.title}`"
+                        @click="openFormPreview(item)"
+                        @keydown.enter="openFormPreview(item)"
+                        @keydown.space.prevent="openFormPreview(item)"
+                      >
                         <v-card-text>
                           <div class="form-card__header">
                             <div>
                               <h3 class="form-card__title">{{ item.title }}</h3>
                               <p class="form-card__id">Entity ID • {{ item.id }}</p>
                             </div>
-                            <v-chip color="primary" size="small" variant="tonal">
-                              {{ item.records }} records
-                            </v-chip>
+                            <div class="form-card__header-actions">
+                              <v-chip color="primary" size="small" variant="tonal">
+                                {{ item.records }} records
+                              </v-chip>
+                              <v-btn
+                                variant="tonal"
+                                color="primary"
+                                size="small"
+                                prepend-icon="mdi-pencil"
+                                @click.stop="editForm(item.index)"
+                              >
+                                Edit
+                              </v-btn>
+                            </div>
                           </div>
                           <p class="form-card__summary">
                             This form currently has {{ item.fields }} configured field{{ item.fields === 1 ? '' : 's' }}
@@ -1064,6 +1133,12 @@ watch(
     @submit="onCredentialsSubmit"
   />
 
+  <FormPreviewDialog
+    v-model="showPreviewDialog"
+    :title="previewForm.title"
+    :formio="previewForm.formio"
+  />
+
   <v-dialog v-model="showArchiveDialog" :max-width="540">
     <v-card>
       <v-card-title class="text-h6">
@@ -1406,12 +1481,33 @@ watch(
   height: 100%;
 }
 
+.form-card--clickable {
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.form-card--clickable:hover,
+.form-card--clickable:focus-visible {
+  border-color: rgb(var(--v-theme-primary));
+  box-shadow: var(--shadow-card);
+  transform: translateY(-2px);
+}
+
 .form-card__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--spacing-md);
   flex-wrap: wrap;
+}
+
+.form-card__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
 }
 
 .form-card__title {

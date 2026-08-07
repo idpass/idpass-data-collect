@@ -34,7 +34,7 @@ import {
   TokenCredentials,
 } from "../interfaces/types";
 import type { SyncResult } from "../interfaces/adapter";
-import { EventApplierService } from "../services/EventApplierService";
+import { EventApplierService, SubmitFormOptions } from "../services/EventApplierService";
 import { AppError } from "../utils/AppError";
 import { ExternalSyncManager, SyncOptions } from "./ExternalSyncManager";
 import { InternalSyncManager } from "./InternalSyncManager";
@@ -225,8 +225,8 @@ export class EntityDataManager {
    * });
    * ```
    */
-  async submitForm(formData: FormSubmission): Promise<EntityDoc | null> {
-    return await this.eventApplierService.submitForm(formData);
+  async submitForm(formData: FormSubmission, options?: SubmitFormOptions): Promise<EntityDoc | null> {
+    return await this.eventApplierService.submitForm(formData, options);
   }
 
   /**
@@ -243,6 +243,8 @@ export class EntityDataManager {
    * retried on the next push.
    *
    * @param events The ordered list of form submissions to process.
+   * @param options Optional apply-path options forwarded to every event (e.g.
+   *   the member sub-write scope guard for bounded `/api/sync/push` callers).
    * @returns An object describing the outcome: applied count and any error details.
    *
    * @example
@@ -255,13 +257,14 @@ export class EntityDataManager {
    */
   async submitFormBatch(
     events: FormSubmission[],
+    options?: SubmitFormOptions,
   ): Promise<{ success: boolean; applied: number; failed: FormSubmission[]; errors: string[] }> {
     let applied = 0;
     const failed: FormSubmission[] = [];
     const errors: string[] = [];
     for (const event of events) {
       try {
-        await this.eventApplierService.submitForm(event);
+        await this.eventApplierService.submitForm(event, options);
         applied += 1;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

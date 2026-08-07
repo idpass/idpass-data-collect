@@ -235,7 +235,7 @@ export class EventStoreImpl implements EventStore {
         // v3 algorithm — strict tamper check (excludes mutable syncLevel)
         const persistedHash = rawAnchor.slice(HASH_V3_PREFIX.length);
         if (persistedHash !== this.latestHash) {
-          // Post-Friday workaround for OP #105: tamper check trips on benign
+          // Workaround: tamper check trips on benign
           // drift (suspected timestamp µs precision rounding across pg/JS or
           // event reordering on REMOTE applies). Throwing here bricks sync —
           // every /api/sync/push returns 422 and the mobile cannot reconcile
@@ -243,7 +243,7 @@ export class EventStoreImpl implements EventStore {
           // self-heals; revisit once the root cause is confirmed.
           log.warn(
             { persistedHash, recomputedHash: this.latestHash },
-            "Hash chain anchor mismatch — auto-re-anchoring (see OP #105 follow-up)",
+            "Hash chain anchor mismatch — auto-re-anchoring",
           );
         }
       } else if (rawAnchor.startsWith(HASH_V2_PREFIX)) {

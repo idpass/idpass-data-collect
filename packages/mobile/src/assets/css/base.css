@@ -67,6 +67,19 @@ a:hover {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/*
+ * Capacitor 8 runs the Android WebView edge-to-edge, so env(safe-area-inset-*)
+ * is now non-zero. The app bar (.app-bar-safe) and bottom nav (.bottom-nav-safe)
+ * grow by those insets, but Vuetify's --v-layout-top/--v-layout-bottom only
+ * reserve the bars' declared heights — so v-main content underlapped the bars by
+ * the inset. Add the insets on top of Vuetify's layout offsets. Scoped to #dy-app
+ * to outrank Vuetify's .v-main rule without !important.
+ */
+#dy-app .v-main {
+  padding-top: calc(var(--v-layout-top) + env(safe-area-inset-top));
+  padding-bottom: calc(var(--v-layout-bottom) + env(safe-area-inset-bottom));
+}
+
 /* Card styles - Updated for Humanitarian Tech theme */
 .card-primary {
   background: var(--primary);

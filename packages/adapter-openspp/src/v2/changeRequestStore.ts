@@ -81,7 +81,7 @@ export const CR_KEY_PREFIX = "cr:";
  *     coexist without colliding on the idempotency store.
  *
  * Keeping the no-discriminator form bare (no trailing colon) preserves
- * exact backwards compatibility with #948 keys.
+ * exact backwards compatibility with pre-existing change-request keys.
  */
 const keyFor = (entityGuid: string, discriminator?: string | number): string => {
   if (discriminator === undefined || discriminator === null || discriminator === "") {

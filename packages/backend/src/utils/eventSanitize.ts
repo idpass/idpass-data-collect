@@ -33,27 +33,62 @@ import { FormSubmission } from "@idpass/data-collect-core";
 const CLIENT_FORBIDDEN_EVENT_DATA_FIELDS: readonly string[] = ["externalId", "identifierType"];
 
 /**
- * Returns a copy of the event with server-managed identifier fields removed
- * from its `data`. The event is returned unchanged (same reference) when no
- * forbidden field is present, so callers pay nothing on the common path.
+ * Read-only recursive scan: is any forbidden key present anywhere within the
+ * value (objects and arrays, at any depth)? Allocates nothing — this is the
+ * common `/api/sync/push` path, where events are clean and must stay cheap.
+ */
+function containsForbiddenKey(value: unknown): boolean {
+  if (Array.isArray(value)) {
+    return value.some(containsForbiddenKey);
+  }
+  if (value && typeof value === "object") {
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      if (CLIENT_FORBIDDEN_EVENT_DATA_FIELDS.includes(key)) return true;
+      if (containsForbiddenKey(val)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Recursively copy the value with the forbidden keys removed at any depth. Only
+ * called once `containsForbiddenKey` has confirmed a hit, so the throwaway copy
+ * is paid only on the rare malicious/edge path, never on clean events.
+ */
+function stripForbidden(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(stripForbidden);
+  }
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+      if (CLIENT_FORBIDDEN_EVENT_DATA_FIELDS.includes(key)) continue;
+      out[key] = stripForbidden(val);
+    }
+    return out;
+  }
+  return value;
+}
+
+/**
+ * Returns a copy of the event with server-managed identifier fields
+ * (`externalId`, `identifierType`) removed from its `data` at any nesting
+ * depth. These select which external (OpenSPP) record a later push PATCHes and
+ * must originate only from a trusted external pull, never from a client — so
+ * this is applied at every untrusted client ingestion door (`/api/sync/push`,
+ * self-service submission, review approval). The event is returned unchanged
+ * (same reference) when no forbidden field is present.
+ *
+ * Security findings: H11, H30, H10/H22 (externalId/identifierType half); #41
+ * (self-service submission door); nit-3 (nested defense-in-depth).
  */
 export function stripServerManagedEventFields(event: FormSubmission): FormSubmission {
   const data = event.data as Record<string, unknown> | undefined;
   if (!data || typeof data !== "object") {
     return event;
   }
-  const present = CLIENT_FORBIDDEN_EVENT_DATA_FIELDS.some((field) =>
-    Object.prototype.hasOwnProperty.call(data, field),
-  );
-  if (!present) {
+  if (!containsForbiddenKey(data)) {
     return event;
   }
-  const cleaned: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(data)) {
-    if (CLIENT_FORBIDDEN_EVENT_DATA_FIELDS.includes(key)) {
-      continue;
-    }
-    cleaned[key] = value;
-  }
-  return { ...event, data: cleaned };
+  return { ...event, data: stripForbidden(data) as Record<string, unknown> };
 }

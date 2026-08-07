@@ -117,7 +117,7 @@ function canonicalize(value: unknown): string {
 }
 
 // ---------------------------------------------------------------------------
-// Pure /push scope validation (Phase 3 — WP #947)
+// Pure /push scope validation (Phase 3)
 // ---------------------------------------------------------------------------
 
 /**

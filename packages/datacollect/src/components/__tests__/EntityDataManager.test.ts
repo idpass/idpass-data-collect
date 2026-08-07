@@ -25,7 +25,6 @@ import { EventApplierService } from "../../services/EventApplierService";
 import { IndexedDbEntityStorageAdapter } from "../../storage/IndexedDbEntityStorageAdapter";
 import { IndexedDbEventStorageAdapter } from "../../storage/IndexedDbEventStorageAdapter";
 import { IndexedDbAuthStorageAdapter } from "../../storage/IndexedDbAuthStorageAdapter";
-import { AppError } from "../../utils/AppError";
 import { EntityDataManager } from "../EntityDataManager";
 import { EntityStoreImpl } from "../EntityStore";
 import { EventStoreImpl } from "../EventStore";
@@ -676,7 +675,7 @@ describe("EntityDataManager", () => {
     };
 
     await expect(manager.submitForm(formData)).rejects.toThrow(
-      new AppError("SUBMIT_FORM_ERROR", "No event applier found for event type: unknown-type", expect.any(Object)),
+      new Error("No event applier found for event type: unknown-type"),
     );
   });
 

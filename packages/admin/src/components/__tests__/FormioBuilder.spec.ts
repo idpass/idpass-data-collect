@@ -58,6 +58,7 @@ vi.mock('@/formio/loadBuilderAssets', () => ({
 // builder lifecycle, not registration (verified via e2e), so stub it out.
 vi.mock('@/formio/builderComponents', () => ({
   registerBuilderComponents: vi.fn(),
+  setCredentialTemplates: vi.fn(),
 }))
 
 describe('FormioBuilder', () => {

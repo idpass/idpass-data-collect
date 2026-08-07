@@ -148,7 +148,7 @@ export const purgeApp = async (id: string) => {
   return response.data
 }
 
-// PATCH /api/apps/:id/syncScope — bounded sync scope (#947).
+// PATCH /api/apps/:id/syncScope — bounded sync scope.
 // Pass `null` to clear the policy; pass a `SyncScopePolicy` to set/replace it.
 export const updateAppSyncScope = async (
   id: string,
@@ -332,7 +332,7 @@ export const retrySyncJob = async (jobId: string) => {
   return response.data as { jobId: string; status: string }
 }
 
-// Per-assignment role binding. `syncScopeOverride` (#947) narrows the tenant
+// Per-assignment role binding. `syncScopeOverride` narrows the tenant
 // `syncScope` policy for this specific role grant; omitted = inherit tenant default.
 export interface AdminRoleAssignment {
   programId: string

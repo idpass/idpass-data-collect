@@ -36,3 +36,10 @@ export interface FormioBuilderInstance {
   on(event: FormioBuilderEvent, handler: () => void): void
   destroy(): Promise<void> | void
 }
+
+// Narrow interface for the read-only renderer produced by `Formio.createForm`.
+// Same rationale as FormioBuilderInstance: `@formio/js` types this as
+// `Promise<any>`, so we cast at the call site (see FormioRenderer.vue).
+export interface FormioFormInstance {
+  destroy(): Promise<void> | void
+}

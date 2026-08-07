@@ -21,7 +21,7 @@
 // linked from the chunk that imports this module, so admin views that never
 // open the builder pay no cost — and nothing is fetched from a CDN (the
 // Phase A concession this replaces; CDN links also leaked unscoped Bootstrap
-// into the Vuetify dashboard and broke its styles, #1059).
+// into the Vuetify dashboard and broke its styles).
 //
 // - formio.full.min.css: Form.io's own builder/dialog/choices/flatpickr styles
 //   (prefixed selectors, safe to load globally).

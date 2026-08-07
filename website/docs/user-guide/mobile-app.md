@@ -21,7 +21,7 @@ The mobile app allows you to:
 
 The main screen of the application is the **App Dashboard**, where you can see all the data collection "apps" (configurations) you have loaded onto your device.
 
-<!-- ![Mobile App Dashboard]() -->
+{/* ![Mobile App Dashboard]() */}
 
 To start collecting data, you first need to load an app configuration. This is typically provided by your project administrator.
 
@@ -54,7 +54,7 @@ Once an app is loaded, you can start collecting data.
 
 Your data is now saved securely on your device. You can continue collecting data even if you are offline.
 
-<!-- ![Mobile Form]() -->
+{/* ![Mobile Form]() */}
 
 ## 4. Viewing Collected Data
 

@@ -830,6 +830,31 @@ describe("POST /api/auth/self-service/submit — entity form name routing", () =
     expect(mockSubmitForm.mock.calls[0][0].type).toBe("update-individual");
   });
 
+  it("strips client-supplied externalId/identifierType from a self-service submission (#41)", async () => {
+    const token = createValidToken();
+
+    const response = await request(app)
+      .post("/api/auth/self-service/submit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        formType: "individual",
+        formData: {
+          name: "Jane Doe",
+          externalId: "victim-openspp-id",
+          identifierType: "national_id",
+          metadata: { externalId: "nested-victim" },
+        },
+      });
+
+    expect(response.status).toBe(200);
+    expect(mockSubmitForm).toHaveBeenCalledTimes(1);
+    const applied = mockSubmitForm.mock.calls[0][0];
+    expect(applied.data.externalId).toBeUndefined();
+    expect(applied.data.identifierType).toBeUndefined();
+    expect(applied.data.metadata).toEqual({});
+    expect(applied.data.name).toBe("Jane Doe");
+  });
+
   it("should route 'association' (top-level group) as entity update with update-group", async () => {
     const token = createValidToken();
 
@@ -1107,5 +1132,135 @@ describe("Scope hardening", () => {
 
     expect(response.status).toBe(403);
     expect(response.body.error).toBe("Forbidden: cannot access other entities");
+  });
+});
+
+// ─── 6. POST /api/auth/self-service/submit — horizontal member-scope guard ───
+describe("POST /api/auth/self-service/submit — member-GUID injection guard", () => {
+  const BOUND_GROUP_GUID = "household-guid-1";
+  const EXISTING_MEMBER_GUID = "member-guid-existing";
+  const VICTIM_GUID = "victim-guid-other-household";
+  const NEW_MEMBER_GUID = "brand-new-member-guid";
+
+  const GROUP_CONFIG: AppConfig = {
+    id: "bola-tenant",
+    name: "BOLA Test Tenant",
+    entityForms: [
+      { id: "f-household", name: "household", title: "Household" },
+      { id: "f-individual", name: "individual", title: "Individual", dependsOn: "household" },
+    ],
+    selfService: {
+      enabled: true,
+      authMethods: ["otp"],
+      allowedForms: ["household", "individual"],
+      languages: ["en"],
+      requireReview: false,
+    },
+  };
+
+  let app: express.Express;
+  let mockSubmitForm: jest.Mock;
+  let mockGetEntity: jest.Mock;
+
+  function boundToken(): string {
+    return jwt.sign(
+      { scope: "self-service", identifier: "beneficiary-1", entityGuid: BOUND_GROUP_GUID, tenantId: "bola-tenant" },
+      JWT_SECRET,
+      { expiresIn: "1h" },
+    );
+  }
+
+  beforeAll(() => {
+    process.env.JWT_SECRET = JWT_SECRET;
+  });
+
+  beforeEach(() => {
+    mockSubmitForm = jest.fn().mockResolvedValue(undefined);
+    // Per-guid entity resolution: the bound group and its existing member and a
+    // victim entity all exist; unknown guids throw (as EntityDataManager does).
+    mockGetEntity = jest.fn().mockImplementation(async (guid: string) => {
+      if (guid === BOUND_GROUP_GUID) {
+        return { modified: { guid, type: "group", data: { name: "My Household" }, memberIds: [EXISTING_MEMBER_GUID] } };
+      }
+      if (guid === EXISTING_MEMBER_GUID) {
+        return { modified: { guid, type: "individual", data: { name: "Alice", gender: "female" } } };
+      }
+      if (guid === VICTIM_GUID) {
+        return { modified: { guid, type: "individual", data: { name: "Victim", gender: "male" } } };
+      }
+      throw new Error(`Entity with ID ${guid} not found`);
+    });
+
+    const mockAppInstanceStore = {
+      initialize: jest.fn(),
+      createAppInstance: jest.fn(),
+      updateAppInstance: jest.fn(),
+      loadEntityData: jest.fn(),
+      getAppInstance: jest.fn().mockResolvedValue({
+        configId: "bola-tenant",
+        config: GROUP_CONFIG,
+        edm: {
+          getEntity: mockGetEntity,
+          getAllEntities: jest.fn().mockResolvedValue([]),
+          searchEntities: jest.fn().mockResolvedValue([]),
+          getAuditTrailByEntityGuid: jest.fn().mockResolvedValue([]),
+          submitForm: mockSubmitForm,
+        } as never,
+      }),
+      clearAppInstance: jest.fn(),
+      clearStore: jest.fn(),
+      closeConnection: jest.fn(),
+    } as unknown as jest.Mocked<AppInstanceStore>;
+
+    const mockOtpStore = {
+      initialize: jest.fn(),
+      createOtp: jest.fn(),
+      verifyOtp: jest.fn(),
+      getActiveCodesByIdentifier: jest.fn(),
+      clearStore: jest.fn(),
+      closeConnection: jest.fn(),
+    };
+
+    app = express();
+    app.use(bodyParser.json());
+    app.use("/api/auth", createSelfServiceRouter(mockOtpStore as never, mockAppInstanceStore));
+    app.use(errorHandler);
+  });
+
+  it("rejects a member entry naming a pre-existing entity outside the caller's household", async () => {
+    const response = await request(app)
+      .post("/api/auth/self-service/submit")
+      .set("Authorization", `Bearer ${boundToken()}`)
+      .send({ formType: "household", formData: { members: [{ guid: VICTIM_GUID, name: "HACKED" }] } });
+
+    expect(response.status).toBe(403);
+    // The malicious submission must never reach the apply path.
+    expect(mockSubmitForm).not.toHaveBeenCalled();
+  });
+
+  it("allows updating a member that already belongs to the caller's household", async () => {
+    const response = await request(app)
+      .post("/api/auth/self-service/submit")
+      .set("Authorization", `Bearer ${boundToken()}`)
+      .send({
+        formType: "household",
+        formData: { members: [{ guid: EXISTING_MEMBER_GUID, name: "Alice", phone: "555-1234" }] },
+      });
+
+    expect(response.status).toBe(200);
+    expect(mockSubmitForm).toHaveBeenCalledTimes(1);
+    // The authorized-scope option is threaded to the apply path (defense-in-depth).
+    const options = mockSubmitForm.mock.calls[0][1];
+    expect(options.authorizedMemberGuids).toEqual(expect.arrayContaining([EXISTING_MEMBER_GUID, BOUND_GROUP_GUID]));
+  });
+
+  it("allows adding a brand-new member whose GUID does not resolve to an existing entity", async () => {
+    const response = await request(app)
+      .post("/api/auth/self-service/submit")
+      .set("Authorization", `Bearer ${boundToken()}`)
+      .send({ formType: "household", formData: { members: [{ guid: NEW_MEMBER_GUID, name: "Newborn" }] } });
+
+    expect(response.status).toBe(200);
+    expect(mockSubmitForm).toHaveBeenCalledTimes(1);
   });
 });

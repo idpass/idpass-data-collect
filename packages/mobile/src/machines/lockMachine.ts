@@ -23,6 +23,17 @@ import { loadPersistedLockState, biometricAuthenticate, persistLockState } from 
 
 const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000
 
+// Upper bound on how long the machine may stay in `authenticating`. The
+// invoked `biometricAuthenticate` actor normally settles (success / failure /
+// cancel / error), but a native biometric bridge can leave its promise
+// permanently pending — e.g. on a device with no enrolled biometric or no
+// secure lock. Without this bound the machine would sit in `authenticating`
+// forever and the only safety net (AppLockService's 30s waitForState) would
+// reject and surface as a Vue runtime crash. This must stay strictly below
+// that 30s guard so the machine self-heals to a recoverable `locked` state
+// first, giving the user the Unlock button again instead of a hard error.
+const AUTH_TIMEOUT_MS = 20 * 1000
+
 export const lockMachine = setup({
   types: {
     context: {} as LockContext,
@@ -113,6 +124,16 @@ export const lockMachine = setup({
           target: 'locked',
           actions: assign({
             error: ({ event }) => event.error instanceof Error ? event.error.message : 'Authentication error'
+          })
+        }
+      },
+      // Deadline: if the native biometric prompt never settles, fall back to a
+      // recoverable locked state instead of hanging until the caller times out.
+      after: {
+        [AUTH_TIMEOUT_MS]: {
+          target: 'locked',
+          actions: assign({
+            error: 'Authentication timed out. Please try again.'
           })
         }
       }

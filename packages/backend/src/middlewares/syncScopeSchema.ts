@@ -20,7 +20,7 @@
 import { z } from "zod";
 
 /**
- * Strict syncScope schema for admin-facing routes (#947 Phase 2).
+ * Strict syncScope schema for admin-facing routes.
  *
  * Rejects empty arrays for `areaIds` and `entityTypes` — an empty array is a
  * deliver-nothing footgun (would block all events) and is almost certainly a

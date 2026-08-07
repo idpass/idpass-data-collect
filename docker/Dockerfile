@@ -14,6 +14,13 @@ WORKDIR /app
 # Own the app tree as the unprivileged built-in node user so the server can
 # write generated public artifacts at runtime while running as non-root.
 COPY --from=build --chown=node:node /app .
+# `WORKDIR /app` is created root-owned and `COPY --chown` only chowns the copied
+# *contents*, not the /app directory itself — so the non-root `node` user cannot
+# create new entries at the /app root. multer 2 eagerly `mkdir`s its upload
+# destination (`/app/uploads`) when routes are constructed at startup, which
+# would throw EACCES and crash-loop the server. Give `node` ownership of the
+# workdir and pre-create the uploads directory.
+RUN mkdir -p /app/uploads && chown node:node /app /app/uploads
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://localhost:3000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
