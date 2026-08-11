@@ -14,6 +14,10 @@ WORKDIR /app
 # Own the app tree as the unprivileged built-in node user so the dev server can
 # write generated files at runtime while running as non-root.
 COPY --from=build --chown=node:node /app .
+# COPY --chown only owns the copied entries, not the WORKDIR-created /app itself.
+# pnpm writes a scratch file into the cwd on every `pnpm run`, so /app must be
+# writable by node or the dev server crash-loops on EACCES.
+RUN chown node:node /app
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://localhost:3000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
