@@ -9,7 +9,7 @@ Get a complete ID PASS DataCollect stack running locally in a few minutes using 
 ### Prerequisites
 
 - **Docker** 24+ (or **Podman** 5+ with the `docker compose` alias) — used for the turnkey stack
-- **Node.js 22+** and **pnpm 10+** — only if you plan to run packages on the host outside the container
+- **Node.js 22.12+** and **pnpm 10.14+** — only for step 6 and for running packages on the host outside the container. See [Installation](./installation.md#toolchain-only-for-running-packages-on-the-host) for how to install them.
 - Modern web browser with [IndexedDB](../../glossary#indexeddb) support
 
 ### 5-Minute Setup (Docker Compose)
@@ -43,7 +43,16 @@ Get a complete ID PASS DataCollect stack running locally in a few minutes using 
    | Admin UI | http://localhost:5173 | Sign in with `ADMIN_EMAIL`/`ADMIN_PASSWORD` from `.env` |
    | Web app (self-service) | http://localhost:5174 | Citizen-facing portal |
    | Mobile app (browser preview) | http://localhost:8081 | Runs the mobile app in the browser for development |
-   | PostgreSQL | localhost:5432 | `admin` / password from `.env` |
+   | PostgreSQL | localhost:5432 | Database, not a web page — see below |
+
+   PostgreSQL speaks its own protocol, so `localhost:5432` in a browser returns nothing. To look inside the database, use a client with the `POSTGRES_USER` / `POSTGRES_PASSWORD` values from `docker/.env`. This works without installing anything locally:
+
+   ```bash
+   docker exec -it $(docker compose -f docker/docker-compose.dev.yaml ps -q postgres) \
+     psql -U admin -d datacollect
+   ```
+
+   If only some containers came up, see [Only some containers started](./installation.md#only-some-containers-started).
 
 4. **Verify the backend**
 
@@ -56,14 +65,18 @@ Get a complete ID PASS DataCollect stack running locally in a few minutes using 
 
 6. **(Optional) Seed demo data**
 
+   This step runs on your host rather than in Docker, so it needs Node.js 22.12+, pnpm 10.14+, and `bash`, `curl`, and `python3` on `PATH`. On Windows, run it from Git Bash or WSL. See [Installation](./installation.md#toolchain-only-for-running-packages-on-the-host) if you need to install or upgrade any of them.
+
    ```bash
    pnpm install
    pnpm seed
    ```
 
-   Creates a "Demo Household Registry" tenant with 4 households, 9 individuals, and a field-worker user.
+   This creates two tenants — **Demo Household Registry** and **Demo Individual Registry** — with households, cooperatives, individuals and their linked activity records, three additional users (field worker, supervisor, enumerator), review configurations, a mix of pending/approved/rejected reviews, attachments, and some event history. The script prints exactly what it created, with the login for each user, when it finishes.
 
-   If the mock registry server is running (`docker compose -f docker/docker-compose.dev.yaml --profile mock up -d`), the seed also provisions a `demo-mock-registry` tenant wired to `http://localhost:9999` and populates the mock with 2 households + 5 persons so you can trigger external sync from the admin UI immediately.
+   Re-running it is safe: configurations are archived and re-uploaded in place, and existing users are left as they are (their passwords are not reset).
+
+   If the mock registry server is running (`docker compose -f docker/docker-compose.dev.yaml --profile mock up -d`), the seed also provisions a `demo-mock-registry` tenant and populates the mock with 2 households + 5 persons so you can trigger external sync from the admin UI immediately. The tenant's stored URL is the in-network `http://mock-registry:9999`; from your host the same service is at `http://localhost:9999`.
 
 ### Stopping the stack
 
@@ -79,6 +92,10 @@ Install the core library in your own project:
 ```bash
 pnpm add @idpass/data-collect-core
 ```
+
+:::note Registry configuration required
+`@idpass/*` packages are published to GitHub Packages, not npmjs.org. Point the scope at that registry and authenticate first — see [Method 3 in the Installation Guide](./installation.md#method-3-package-installation-embedding-the-library).
+:::
 
 Create a minimal offline-first client:
 
