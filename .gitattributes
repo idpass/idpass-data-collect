@@ -1,0 +1,15 @@
+# Normalize line endings so shell scripts and git hooks stay executable on
+# Windows checkouts. Without this, Git for Windows' default core.autocrlf=true
+# rewrites LF to CRLF and bash fails on the trailing \r (e.g.
+# "set: pipefail: invalid option name" from scripts/seed.sh).
+* text=auto eol=lf
+
+# Windows-native scripts must keep CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Scripts executed by a shell, including the ones without a .sh suffix.
+*.sh text eol=lf
+.husky/* text eol=lf
+gradlew text eol=lf
