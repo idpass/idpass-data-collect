@@ -20,7 +20,7 @@
   "dependencies": {
     "@idpass/data-collect-core": "workspace:*",
     "@formio/vue": "^5.0.0",
-    "axios": "^1.19.0",
+    "axios": "1.18.1",
     "bootstrap": "4.6.2",
     "formiojs": "^4.21.7",
     "oidc-client-ts": "^3.5.0",
