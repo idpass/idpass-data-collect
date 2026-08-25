@@ -19,7 +19,7 @@
   "dependencies": {
     "@idpass/data-collect-core": "workspace:*",
     "axios": "1.18.1",
-    "uuid": "^14.0.1",
+    "uuid": "^14.0.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
