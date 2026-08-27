@@ -25,6 +25,16 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    # axios is held at an exact 1.18.1 across the workspace. axios 1.19 brands
+    # responses with a `unique symbol`, which pnpm's symlink layout causes
+    # TypeScript to load twice as two unrelated identities -- that breaks every
+    # `new MockAdapter(axiosInstance)` call in packages/datacollect and fails
+    # the test job. Without this ignore, every weekly re-roll of the group PR
+    # below drags axios 1.19 back in and lands red; it has already happened
+    # three times. Remove this entry when axios-mock-adapter ships compatible
+    # types (tracked in issue #136) and restore the caret ranges in the same PR.
+    ignore:
+      - dependency-name: "axios"
     groups:
       npm-minor-and-patch:
         patterns:
