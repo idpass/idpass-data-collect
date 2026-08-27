@@ -6,142 +6,60 @@ sidebar_position: 4
 
 # Import OpenSPP Fields
 
-This guide explains how to import OpenSPP field metadata when configuring field mappings for OpenSPP synchronization.
+Before you can map form fields to OpenSPP fields, the Admin UI needs to know which fields your OpenSPP instance exposes. It fetches that list directly from the instance — there is one button to press, and which flow you get depends on the adapter you selected.
 
-## Overview
+## Where this happens
 
-When configuring an OpenSPP adapter, you need to map form fields from your DataCollect configuration to fields in your OpenSPP/Odoo system. To make this easier, the Admin UI provides tools to import field metadata from OpenSPP.
+Field fetching lives on the **Field Mapping** step of the program wizard, which appears only when the program's **Integration Type** is OpenSPP V1 or OpenSPP v2. The connection details are entered one step earlier, on **Integration**; the Field Mapping step reuses them and does not ask again.
 
-## Import Methods
+So the order is always:
 
-The Admin UI supports three methods for importing OpenSPP field metadata:
+1. **Integration** step — choose the adapter, enter the API URL and credentials.
+2. **Entity Forms** step — design the forms whose fields you want to map.
+3. **Field Mapping** step — fetch the OpenSPP field list, then map field to field.
 
-### 1. Upload JSON File
+## OpenSPP V1
 
-Upload a JSON file containing a sample OpenSPP payload.
+The Field Mapping step shows an **OpenSPP V1 Fields** section with a **Fetch Fields** button and a read-only summary of what it will connect to (URL, database, username).
 
-**Steps**:
-1. In the External Sync configuration section, click "Import OpenSPP Fields"
-2. Select the "Upload File" tab
-3. Click "Select JSON file" and choose a file containing sample OpenSPP data
-4. Click "Parse Fields"
+It needs all four of these from the Integration step: **API URL**, **Database Name**, **Username**, and **Password**. Until they are all present the button stays disabled and the step tells you to complete the connection settings first.
 
-**File Format**:
-The JSON file should contain a single object or array with sample OpenSPP data:
+Click **Fetch Fields** and the loaded field count is reported back to you.
 
-```json
-{
-  "firstname": "John",
-  "lastname": "Doe",
-  "birthdate": "1990-01-01",
-  "gender_id": {"id": 1, "display_name": "Male"},
-  "partner_id": {"id": 5, "display_name": "Household ABC"}
-}
-```
+## OpenSPP v2
 
-**Use Case**: When you have a sample export from OpenSPP or a test record.
+For V2 the section is **OpenSPP V2 Fields**, with **Fetch Fields** — which becomes **Refresh Fields** once a list is loaded, alongside **Clear** to discard it.
 
-### 2. Paste JSON
+It needs the **API URL** plus the **OAuth Client ID** and **OAuth Client Secret** from the Integration step. Those same credentials power the Integration step's **Test Connection** button, which is worth using first: it confirms the credentials independently of field fetching.
 
-Paste JSON payload directly into the dialog.
+Once fetched, the fields are summarised as counts — total, core, Studio, individual, and group — with the time of the last refresh, and listed in two expandable tables, **Individual Fields** and **Group Fields**, showing each field's name, label, type, and source.
 
-**Steps**:
-1. In the External Sync configuration section, click "Import OpenSPP Fields"
-2. Select the "Paste JSON" tab
-3. Paste your JSON payload into the text area
-4. Click "Parse Fields"
+## Mapping fields
 
-**Use Case**: When you have JSON data copied from OpenSPP API responses or exports.
+With the field list loaded, build the mapping table with **Add Mapping**. Each row pairs one form field with one OpenSPP field and applies a transformer:
 
-### 3. Fetch from API
+| Transformer | What it does | Options |
+|-------------|--------------|---------|
+| **Text** | Pass-through or string conversion (the default) | — |
+| **Date** | Converts between date formats | **Input Format**, **Output Format** |
+| **ID** | Extracts the ID from an OpenSPP relation value shaped like `{"id": 0, "display_name": ""}` | — |
+| **Multi-select** | Joins and splits array values | **Delimiter** |
+| **Boolean** | Normalises checkbox values | **Truthy Value**, **Falsy Value** |
 
-Connect directly to your OpenSPP/Odoo instance to fetch field metadata.
-
-**Steps**:
-1. In the External Sync configuration section, click "Import OpenSPP Fields"
-2. Select the "Fetch from API" tab
-3. Enter your OpenSPP connection details:
-   - **OpenSPP URL**: Base URL of your OpenSPP/Odoo instance (e.g., `https://openspp.example.com`)
-   - **Database**: Database name
-   - **Username**: Username for authentication
-   - **Password**: Password for authentication
-   - **Model** (optional): Odoo model name (default: `res.partner`)
-4. Click "Fetch Fields"
-
-**Use Case**: When you want complete, up-to-date field metadata directly from your OpenSPP instance.
-
-**Advantages**:
-- Fetches complete field definitions including selection options
-- Gets field labels, types, and required flags
-- Provides most accurate field information
-- Similar to how SugarCRM provides field metadata
-
-## Field Type Detection
-
-The import process automatically detects field types:
-
-- **Text**: Standard text fields
-- **Date**: Detected from date strings (YYYY-MM-DD, MM/DD/YYYY, DD/MM/YYYY) or Date objects
-- **Relation**: Detected from `{"id": X, "display_name": "..."}` format or `[id, label]` tuples
-- **Selection**: Detected from Odoo `fields_get` API when using API fetch method
-
-## After Import
-
-Once fields are imported:
-
-1. **Field List**: The imported fields appear in the field mapping dialog
-2. **Field Mapping**: You can now map form fields to OpenSPP fields
-3. **Transformer Selection**: The system suggests appropriate transformers based on field types:
-   - Date fields → Date transformer
-   - Relation fields → ID transformer
-   - Selection fields → Text or ID transformer (depending on usage)
-
-## Example Workflow
-
-1. **Configure External Sync**:
-   - Set Type to "OpenSPP"
-   - Enter OpenSPP URL
-   - Add database, username, and password in Extra Fields
-
-2. **Import Fields**:
-   - Click "Import OpenSPP Fields"
-   - Use "Fetch from API" method
-   - Enter credentials and fetch fields
-
-3. **Map Fields**:
-   - In the field mapping dialog, select form fields
-   - Select corresponding OpenSPP fields
-   - Configure transformers as needed
-
-4. **Save Configuration**:
-   - Field mappings are saved automatically
-   - Configuration is ready for synchronization
+Counters above the table show how many form fields, OpenSPP fields, and mappings you currently have. Mappings are saved with the rest of the program configuration when you finish the wizard.
 
 ## Troubleshooting
 
-### Import Fails
+**The Fetch Fields button is disabled.** A required connection setting is missing. Go back to the **Integration** step and complete it — URL, database, username, and password for V1; URL, client ID, and client secret for V2.
 
-- **Check File Format**: Ensure JSON is valid
-- **Verify Credentials**: For API fetch, check username/password
-- **Network Access**: Ensure server can reach OpenSPP instance
-- **Model Name**: Verify model name is correct (default: `res.partner`)
+**Fetching fails.** Confirm the server can reach the OpenSPP URL, and that the credentials are valid. For V2, use **Test Connection** on the Integration step to separate an authentication problem from a field-fetching one. For V1, check that the account may call Odoo's field-introspection API.
 
-### Fields Not Detected
+**The Field Mapping step isn't in the wizard.** It only appears for OpenSPP adapters. Other adapters do not use field mappings, and the step is skipped entirely.
 
-- **Sample Data**: Ensure sample JSON contains representative data
-- **Field Types**: Some field types may require API fetch for accurate detection
-- **Relation Fields**: Use API fetch to get complete relation field information
-
-### API Fetch Errors
-
-- **Connection**: Verify OpenSPP URL is accessible
-- **Authentication**: Check username and password
-- **Database**: Ensure database name is correct
-- **Permissions**: Verify user has `fields_get` API access
+**No form fields to map.** The form-field side of the mapping is read from your designed forms, so complete the **Entity Forms** step first.
 
 ## Related Documentation
 
 - [Admin UI Dashboard](./admin-ui-dashboard.md)
 - [OpenSPP Adapter](/adapters/openspp-adapter)
 - [External Sync Configuration](/configuration/external-sync)
-

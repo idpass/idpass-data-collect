@@ -39,7 +39,7 @@ Refer to test and PR checking scripts.
 
 Refer to the seed command in `package.json`
 
-Requires the backend to be running (default `http://localhost:3000`). Creates a "Demo Household Registry" config with 4 households, 9 individuals, and a field worker user. Safe to run multiple times (deletes and recreates). Override defaults with env vars: `BACKEND_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`.
+Requires the backend to be running (default `http://localhost:3000`), plus `bash`, `curl`, and `python3` on PATH. Creates the "Demo Household Registry" and "Demo Individual Registry" configs (and "Demo Mock Registry Sync" when the mock profile is up), three users, review configs, reviews, attachments, and event history — the script prints the exact inventory when it finishes; don't hard-code the counts here. Re-runnable: configs are archived and re-uploaded in place (entity data is kept, not deleted), existing users are skipped rather than reset, and attachments and push events are re-created on each run. Override defaults with env vars: `BACKEND_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`.
 
 ### Test Suites
 
