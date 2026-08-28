@@ -48,6 +48,25 @@ body {
   outline-offset: var(--focus-outline-offset);
 }
 
+/* Vuetify 4 ships its stylesheet inside CSS cascade layers (@layer
+ * vuetify-core / -components / -overrides / -utilities). Unlayered rules
+ * always outrank layered ones regardless of specificity, so the unlayered
+ * rule above now wins over Vuetify's own
+ * `.v-field__input:focus { outline: none }` — which it did not under
+ * Vuetify 3, where nothing was layered. The visible result is our brand
+ * focus ring drawn around the inner <input> on top of the field's own
+ * focused border, i.e. a doubled outline on every text field.
+ *
+ * Vuetify already indicates focus on `.v-field__outline`, so opt form-field
+ * inputs out of the global ring. Scoped to the input elements themselves so
+ * that buttons and icons inside a field (clear, append) keep theirs. */
+.v-field__input:focus-visible,
+.v-field input:focus-visible,
+.v-field textarea:focus-visible,
+.v-field select:focus-visible {
+  outline: none;
+}
+
 /* Selection */
 ::selection {
   background-color: var(--brand-100);
