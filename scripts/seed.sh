@@ -49,6 +49,13 @@ if ! command -v curl &>/dev/null; then
   fail "curl is not installed or not in PATH"
 fi
 
+# python3 is used to generate event guids and to parse the user list. Check it up
+# front so a missing interpreter fails here with a clear message instead of
+# aborting mid-seed at the first push event.
+if ! command -v python3 &>/dev/null; then
+  fail "python3 is not installed or not in PATH"
+fi
+
 # --- Step 1: Authenticate ---
 
 log "Authenticating as $ADMIN_EMAIL at $BACKEND_URL ..."
@@ -79,13 +86,15 @@ CHECK_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BACKEND_URL/api/apps/$CO
   -H "Authorization: Bearer $TOKEN")
 
 if [ "$CHECK_STATUS" = "200" ]; then
-  log "WARNING: Config '$CONFIG_ID' already exists. Deleting (this removes all its entity data) ..."
+  # DELETE /api/apps/:id archives the config; it does not remove entities or events.
+  # Re-uploading below clears archivedAt and updates the config in place.
+  log "Config '$CONFIG_ID' already exists. Archiving it before re-upload (entity data is kept) ..."
   DELETE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$BACKEND_URL/api/apps/$CONFIG_ID" \
     -H "Authorization: Bearer $TOKEN")
   if [ "$DELETE_STATUS" != "200" ]; then
-    fail "Failed to delete existing config (HTTP $DELETE_STATUS)"
+    fail "Failed to archive existing config (HTTP $DELETE_STATUS)"
   fi
-  log "Deleted existing config."
+  log "Archived existing config."
 fi
 
 # --- Step 3: Upload config ---
@@ -666,17 +675,39 @@ fi
 
 log "Updating field worker user with tenant assignment ..."
 
-# Get the user list to find the field worker's ID
-USERS_JSON=$(curl -s "$BACKEND_URL/api/users" \
+# Get the user list to find the field worker's ID. The id is looked up here rather
+# than kept from Step 4, because POST /api/users returns only a message — and on a
+# re-run the user already exists and is not created at all.
+USERS_JSON=$(curl -s -w "\n%{http_code}" "$BACKEND_URL/api/users" \
   -H "Authorization: Bearer $TOKEN")
+USERS_CODE=$(echo "$USERS_JSON" | tail -1)
+USERS_BODY=$(echo "$USERS_JSON" | sed '$d')
 
-# Parse the field worker user ID from the JSON array using Python for reliability
-FIELDWORKER_ID=$(python3 -c "
+FIELDWORKER_ID=""
+if [ "$USERS_CODE" != "200" ]; then
+  log "  WARNING: GET /api/users returned HTTP $USERS_CODE. Skipping tenant assignment."
+else
+  # Report the parse error instead of swallowing it — a silent empty id here is
+  # what makes the "could not find user" warning undiagnosable.
+  PARSE_ERR=$(mktemp)
+  FIELDWORKER_ID=$(python3 -c "
 import json, sys
-users = json.loads(sys.stdin.read())
+raw = sys.stdin.read()
+try:
+    users = json.loads(raw)
+except ValueError as exc:
+    raise SystemExit('response was not valid JSON (%s)' % exc)
+if not isinstance(users, list):
+    raise SystemExit('expected a JSON array of users, got %s' % type(users).__name__)
 fw = [u for u in users if u.get('email') == '$FIELDWORKER_EMAIL']
 print(fw[0]['id'] if fw else '')
-" <<< "$USERS_JSON" 2>/dev/null || true)
+" <<< "$USERS_BODY" 2>"$PARSE_ERR" || true)
+
+  if [ -z "$FIELDWORKER_ID" ] && [ -s "$PARSE_ERR" ]; then
+    log "  WARNING: could not parse the user list: $(tr '\n' ' ' < "$PARSE_ERR")"
+  fi
+  rm -f "$PARSE_ERR"
+fi
 
 if [ -n "$FIELDWORKER_ID" ]; then
   FW_UPDATE_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BACKEND_URL/api/users/$FIELDWORKER_ID" \
@@ -690,8 +721,8 @@ if [ -n "$FIELDWORKER_ID" ]; then
   else
     log "  WARNING: Could not update field worker (HTTP $FW_UPDATE_CODE)."
   fi
-else
-  log "  WARNING: Could not find field worker user ID. Skipping tenant assignment."
+elif [ "$USERS_CODE" = "200" ]; then
+  log "  WARNING: No user found with email $FIELDWORKER_EMAIL. Skipping tenant assignment."
 fi
 
 # --- Summary ---
@@ -709,8 +740,8 @@ log "  Data (household registry):"
 log "    4 households, 2 cooperatives, 12 individuals (1 standalone)"
 log "    6 home visits, 6 trainings, 5 assistance distributions, 5 referrals"
 log "    8 push events (4 entity updates, 4 cooperative member cross-links)"
-log "    4 users (admin, supervisor, enumerator, fieldworker)"
-log "    8 reviews (4 pending, 2 approved, 1 rejected, 1 update)"
+log "    3 users created by this script (fieldworker, supervisor, enumerator)"
+log "    8 reviews (5 pending, 2 approved, 1 rejected)"
 log "    5 attachments"
 log "    4 review configs"
 log "  Data (individual registry):"

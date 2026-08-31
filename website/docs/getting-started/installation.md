@@ -11,15 +11,21 @@ If you just want a running instance as quickly as possible, follow the [Quick St
 ## System Requirements
 
 ### Client Applications
-- **Node.js**: 22.x or higher
+- **Node.js**: 22.12.0 or higher (the workspace declares `node >=22.12.0`)
 - **Browser**: Modern browser with IndexedDB support (Chrome 58+, Firefox 55+, Safari 10+)
 - **Memory**: Minimum 512 MB available for IndexedDB storage
 
 ### Backend Server
-- **Node.js**: 22.x or higher
+- **Node.js**: 22.12.0 or higher
 - **PostgreSQL**: 15.x or higher
 - **Memory**: Minimum 2 GB RAM for production
 - **Storage**: SSD recommended for database performance
+
+### Toolchain (only for running packages on the host)
+
+- **Node.js** ≥ 22.12.0. Recent pnpm releases refuse to start on older versions, so an outdated global Node fails immediately rather than subtly. Check with `node --version`, and upgrade with [nvm](https://github.com/nvm-sh/nvm), [nvm-windows](https://github.com/coreybutler/nvm-windows), [fnm](https://github.com/Schniz/fnm), or [Volta](https://volta.sh/) if needed.
+- **pnpm** 10.14.x, the version pinned in `packageManager`. Install with `corepack enable && corepack use pnpm@10.14.0`, or `npm install -g pnpm@10` if you don't use Corepack.
+- **`bash`, `curl`, and `python3`** on `PATH` — required by `pnpm seed`. On Windows, run seeding from Git Bash or WSL, not PowerShell.
 
 ### Secrets
 
@@ -63,6 +69,12 @@ Services available after startup:
 | PostgreSQL | localhost:5432 | 5432 |
 | Node debugger | localhost:9229 | 9229 |
 
+The last two rows are not web pages. To inspect the database, use a client rather than a browser — `docker exec -it $(docker compose -f docker/docker-compose.dev.yaml ps -q postgres) psql -U admin -d datacollect` needs nothing installed locally.
+
+:::tip If only some containers come up
+`sync-server` waits for PostgreSQL to pass its healthcheck. If PostgreSQL is slow on a first run with a fresh volume, `sync-server` can be left in `Created` while the UI containers start and fail against a missing API. Check with `docker compose -f docker/docker-compose.dev.yaml ps`; if PostgreSQL is healthy but `sync-server` never started, re-run `up -d`.
+:::
+
 ### 4. Verify
 
 ```bash
@@ -90,7 +102,12 @@ git clone https://github.com/idpass/idpass-data-collect.git
 cd idpass-data-collect
 pnpm install
 pnpm --filter @idpass/data-collect-core build
+pnpm --filter @idpass/adapter-openspp --filter @idpass/adapter-openfn --filter @idpass/adapter-mock build
 ```
+
+:::caution The adapters must be built too
+The backend imports the OpenSPP, OpenFn, and Mock adapters at startup, and each resolves to its `dist/` output. Building only the core library leaves the backend unable to start, with `Cannot find module '@idpass/adapter-openspp'`. `pnpm build` from the repo root builds everything if you would rather not name each package.
+:::
 
 Verify the core library:
 
@@ -115,19 +132,25 @@ Or install PostgreSQL 15+ locally and create a `datacollect` database owned by `
 
 ### 3. Configure and run the backend
 
-The backend reads its environment file from `docker/.env`:
+Running on the host, the backend reads `packages/backend/.env` — **not** `docker/.env`:
 
 ```bash
-cp docker/.env.example docker/.env
-# Optional: change POSTGRES_HOST=postgres to POSTGRES_HOST=localhost if running PostgreSQL on the host
+cp packages/backend/.env.example packages/backend/.env
+# Edit it if your PostgreSQL host, port, or credentials differ from the defaults.
 pnpm --filter @idpass/data-collect-backend dev
 # → Sync server is running on http://localhost:3000
 ```
 
+:::info Why there are two env files
+`docker/.env` is read by Docker Compose, which injects the values into the container's environment. On the host there is no Compose, so the backend falls back to `dotenv`, which loads `.env` from the process's working directory — `packages/backend/`.
+
+Copying `docker/.env` to that path does not work either: it composes its connection strings from other variables (`postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@…`). Compose expands those; plain `dotenv` does not, so the backend receives the literal string and fails with `getaddrinfo ENOTFOUND $POSTGRES_HOST`. `packages/backend/.env.example` therefore ships fully literal values — percent-encode any special characters in the password.
+:::
+
 ### 4. Run the admin UI
 
 ```bash
-cp packages/admin/.env.example packages/admin/.env   # if the example exists; otherwise skip
+cp packages/admin/.env.example packages/admin/.env
 pnpm --filter @idpass/data-collect-admin dev
 # → http://localhost:5173
 ```
@@ -156,9 +179,24 @@ Use this when you want offline-first storage in your own app and don't need the 
 
 ### 1. Install
 
+The `@idpass/*` packages are published to **GitHub Packages**, not to npmjs.org, so a plain `pnpm add` cannot resolve them until you point the scope at the right registry and authenticate.
+
+Add to your project's `.npmrc`:
+
+```ini
+@idpass:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+Then, with `GITHUB_TOKEN` set to a token carrying the `read:packages` scope:
+
 ```bash
 pnpm add @idpass/data-collect-core
 ```
+
+:::note
+The same applies to `@idpass/data-collect-backend`, `@idpass/adapter-openspp`, `@idpass/adapter-openfn`, and `@idpass/adapter-mock`. If you would rather not depend on GitHub Packages, build the library from a checkout and depend on the tarball or a git reference instead.
+:::
 
 ### 2. Basic usage
 
@@ -271,6 +309,33 @@ Pick a longer secret. In production, use a cryptographically random value (e.g. 
 1. Verify PostgreSQL is running (`docker ps` or `systemctl status postgresql`)
 2. Check `POSTGRES_HOST` — inside Docker the hostname is `postgres`, on the host it's `localhost`
 3. Confirm the password in `docker/.env` matches what PostgreSQL was initialized with; if you changed it, you may need `docker compose down -v` to wipe the existing volume
+
+### Only some containers started
+
+`sync-server` starts only once PostgreSQL reports healthy, and the UI containers start once `sync-server` exists. If PostgreSQL is slow to pass its healthcheck on a first run, you can end up with UI containers running against an API that never started. Inspect with `docker compose -f docker/docker-compose.dev.yaml ps` and `… logs postgres`, then re-run `up -d` once PostgreSQL is healthy.
+
+### The browser shows `Failed to resolve import "<package>"` even though the build succeeded
+
+A dependency can end up missing from a service's image if it failed to install completely during the build without failing the build itself. Rebuild that one service from scratch:
+
+```bash
+docker compose -f docker/docker-compose.dev.yaml build --no-cache admin-ui
+docker compose -f docker/docker-compose.dev.yaml up -d --force-recreate admin-ui
+```
+
+### `pnpm seed` fails with `set: pipefail: invalid option name` (Windows)
+
+The shell script was checked out with CRLF line endings — Git for Windows does this by default (`core.autocrlf=true`), and `bash` then reads the trailing carriage return as part of the command. The repository ships a `.gitattributes` that forces LF for shell scripts, so a fresh clone is correct. If your clone predates it, re-check-out just the scripts:
+
+```bash
+git checkout -- scripts/ .husky/
+```
+
+If other scripts are still affected, `git rm --cached -r . && git reset --hard` renormalizes the whole tree — but it discards uncommitted changes, so commit or stash first.
+
+### `pnpm seed` fails before it starts
+
+The seed script needs `bash`, `curl`, and `python3` on `PATH`, plus a running backend. On Windows use Git Bash or WSL — PowerShell cannot run it.
 
 ### IndexedDB errors in tests
 ```typescript
