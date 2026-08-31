@@ -625,12 +625,12 @@ importers:
       '@idpass/data-collect-core':
         specifier: workspace:*
         version: link:../datacollect
+      '@injistack/pixelpass':
+        specifier: ^0.8.0
+        version: 0.8.0
       '@mdi/font':
         specifier: ^7.4.47
         version: 7.4.47
-      '@mosip/pixelpass':
-        specifier: ^0.6.0
-        version: 0.6.0
       '@xstate/vue':
         specifier: ^5.0.1
         version: 5.0.1(vue@3.5.41(typescript@5.9.3))(xstate@5.32.5)
@@ -3572,6 +3572,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@injistack/pixelpass@0.8.0':
+    resolution: {integrity: sha512-rjnQyZu2vzNduLa/wwXIz7C8OCFfz2jYXe2+N1AqWwmcriUaq7UgCfi3cvz9vuZITt0zC3vVm3Z+7QetXx8o4g==}
+
   '@intlify/core-base@11.4.10':
     resolution: {integrity: sha512-+yJ74JRWVJokdgG9zYNMyTSzeNV3O9T4vVxk8PvLFHmI+R/BYA//cITh7vhRK37hWLZ4/kTcKcUz1dlWOpypIg==}
     engines: {node: '>= 22'}
@@ -3920,10 +3923,6 @@ packages:
 
   '@mongodb-js/saslprep@1.4.6':
     resolution: {integrity: sha512-y+x3H1xBZd38n10NZF/rEBlvDOOMQ6LKUTHqr8R9VkJ+mmQOYtJFxIlkkK8fZrtOiL6VixbOBWMbZGBdal3Z1g==}
-
-  '@mosip/pixelpass@0.6.0':
-    resolution: {integrity: sha512-JWzvbtgQ5gLwgYx6thUrPQn5VAyLMlo6KkjRiexXxQnFTvYUR01oJ2+D4tTgAnD5hxHaEj5AxkHdrBP6tFCy2A==}
-    deprecated: 'Package moved to @injistack/pixelpass. Please use the new package. More details: https://community.mosip.io/t/community-advisory-migration-of-inji-relate-artifacts-publish-from-mosip-related-repositories-to-dedicated-inji-related-repositories/2491'
 
   '@napi-rs/wasm-runtime@1.0.7':
     resolution: {integrity: sha512-SeDnOO0Tk7Okiq6DbXmmBODgOAb9dp9gjlphokTUxmt8U3liIP1ZsozBahH69j/RJv+Rfs6IwUKHTgQYJ/HBAw==}
@@ -16083,6 +16082,14 @@ snapshots:
   '@img/sharp-win32-x64@0.35.2':
     optional: true
 
+  '@injistack/pixelpass@0.8.0':
+    dependencies:
+      base45-web: 1.0.2
+      cbor-web: 9.0.2
+      jszip: 3.10.1
+      pako: 2.2.0
+      qrcode: 1.5.4
+
   '@intlify/core-base@11.4.10':
     dependencies:
       '@intlify/devtools-types': 11.4.10
@@ -16668,14 +16675,6 @@ snapshots:
   '@mongodb-js/saslprep@1.4.6':
     dependencies:
       sparse-bitfield: 3.0.3
-
-  '@mosip/pixelpass@0.6.0':
-    dependencies:
-      base45-web: 1.0.2
-      cbor-web: 9.0.2
-      jszip: 3.10.1
-      pako: 2.2.0
-      qrcode: 1.5.4
 
   '@napi-rs/wasm-runtime@1.0.7':
     dependencies:

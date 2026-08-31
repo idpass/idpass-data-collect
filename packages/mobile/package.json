@@ -45,7 +45,7 @@
     "@formio/vue": "^5.0.0",
     "@idpass/data-collect-core": "workspace:*",
     "@mdi/font": "^7.4.47",
-    "@mosip/pixelpass": "^0.6.0",
+    "@injistack/pixelpass": "^0.8.0",
     "@xstate/vue": "^5.0.1",
     "axios": "1.18.1",
     "bootstrap": "^5.3.8",

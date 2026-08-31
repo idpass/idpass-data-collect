@@ -41,7 +41,7 @@ import {
   type CryptoKey,
   type JWK
 } from 'jose'
-import { decode as pixelPassDecode } from '@mosip/pixelpass'
+import { decode as pixelPassDecode } from '@injistack/pixelpass'
 import type { InjiCredentialTemplate, InjiTrustedIssuer } from '@/utils/formIoUtils'
 import { verifyLdp } from './verifiers/ldpVc'
 

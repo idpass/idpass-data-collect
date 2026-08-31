@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeAll } from 'vitest'
 import { exportJWK } from 'jose'
 import * as jsonldMod from 'jsonld'
-import { generateQRData } from '@mosip/pixelpass'
+import { generateQRData } from '@injistack/pixelpass'
 import { createOfflineDocumentLoader } from '../verifiers/jsonldContexts'
 import { verify, extractClaim, matchTemplate, VcRejectReason } from '../injiVcService'
 import type { InjiCredentialTemplate, InjiTrustedIssuer } from '@/utils/formIoUtils'

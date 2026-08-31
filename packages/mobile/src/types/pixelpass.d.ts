@@ -17,10 +17,10 @@
  * under the License.
  */
 
-// Minimal ambient types for @mosip/pixelpass (ships no type definitions).
+// Minimal ambient types for @injistack/pixelpass (ships no type definitions).
 // PixelPass is MOSIP's QR codec: base45 + CBOR + zlib. The Inji Wallet emits
 // share QRs as generateQRData(JSON.stringify(credential)); decode() reverses it.
-declare module '@mosip/pixelpass' {
+declare module '@injistack/pixelpass' {
   /** base45 decode → CBOR decode → zlib inflate. Returns the original string. */
   export function decode(data: string): string
   /** zlib deflate → CBOR encode → base45 encode (optional header prefix). */

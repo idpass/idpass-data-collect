@@ -26,7 +26,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest'
 import { SignJWT, exportSPKI, generateKeyPair, base64url, type CryptoKey } from 'jose'
-import { generateQRData } from '@mosip/pixelpass'
+import { generateQRData } from '@injistack/pixelpass'
 import {
   detectFormat,
   verify,
