@@ -25,8 +25,9 @@ import { EntityForm } from '@/utils/formIoUtils'
 import FormioWrapper from '@/components/FormioWrapper.vue'
 import { SyncLevel, FormClassifier } from '@idpass/data-collect-core'
 import { v4 as uuidv4 } from 'uuid'
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useInjiVerification } from '@/composables/useInjiVerification'
 
 const props = defineProps<{
   id: string
@@ -42,7 +43,12 @@ const entityForm = ref<EntityForm>()
 const formio = ref<unknown>()
 const isGroup = ref(false)
 const entityTypeLabel = ref('')
+const inji = useInjiVerification()
 
+// Clear any staged Inji verifications when leaving the form so they never
+// bleed into the next entry. New entries start with a fresh session.
+inji.reset()
+onUnmounted(() => inji.reset())
 
 type FormSubmissionEvent = {
   data: Record<string, unknown>
@@ -101,6 +107,7 @@ const onSubmit = async (submission: FormSubmissionEvent) => {
     type: classification.createEventType,
     data: {
       ...submission.data,
+      ...(inji.serializeForSave() ?? {}),
       parentGuid: props.parentGuid,
       entityName: entityForm.value.name,
       _displayName: entityForm.value.nameField

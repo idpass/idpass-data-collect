@@ -37,6 +37,97 @@ import { Formio } from '@formio/js'
 let registered = false
 
 /**
+ * Tenant credential templates available to the "Inji Verification" field tab.
+ * Set by the builder host (`FormioBuilder.vue`) from `draft.inji.credentialTemplates`
+ * BEFORE `registerBuilderComponents()` / `Formio.builder()` mounts. Read at
+ * editForm-call time (when a field is clicked) so the template dropdown reflects
+ * the current tenant config without re-registering components.
+ */
+let currentCredentialTemplates: Array<{ id: string; claimLabel?: string }> = []
+
+export function setCredentialTemplates(templates: Array<{ id: string; claimLabel?: string }> | undefined | null): void {
+  currentCredentialTemplates = Array.isArray(templates) ? templates : []
+}
+
+/** Field types that are never VC-filled — skip the Inji tab to avoid clutter. */
+const INJI_TAB_SKIP = new Set([
+  'biometricCapture',
+  'claim169Scanner',
+  'button',
+  'panel',
+  'columns',
+  'well',
+  'table',
+  'tabs',
+  'fieldset',
+  'content',
+  'htmlelement',
+  'form',
+  'container',
+  'datagrid',
+  'editgrid',
+])
+
+/**
+ * The "Inji Verification" edit tab appended to a field's settings. Writes the
+ * stock Form.io custom properties the mobile runtime reads
+ * (`properties.injiTemplate` + `properties.injiClaimPath`) — NOT top-level keys.
+ * Built fresh per call so the template dropdown reflects the latest tenant config.
+ */
+function injiVerificationTab(): any {
+  const values = currentCredentialTemplates.map((t) => ({ label: t.claimLabel || t.id, value: t.id }))
+  return {
+    key: 'inji',
+    label: 'Inji Verification',
+    weight: 60,
+    components: [
+      {
+        type: 'select',
+        key: 'properties.injiTemplate',
+        label: 'Verifiable from credential template',
+        tooltip:
+          'If set, this field shows a "Verify" button that fills it from a matching verified credential (Inji wallet).',
+        dataSrc: 'values',
+        data: { values },
+        clearOnRefresh: false,
+      },
+      {
+        type: 'textfield',
+        key: 'properties.injiClaimPath',
+        label: 'Claim path (JSONPath)',
+        placeholder: '$.credentialSubject.fullName',
+        tooltip: 'Which credential claim fills this field, e.g. $.credentialSubject.dateOfBirth.',
+        customConditional: 'show = !!(data.properties && data.properties.injiTemplate);',
+      },
+    ],
+  }
+}
+
+/**
+ * Append the Inji Verification tab to every input field's editForm. Wraps each
+ * component's static `editForm` once; the wrapper reads `currentCredentialTemplates`
+ * live, so updating templates needs no re-registration.
+ */
+function injectInjiTab(Components: any): void {
+  const comps = Components.components || {}
+  for (const name of Object.keys(comps)) {
+    if (INJI_TAB_SKIP.has(name)) continue
+    const Comp = comps[name]
+    if (!Comp || typeof Comp.editForm !== 'function' || (Comp.editForm as any).__injiWrapped) continue
+    const orig = Comp.editForm
+    const wrapped = function (this: unknown, ...args: any[]) {
+      const form = orig.apply(this, args)
+      if (form && Array.isArray(form.components) && !form.components.some((c: any) => c && c.key === 'inji')) {
+        form.components.push(injiVerificationTab())
+      }
+      return form
+    }
+    ;(wrapped as any).__injiWrapped = true
+    Comp.editForm = wrapped
+  }
+}
+
+/**
  * Register the ID PASS custom builder components with Form.io. Idempotent and
  * must run before `Formio.builder(...)` so the palette includes them.
  */
@@ -415,5 +506,9 @@ export function registerBuilderComponents(): void {
 
   Components.addComponent('biometricCapture', BiometricCapture)
   Components.addComponent('claim169Scanner', Claim169Scanner)
+
+  // Append the "Inji Verification" tab to every input field's settings.
+  injectInjiTab(Components)
+
   registered = true
 }

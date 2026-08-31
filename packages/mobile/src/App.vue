@@ -23,6 +23,7 @@
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { computed, onMounted } from 'vue'
 import Claim169ScannerOverlay from '@/components/Claim169ScannerOverlay.vue'
+import InjiVerifyOverlay from '@/components/InjiVerifyOverlay.vue'
 import LockScreen from '@/components/LockScreen.vue'
 import AppSnackbar from '@/components/AppSnackbar.vue'
 import { AppLockService } from '@/services/AppLockService'
@@ -130,6 +131,7 @@ const activeTab = computed(() => {
     </v-bottom-navigation>
 
     <Claim169ScannerOverlay />
+    <InjiVerifyOverlay />
     <AppSnackbar />
   </v-app>
 </template>

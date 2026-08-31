@@ -170,6 +170,37 @@ export interface Claim169Config {
   }>;
 }
 
+/**
+ * Inji wallet per-field verification config carried at the tenant level.
+ * Powers the mobile "Verify" affordance on form fields marked with
+ * `properties.injiTemplate`. `enabled` false hides every Verify button.
+ * `trustedIssuers` is the operator-curated offline trust registry (no network
+ * call at verify time); `credentialTemplates` declares which VC types map to
+ * which field marker and the expected proof format.
+ */
+export interface InjiConfig {
+  enabled: boolean;
+  trustedIssuers: Array<{
+    issuerId: string;
+    /** Optional JWK `kid` to disambiguate multiple keys for one issuer. */
+    kid?: string;
+    publicKey: {
+      ed25519?: string;
+      es256?: string;
+    };
+  }>;
+  credentialTemplates: Array<{
+    id: string;
+    /** VC `type` values a credential must contain to satisfy this template. */
+    matchTypes: string[];
+    expectedFormat: "jwt-vc" | "sd-jwt" | "ldp_vc";
+    /** Optional issuer allowlist scoping this template to specific issuers. */
+    allowedIssuers?: string[];
+    /** Optional human label surfaced in the scan overlay. */
+    claimLabel?: string;
+  }>;
+}
+
 export interface AppConfig {
   id: string;
   artifactId?: string;
@@ -194,6 +225,12 @@ export interface AppConfig {
    * Null/undefined means feature off; mobile resolver returns enabled:false.
    */
   claim169?: Claim169Config | null;
+  /**
+   * Inji wallet per-field verification trust anchors + templates. See
+   * {@link InjiConfig}. Null/undefined means feature off; mobile resolver
+   * returns enabled:false.
+   */
+  inji?: InjiConfig | null;
   /**
    * Backend URL the mobile/admin clients call for sync push + pull. Stored
    * per-tenant so a single backend can serve tenants whose clients connect

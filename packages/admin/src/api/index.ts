@@ -203,6 +203,46 @@ export const updateAppClaim169 = async (
   return response.data
 }
 
+// Inji wallet per-field VC verification config carried at the tenant level.
+// Structure mirrors backend `InjiConfig` + mobile `InjiConfig` — keep in sync.
+export interface InjiTrustedIssuer {
+  issuerId: string
+  /** Optional JWK `kid` to disambiguate multiple keys for one issuer. */
+  kid?: string
+  publicKey: {
+    ed25519?: string
+    es256?: string
+  }
+}
+
+export interface InjiCredentialTemplate {
+  id: string
+  /** VC `type` values a credential must contain to satisfy this template. */
+  matchTypes: string[]
+  expectedFormat: 'jwt-vc' | 'sd-jwt' | 'ldp_vc'
+  /** Optional issuer allowlist scoping this template to specific issuers. */
+  allowedIssuers?: string[]
+  /** Optional human label surfaced in the builder dropdown + scan overlay. */
+  claimLabel?: string
+}
+
+export interface InjiConfig {
+  enabled: boolean
+  trustedIssuers: InjiTrustedIssuer[]
+  credentialTemplates: InjiCredentialTemplate[]
+}
+
+// PATCH /api/apps/:id/inji — Inji trust anchors + credential templates + enable flag.
+// Pass `null` to clear the block. Triggers public-artifact regeneration so mobile
+// picks up the change on next pull. (The wizard's full-config save also persists it.)
+export const updateAppInji = async (
+  id: string,
+  inji: InjiConfig | null,
+): Promise<{ status: 'success'; inji: InjiConfig | null }> => {
+  const response = await api().patch(`${APPS_URL}/${id}/inji`, { inji })
+  return response.data
+}
+
 export const getAppConfigJsonUrl = (artifactId: string) => {
   api() // ensure initialized
   if (!artifactId) {

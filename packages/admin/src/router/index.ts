@@ -156,6 +156,11 @@ const router = createRouter({
           component: () => import('../views/wizard/Claim169Step.vue'),
         },
         {
+          path: 'inji',
+          name: 'wizard-inji',
+          component: () => import('../views/wizard/InjiStep.vue'),
+        },
+        {
           path: 'auth',
           name: 'wizard-auth',
           component: () => import('../views/wizard/AuthStep.vue'),

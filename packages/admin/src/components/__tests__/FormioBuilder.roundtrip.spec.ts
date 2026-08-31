@@ -58,6 +58,7 @@ vi.mock('@/formio/loadBuilderAssets', () => ({
 // registry (absent from the @formio/js mock); stub it for the lifecycle tests.
 vi.mock('@/formio/builderComponents', () => ({
   registerBuilderComponents: vi.fn(),
+  setCredentialTemplates: vi.fn(),
 }))
 
 describe('FormioBuilder schema round-trip', () => {

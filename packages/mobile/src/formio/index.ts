@@ -25,10 +25,13 @@ import Formio from 'formiojs';
 // be used here to defer module evaluation.
 import BiometricCapture from './components/BiometricCapture';
 import Claim169Scanner from './components/Claim169Scanner';
+import { applyInjiVerifiableDecoration } from './components/injiVerifiable';
 
 export async function registerCustomComponents() {
   if (Formio?.Components?.addComponent) {
     Formio.Components.addComponent('biometricCapture', BiometricCapture);
     Formio.Components.addComponent('claim169Scanner', Claim169Scanner);
+    // Decorate stock fields marked with properties.injiTemplate (no new type).
+    applyInjiVerifiableDecoration();
   }
 }

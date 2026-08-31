@@ -50,9 +50,9 @@ addRxPlugin(RxDBLeaderElectionPlugin)
 
 // Required for any collection whose schema version is > 0. The tenantapps
 // collection bumped to v1 to add `programs[]`, then v2 to introduce the
-// tenant-level `claim169` block (and drop legacy top-level `trustedIssuers`).
-// Without this plugin RxDB throws "function must be overwritten by a plugin"
-// on init.
+// tenant-level `claim169` block (and drop legacy top-level `trustedIssuers`),
+// then v3 to add the tenant-level `inji` block. Without this plugin RxDB
+// throws "function must be overwritten by a plugin" on init.
 import { RxDBMigrationSchemaPlugin } from 'rxdb/plugins/migration-schema'
 addRxPlugin(RxDBMigrationSchemaPlugin)
 
@@ -273,6 +273,13 @@ export async function getDatabase(): Promise<RxDatabase> {
             // Operator wires claim169 via the new admin tab; default disabled.
             oldDoc.claim169 = { enabled: false, trustedIssuers: [] }
             delete oldDoc.trustedIssuers
+            return oldDoc
+          },
+          3: (oldDoc: Record<string, unknown>) => {
+            // v2 → v3: introduce tenant-level inji block; default disabled so
+            // existing tenants keep the Verify affordance hidden until the
+            // operator wires trust anchors + templates via PATCH /:id/inji.
+            oldDoc.inji = { enabled: false, trustedIssuers: [], credentialTemplates: [] }
             return oldDoc
           }
         }
