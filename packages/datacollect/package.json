@@ -65,7 +65,7 @@
     "@types/crypto-js": "^4.2.2",
     "@types/jest": "^30.0.0",
     "@types/lodash": "^4.17.25",
-    "@types/node": "^22.19.11",
+    "@types/node": "^26.4.0",
     "@types/pg": "^8.23.1",
     "axios-mock-adapter": "^2.1.0",
     "core-js": "^3.50.0",
