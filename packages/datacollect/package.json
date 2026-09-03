@@ -70,7 +70,7 @@
     "axios-mock-adapter": "^2.1.0",
     "core-js": "^3.50.0",
     "drizzle-kit": "^0.31.10",
-    "eslint": "^9.39.2",
+    "eslint": "^10.9.1",
     "fake-indexeddb": "^6.2.5",
     "globals": "^17.11.0",
     "husky": "^9.1.7",
