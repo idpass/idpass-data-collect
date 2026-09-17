@@ -28,8 +28,8 @@
     "lunr": "^2.3.9",
     "mermaid": "^11.17.0",
     "prism-react-renderer": "2.4.1",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
@@ -37,14 +37,14 @@
     "@docusaurus/module-type-aliases": "3.10.2",
     "@docusaurus/tsconfig": "3.10.2",
     "@docusaurus/types": "3.10.2",
-    "docusaurus-plugin-typedoc": "^1.4.2",
-    "js-yaml": "^5.3.0",
+    "docusaurus-plugin-typedoc": "^1.4.3",
+    "js-yaml": "^5.4.2",
     "openapi-to-postmanv2": "^6.3.3",
     "typedoc": "^0.28.20",
-    "typedoc-docusaurus-theme": "^1.4.2",
-    "typedoc-plugin-markdown": "^4.12.0",
+    "typedoc-docusaurus-theme": "^1.4.3",
+    "typedoc-plugin-markdown": "^4.13.0",
     "typescript": "~5.6.3",
-    "wrangler": "^4.125.0"
+    "wrangler": "^4.131.1"
   },
   "browserslist": {
     "production": [
