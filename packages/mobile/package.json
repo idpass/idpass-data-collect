@@ -31,7 +31,7 @@
     "@aparajita/capacitor-biometric-auth": "^10.0.0",
     "@aparajita/capacitor-secure-storage": "^6.0.1",
     "@capacitor-mlkit/barcode-scanning": "^8.1.0",
-    "@capacitor/android": "^8.5.0",
+    "@capacitor/android": "^8.5.1",
     "@capacitor/app": "^8.1.1",
     "@capacitor/camera": "^8.2.3",
     "@capacitor/cli": "^8.5.0",
