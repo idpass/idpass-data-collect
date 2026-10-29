@@ -28,23 +28,23 @@
     "lunr": "^2.3.9",
     "mermaid": "^11.17.0",
     "prism-react-renderer": "2.4.1",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "unist-util-visit": "^5.1.0"
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "unist-util-visit": "^5.2.0"
   },
   "devDependencies": {
     "@docusaurus/faster": "^3.10.2",
     "@docusaurus/module-type-aliases": "3.10.2",
     "@docusaurus/tsconfig": "3.10.2",
     "@docusaurus/types": "3.10.2",
-    "docusaurus-plugin-typedoc": "^1.4.2",
-    "js-yaml": "^5.3.0",
-    "openapi-to-postmanv2": "^6.3.3",
+    "docusaurus-plugin-typedoc": "^1.4.3",
+    "js-yaml": "^5.5.0",
+    "openapi-to-postmanv2": "^6.4.1",
     "typedoc": "^0.28.20",
-    "typedoc-docusaurus-theme": "^1.4.2",
-    "typedoc-plugin-markdown": "^4.12.0",
+    "typedoc-docusaurus-theme": "^1.4.3",
+    "typedoc-plugin-markdown": "^4.14.1",
     "typescript": "~5.6.3",
-    "wrangler": "^4.125.0"
+    "wrangler": "^4.152.0"
   },
   "browserslist": {
     "production": [
